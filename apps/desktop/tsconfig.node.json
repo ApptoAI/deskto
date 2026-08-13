@@ -1,0 +1,7 @@
+{
+  "extends": "@workspace/typescript-config/base.json",
+  "compilerOptions": {
+    "types": ["node", "electron-vite/node"]
+  },
+  "include": ["electron.vite.config.ts", "electron-builder.config.ts", "src/main", "src/preload", "src/shared"]
+}

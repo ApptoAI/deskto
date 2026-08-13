@@ -1,21 +1,36 @@
-# shadcn/ui monorepo template
+# Appto
 
-This is a Next.js monorepo template with shadcn/ui.
+Appto is a local desktop app for giving folder-based work to Claude Code or Codex. The MVP has projects, tasks, streamed Markdown, model and permission controls, visible tool activity, approvals, cancellation, and resumable sessions.
 
-## Adding components
+## Requirements
 
-To add components to your app, run the following command at the root of your `web` app:
+- Node.js 22.12 or newer
+- pnpm 10.33.4
+- A Claude account already available to Claude Code
+- Codex installed and signed in if you want to use the Codex harness
+
+## Run locally
 
 ```bash
-pnpm dlx shadcn@latest add button -c apps/web
+pnpm install
+pnpm dev
 ```
 
-This will place the ui components in the `packages/ui/src/components` directory.
+The app stores its SQLite database in Electron's user data directory. Each harness starts in the project folder selected by the user. When a harness asks for approval, Appto shows that request in the task.
 
-## Using components
+## Check the project
 
-To use the components in your app, import them from the `ui` package.
-
-```tsx
-import { Button } from "@workspace/ui/components/button";
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm --filter @openappto/desktop build
 ```
+
+Create an unpacked desktop build with:
+
+```bash
+pnpm --filter @openappto/desktop package:dir
+```
+
+The domain glossary and package rules live in [`CONTEXT.md`](./CONTEXT.md). Accepted architecture decisions live in [`docs/adr`](./docs/adr).

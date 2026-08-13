@@ -1,0 +1,19 @@
+@import "@workspace/ui/globals.css";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    overscroll-behavior: none;
+  }
+}
+
+@utility drag-region {
+  -webkit-app-region: drag;
+}
+
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
