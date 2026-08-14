@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "desktop:dev": "turbo dev --filter=@openappto/desktop",
     "lint": "turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck",

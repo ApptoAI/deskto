@@ -1,48 +1,19 @@
-import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
-import { homedir } from "node:os"
 import path from "node:path"
-import { promisify } from "node:util"
 
-import { app } from "electron"
+import { app, BrowserWindow, dialog } from "electron"
 
 import { ClaudeAdapter, CodexAdapter, createRuntime } from "@openappto/runtime"
 
+import { configureCliPath } from "./cli-path.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
 import { installContentSecurityPolicy } from "./security.js"
 import { createMainWindow } from "./window.js"
 
+const runtimeCloseTimeoutMs = 5_000
+
 let closeRuntime: (() => Promise<void>) | undefined
-const execFileAsync = promisify(execFile)
-
-async function configureCliPath(): Promise<void> {
-  const inherited = process.env.PATH?.split(path.delimiter) ?? []
-  const shell = await readLoginShellPath()
-  const fallbacks = [
-    path.join(homedir(), ".local/bin"),
-    path.join(homedir(), ".npm-global/bin"),
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-  ]
-  process.env.PATH = [...new Set([...shell, ...inherited, ...fallbacks])].join(
-    path.delimiter
-  )
-}
-
-async function readLoginShellPath(): Promise<string[]> {
-  if (process.platform !== "darwin") return []
-  try {
-    const { stdout } = await execFileAsync("/bin/zsh", [
-      "-lic",
-      'printf "\\n__APPTO_PATH__%s" "$PATH"',
-    ])
-    const value = stdout.split("__APPTO_PATH__").at(-1)?.trim()
-    return value ? value.split(path.delimiter) : []
-  } catch {
-    return []
-  }
-}
 
 function packagedClaudeExecutable(): string | undefined {
   if (!app.isPackaged) return undefined
@@ -66,7 +37,11 @@ function packagedClaudeExecutable(): string | undefined {
 }
 
 async function openApplication(): Promise<void> {
-  await configureCliPath()
+  // The PATH probe spawns a login shell and can take a few seconds, so it runs
+  // while the window opens and the renderer loads. The runtime gets it as the
+  // probe gate: no harness CLI is spawned before PATH is rebuilt.
+  const cliPathConfigured = configureCliPath()
+
   installContentSecurityPolicy()
   registerDesktopIpc()
 
@@ -79,7 +54,12 @@ async function openApplication(): Promise<void> {
       ),
       new CodexAdapter(),
     ],
+    probeGate: cliPathConfigured,
   })
+  // Assigned before the window opens so a failure below still closes the
+  // runtime through the before-quit path.
+  closeRuntime = () => runtime.close()
+
   const window = createMainWindow()
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   closeRuntime = async () => {
@@ -88,16 +68,55 @@ async function openApplication(): Promise<void> {
   }
 }
 
-app.whenReady().then(openApplication)
+function showFatalStartupError(error: unknown): void {
+  const detail =
+    error instanceof Error ? (error.stack ?? error.message) : String(error)
+  dialog.showErrorBox("Appto failed to start", detail)
+  app.quit()
+}
+
+function focusExistingMainWindow(): void {
+  const window = BrowserWindow.getAllWindows().at(0)
+  if (!window) return
+  if (window.isMinimized()) window.restore()
+  window.focus()
+}
+
+// A runtime that cannot shut down cleanly should delay quitting, not block it.
+async function closeRuntimeWithTimeout(
+  close: () => Promise<void>
+): Promise<void> {
+  const timeout = new Promise<void>((resolve) => {
+    setTimeout(resolve, runtimeCloseTimeoutMs)
+  })
+  await Promise.race([close().catch(() => undefined), timeout])
+}
+
+// A second launch would open another runtime on the same database; hand over
+// to the running instance instead.
+const isPrimaryInstance = app.requestSingleInstanceLock()
+
+if (isPrimaryInstance) {
+  app.on("second-instance", focusExistingMainWindow)
+  app.whenReady().then(() => openApplication().catch(showFatalStartupError))
+} else {
+  app.quit()
+}
 
 app.on("before-quit", (event) => {
   if (!closeRuntime) return
   event.preventDefault()
   const close = closeRuntime
   closeRuntime = undefined
-  void close().finally(() => app.quit())
+  void closeRuntimeWithTimeout(close).finally(() => app.quit())
 })
 
 app.on("window-all-closed", () => {
   app.quit()
 })
+
+// Route Ctrl+C in development and SIGTERM through the same clean shutdown as
+// a regular quit.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => app.quit())
+}
