@@ -171,10 +171,48 @@ export const messageSchema = z.object({
   failure: harnessFailureSchema.optional(),
   /** Kept while existing databases migrate to the structured failure. */
   error: z.string().optional(),
+  /** Position within the Turn, shared with activities so both interleave. */
+  ordinal: z.number().int().optional(),
   createdAt: z.string(),
 })
 
 export type Message = z.infer<typeof messageSchema>
+
+export const planStepSchema = z.object({
+  text: z.string(),
+  status: z.enum(["pending", "active", "done"]),
+})
+
+export type PlanStep = z.infer<typeof planStepSchema>
+
+/**
+ * Typed detail behind an Activity row. Kinds are provider-neutral; every
+ * Harness Adapter classifies its native items into this vocabulary. An
+ * Activity without a payload renders as the plain label row it always was.
+ */
+export const activityPayloadSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("tool"),
+    tool: z.enum(["command", "search", "web", "mcp", "other"]),
+  }),
+  z.object({
+    kind: z.literal("file-change"),
+    files: z.array(
+      z.object({
+        path: z.string(),
+        additions: z.number().int().nonnegative().optional(),
+        deletions: z.number().int().nonnegative().optional(),
+      })
+    ),
+  }),
+  z.object({ kind: z.literal("plan"), steps: z.array(planStepSchema) }),
+  z.object({
+    kind: z.literal("subagent"),
+    agentType: z.string().optional(),
+  }),
+])
+
+export type ActivityPayload = z.infer<typeof activityPayloadSchema>
 
 export const activitySchema = z.object({
   id: z.string(),
@@ -183,6 +221,11 @@ export const activitySchema = z.object({
   name: z.string(),
   detail: z.string().optional(),
   status: z.enum(["running", "completed", "failed"]),
+  payload: activityPayloadSchema.optional(),
+  /** Owning Activity when this one ran inside a subagent. */
+  parentActivityId: z.string().optional(),
+  /** Position within the Turn, shared with messages so both interleave. */
+  ordinal: z.number().int().optional(),
   createdAt: z.string(),
   finishedAt: z.string().optional(),
 })
@@ -206,6 +249,13 @@ export const threadViewSchema = z.object({
   messages: z.array(messageSchema),
   activities: z.array(activitySchema),
   pendingApproval: approvalSchema.optional(),
+  /**
+   * Delta cursor for this thread. A `thread.delta` event applies to an open
+   * view only when its seq is exactly view seq + 1; any gap means the view
+   * must be reloaded. The counter lives in Runtime memory, so it restarts
+   * with the process — reloads re-baseline it.
+   */
+  seq: z.number().int().nonnegative(),
 })
 
 export type ThreadView = z.infer<typeof threadViewSchema>

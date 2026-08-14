@@ -4,13 +4,16 @@ import { randomUUID } from "node:crypto"
 import {
   AsyncQueue,
   harnessFailure,
+  type ActivityStart,
   type ApprovalDecision,
+  type ChangedFile,
   type ContextUsage,
   type HarnessAdapterFactory,
   type HarnessEvent,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type PlanStep,
 } from "@openappto/harness-sdk"
 
 import { positiveTokens } from "../token-usage.js"
@@ -232,6 +235,7 @@ class CodexSession implements HarnessSession {
 
     if (
       notification.method === "item/started" ||
+      notification.method === "item/updated" ||
       notification.method === "item/completed"
     ) {
       const item = isRecord(params.item) ? params.item : undefined
@@ -239,12 +243,27 @@ class CodexSession implements HarnessSession {
       if (!activity) return
       if (notification.method === "item/started") {
         this.#queue.push({ type: "activity.started", activity })
+      } else if (notification.method === "item/updated") {
+        this.#queue.push({
+          type: "activity.updated",
+          update: {
+            id: activity.id,
+            name: activity.name,
+            ...(activity.detail ? { detail: activity.detail } : {}),
+            ...(activity.payload ? { payload: activity.payload } : {}),
+          },
+        })
       } else {
+        const status = getString(item, "status")
         this.#queue.push({
           type: "activity.completed",
           id: activity.id,
+          // An item that ends without a status, e.g. a settled plan, counts
+          // as completed; only an explicit non-completed status fails it.
           outcome:
-            getString(item, "status") === "completed" ? "completed" : "failed",
+            status === undefined || status === "completed"
+              ? "completed"
+              : "failed",
         })
       }
       return
@@ -471,44 +490,74 @@ export function codexLimitResetAt(value: unknown): string | undefined {
   return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
 }
 
-function codexActivity(
+export function codexActivity(
   item: Record<string, unknown> | undefined
-): { id: string; name: string; detail?: string } | undefined {
+): ActivityStart | undefined {
   const id = getString(item, "id")
   const type = getString(item, "type")
   if (!id || !type || ignoredItemTypes.has(type)) return undefined
 
   if (type === "commandExecution") {
-    return withDetail(id, "Run command", compactDetail(item?.command))
+    return {
+      id,
+      name: "Run command",
+      ...detailOf(compactDetail(item?.command)),
+      payload: { kind: "tool", tool: "command" },
+    }
   }
   if (type === "fileChange") {
-    return withDetail(id, "Change files", changedFiles(item?.changes))
+    const files = changedFiles(item?.changes)
+    return {
+      id,
+      name: "Change files",
+      ...detailOf(fileSummary(files)),
+      ...(files.length > 0
+        ? { payload: { kind: "file-change" as const, files } }
+        : {}),
+    }
+  }
+  if (type === "plan") {
+    const steps = item ? codexPlanSteps(item) : []
+    return {
+      id,
+      name: "Plan",
+      ...(steps.length > 0
+        ? { payload: { kind: "plan" as const, steps } }
+        : detailOf(getString(item, "text"))),
+    }
   }
   if (type === "mcpToolCall") {
     const server = getString(item, "server")
     const tool = getString(item, "tool")
-    return withDetail(id, tool ?? "Use MCP tool", server)
+    return {
+      id,
+      name: tool ?? "Use MCP tool",
+      ...detailOf(server),
+      payload: { kind: "tool", tool: "mcp" },
+    }
   }
   if (type === "webSearch") {
-    return withDetail(id, "Search web", getString(item, "query"))
+    return {
+      id,
+      name: "Search web",
+      ...detailOf(getString(item, "query")),
+      payload: { kind: "tool", tool: "web" },
+    }
   }
-  if (type === "imageView") return { id, name: "View image" }
-  return { id, name: wordsFromCamelCase(type) }
+  if (type === "imageView") {
+    return { id, name: "View image", payload: { kind: "tool", tool: "other" } }
+  }
+  return {
+    id,
+    name: wordsFromCamelCase(type),
+    payload: { kind: "tool", tool: "other" },
+  }
 }
 
-const ignoredItemTypes = new Set([
-  "agentMessage",
-  "userMessage",
-  "reasoning",
-  "plan",
-])
+const ignoredItemTypes = new Set(["agentMessage", "userMessage", "reasoning"])
 
-function withDetail(
-  id: string,
-  name: string,
-  detail: string | undefined
-): { id: string; name: string; detail?: string } {
-  return detail ? { id, name, detail } : { id, name }
+function detailOf(detail: string | undefined): { detail?: string } {
+  return detail ? { detail } : {}
 }
 
 function compactDetail(value: unknown): string | undefined {
@@ -522,13 +571,52 @@ function compactDetail(value: unknown): string | undefined {
   return undefined
 }
 
-function changedFiles(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined
-  const paths = value.flatMap((change) => {
+function changedFiles(value: unknown): ChangedFile[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((change) => {
     const path = getString(change, "path")
-    return path ? [path] : []
+    return path ? [{ path }] : []
   })
-  return paths.length ? paths.slice(0, 3).join(", ") : undefined
+}
+
+function fileSummary(files: ChangedFile[]): string | undefined {
+  if (files.length === 0) return undefined
+  return files
+    .slice(0, 3)
+    .map((file) => file.path)
+    .join(", ")
+}
+
+/**
+ * Codex plan items are experimental app-server surface; accept the step-list
+ * shapes seen in the wild and fall back to a plain row when none match.
+ */
+export function codexPlanSteps(item: Record<string, unknown>): PlanStep[] {
+  const candidates = [item.plan, item.steps, item.items]
+  const list = candidates.find(Array.isArray)
+  if (!list) return []
+  return list.flatMap((entry) => {
+    if (typeof entry === "string") return [{ text: entry, status: "pending" }]
+    if (!isRecord(entry)) return []
+    const text =
+      getString(entry, "step") ??
+      getString(entry, "text") ??
+      getString(entry, "content") ??
+      getString(entry, "title")
+    if (!text) return []
+    const status = getString(entry, "status")
+    return [
+      {
+        text,
+        status:
+          status === "completed" || status === "done"
+            ? ("done" as const)
+            : status === "inProgress" || status === "in_progress"
+              ? ("active" as const)
+              : ("pending" as const),
+      },
+    ]
+  })
 }
 
 function wordsFromCamelCase(value: string): string {

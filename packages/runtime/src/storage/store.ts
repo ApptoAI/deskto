@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite"
 
+import type { ThreadSequences } from "../thread-sequences.js"
 import { transaction } from "./database.js"
 import { Activities } from "./activities.js"
 import { Settings } from "./settings.js"
@@ -18,12 +19,15 @@ export class Store {
   readonly turns: Turns
   readonly settings: Settings
 
-  constructor(private readonly database: DatabaseSync) {
+  constructor(
+    private readonly database: DatabaseSync,
+    sequences: ThreadSequences
+  ) {
     this.workspaces = new Workspaces(database)
     this.projects = new Projects(database, this.workspaces)
     this.packs = new Packs(database, this.workspaces)
     this.activities = new Activities(database)
-    this.threads = new Threads(database, this.projects)
+    this.threads = new Threads(database, this.projects, sequences)
     this.turns = new Turns(database)
     this.settings = new Settings(database)
   }

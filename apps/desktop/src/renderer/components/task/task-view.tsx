@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useState } from "react"
 import type { ExecutionProfile, Harness } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -11,11 +11,8 @@ import {
 import { describeThreadStatus } from "../../lib/thread-status.js"
 import { describeError } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
-import {
-  useRuntimeQuery,
-  type QueryState,
-} from "../../runtime/use-runtime-query.js"
-import { useThreadChanged } from "../../runtime/use-thread-changed.js"
+import { type QueryState } from "../../runtime/use-runtime-query.js"
+import { useThreadView } from "../../runtime/use-thread-view.js"
 import { HarnessLogo } from "../brand-logos.js"
 import { Composer } from "../composer.js"
 import { ContextUsageMeter } from "../context-usage-meter.js"
@@ -33,18 +30,8 @@ export function TaskView({
   harnesses: QueryState<Harness[]>
 }) {
   const client = useRuntimeClient()
-  const load = useCallback(() => client.getThread(threadId), [client, threadId])
-  const { state, revalidate, replace } = useRuntimeQuery(load)
+  const { state, revalidate, replace } = useThreadView(threadId)
   const [profileError, setProfileError] = useState<string | null>(null)
-
-  useThreadChanged(
-    useCallback(
-      (changedThreadId: string) => {
-        if (changedThreadId === threadId) revalidate()
-      },
-      [threadId, revalidate]
-    )
-  )
 
   if (state.status === "loading" || state.status === "idle") {
     return <StatusPanel title="Opening the task…" />

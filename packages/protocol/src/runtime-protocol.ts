@@ -1,8 +1,10 @@
 import { z } from "zod"
 
 import {
+  activitySchema,
   harnessSchema,
   executionProfileSchema,
+  messageSchema,
   packSchema,
   preferencesSchema,
   selectionSchema,
@@ -182,8 +184,34 @@ export type RuntimeResponse<M extends RuntimeMethod = RuntimeMethod> =
   | { ok: true; data: RuntimeResponses[M] }
   | { ok: false; error: { code: string; message: string } }
 
+/**
+ * One incremental change to an open Thread view. Deltas cover the
+ * high-frequency stream of a running Turn (text chunks, activity rows, usage);
+ * lifecycle transitions such as turn start, approvals, and completion still go
+ * through `thread.changed` and a full reload.
+ */
+export const threadDeltaChangeSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("message.appended"),
+    messageId: z.string(),
+    text: z.string(),
+  }),
+  z.object({ type: z.literal("message.upserted"), message: messageSchema }),
+  z.object({ type: z.literal("activity.upserted"), activity: activitySchema }),
+  z.object({ type: z.literal("thread.updated"), thread: threadSchema }),
+])
+
+export type ThreadDeltaChange = z.infer<typeof threadDeltaChangeSchema>
+
 export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
+  z.object({
+    type: z.literal("thread.delta"),
+    threadId: z.string(),
+    /** Matches ThreadView.seq: apply when seq is view seq + 1, else reload. */
+    seq: z.number().int().positive(),
+    change: threadDeltaChangeSchema,
+  }),
   z.object({ type: z.literal("harness.changed") }),
   z.object({ type: z.literal("settings.changed") }),
   z.object({ type: z.literal("workspace.changed") }),

@@ -1,19 +1,28 @@
 import { randomUUID } from "node:crypto"
 
 import type {
+  ActivityStart,
+  ActivityUpdate,
   ApprovalDecision,
   ContextUsage,
   HarnessEvent,
   HarnessFailure,
   HarnessSession,
 } from "@openappto/harness-sdk"
-import type { ThreadView } from "@openappto/protocol"
+import type { ThreadDeltaChange, ThreadView } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
+
+export type TurnEvents = {
+  /** Coarse invalidation: lifecycle transitions worth a full view reload. */
+  changed: (threadId: string) => void
+  /** Fine-grained change an open view applies without a reload. */
+  delta: (threadId: string, change: ThreadDeltaChange) => void
+}
 
 type StartingRun = ActiveTurnRecord & {
   threadId: string
@@ -31,6 +40,14 @@ type ActiveRun = ActiveTurnRecord & {
   pendingText: string
   approvalIds: Map<string, string>
   activityIds: Map<string, string>
+  /** Streaming assistant message currently receiving text, if one is open. */
+  segmentMessageId?: string
+  /** Whether the open segment holds flushed text a tool row should follow. */
+  segmentHasText: boolean
+  /** Most recently created assistant message; terminal states land on it. */
+  lastMessageId: string
+  /** Next shared position for messages and activities within this Turn. */
+  ordinal: number
   flushTimer?: ReturnType<typeof setTimeout>
   lastUsage?: ContextUsage
 }
@@ -43,7 +60,7 @@ export class TurnCoordinator {
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
-    private readonly changed: (threadId: string) => void
+    private readonly events: TurnEvents
   ) {}
 
   async start(threadId: string, prompt: string): Promise<ThreadView> {
@@ -65,7 +82,7 @@ export class TurnCoordinator {
       cancelled: false,
     }
     this.#runs.set(threadId, starting)
-    this.changed(threadId)
+    this.events.changed(threadId)
 
     try {
       const session = await harness.start(
@@ -100,6 +117,11 @@ export class TurnCoordinator {
         pendingText: "",
         approvalIds: new Map(),
         activityIds: new Map(),
+        segmentMessageId: turn.assistantMessageId,
+        segmentHasText: false,
+        lastMessageId: turn.assistantMessageId,
+        // The user message holds 0 and the first assistant segment holds 1.
+        ordinal: 2,
       }
       this.#runs.set(threadId, run)
       void this.#consume(threadId, run)
@@ -111,7 +133,7 @@ export class TurnCoordinator {
           turn.assistantMessageId,
           genericFailure(errorMessage(error))
         )
-        this.changed(threadId)
+        this.events.changed(threadId)
       }
       if (this.#runs.get(threadId) === starting) this.#runs.delete(threadId)
     }
@@ -129,7 +151,7 @@ export class TurnCoordinator {
       run.controller.abort()
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
       this.#runs.delete(threadId)
-      this.changed(threadId)
+      this.events.changed(threadId)
       return this.store.threads.view(threadId)
     }
 
@@ -144,18 +166,22 @@ export class TurnCoordinator {
       this.store.turns.fail(
         threadId,
         run.turnId,
-        run.assistantMessageId,
+        this.#terminalMessageId(run),
         genericFailure(message)
       )
       this.#runs.delete(threadId)
-      this.changed(threadId)
+      this.events.changed(threadId)
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
       run.terminal = true
       this.store.activities.failRunning(run.turnId)
-      this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
-      this.changed(threadId)
+      this.store.turns.cancel(
+        threadId,
+        run.turnId,
+        this.#terminalMessageId(run)
+      )
+      this.events.changed(threadId)
     }
     this.#runs.delete(threadId)
     return this.store.threads.view(threadId)
@@ -180,7 +206,7 @@ export class TurnCoordinator {
     }
     this.store.turns.resolveApproval(threadId, approvalId, decision)
     run.approvalIds.delete(approvalId)
-    this.changed(threadId)
+    this.events.changed(threadId)
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
@@ -206,7 +232,11 @@ export class TurnCoordinator {
       if (!run.terminal) {
         run.terminal = true
         this.store.activities.failRunning(run.turnId)
-        this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
+        this.store.turns.cancel(
+          threadId,
+          run.turnId,
+          this.#terminalMessageId(run)
+        )
       }
     }
     this.#runs.clear()
@@ -247,7 +277,7 @@ export class TurnCoordinator {
         break
       case "message.delta":
         this.#appendDelta(run, event.text)
-        return
+        break
       case "usage.updated": {
         const usage =
           event.usage.maxTokens === undefined &&
@@ -255,45 +285,62 @@ export class TurnCoordinator {
             ? { ...event.usage, maxTokens: run.lastUsage.maxTokens }
             : event.usage
         // Providers repeat usage reports; only a changed value is worth a
-        // write and a renderer refetch.
+        // write and a renderer update.
         if (
           run.lastUsage?.usedTokens === usage.usedTokens &&
           run.lastUsage.maxTokens === usage.maxTokens
         )
-          return
+          break
         run.lastUsage = usage
         this.store.threads.setContextUsage(threadId, usage)
+        this.events.delta(threadId, {
+          type: "thread.updated",
+          thread: this.store.threads.get(threadId),
+        })
         break
       }
       case "approval.requested":
         this.#flush(run)
         this.#requestApproval(threadId, run, event.request)
+        this.events.changed(threadId)
         break
       case "turn.completed":
         this.#flush(run)
         run.terminal = true
         this.store.activities.failRunning(run.turnId)
-        this.store.turns.complete(threadId, run.turnId, run.assistantMessageId)
+        this.store.turns.complete(
+          threadId,
+          run.turnId,
+          this.#terminalMessageId(run)
+        )
+        this.events.changed(threadId)
         break
       case "turn.failed":
         this.#fail(threadId, run, event.failure)
-        return
+        break
       case "activity.started":
         this.#startActivity(threadId, run, event.activity)
         break
+      case "activity.updated":
+        this.#updateActivity(threadId, run, event.update)
+        break
       case "activity.completed":
-        this.#completeActivity(run, event.id, event.outcome)
+        this.#completeActivity(threadId, run, event.id, event.outcome)
         break
     }
-    this.changed(threadId)
   }
 
   #fail(threadId: string, run: ActiveRun, failure: HarnessFailure): void {
     this.#flush(run)
     run.terminal = true
     this.store.activities.failRunning(run.turnId)
-    this.store.turns.fail(threadId, run.turnId, run.assistantMessageId, failure)
-    this.changed(threadId)
+    this.store.turns.fail(
+      threadId,
+      run.turnId,
+      this.#terminalMessageId(run),
+      failure
+    )
+    this.events.changed(threadId)
   }
 
   #appendDelta(run: ActiveRun, text: string): void {
@@ -318,22 +365,83 @@ export class TurnCoordinator {
   #startActivity(
     threadId: string,
     run: ActiveRun,
-    activity: Extract<HarnessEvent, { type: "activity.started" }>["activity"]
+    activity: ActivityStart
   ): void {
     if (run.activityIds.has(activity.id)) return
-    const id = this.store.activities.start(threadId, run.turnId, activity)
-    run.activityIds.set(activity.id, id)
+    // A top-level tool row after prose settles the current segment, so the
+    // next prose lands below the row instead of merging into one block.
+    // Subagent-internal work must not chop the main narration.
+    if (!activity.parentId) this.#closeSegment(threadId, run)
+    const parentId = activity.parentId
+      ? run.activityIds.get(activity.parentId)
+      : undefined
+    const record = this.store.activities.start(
+      threadId,
+      run.turnId,
+      run.ordinal++,
+      {
+        name: activity.name,
+        ...(activity.detail ? { detail: activity.detail } : {}),
+        ...(activity.payload ? { payload: activity.payload } : {}),
+        ...(parentId ? { parentId } : {}),
+      }
+    )
+    run.activityIds.set(activity.id, record.id)
+    this.events.delta(threadId, { type: "activity.upserted", activity: record })
+  }
+
+  #updateActivity(
+    threadId: string,
+    run: ActiveRun,
+    update: ActivityUpdate
+  ): void {
+    const id = run.activityIds.get(update.id)
+    if (!id) return
+    const record = this.store.activities.update(id, {
+      ...(update.name ? { name: update.name } : {}),
+      ...(update.detail ? { detail: update.detail } : {}),
+      ...(update.payload ? { payload: update.payload } : {}),
+    })
+    if (record)
+      this.events.delta(threadId, {
+        type: "activity.upserted",
+        activity: record,
+      })
   }
 
   #completeActivity(
+    threadId: string,
     run: ActiveRun,
     providerId: string,
     outcome: "completed" | "failed"
   ): void {
     const id = run.activityIds.get(providerId)
     if (!id) return
-    this.store.activities.complete(id, outcome)
-    run.activityIds.delete(providerId)
+    // The provider id stays mapped so later children can still name their
+    // parent, and the status guard makes repeated completions harmless.
+    const record = this.store.activities.complete(id, outcome)
+    if (record)
+      this.events.delta(threadId, {
+        type: "activity.upserted",
+        activity: record,
+      })
+  }
+
+  #closeSegment(threadId: string, run: ActiveRun): void {
+    this.#flush(run)
+    if (!run.segmentMessageId || !run.segmentHasText) return
+    const closed = this.store.turns.closeSegment(run.segmentMessageId)
+    run.segmentMessageId = undefined
+    run.segmentHasText = false
+    if (closed)
+      this.events.delta(threadId, {
+        type: "message.upserted",
+        message: closed,
+      })
+  }
+
+  #terminalMessageId(run: ActiveRun): string {
+    return run.segmentMessageId ?? run.lastMessageId
   }
 
   #flush(run: ActiveRun): void {
@@ -341,9 +449,27 @@ export class TurnCoordinator {
     run.flushTimer = undefined
     if (!run.pendingText) return
 
-    this.store.turns.appendDelta(run.assistantMessageId, run.pendingText)
+    if (!run.segmentMessageId) {
+      const segment = this.store.turns.addSegment(
+        run.threadId,
+        run.turnId,
+        run.ordinal++
+      )
+      run.segmentMessageId = segment.id
+      run.lastMessageId = segment.id
+      this.events.delta(run.threadId, {
+        type: "message.upserted",
+        message: segment,
+      })
+    }
+    this.store.turns.appendDelta(run.segmentMessageId, run.pendingText)
+    this.events.delta(run.threadId, {
+      type: "message.appended",
+      messageId: run.segmentMessageId,
+      text: run.pendingText,
+    })
     run.pendingText = ""
-    this.changed(run.threadId)
+    run.segmentHasText = true
   }
 }
 

@@ -80,9 +80,7 @@ export class RequestRouter {
         return this.harnesses.refresh()
       case "preferences.get": {
         const stored = lastProfileSchema.safeParse(
-          this.store.settings.get(
-            lastProfileKeyFor(request.params.workspaceId)
-          )
+          this.store.settings.get(lastProfileKeyFor(request.params.workspaceId))
         )
         return { lastProfile: stored.success ? stored.data : null }
       }

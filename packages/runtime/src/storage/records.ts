@@ -1,10 +1,11 @@
-import type {
-  Activity,
-  Approval,
-  Message,
-  Thread,
-  Project,
-  Workspace,
+import {
+  activityPayloadSchema,
+  type Activity,
+  type Approval,
+  type Message,
+  type Thread,
+  type Project,
+  type Workspace,
 } from "@openappto/protocol"
 
 export type WorkspaceRow = {
@@ -52,6 +53,7 @@ export type MessageRow = {
   error: string | null
   failure_kind: "usage-limit" | "error" | null
   failure_reset_at: string | null
+  ordinal: number | null
   created_at: string
 }
 
@@ -62,6 +64,9 @@ export type ActivityRow = {
   name: string
   detail: string | null
   status: Activity["status"]
+  payload: string | null
+  parent_id: string | null
+  ordinal: number | null
   created_at: string
   finished_at: string | null
 }
@@ -162,6 +167,7 @@ export function toMessage(row: MessageRow): Message {
     state: row.state,
     ...(failure ? { failure } : {}),
     ...(row.error ? { error: row.error } : {}),
+    ...(row.ordinal !== null ? { ordinal: row.ordinal } : {}),
     createdAt: row.created_at,
   }
 }
@@ -175,7 +181,23 @@ export function toActivity(row: ActivityRow): Activity {
     status: row.status,
     createdAt: row.created_at,
     ...(row.detail ? { detail: row.detail } : {}),
+    ...(parsedPayload(row.payload) ?? {}),
+    ...(row.parent_id ? { parentActivityId: row.parent_id } : {}),
+    ...(row.ordinal !== null ? { ordinal: row.ordinal } : {}),
     ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
+  }
+}
+
+/** A payload written by a newer build than this one reads as a plain row. */
+function parsedPayload(
+  raw: string | null
+): Pick<Activity, "payload"> | undefined {
+  if (!raw) return undefined
+  try {
+    const result = activityPayloadSchema.safeParse(JSON.parse(raw))
+    return result.success ? { payload: result.data } : undefined
+  } catch {
+    return undefined
   }
 }
 

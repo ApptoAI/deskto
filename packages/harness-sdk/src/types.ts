@@ -80,14 +80,50 @@ export type HarnessFailure = {
   resetAt?: string
 }
 
+export type PlanStepStatus = "pending" | "active" | "done"
+
+export type PlanStep = { text: string; status: PlanStepStatus }
+
+export type ChangedFile = {
+  path: string
+  additions?: number
+  deletions?: number
+}
+
+/**
+ * Provider-neutral classification of one Activity. Adapters map their native
+ * item vocabulary into these kinds; an Activity without a payload is a plain
+ * labeled row. Payloads stay bounded summaries — no transcripts, no raw tool
+ * output.
+ */
+export type ActivityPayload =
+  | { kind: "tool"; tool: "command" | "search" | "web" | "mcp" | "other" }
+  | { kind: "file-change"; files: ChangedFile[] }
+  | { kind: "plan"; steps: PlanStep[] }
+  | { kind: "subagent"; agentType?: string }
+
+export type ActivityStart = {
+  id: string
+  name: string
+  detail?: string
+  payload?: ActivityPayload
+  /** Provider id of the Activity this one runs inside, e.g. a subagent. */
+  parentId?: string
+}
+
+export type ActivityUpdate = {
+  id: string
+  name?: string
+  detail?: string
+  payload?: ActivityPayload
+}
+
 export type HarnessEvent =
   | { type: "session.started"; providerSessionId: string }
   | { type: "message.delta"; text: string }
   | { type: "usage.updated"; usage: ContextUsage }
-  | {
-      type: "activity.started"
-      activity: { id: string; name: string; detail?: string }
-    }
+  | { type: "activity.started"; activity: ActivityStart }
+  | { type: "activity.updated"; update: ActivityUpdate }
   | {
       type: "activity.completed"
       id: string

@@ -160,6 +160,12 @@ const migrations = [
     ALTER TABLE turns ADD COLUMN failure_kind TEXT;
     ALTER TABLE turns ADD COLUMN failure_reset_at TEXT;
   `,
+  `
+    ALTER TABLE activities ADD COLUMN payload TEXT;
+    ALTER TABLE activities ADD COLUMN parent_id TEXT;
+    ALTER TABLE activities ADD COLUMN ordinal INTEGER;
+    ALTER TABLE messages ADD COLUMN ordinal INTEGER;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

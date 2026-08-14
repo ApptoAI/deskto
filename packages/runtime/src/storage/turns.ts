@@ -5,11 +5,12 @@ import type {
   Approval,
   ExecutionProfile,
   HarnessFailure,
+  Message,
 } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
-import type { ThreadRow } from "./records.js"
+import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
 
 export type ActiveTurnRecord = {
   turnId: string
@@ -65,12 +66,12 @@ export class Turns {
         )
       this.database
         .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, created_at) VALUES (?, ?, ?, 'user', ?, 'complete', ?)"
+          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, 'complete', 0, ?)"
         )
         .run(userMessageId, threadId, turnId, prompt, now)
       this.database
         .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', ?)"
+          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"
         )
         .run(assistantMessageId, threadId, turnId, now)
       this.database
@@ -121,6 +122,39 @@ export class Turns {
         "UPDATE messages SET content = content || ? WHERE id = ? AND state = 'streaming'"
       )
       .run(text, messageId)
+  }
+
+  /**
+   * Opens a further assistant message inside a running Turn, so prose that
+   * follows tool work lands after it instead of merging into one block.
+   */
+  addSegment(threadId: string, turnId: string, ordinal: number): Message {
+    const id = randomUUID()
+    this.database
+      .prepare(
+        "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', ?, ?)"
+      )
+      .run(id, threadId, turnId, ordinal, new Date().toISOString())
+    return this.requireMessage(id)
+  }
+
+  /** Settles a streaming segment when work moves on past it. */
+  closeSegment(messageId: string): Message | undefined {
+    const result = this.database
+      .prepare(
+        "UPDATE messages SET state = 'complete' WHERE id = ? AND state = 'streaming'"
+      )
+      .run(messageId)
+    if (result.changes === 0) return undefined
+    return this.requireMessage(messageId)
+  }
+
+  requireMessage(id: string): Message {
+    const row = this.database
+      .prepare("SELECT * FROM messages WHERE id = ?")
+      .get(id) as MessageRow | undefined
+    if (!row) throw new RuntimeError("message-not-found", "Message not found")
+    return toMessage(row)
   }
 
   requestApproval(

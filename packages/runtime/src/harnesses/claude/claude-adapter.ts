@@ -8,6 +8,7 @@ import {
 import {
   AsyncQueue,
   harnessFailure,
+  type ActivityStart,
   type ApprovalDecision,
   type HarnessAdapterFactory,
   type HarnessEvent,
@@ -15,6 +16,7 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type PlanStep,
 } from "@openappto/harness-sdk"
 
 import { positiveTokens } from "../token-usage.js"
@@ -97,6 +99,7 @@ class ClaudeSession implements HarnessSession {
   #primaryModel?: string
   #usageLimitResetAt?: string
   #terminalEventEmitted = false
+  #planStarted = false
 
   constructor(
     input: HarnessRunInput,
@@ -271,15 +274,16 @@ class ClaudeSession implements HarnessSession {
       }
       for (const block of message.message.content) {
         if (block.type !== "tool_use") continue
+        const parentId = message.parent_tool_use_id ?? undefined
+        // The main thread's todo list is the Turn's plan: one activity,
+        // updated in place. A subagent's own todos stay ordinary tool rows.
+        if (!parentId && block.name === "TodoWrite") {
+          this.#pushPlan(block.input)
+          continue
+        }
         this.#queue.push({
           type: "activity.started",
-          activity: {
-            id: block.id,
-            name: readableToolName(block.name),
-            ...(readableInput(block.input)
-              ? { detail: readableInput(block.input) }
-              : {}),
-          },
+          activity: claudeActivity(block.id, block.name, block.input, parentId),
         })
       }
       return
@@ -371,10 +375,38 @@ class ClaudeSession implements HarnessSession {
     this.#emitTerminal({ type: "turn.failed", failure })
   }
 
+  /** Emits the plan once, then updates the same activity in place. */
+  #pushPlan(input: unknown): void {
+    const steps = planStepsFromTodos(input)
+    if (steps.length === 0) return
+    const payload = { kind: "plan" as const, steps }
+    if (this.#planStarted) {
+      this.#queue.push({
+        type: "activity.updated",
+        update: { id: planActivityId, payload },
+      })
+      return
+    }
+    this.#planStarted = true
+    this.#queue.push({
+      type: "activity.started",
+      activity: { id: planActivityId, name: "Plan", payload },
+    })
+  }
+
   #emitTerminal(
     event: Extract<HarnessEvent, { type: "turn.completed" | "turn.failed" }>
   ): void {
     if (this.#terminalEventEmitted) return
+    // A finished turn settles the plan; an interrupted one leaves it to the
+    // Runtime, which marks still-running activities as failed.
+    if (event.type === "turn.completed" && this.#planStarted) {
+      this.#queue.push({
+        type: "activity.completed",
+        id: planActivityId,
+        outcome: "completed",
+      })
+    }
     this.#queue.push(event)
     this.#terminalEventEmitted = true
   }
@@ -419,6 +451,104 @@ class ClaudeSession implements HarnessSession {
   }
 }
 
+const planActivityId = "claude-plan"
+
+/** Classifies one Claude tool call into the provider-neutral activity shape. */
+export function claudeActivity(
+  id: string,
+  toolName: string,
+  input: unknown,
+  parentId: string | undefined
+): ActivityStart {
+  const base = { id, ...(parentId ? { parentId } : {}) }
+  const detail = readableInput(input)
+
+  if (toolName === "Task") {
+    const description = isRecord(input) ? input.description : undefined
+    const agentType = isRecord(input) ? input.subagent_type : undefined
+    return {
+      ...base,
+      name: typeof description === "string" ? description : "Subagent",
+      ...(typeof agentType === "string"
+        ? { detail: agentType, payload: { kind: "subagent", agentType } }
+        : { payload: { kind: "subagent" } }),
+    }
+  }
+
+  if (fileChangeTools.has(toolName)) {
+    const filePath =
+      isRecord(input) && typeof input.file_path === "string"
+        ? input.file_path
+        : undefined
+    return {
+      ...base,
+      name: readableToolName(toolName),
+      ...(filePath
+        ? {
+            detail: filePath,
+            payload: { kind: "file-change", files: [{ path: filePath }] },
+          }
+        : {}),
+    }
+  }
+
+  const mcp = mcpToolParts(toolName)
+  if (mcp) {
+    return {
+      ...base,
+      name: mcp.tool,
+      detail: mcp.server,
+      payload: { kind: "tool", tool: "mcp" },
+    }
+  }
+
+  return {
+    ...base,
+    name: readableToolName(toolName),
+    ...(detail ? { detail } : {}),
+    payload: { kind: "tool", tool: toolCategory(toolName) },
+  }
+}
+
+function toolCategory(
+  toolName: string
+): "command" | "search" | "web" | "other" {
+  if (toolName === "Bash") return "command"
+  if (toolName === "Glob" || toolName === "Grep") return "search"
+  if (toolName === "WebFetch" || toolName === "WebSearch") return "web"
+  return "other"
+}
+
+const fileChangeTools = new Set(["Edit", "Write", "NotebookEdit"])
+
+/** Splits an MCP tool id like `mcp__linear__create_issue`. */
+function mcpToolParts(
+  toolName: string
+): { server: string; tool: string } | undefined {
+  if (!toolName.startsWith("mcp__")) return undefined
+  const rest = toolName.slice("mcp__".length)
+  const separator = rest.indexOf("__")
+  if (separator <= 0) return undefined
+  return {
+    server: rest.slice(0, separator),
+    tool: rest.slice(separator + 2).replaceAll("_", " ") || toolName,
+  }
+}
+
+export function planStepsFromTodos(input: unknown): PlanStep[] {
+  if (!isRecord(input) || !Array.isArray(input.todos)) return []
+  return input.todos.flatMap((todo) => {
+    if (!isRecord(todo) || typeof todo.content !== "string") return []
+    const status =
+      todo.status === "completed"
+        ? ("done" as const)
+        : todo.status === "in_progress"
+          ? ("active" as const)
+          : ("pending" as const)
+    return [{ text: todo.content, status }]
+  })
+}
+
 function readableInput(input: unknown): string | undefined {
   if (!isRecord(input)) return undefined
   const command = input.command
@@ -430,6 +560,8 @@ function readableInput(input: unknown): string | undefined {
   if (typeof query === "string") return query
   const pattern = input.pattern
   if (typeof pattern === "string") return pattern
+  const url = input.url
+  if (typeof url === "string") return url
   return undefined
 }
 
@@ -443,6 +575,7 @@ function readableToolName(name: string): string {
     WebFetch: "Fetch webpage",
     WebSearch: "Search web",
     Write: "Write file",
+    NotebookEdit: "Edit notebook",
   }
   return names[name] ?? name
 }
