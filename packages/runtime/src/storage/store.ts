@@ -21,7 +21,7 @@ export class Store {
   constructor(private readonly database: DatabaseSync) {
     this.workspaces = new Workspaces(database)
     this.projects = new Projects(database, this.workspaces)
-    this.packs = new Packs(database)
+    this.packs = new Packs(database, this.workspaces)
     this.activities = new Activities(database)
     this.threads = new Threads(database, this.projects)
     this.turns = new Turns(database)

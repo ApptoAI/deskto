@@ -356,6 +356,7 @@ export function Workbench() {
                 onClick={() => {
                   revalidateWorkspaces()
                   revalidateProjects()
+                  selectionQuery.revalidate()
                 }}
               >
                 Try again

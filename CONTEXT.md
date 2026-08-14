@@ -21,7 +21,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
 - **Execution Profile**: The model, thinking level, and permission mode used by a Harness. A Thread owns the editable profile; every Turn stores the profile it started with.
-- **Pack**: A future versioned bundle of skills, prompts, MCP configuration, templates, and tool requirements.
+- **Pack**: An app-managed directory of skills that can be created locally or imported and attached to multiple Workspaces. Prompts, MCP configuration, templates, tool requirements, and versioning may follow.
 - **Catalog**: A future list of Packs available to a person or organization.
 - **Hub**: A future service that publishes Catalogs and Packs. A Hub does not execute Threads.
 
@@ -54,7 +54,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Web and mobile Surfaces
 - A remotely hosted Runtime
 - Authentication and team administration
-- Hub, Catalog, Pack installation, and policy enforcement
+- Hub, Catalog, remote Pack distribution, and policy enforcement
 - MCP and CLI provisioning
 - Starter project distribution
 - Search, pinning, inbox, automation, and usage screens

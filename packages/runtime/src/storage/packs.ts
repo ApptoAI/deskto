@@ -3,10 +3,14 @@ import type { DatabaseSync } from "node:sqlite"
 
 import { RuntimeError } from "../errors.js"
 import type { PackRow } from "./records.js"
+import type { Workspaces } from "./workspaces.js"
 
 /** Registration only; a Pack's content lives in its directory on disk. */
 export class Packs {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly workspaces: Workspaces
+  ) {}
 
   list(): PackRow[] {
     return this.database
@@ -67,7 +71,18 @@ export class Packs {
     return byPack
   }
 
+  workspaceIdsFor(packId: string): string[] {
+    return (
+      this.database
+        .prepare(
+          "SELECT workspace_id FROM workspace_packs WHERE pack_id = ? ORDER BY workspace_id"
+        )
+        .all(packId) as { workspace_id: string }[]
+    ).map((row) => row.workspace_id)
+  }
+
   setAttached(workspaceId: string, packId: string, attached: boolean): void {
+    this.workspaces.get(workspaceId)
     this.get(packId)
     if (attached) {
       this.database

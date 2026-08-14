@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs"
+import { existsSync, statSync } from "node:fs"
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
 
@@ -22,7 +22,15 @@ export function existingSkillRoots(
 ): SkillRoot[] {
   return packs
     .map((pack) => ({ path: skillsDirectory(pack.path), name: pack.name }))
-    .filter((root) => existsSync(root.path))
+    .filter((root) => isDirectory(root.path))
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 /** Resolves a path and asserts it is a directory, with caller-owned wording. */
@@ -69,11 +77,11 @@ export async function validatePackDirectory(path: string): Promise<string> {
     missing: "Pack folder does not exist",
     notFolder: "Pack path is not a folder",
   })
-  if (!existsSync(skillsDirectory(resolved)))
-    throw new RuntimeError(
-      "invalid-pack",
-      "A pack folder must contain a skills directory"
-    )
+  await resolvedDirectory(skillsDirectory(resolved), {
+    code: "invalid-pack",
+    missing: "A pack folder must contain a skills directory",
+    notFolder: "A pack folder must contain a skills directory",
+  })
   return resolved
 }
 

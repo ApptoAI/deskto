@@ -236,6 +236,9 @@ function PackSection({
 }: { workspace: Workspace; packs: Pack[] } & PackActions) {
   const [newPackName, setNewPackName] = useState("")
   const [busy, setBusy] = useState(false)
+  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(
+    null
+  )
 
   async function run(action: () => Promise<void>) {
     setBusy(true)
@@ -282,9 +285,16 @@ function PackSection({
                 size="xs"
                 className="text-muted-foreground"
                 disabled={busy}
-                onClick={() => void run(() => onRemove(pack.id))}
+                onClick={() => {
+                  if (confirmingRemoval === pack.id) {
+                    setConfirmingRemoval(null)
+                    void run(() => onRemove(pack.id))
+                  } else {
+                    setConfirmingRemoval(pack.id)
+                  }
+                }}
               >
-                Remove
+                {confirmingRemoval === pack.id ? "Remove for all?" : "Remove"}
               </Button>
               <Switch
                 checked={pack.workspaceIds.includes(workspace.id)}

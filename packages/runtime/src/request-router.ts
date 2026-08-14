@@ -133,6 +133,15 @@ export class RequestRouter {
       case "selection.get":
         return this.#selection()
       case "selection.set": {
+        this.store.workspaces.get(request.params.workspaceId)
+        if (request.params.projectId) {
+          const project = this.store.projects.get(request.params.projectId)
+          if (project.workspaceId !== request.params.workspaceId)
+            throw new RuntimeError(
+              "invalid-selection",
+              "Project does not belong to workspace"
+            )
+        }
         const current = this.#selection()
         const next: Selection = {
           lastWorkspaceId: request.params.workspaceId,
@@ -167,7 +176,6 @@ export class RequestRouter {
         return null
       }
       case "workspace.setPack": {
-        this.store.workspaces.get(request.params.workspaceId)
         this.store.packs.setAttached(
           request.params.workspaceId,
           request.params.packId,
@@ -260,9 +268,7 @@ export class RequestRouter {
     return {
       ...toPackRecord(row),
       skills: await readPackSkills(row.path),
-      workspaceIds:
-        workspaceIds ??
-        (this.store.packs.attachedWorkspaceIds().get(row.id) ?? []),
+      workspaceIds: workspaceIds ?? this.store.packs.workspaceIdsFor(row.id),
     }
   }
 

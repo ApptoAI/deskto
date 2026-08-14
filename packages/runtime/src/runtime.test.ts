@@ -6,6 +6,7 @@ import type { HarnessAdapterFactory } from "@openappto/harness-sdk"
 import { ScriptedHarness } from "@openappto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { existingSkillRoots } from "./packs/pack-files.js"
 import { createRuntime } from "./runtime.js"
 
 const directories: string[] = []
@@ -406,12 +407,50 @@ describe("Runtime", () => {
     )
     expect(project.workspaceId).toBe(press.id)
 
+    const other = unwrap(
+      await runtime.request({
+        method: "workspace.create",
+        params: { name: "Other", color: "rose", icon: "star" },
+      })
+    )
+
     unwrap(
       await runtime.request({
         method: "selection.set",
         params: { workspaceId: press.id, projectId: project.id },
       })
     )
+
+    const mismatchedSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: other.id, projectId: project.id },
+    })
+    expect(mismatchedSelection.ok).toBe(false)
+    if (!mismatchedSelection.ok)
+      expect(mismatchedSelection.error.code).toBe("invalid-selection")
+
+    const missingWorkspaceSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: "missing" },
+    })
+    expect(missingWorkspaceSelection.ok).toBe(false)
+    if (!missingWorkspaceSelection.ok)
+      expect(missingWorkspaceSelection.error.code).toBe("workspace-not-found")
+
+    const missingProjectSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: press.id, projectId: "missing" },
+    })
+    expect(missingProjectSelection.ok).toBe(false)
+    if (!missingProjectSelection.ok)
+      expect(missingProjectSelection.error.code).toBe("project-not-found")
+
+    expect(
+      unwrap(await runtime.request({ method: "selection.get", params: {} }))
+    ).toEqual({
+      lastWorkspaceId: press.id,
+      lastProjectIds: { [press.id]: project.id },
+    })
 
     unwrap(
       await runtime.request({
@@ -422,7 +461,10 @@ describe("Runtime", () => {
     const remaining = unwrap(
       await runtime.request({ method: "workspace.list", params: {} })
     )
-    expect(remaining.map((workspace) => workspace.id)).toEqual(["personal"])
+    expect(remaining.map((workspace) => workspace.id)).toEqual([
+      "personal",
+      other.id,
+    ])
 
     const projects = unwrap(
       await runtime.request({ method: "project.list", params: {} })
@@ -442,12 +484,6 @@ describe("Runtime", () => {
     if (!undeletable.ok)
       expect(undeletable.error.code).toBe("workspace-not-deletable")
 
-    const other = unwrap(
-      await runtime.request({
-        method: "workspace.create",
-        params: { name: "Other", color: "rose", icon: "star" },
-      })
-    )
     const conflict = await runtime.request({
       method: "project.add",
       params: { path: directory, name: "Example", workspaceId: other.id },
@@ -456,7 +492,13 @@ describe("Runtime", () => {
     if (!conflict.ok)
       expect(conflict.error.code).toBe("project-in-other-workspace")
 
-    expect(events.filter((type) => type === "workspace.changed").length).toBe(4)
+    expect(events).toEqual([
+      "workspace.changed",
+      "workspace.changed",
+      "workspace.changed",
+      "workspace.changed",
+      "pack.changed",
+    ])
     await runtime.close()
   })
 
@@ -478,6 +520,27 @@ describe("Runtime", () => {
     )
     expect(created.path).toBe(join(directory, "packs", "press-tools"))
     expect(created.skills).toEqual([])
+
+    const malformedPackPath = join(directory, "malformed-pack")
+    await mkdir(malformedPackPath)
+    await writeFile(join(malformedPackPath, "skills"), "not a directory")
+    const malformedPack = await runtime.request({
+      method: "pack.import",
+      params: { path: malformedPackPath },
+    })
+    expect(malformedPack.ok).toBe(false)
+    if (!malformedPack.ok) expect(malformedPack.error.code).toBe("invalid-pack")
+    expect(
+      existingSkillRoots([{ path: malformedPackPath, name: "Malformed" }])
+    ).toEqual([])
+
+    const invalidAttachment = await runtime.request({
+      method: "workspace.setPack",
+      params: { workspaceId: "missing", packId: created.id, attached: true },
+    })
+    expect(invalidAttachment.ok).toBe(false)
+    if (!invalidAttachment.ok)
+      expect(invalidAttachment.error.code).toBe("workspace-not-found")
 
     await mkdir(join(created.path, "skills", "summarize"), { recursive: true })
     await writeFile(
