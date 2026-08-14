@@ -108,6 +108,50 @@ describe("codexActivity", () => {
     })
   })
 
+  it.each([
+    [
+      {
+        id: "mcp",
+        type: "mcpToolCall",
+        server: "linear",
+        tool: "create_issue",
+      },
+      {
+        id: "mcp",
+        name: "create_issue",
+        detail: "linear",
+        payload: { kind: "tool", tool: "mcp" },
+      },
+    ],
+    [
+      { id: "web", type: "webSearch", query: "activity payloads" },
+      {
+        id: "web",
+        name: "Search web",
+        detail: "activity payloads",
+        payload: { kind: "tool", tool: "web" },
+      },
+    ],
+    [
+      { id: "image", type: "imageView" },
+      {
+        id: "image",
+        name: "View image",
+        payload: { kind: "tool", tool: "other" },
+      },
+    ],
+    [
+      { id: "future", type: "futureItem" },
+      {
+        id: "future",
+        name: "Future Item",
+        payload: { kind: "tool", tool: "other" },
+      },
+    ],
+  ])("classifies supported and fallback item %s", (item, expected) => {
+    expect(codexActivity(item)).toEqual(expected)
+  })
+
   it("keeps plan items instead of dropping them", () => {
     expect(
       codexActivity({
@@ -238,6 +282,17 @@ describe("CodexAdapter activity notifications", () => {
           payload: {
             kind: "plan",
             steps: [{ text: "Research", status: "active" }],
+          },
+        },
+      },
+      {
+        type: "activity.updated",
+        update: {
+          id: "plan-1",
+          name: "Plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Research", status: "done" }],
           },
         },
       },

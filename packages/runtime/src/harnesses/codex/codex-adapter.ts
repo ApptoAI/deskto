@@ -263,21 +263,13 @@ class CodexSession implements HarnessSession {
       } else if (notification.method === "item/updated") {
         // Codex repeats item/updated while an item runs; identical shapes
         // would burn a write, a sequence number, and a renderer pass each.
-        const shape = JSON.stringify(activity)
-        if (this.#lastActivityShape.get(activity.id) === shape) return
-        this.#lastActivityShape.set(activity.id, shape)
-        this.#queue.push({
-          type: "activity.updated",
-          update: {
-            id: activity.id,
-            name: activity.name,
-            ...(activity.detail ? { detail: activity.detail } : {}),
-            ...(activity.payload ? { payload: activity.payload } : {}),
-          },
-        })
+        this.#pushActivityUpdate(activity)
       } else {
         const status = getString(item, "status")
         const type = getString(item, "type")
+        // The terminal item can contain the final plan or file-change shape
+        // even when Codex did not send a matching item/updated notification.
+        this.#pushActivityUpdate(activity)
         this.#lastActivityShape.delete(activity.id)
         this.#queue.push({
           type: "activity.completed",
@@ -322,6 +314,23 @@ class CodexSession implements HarnessSession {
       })
     }
     this.#finish()
+  }
+
+  #pushActivityUpdate(activity: ActivityStart): void {
+    const shape = JSON.stringify(activity)
+    if (this.#lastActivityShape.get(activity.id) === shape) return
+    this.#lastActivityShape.set(activity.id, shape)
+    this.#queue.push({
+      type: "activity.updated",
+      update: {
+        id: activity.id,
+        name: activity.name,
+        ...(activity.detail !== undefined ? { detail: activity.detail } : {}),
+        ...(activity.payload !== undefined
+          ? { payload: activity.payload }
+          : {}),
+      },
+    })
   }
 
   #onRequest(request: CodexServerRequest): void {
@@ -369,6 +378,7 @@ class CodexSession implements HarnessSession {
       }
     }
     this.#discardApprovals()
+    this.#lastActivityShape.clear()
     this.client.close()
     this.#queue.close()
   }

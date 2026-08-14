@@ -1204,8 +1204,13 @@ describe("Runtime", () => {
         id: "orphan-tool",
         parentId: "missing-parent",
         name: "Read file",
+        detail: "draft.md",
         payload: { kind: "tool", tool: "other" },
       },
+    })
+    run.emit({
+      type: "activity.updated",
+      update: { id: "orphan-tool", detail: "" },
     })
     run.emit({ type: "message.delta", text: "Checked the result." })
     run.emit({ type: "turn.completed" })
@@ -1240,6 +1245,7 @@ describe("Runtime", () => {
       (message) => message.content === "Checked the result."
     )!
     expect(orphan.parentActivityId).toBeUndefined()
+    expect(orphan.detail).toBeUndefined()
     expect(following.ordinal).toBeGreaterThan(orphan.ordinal!)
     // The tool never reported completion; a finished turn settles it as
     // completed rather than blaming it with a failure mark.

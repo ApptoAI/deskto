@@ -434,9 +434,9 @@ export class TurnCoordinator {
     const id = run.activityIds.get(update.id)
     if (!id) return
     const record = this.store.activities.update(id, {
-      ...(update.name ? { name: update.name } : {}),
-      ...(update.detail ? { detail: update.detail } : {}),
-      ...(update.payload ? { payload: update.payload } : {}),
+      ...(update.name !== undefined ? { name: update.name } : {}),
+      ...(update.detail !== undefined ? { detail: update.detail } : {}),
+      ...(update.payload !== undefined ? { payload: update.payload } : {}),
     })
     if (record)
       this.events.delta(threadId, {
