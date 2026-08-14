@@ -10,19 +10,21 @@ The desktop app talks to the Runtime over Electron IPC today. A hosted Runtime c
 
 Domain records, defined as zod schemas with types inferred from them:
 
-- `Workspace`, a folder opened as a project
-- `Thread`, a task inside a workspace, with its status and execution profile
+- `Workspace`, a container of projects with a name, color, icon, and ordering; every install has a non-deletable `personal` workspace
+- `Project`, a folder opened as a project, belonging to exactly one workspace
+- `Pack`, a directory of skills the user manages in the app, attachable to many workspaces
+- `Thread`, a task inside a project, with its status and execution profile
 - `Message`, `Activity`, and `Approval`, the things a thread displays
 - `Harness`, an agent product with its availability and model catalog
 - `ThreadView`, the aggregate most calls return: the thread plus its messages, activities, and any pending approval
-- `ExecutionProfile` and `Preferences`
+- `ExecutionProfile`, `Preferences`, and `Selection` (the last active workspace and project, so a restart reopens them)
 - `SettingsSnapshot`, the effective user settings: every value in effect plus the subset the user overrode. Values are opaque JSON here; both sides read them through `@openappto/settings`
 
-Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`. There are 15 methods across seven groups: `harness.*` (list, setEnabled, refresh), `preferences.get`, `settings.*` (get, update), `workspace.*` (list, add), `thread.*` (list, create, configure, get), `turn.*` (start, cancel), and `approval.resolve`. The Runtime validates incoming requests with this schema at the IPC boundary.
+Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`. The groups are `harness.*` (list, setEnabled, refresh), `preferences.get`, `settings.*` (get, update), `workspace.*` (list, create, update, delete, setPack), `selection.*` (get, set), `pack.*` (list, create, import, remove), `project.*` (list, add, move), `thread.*` (list, create, configure, get), `turn.*` (start, cancel), and `approval.resolve`. The Runtime validates incoming requests with this schema at the IPC boundary.
 
 Responses are typed through the `RuntimeResponses` map. Every call resolves to `{ ok: true, data }` or `{ ok: false, error: { code, message } }`, so transport code never throws domain errors.
 
-Events are a second discriminated union with three members: `thread.changed` (with a `threadId`), `harness.changed`, and `settings.changed`. Events carry no payloads beyond the id. They tell an open view to refetch; they are not a data stream.
+Events are a second discriminated union: `thread.changed` (with a `threadId`), `harness.changed`, `settings.changed`, `workspace.changed`, and `pack.changed`. Events carry no payloads beyond the id. They tell an open view to refetch; they are not a data stream.
 
 The `RuntimeTransport` interface ties it together: `request()` for calls and `subscribe()` for events. The Runtime implements it in-process and the desktop app implements it over IPC.
 
