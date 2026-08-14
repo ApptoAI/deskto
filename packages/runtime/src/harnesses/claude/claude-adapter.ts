@@ -90,6 +90,7 @@ class ClaudeSession implements HarnessSession {
   #drainingApprovals = false
   #lastUsedTokens = 0
   #lastKnownMaxTokens?: number
+  #primaryModel?: string
 
   constructor(
     input: HarnessRunInput,
@@ -225,6 +226,7 @@ class ClaudeSession implements HarnessSession {
       // Subagent (sidechain) messages run in their own context; only the main
       // thread's usage describes this session's window.
       if (message.parent_tool_use_id === null) {
+        this.#primaryModel = message.message.model
         const usedTokens = contextTokens(message.message.usage)
         if (usedTokens > 0) this.#pushUsage(usedTokens)
       }
@@ -272,7 +274,10 @@ class ClaudeSession implements HarnessSession {
     // the window is already known this stays silent — modelUsage spans subagent
     // models whose larger windows would skew the denominator.
     if (!this.#lastKnownMaxTokens) {
-      const contextWindow = maxContextWindow(message.modelUsage)
+      const contextWindow = primaryContextWindow(
+        message.modelUsage,
+        this.#primaryModel
+      )
       if (contextWindow) {
         this.#lastKnownMaxTokens = contextWindow
         if (this.#lastUsedTokens > 0) this.#pushUsage(this.#lastUsedTokens)
@@ -408,13 +413,12 @@ function contextTokens(usage: unknown): number {
   )
 }
 
-function maxContextWindow(
-  modelUsage: Record<string, { contextWindow: number }>
+function primaryContextWindow(
+  modelUsage: Record<string, { contextWindow: number }>,
+  primaryModel: string | undefined
 ): number | undefined {
-  const windows = Object.values(modelUsage)
-    .map((usage) => usage.contextWindow)
-    .filter((window) => Number.isFinite(window) && window > 0)
-  return windows.length ? Math.max(...windows) : undefined
+  if (!primaryModel) return undefined
+  return positiveTokens(modelUsage[primaryModel]?.contextWindow)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

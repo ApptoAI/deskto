@@ -237,17 +237,23 @@ export class TurnCoordinator {
       case "message.delta":
         this.#appendDelta(run, event.text)
         return
-      case "usage.updated":
+      case "usage.updated": {
+        const usage =
+          event.usage.maxTokens === undefined &&
+          run.lastUsage?.maxTokens !== undefined
+            ? { ...event.usage, maxTokens: run.lastUsage.maxTokens }
+            : event.usage
         // Providers repeat usage reports; only a changed value is worth a
         // write and a renderer refetch.
         if (
-          run.lastUsage?.usedTokens === event.usage.usedTokens &&
-          run.lastUsage.maxTokens === event.usage.maxTokens
+          run.lastUsage?.usedTokens === usage.usedTokens &&
+          run.lastUsage.maxTokens === usage.maxTokens
         )
           return
-        run.lastUsage = event.usage
-        this.store.threads.setContextUsage(threadId, event.usage)
+        run.lastUsage = usage
+        this.store.threads.setContextUsage(threadId, usage)
         break
+      }
       case "approval.requested":
         this.#flush(run)
         this.#requestApproval(threadId, run, event.request)

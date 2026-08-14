@@ -11,12 +11,13 @@ const radius = 9.75
 const circumference = 2 * Math.PI * radius
 
 export function ContextUsageMeter({ usage }: { usage: ContextUsage }) {
-  const percentage = usage.maxTokens
-    ? Math.min(100, (usage.usedTokens / usage.maxTokens) * 100)
+  const actualPercentage = usage.maxTokens
+    ? (usage.usedTokens / usage.maxTokens) * 100
     : 0
-  const nearLimit = percentage > 90
+  const meterPercentage = Math.min(100, actualPercentage)
+  const nearLimit = actualPercentage > 90
   const label = usage.maxTokens
-    ? `Context ${Math.round(percentage)}% used, ${formatTokens(usage.usedTokens)} of ${formatTokens(usage.maxTokens)} tokens`
+    ? `Context ${Math.round(actualPercentage)}% used, ${formatTokens(usage.usedTokens)} of ${formatTokens(usage.maxTokens)} tokens`
     : `Context ${formatTokens(usage.usedTokens)} tokens used`
 
   return (
@@ -53,7 +54,7 @@ export function ContextUsageMeter({ usage }: { usage: ContextUsage }) {
             strokeWidth="3"
             strokeLinecap="round"
             strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - percentage / 100)}
+            strokeDashoffset={circumference * (1 - meterPercentage / 100)}
             className="transition-[stroke-dashoffset] duration-500 ease-out motion-reduce:transition-none"
           />
         </svg>
