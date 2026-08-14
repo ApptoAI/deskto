@@ -17,7 +17,7 @@ An adapter implements `HarnessAdapterFactory`:
 
 `HarnessRunInput` carries the thread, turn, workspace path, prompt, execution profile, and an optional `providerSessionId`, the opaque token that lets a provider resume an earlier session.
 
-A `HarnessSession` exposes `events` (an `AsyncIterable<HarnessEvent>`), `cancel()`, and `respondToApproval(approvalId, decision)`. The event union has seven members: `session.started`, `message.delta`, `activity.started`, `activity.completed`, `approval.requested`, `turn.completed`, and `turn.failed`. A session emits at most one unresolved approval request at a time.
+A `HarnessSession` exposes `events` (an `AsyncIterable<HarnessEvent>`), `cancel()`, and `respondToApproval(approvalId, decision)`. The event union has eight members: `session.started`, `message.delta`, `usage.updated`, `activity.started`, `activity.completed`, `approval.requested`, `turn.completed`, and `turn.failed`. A session emits at most one unresolved approval request at a time, and `usage.updated` reports how full the provider's context window is (`ContextUsage`).
 
 `AsyncQueue` is the one value export: a small async iterable queue adapters use to push translated provider events to the Runtime as they arrive.
 

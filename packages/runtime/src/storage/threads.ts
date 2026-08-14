@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { ExecutionProfile, Thread, ThreadView } from "@openappto/protocol"
+import type {
+  ContextUsage,
+  ExecutionProfile,
+  Thread,
+  ThreadView,
+} from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import {
@@ -88,6 +93,16 @@ export class Threads {
         id
       )
     return this.view(id)
+  }
+
+  setContextUsage(id: string, usage: ContextUsage): void {
+    // Providers report the window intermittently; keep the last known max
+    // instead of erasing it on every max-less reading.
+    this.database
+      .prepare(
+        "UPDATE threads SET context_used_tokens = ?, context_max_tokens = COALESCE(?, context_max_tokens) WHERE id = ?"
+      )
+      .run(usage.usedTokens, usage.maxTokens ?? null, id)
   }
 
   getRow(id: string): ThreadRow {

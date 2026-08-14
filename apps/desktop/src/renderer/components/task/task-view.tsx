@@ -18,6 +18,7 @@ import {
 import { useThreadChanged } from "../../runtime/use-thread-changed.js"
 import { HarnessLogo } from "../brand-logos.js"
 import { Composer } from "../composer.js"
+import { ContextUsageMeter } from "../context-usage-meter.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
@@ -150,6 +151,11 @@ export function TaskView({
                   onChange={handleProfileChange}
                   disabled={active}
                 />
+              ) : null
+            }
+            trailing={
+              thread.contextUsage ? (
+                <ContextUsageMeter usage={thread.contextUsage} />
               ) : null
             }
           />

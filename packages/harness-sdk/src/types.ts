@@ -47,9 +47,15 @@ export type ApprovalRequest = {
 
 export type ApprovalDecision = "approve" | "deny"
 
+export type ContextUsage = {
+  usedTokens: number
+  maxTokens?: number
+}
+
 export type HarnessEvent =
   | { type: "session.started"; providerSessionId: string }
   | { type: "message.delta"; text: string }
+  | { type: "usage.updated"; usage: ContextUsage }
   | {
       type: "activity.started"
       activity: { id: string; name: string; detail?: string }

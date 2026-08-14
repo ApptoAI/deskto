@@ -20,6 +20,7 @@ export function Composer({
   running = false,
   blockedReason,
   toolbar,
+  trailing,
   autoFocus = false,
 }: {
   label: string
@@ -29,6 +30,7 @@ export function Composer({
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
+  trailing?: ReactNode
   autoFocus?: boolean
 }) {
   const [prompt, setPrompt] = useState("")
@@ -87,6 +89,7 @@ export function Composer({
         <PromptInputToolbar>
           {toolbar}
           <div className="ml-auto flex items-center gap-2">
+            {trailing}
             {running && onCancel ? (
               <Button
                 type="button"

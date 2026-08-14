@@ -24,6 +24,8 @@ export type ThreadRow = {
   model_id: string | null
   effort: Thread["executionProfile"]["effort"]
   permission_mode: Thread["executionProfile"]["permissionMode"]
+  context_used_tokens: number | null
+  context_max_tokens: number | null
   created_at: string
   updated_at: string
 }
@@ -71,6 +73,15 @@ export function toWorkspace(row: WorkspaceRow): Workspace {
 }
 
 export function toThread(row: ThreadRow): Thread {
+  const contextUsage =
+    row.context_used_tokens !== null
+      ? {
+          usedTokens: row.context_used_tokens,
+          ...(row.context_max_tokens !== null
+            ? { maxTokens: row.context_max_tokens }
+            : {}),
+        }
+      : undefined
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -82,6 +93,7 @@ export function toThread(row: ThreadRow): Thread {
       effort: row.effort,
       permissionMode: row.permission_mode,
     },
+    ...(contextUsage ? { contextUsage } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import type {
   ApprovalDecision,
+  ContextUsage,
   HarnessEvent,
   HarnessSession,
 } from "@openappto/harness-sdk"
@@ -29,6 +30,7 @@ type ActiveRun = ActiveTurnRecord & {
   approvalIds: Map<string, string>
   activityIds: Map<string, string>
   flushTimer?: ReturnType<typeof setTimeout>
+  lastUsage?: ContextUsage
 }
 
 const streamFlushIntervalMs = 50
@@ -235,6 +237,17 @@ export class TurnCoordinator {
       case "message.delta":
         this.#appendDelta(run, event.text)
         return
+      case "usage.updated":
+        // Providers repeat usage reports; only a changed value is worth a
+        // write and a renderer refetch.
+        if (
+          run.lastUsage?.usedTokens === event.usage.usedTokens &&
+          run.lastUsage.maxTokens === event.usage.maxTokens
+        )
+          return
+        run.lastUsage = event.usage
+        this.store.threads.setContextUsage(threadId, event.usage)
+        break
       case "approval.requested":
         this.#flush(run)
         this.#requestApproval(threadId, run, event.request)
