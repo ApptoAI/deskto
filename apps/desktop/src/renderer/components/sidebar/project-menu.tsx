@@ -1,6 +1,7 @@
 import ChevronsUpDownIcon from "lucide-react/dist/esm/icons/chevrons-up-down"
+import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
 import FolderPlusIcon from "lucide-react/dist/esm/icons/folder-plus"
-import type { Project } from "@openappto/protocol"
+import type { Project, Workspace } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -10,22 +11,33 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 
 export function ProjectMenu({
+  workspaces,
   projects,
   activeProject,
   onSelect,
   onAddProject,
+  onMoveProject,
   adding,
 }: {
+  workspaces: Workspace[]
   projects: Project[]
   activeProject: Project | null
   onSelect: (projectId: string) => void
   onAddProject: () => void
+  onMoveProject: (projectId: string, workspaceId: string) => void
   adding: boolean
 }) {
+  const otherWorkspaces = workspaces.filter(
+    (workspace) => workspace.id !== activeProject?.workspaceId
+  )
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -70,6 +82,24 @@ export function ProjectMenu({
           <FolderPlusIcon />
           {adding ? "Opening…" : "Add a project folder"}
         </DropdownMenuItem>
+        {activeProject && otherWorkspaces.length > 0 ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <FolderInputIcon />
+              Move project to…
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {otherWorkspaces.map((workspace) => (
+                <DropdownMenuItem
+                  key={workspace.id}
+                  onClick={() => onMoveProject(activeProject.id, workspace.id)}
+                >
+                  {workspace.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

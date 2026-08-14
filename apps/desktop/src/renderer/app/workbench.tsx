@@ -7,15 +7,21 @@ import { Button } from "@workspace/ui/components/button"
 import { InlineError } from "../components/inline-error.js"
 import { SettingsView } from "../components/settings/settings-view.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
+import { WorkspaceRail } from "../components/sidebar/workspace-rail.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
 import { TaskView } from "../components/task/task-view.js"
+import {
+  WorkspaceDialog,
+  type WorkspaceDraft,
+} from "../components/workspace/workspace-dialog.js"
 import { pickProjectFolder } from "../lib/desktop.js"
 import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
 import { useThreadChanged } from "../runtime/use-thread-changed.js"
+import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
 
 // One value per possible main pane, so navigation cannot leave a stale
@@ -24,6 +30,8 @@ type MainView =
   | { kind: "new-task" }
   | { kind: "task"; threadId: string }
   | { kind: "settings" }
+
+type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
 export function Workbench() {
   const client = useRuntimeClient()
@@ -36,21 +44,61 @@ export function Workbench() {
     useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
   )
 
+  const loadWorkspaces = useCallback(() => client.listWorkspaces(), [client])
+  const workspacesQuery = useRuntimeQuery(loadWorkspaces)
+  const loadSelection = useCallback(() => client.getSelection(), [client])
+  const selectionQuery = useRuntimeQuery(loadSelection)
   const loadProjects = useCallback(() => client.listProjects(), [client])
   const projectsQuery = useRuntimeQuery(loadProjects)
 
-  const [chosenProjectId, setChosenProjectId] = useState<string | null>(
+  const revalidateWorkspaces = workspacesQuery.revalidate
+  const revalidateProjects = projectsQuery.revalidate
+  useWorkspaceChanged(
+    useCallback(() => {
+      revalidateWorkspaces()
+      revalidateProjects()
+    }, [revalidateWorkspaces, revalidateProjects])
+  )
+
+  const [chosenWorkspaceId, setChosenWorkspaceId] = useState<string | null>(
     null
   )
+  const [chosenProjectId, setChosenProjectId] = useState<string | null>(null)
   const [view, setView] = useState<MainView>({ kind: "new-task" })
   const [addingProject, setAddingProject] = useState(false)
-  const [projectError, setProjectError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [workspaceDialog, setWorkspaceDialog] =
+    useState<WorkspaceDialogState>(null)
 
+  const workspaces =
+    workspacesQuery.state.status === "ready" ? workspacesQuery.state.data : []
+  const selection =
+    selectionQuery.state.status === "ready" ? selectionQuery.state.data : null
   const projects =
     projectsQuery.state.status === "ready" ? projectsQuery.state.data : []
+
+  // A restart reopens the last used workspace and its last used project;
+  // explicit clicks in this session win over what was remembered.
+  const activeWorkspace =
+    workspaces.find(
+      (workspace) =>
+        workspace.id === (chosenWorkspaceId ?? selection?.lastWorkspaceId)
+    ) ??
+    workspaces[0] ??
+    null
+  const activeWorkspaceId = activeWorkspace?.id ?? null
+
+  const workspaceProjects = projects.filter(
+    (project) => project.workspaceId === activeWorkspaceId
+  )
+  const rememberedProjectId = activeWorkspaceId
+    ? (selection?.lastProjectIds[activeWorkspaceId] ?? null)
+    : null
   const activeProject =
-    projects.find((project) => project.id === chosenProjectId) ??
-    projects[0] ??
+    workspaceProjects.find(
+      (project) => project.id === (chosenProjectId ?? rememberedProjectId)
+    ) ??
+    workspaceProjects[0] ??
     null
   const activeProjectId = activeProject?.id ?? null
 
@@ -70,10 +118,22 @@ export function Workbench() {
   )
 
   const openThreadId = view.kind === "task" ? view.threadId : null
+  const replaceSelection = selectionQuery.replace
+
+  function selectWorkspace(workspaceId: string) {
+    setChosenWorkspaceId(workspaceId)
+    setChosenProjectId(null)
+    setView({ kind: "new-task" })
+    client.setSelection(workspaceId).then(replaceSelection, () => {})
+  }
 
   function selectProject(projectId: string) {
     setChosenProjectId(projectId)
     setView({ kind: "new-task" })
+    if (activeWorkspaceId)
+      client
+        .setSelection(activeWorkspaceId, projectId)
+        .then(replaceSelection, () => {})
   }
 
   function openThread(threadId: string) {
@@ -81,8 +141,9 @@ export function Workbench() {
   }
 
   async function addProject() {
+    if (!activeWorkspaceId) return
     setAddingProject(true)
-    setProjectError(null)
+    setActionError(null)
     try {
       const picked = await pickProjectFolder()
       if (!picked) return
@@ -90,25 +151,85 @@ export function Workbench() {
       const project = await client.addProject(
         picked.path,
         picked.name,
-        personalWorkspaceId
+        activeWorkspaceId
       )
       projectsQuery.revalidate()
       selectProject(project.id)
     } catch (error) {
-      setProjectError(describeError(error))
+      setActionError(describeError(error))
     } finally {
       setAddingProject(false)
     }
   }
 
+  async function moveProject(projectId: string, workspaceId: string) {
+    setActionError(null)
+    try {
+      await client.moveProject(projectId, workspaceId)
+      setChosenProjectId(null)
+      projectsQuery.revalidate()
+    } catch (error) {
+      setActionError(describeError(error))
+    }
+  }
+
+  async function submitWorkspace(draft: WorkspaceDraft) {
+    setActionError(null)
+    try {
+      if (workspaceDialog?.mode === "edit" && activeWorkspace) {
+        await client.updateWorkspace(activeWorkspace.id, draft)
+        revalidateWorkspaces()
+      } else {
+        const created = await client.createWorkspace(
+          draft.name,
+          draft.color,
+          draft.icon
+        )
+        revalidateWorkspaces()
+        selectWorkspace(created.id)
+      }
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
+  async function deleteActiveWorkspace() {
+    if (!activeWorkspace) return
+    setActionError(null)
+    try {
+      await client.deleteWorkspace(activeWorkspace.id)
+      setChosenWorkspaceId(null)
+      setChosenProjectId(null)
+      setView({ kind: "new-task" })
+      revalidateWorkspaces()
+      revalidateProjects()
+      selectionQuery.revalidate()
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+      <WorkspaceRail
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelect={selectWorkspace}
+        onCreate={() => setWorkspaceDialog({ mode: "create" })}
+      />
+
       <ProjectSidebar
-        projects={projects}
+        workspace={activeWorkspace}
+        workspaces={workspaces}
+        projects={workspaceProjects}
         activeProject={activeProject}
         onSelectProject={selectProject}
         onAddProject={addProject}
+        onMoveProject={moveProject}
         addingProject={addingProject}
+        onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
         threads={threads.state}
         openThreadId={openThreadId}
         onOpenThread={openThread}
@@ -118,9 +239,9 @@ export function Workbench() {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        {projectError ? (
+        {actionError ? (
           <div className="px-6 pt-3">
-            <InlineError message={projectError} />
+            <InlineError message={actionError} />
           </div>
         ) : null}
 
@@ -182,6 +303,17 @@ export function Workbench() {
           />
         )}
       </main>
+
+      <WorkspaceDialog
+        open={workspaceDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setWorkspaceDialog(null)
+        }}
+        workspace={workspaceDialog?.mode === "edit" ? activeWorkspace : null}
+        canDelete={activeWorkspace?.id !== personalWorkspaceId}
+        onSubmit={submitWorkspace}
+        onDelete={deleteActiveWorkspace}
+      />
     </div>
   )
 }
