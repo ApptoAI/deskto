@@ -81,6 +81,12 @@ const migrations = [
 
     CREATE INDEX activities_thread_created_idx ON activities(thread_id, created_at);
   `,
+  `
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

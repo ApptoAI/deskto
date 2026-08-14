@@ -1,5 +1,5 @@
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
-import type { HarnessDescriptor } from "@openappto/protocol"
+import type { Harness } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -21,7 +21,7 @@ export function HarnessMenu({
   selectedId,
   onSelect,
 }: {
-  harnesses: HarnessDescriptor[]
+  harnesses: Harness[]
   selectedId: string | null
   onSelect: (harnessId: string) => void
 }) {

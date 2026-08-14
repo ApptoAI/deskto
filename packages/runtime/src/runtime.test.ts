@@ -157,6 +157,65 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
+  it("keeps a harness switched off across restarts and blocks new tasks on it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const runtime = createRuntime({
+      databasePath,
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
+    const listed = unwrap(
+      await runtime.request({ method: "harness.list", params: {} })
+    )
+    expect(listed).toMatchObject([
+      { id: "claude", enabled: true, availability: { status: "available" } },
+    ])
+    expect(listed[0]?.checkedAt).not.toBeNull()
+
+    // A refresh that finds nothing moved stays silent: harness.changed only
+    // fires when health actually changed, not on every re-check.
+    unwrap(await runtime.request({ method: "harness.refresh", params: {} }))
+    expect(events).toEqual([])
+
+    const disabled = unwrap(
+      await runtime.request({
+        method: "harness.setEnabled",
+        params: { harnessId: "claude", enabled: false },
+      })
+    )
+    expect(disabled[0]?.enabled).toBe(false)
+    // The response already carries the new state; no event echoes it back.
+    expect(events).toEqual([])
+
+    const workspace = unwrap(
+      await runtime.request({
+        method: "workspace.add",
+        params: { path: directory, name: "Example" },
+      })
+    )
+    const blocked = await runtime.request({
+      method: "thread.create",
+      params: { workspaceId: workspace.id, harnessId: "claude" },
+    })
+    expect(blocked.ok).toBe(false)
+    if (!blocked.ok) expect(blocked.error.code).toBe("harness-disabled")
+    await runtime.close()
+
+    const resumedRuntime = createRuntime({
+      databasePath,
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+    const persisted = unwrap(
+      await resumedRuntime.request({ method: "harness.list", params: {} })
+    )
+    expect(persisted[0]?.enabled).toBe(false)
+    await resumedRuntime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

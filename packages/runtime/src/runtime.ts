@@ -16,22 +16,40 @@ import { TurnCoordinator } from "./turn-coordinator.js"
 export type RuntimeOptions = {
   databasePath: string
   harnesses: HarnessAdapterFactory[]
+  /** How often harness health is re-checked. Pass 0 to turn the loop off. */
+  harnessRefreshMs?: number
+  /** Harness probes wait for this, e.g. until the host rebuilt PATH. */
+  probeGate?: Promise<void>
 }
+
+const defaultHarnessRefreshMs = 5 * 60_000
 
 export class Runtime implements RuntimeTransport {
   readonly #listeners = new Set<(event: RuntimeEvent) => void>()
   readonly #store: Store
+  readonly #harnesses: HarnessRegistry
   readonly #turns: TurnCoordinator
   readonly #router: RequestRouter
 
   constructor(options: RuntimeOptions) {
     this.#store = new Store(openDatabase(options.databasePath))
     this.#store.recoverInterrupted()
-    const harnesses = new HarnessRegistry(options.harnesses)
-    this.#turns = new TurnCoordinator(this.#store, harnesses, (threadId) =>
-      this.#emit({ type: "thread.changed", threadId })
+    this.#harnesses = new HarnessRegistry(
+      options.harnesses,
+      this.#store.settings,
+      {
+        onChanged: () => this.#emit({ type: "harness.changed" }),
+        probeGate: options.probeGate,
+      }
     )
-    this.#router = new RequestRouter(this.#store, harnesses, this.#turns)
+    const refreshMs = options.harnessRefreshMs ?? defaultHarnessRefreshMs
+    if (refreshMs > 0) this.#harnesses.startAutoRefresh(refreshMs)
+    this.#turns = new TurnCoordinator(
+      this.#store,
+      this.#harnesses,
+      (threadId) => this.#emit({ type: "thread.changed", threadId })
+    )
+    this.#router = new RequestRouter(this.#store, this.#harnesses, this.#turns)
   }
 
   request<M extends RuntimeMethod>(
@@ -46,6 +64,7 @@ export class Runtime implements RuntimeTransport {
   }
 
   async close(): Promise<void> {
+    this.#harnesses.dispose()
     await this.#turns.dispose()
     this.#listeners.clear()
     this.#store.close()

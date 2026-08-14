@@ -1,3 +1,4 @@
+import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Workspace } from "@openappto/protocol"
 
@@ -18,6 +19,7 @@ export function ProjectSidebar({
   onOpenThread,
   onNewTask,
   onRetryThreads,
+  onOpenSettings,
 }: {
   workspaces: Workspace[]
   activeWorkspace: Workspace | null
@@ -29,6 +31,7 @@ export function ProjectSidebar({
   onOpenThread: (threadId: string) => void
   onNewTask: () => void
   onRetryThreads: () => void
+  onOpenSettings: () => void
 }) {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border xl:w-72">
@@ -80,6 +83,18 @@ export function ProjectSidebar({
       ) : (
         <div className="flex-1" />
       )}
+
+      <div className="no-drag border-t border-border p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground"
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon data-icon="inline-start" />
+          Settings
+        </Button>
+      </div>
     </aside>
   )
 }

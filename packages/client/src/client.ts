@@ -32,8 +32,19 @@ export class RuntimeClient {
     return this.transport.subscribe(listener)
   }
 
-  systemInfo() {
-    return this.request({ method: "system.info", params: {} })
+  listHarnesses() {
+    return this.request({ method: "harness.list", params: {} })
+  }
+
+  setHarnessEnabled(harnessId: string, enabled: boolean) {
+    return this.request({
+      method: "harness.setEnabled",
+      params: { harnessId, enabled },
+    })
+  }
+
+  refreshHarnesses() {
+    return this.request({ method: "harness.refresh", params: {} })
   }
 
   listWorkspaces() {

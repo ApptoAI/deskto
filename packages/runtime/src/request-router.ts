@@ -41,8 +41,15 @@ export class RequestRouter {
     request: RuntimeRequest
   ): Promise<RuntimeResponses[RuntimeMethod]> {
     switch (request.method) {
-      case "system.info":
-        return { harnesses: await this.harnesses.list() }
+      case "harness.list":
+        return this.harnesses.list()
+      case "harness.setEnabled":
+        return this.harnesses.setEnabled(
+          request.params.harnessId,
+          request.params.enabled
+        )
+      case "harness.refresh":
+        return this.harnesses.refresh()
       case "workspace.list":
         return this.store.workspaces.list()
       case "workspace.add": {

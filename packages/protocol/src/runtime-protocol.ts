@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import {
-  harnessDescriptorSchema,
+  harnessSchema,
   executionProfileSchema,
   threadSchema,
   threadViewSchema,
@@ -9,7 +9,12 @@ import {
 } from "./models.js"
 
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
-  z.object({ method: z.literal("system.info"), params: z.object({}) }),
+  z.object({ method: z.literal("harness.list"), params: z.object({}) }),
+  z.object({
+    method: z.literal("harness.setEnabled"),
+    params: z.object({ harnessId: z.string().min(1), enabled: z.boolean() }),
+  }),
+  z.object({ method: z.literal("harness.refresh"), params: z.object({}) }),
   z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
   z.object({
     method: z.literal("workspace.add"),
@@ -67,7 +72,9 @@ export type RequestFor<M extends RuntimeMethod> = Extract<
 >
 
 export interface RuntimeResponses {
-  "system.info": { harnesses: z.infer<typeof harnessDescriptorSchema>[] }
+  "harness.list": z.infer<typeof harnessSchema>[]
+  "harness.setEnabled": z.infer<typeof harnessSchema>[]
+  "harness.refresh": z.infer<typeof harnessSchema>[]
   "workspace.list": z.infer<typeof workspaceSchema>[]
   "workspace.add": z.infer<typeof workspaceSchema>
   "thread.list": z.infer<typeof threadSchema>[]
@@ -83,10 +90,10 @@ export type RuntimeResponse<M extends RuntimeMethod = RuntimeMethod> =
   | { ok: true; data: RuntimeResponses[M] }
   | { ok: false; error: { code: string; message: string } }
 
-export const runtimeEventSchema = z.object({
-  type: z.literal("thread.changed"),
-  threadId: z.string(),
-})
+export const runtimeEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
+  z.object({ type: z.literal("harness.changed") }),
+])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>
 

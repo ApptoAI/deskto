@@ -1,9 +1,5 @@
 import { useState } from "react"
-import type {
-  ExecutionProfile,
-  HarnessDescriptor,
-  Workspace,
-} from "@openappto/protocol"
+import type { ExecutionProfile, Harness, Workspace } from "@openappto/protocol"
 
 import { defaultExecutionProfile } from "../../lib/execution-profile.js"
 import {
@@ -24,7 +20,7 @@ export function NewTaskView({
   onTaskStarted,
 }: {
   workspace: Workspace
-  harnesses: QueryState<HarnessDescriptor[]>
+  harnesses: QueryState<Harness[]>
   onTaskCreated: (threadId: string) => void
   onTaskStarted: (threadId: string) => void
 }) {

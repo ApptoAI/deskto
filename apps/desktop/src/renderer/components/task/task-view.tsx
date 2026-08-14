@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import type { ExecutionProfile, HarnessDescriptor } from "@openappto/protocol"
+import type { ExecutionProfile, Harness } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -28,7 +28,7 @@ export function TaskView({
   harnesses,
 }: {
   threadId: string
-  harnesses: QueryState<HarnessDescriptor[]>
+  harnesses: QueryState<Harness[]>
 }) {
   const client = useRuntimeClient()
   const load = useCallback(() => client.getThread(threadId), [client, threadId])

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react"
 import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
+import { SettingsView } from "../components/settings/settings-view.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
@@ -10,17 +11,27 @@ import { TaskView } from "../components/task/task-view.js"
 import { pickWorkspaceFolder } from "../lib/desktop.js"
 import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
+import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
 import { useThreadChanged } from "../runtime/use-thread-changed.js"
+
+// One value per possible main pane, so navigation cannot leave a stale
+// combination behind (e.g. a task opening underneath the settings screen).
+type MainView =
+  | { kind: "new-task" }
+  | { kind: "task"; threadId: string }
+  | { kind: "settings" }
 
 export function Workbench() {
   const client = useRuntimeClient()
 
-  const loadHarnesses = useCallback(
-    async () => (await client.systemInfo()).harnesses,
-    [client]
-  )
+  const loadHarnesses = useCallback(() => client.listHarnesses(), [client])
   const harnesses = useRuntimeQuery(loadHarnesses)
+  const revalidateHarnesses = harnesses.revalidate
+
+  useHarnessChanged(
+    useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
+  )
 
   const loadWorkspaces = useCallback(() => client.listWorkspaces(), [client])
   const workspaces = useRuntimeQuery(loadWorkspaces)
@@ -28,7 +39,7 @@ export function Workbench() {
   const [chosenWorkspaceId, setChosenWorkspaceId] = useState<string | null>(
     null
   )
-  const [openThreadId, setOpenThreadId] = useState<string | null>(null)
+  const [view, setView] = useState<MainView>({ kind: "new-task" })
   const [addingProject, setAddingProject] = useState(false)
   const [projectError, setProjectError] = useState<string | null>(null)
 
@@ -50,9 +61,15 @@ export function Workbench() {
 
   useThreadChanged(useCallback(() => revalidateThreads(), [revalidateThreads]))
 
+  const openThreadId = view.kind === "task" ? view.threadId : null
+
   function selectWorkspace(workspaceId: string) {
     setChosenWorkspaceId(workspaceId)
-    setOpenThreadId(null)
+    setView({ kind: "new-task" })
+  }
+
+  function openThread(threadId: string) {
+    setView({ kind: "task", threadId })
   }
 
   async function addProject() {
@@ -82,9 +99,10 @@ export function Workbench() {
         addingProject={addingProject}
         threads={threads.state}
         openThreadId={openThreadId}
-        onOpenThread={setOpenThreadId}
-        onNewTask={() => setOpenThreadId(null)}
+        onOpenThread={openThread}
+        onNewTask={() => setView({ kind: "new-task" })}
         onRetryThreads={revalidateThreads}
+        onOpenSettings={() => setView({ kind: "settings" })}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -94,7 +112,7 @@ export function Workbench() {
           </div>
         ) : null}
 
-        {harnesses.state.status === "error" ? (
+        {harnesses.state.status === "error" && view.kind !== "settings" ? (
           <div className="flex items-center gap-3 px-6 pt-3">
             <InlineError
               className="min-w-0 flex-1"
@@ -106,8 +124,10 @@ export function Workbench() {
           </div>
         ) : null}
 
-        {workspaces.state.status === "loading" ||
-        workspaces.state.status === "idle" ? (
+        {view.kind === "settings" ? (
+          <SettingsView harnesses={harnesses} />
+        ) : workspaces.state.status === "loading" ||
+          workspaces.state.status === "idle" ? (
           <Screen>
             <StatusPanel title="Loading your projects…" />
           </Screen>
@@ -146,7 +166,7 @@ export function Workbench() {
             workspace={activeWorkspace}
             harnesses={harnesses.state}
             onTaskCreated={revalidateThreads}
-            onTaskStarted={setOpenThreadId}
+            onTaskStarted={openThread}
           />
         )}
       </main>

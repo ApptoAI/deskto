@@ -1,6 +1,6 @@
-import type { ExecutionProfile, HarnessDescriptor } from "@openappto/protocol"
+import type { ExecutionProfile, Harness } from "@openappto/protocol"
 
-export type HarnessModel = HarnessDescriptor["models"][number]
+export type HarnessModel = Harness["models"][number]
 
 export function findModel(
   models: HarnessModel[],

@@ -1,8 +1,9 @@
 import { z } from "zod"
 
-export const harnessDescriptorSchema = z.object({
+export const harnessSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  enabled: z.boolean(),
   availability: z.discriminatedUnion("status", [
     z.object({
       status: z.literal("available"),
@@ -10,6 +11,8 @@ export const harnessDescriptorSchema = z.object({
     }),
     z.object({ status: z.literal("unavailable"), reason: z.string() }),
   ]),
+  /** When availability was last checked, or null before the first check. */
+  checkedAt: z.string().nullable(),
   models: z.array(
     z.object({
       id: z.string().min(1),
@@ -25,7 +28,7 @@ export const harnessDescriptorSchema = z.object({
   ),
 })
 
-export type HarnessDescriptor = z.infer<typeof harnessDescriptorSchema>
+export type Harness = z.infer<typeof harnessSchema>
 
 export const workspaceSchema = z.object({
   id: z.string(),
