@@ -21,6 +21,27 @@ export function defaultExecutionProfile(
   }
 }
 
+/**
+ * Re-applies a profile saved earlier against the models available now. A model
+ * that disappeared falls back to the harness default; an effort or permission
+ * mode the model no longer supports falls back the same way `withModel` does.
+ */
+export function restoredExecutionProfile(
+  models: HarnessModel[],
+  saved: ExecutionProfile
+): ExecutionProfile {
+  const model =
+    findModel(models, saved.modelId) ??
+    models.find((candidate) => candidate.isDefault) ??
+    models[0]
+  if (!model) return defaultExecutionProfile(models)
+  return {
+    modelId: model.id,
+    effort: keptEffort(model, model.id === saved.modelId ? saved.effort : null),
+    permissionMode: keptPermissionMode(model, saved.permissionMode),
+  }
+}
+
 export function withModel(
   profile: ExecutionProfile,
   model: HarnessModel

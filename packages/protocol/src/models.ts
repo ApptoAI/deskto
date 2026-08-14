@@ -48,6 +48,20 @@ export const executionProfileSchema = z.object({
 
 export type ExecutionProfile = z.infer<typeof executionProfileSchema>
 
+/** The harness and profile most recently used to create or configure a thread. */
+export const lastProfileSchema = z.object({
+  harnessId: z.string().min(1),
+  executionProfile: executionProfileSchema,
+})
+
+export type LastProfile = z.infer<typeof lastProfileSchema>
+
+export const preferencesSchema = z.object({
+  lastProfile: lastProfileSchema.nullable(),
+})
+
+export type Preferences = z.infer<typeof preferencesSchema>
+
 export const threadStatusSchema = z.enum([
   "idle",
   "running",

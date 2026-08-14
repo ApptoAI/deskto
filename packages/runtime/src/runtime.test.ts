@@ -216,6 +216,60 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
+  it("remembers the last used execution profile across restarts", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const runtime = createRuntime({
+      databasePath,
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+
+    const empty = unwrap(
+      await runtime.request({ method: "preferences.get", params: {} })
+    )
+    expect(empty.lastProfile).toBeNull()
+
+    const workspace = unwrap(
+      await runtime.request({
+        method: "workspace.add",
+        params: { path: directory, name: "Example" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          workspaceId: workspace.id,
+          harnessId: "claude",
+          executionProfile: {
+            modelId: "test-model",
+            effort: "high",
+            permissionMode: "full-access",
+          },
+        },
+      })
+    )
+    await runtime.close()
+
+    const resumedRuntime = createRuntime({
+      databasePath,
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+    const persisted = unwrap(
+      await resumedRuntime.request({ method: "preferences.get", params: {} })
+    )
+    expect(persisted.lastProfile).toEqual({
+      harnessId: "claude",
+      executionProfile: {
+        modelId: "test-model",
+        effort: "high",
+        permissionMode: "full-access",
+      },
+    })
+    await resumedRuntime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

@@ -3,6 +3,7 @@ import { z } from "zod"
 import {
   harnessSchema,
   executionProfileSchema,
+  preferencesSchema,
   threadSchema,
   threadViewSchema,
   workspaceSchema,
@@ -15,6 +16,7 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ harnessId: z.string().min(1), enabled: z.boolean() }),
   }),
   z.object({ method: z.literal("harness.refresh"), params: z.object({}) }),
+  z.object({ method: z.literal("preferences.get"), params: z.object({}) }),
   z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
   z.object({
     method: z.literal("workspace.add"),
@@ -75,6 +77,7 @@ export interface RuntimeResponses {
   "harness.list": z.infer<typeof harnessSchema>[]
   "harness.setEnabled": z.infer<typeof harnessSchema>[]
   "harness.refresh": z.infer<typeof harnessSchema>[]
+  "preferences.get": z.infer<typeof preferencesSchema>
   "workspace.list": z.infer<typeof workspaceSchema>[]
   "workspace.add": z.infer<typeof workspaceSchema>
   "thread.list": z.infer<typeof threadSchema>[]

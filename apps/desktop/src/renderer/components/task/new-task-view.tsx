@@ -1,14 +1,20 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import type { ExecutionProfile, Harness, Workspace } from "@openappto/protocol"
 
-import { defaultExecutionProfile } from "../../lib/execution-profile.js"
+import {
+  defaultExecutionProfile,
+  restoredExecutionProfile,
+} from "../../lib/execution-profile.js"
 import {
   describeHarnessBlock,
   findHarness,
   isHarnessAvailable,
 } from "../../lib/harness.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
-import type { QueryState } from "../../runtime/use-runtime-query.js"
+import {
+  useRuntimeQuery,
+  type QueryState,
+} from "../../runtime/use-runtime-query.js"
 import { Composer } from "../composer.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { HarnessMenu } from "../harness-menu.js"
@@ -30,15 +36,32 @@ export function NewTaskView({
     null
   )
 
+  const loadPreferences = useCallback(() => client.getPreferences(), [client])
+  const preferences = useRuntimeQuery(loadPreferences)
+  const lastProfile =
+    preferences.state.status === "ready"
+      ? preferences.state.data.lastProfile
+      : null
+
   const options = harnesses.status === "ready" ? harnesses.data : []
-  const fallbackHarnessId = options.find(isHarnessAvailable)?.id ?? null
+  const lastHarness = lastProfile
+    ? findHarness(options, lastProfile.harnessId)
+    : null
+  const fallbackHarnessId =
+    (lastHarness && isHarnessAvailable(lastHarness) ? lastHarness.id : null) ??
+    options.find(isHarnessAvailable)?.id ??
+    null
   const harnessId = chosenHarnessId ?? fallbackHarnessId
   const blockedReason = describeHarnessBlock(harnesses, harnessId)
 
   const models = harnessId
     ? (findHarness(options, harnessId)?.models ?? [])
     : []
-  const profile = chosenProfile ?? defaultExecutionProfile(models)
+  const profile =
+    chosenProfile ??
+    (lastProfile && lastProfile.harnessId === harnessId
+      ? restoredExecutionProfile(models, lastProfile.executionProfile)
+      : defaultExecutionProfile(models))
 
   function selectHarness(id: string) {
     setChosenHarnessId(id)

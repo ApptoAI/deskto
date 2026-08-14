@@ -47,6 +47,10 @@ export class RuntimeClient {
     return this.request({ method: "harness.refresh", params: {} })
   }
 
+  getPreferences() {
+    return this.request({ method: "preferences.get", params: {} })
+  }
+
   listWorkspaces() {
     return this.request({ method: "workspace.list", params: {} })
   }

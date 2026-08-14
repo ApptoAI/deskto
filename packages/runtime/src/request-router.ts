@@ -1,17 +1,21 @@
 import { realpath, stat } from "node:fs/promises"
 
-import type {
-  RequestFor,
-  RuntimeMethod,
-  RuntimeRequest,
-  RuntimeResponse,
-  RuntimeResponses,
+import {
+  lastProfileSchema,
+  type ExecutionProfile,
+  type RequestFor,
+  type RuntimeMethod,
+  type RuntimeRequest,
+  type RuntimeResponse,
+  type RuntimeResponses,
 } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
+
+const lastProfileSettingKey = "preferences.lastProfile"
 
 export class RequestRouter {
   constructor(
@@ -50,6 +54,12 @@ export class RequestRouter {
         )
       case "harness.refresh":
         return this.harnesses.refresh()
+      case "preferences.get": {
+        const stored = lastProfileSchema.safeParse(
+          this.store.settings.get(lastProfileSettingKey)
+        )
+        return { lastProfile: stored.success ? stored.data : null }
+      }
       case "workspace.list":
         return this.store.workspaces.list()
       case "workspace.add": {
@@ -69,6 +79,7 @@ export class RequestRouter {
           request.params.harnessId,
           request.params.executionProfile
         )
+        this.#rememberProfile(request.params.harnessId, profile)
         return this.store.threads.create(
           request.params.workspaceId,
           request.params.harnessId,
@@ -81,6 +92,7 @@ export class RequestRouter {
           thread.harness_id,
           request.params.executionProfile
         )
+        this.#rememberProfile(thread.harness_id, executionProfile)
         return this.store.threads.configure(thread.id, executionProfile)
       }
       case "thread.get":
@@ -96,6 +108,14 @@ export class RequestRouter {
           request.params.decision
         )
     }
+  }
+
+  /** New threads start from the profile the user last used. */
+  #rememberProfile(harnessId: string, executionProfile: ExecutionProfile) {
+    this.store.settings.set(lastProfileSettingKey, {
+      harnessId,
+      executionProfile,
+    })
   }
 }
 
