@@ -76,8 +76,11 @@ export function Workbench() {
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
-  const workspaces =
-    workspacesQuery.state.status === "ready" ? workspacesQuery.state.data : []
+  const workspacesState = workspacesQuery.state
+  const workspaces = useMemo(
+    () => (workspacesState.status === "ready" ? workspacesState.data : []),
+    [workspacesState]
+  )
   const selection =
     selectionQuery.state.status === "ready" ? selectionQuery.state.data : null
   const projects =
@@ -128,12 +131,39 @@ export function Workbench() {
   const openThreadId = view.kind === "task" ? view.threadId : null
   const replaceSelection = selectionQuery.replace
 
-  function selectWorkspace(workspaceId: string) {
-    setChosenWorkspaceId(workspaceId)
-    setChosenProjectId(null)
-    setView({ kind: "new-task" })
-    client.setSelection(workspaceId).then(replaceSelection, () => {})
-  }
+  const selectWorkspace = useCallback(
+    (workspaceId: string) => {
+      setChosenWorkspaceId(workspaceId)
+      setChosenProjectId(null)
+      setView({ kind: "new-task" })
+      client.setSelection(workspaceId).then(replaceSelection, () => {})
+    },
+    [client, replaceSelection]
+  )
+
+  const cycleWorkspace = useCallback(
+    (direction: number) => {
+      if (workspaces.length < 2) return
+      const index = workspaces.findIndex(
+        (workspace) => workspace.id === activeWorkspaceId
+      )
+      const next =
+        workspaces[
+          (index + direction + workspaces.length) % workspaces.length
+        ]!
+      selectWorkspace(next.id)
+    },
+    [workspaces, activeWorkspaceId, selectWorkspace]
+  )
+
+  useKeybinding(
+    appSettings.nextWorkspaceKeybinding,
+    useCallback(() => cycleWorkspace(1), [cycleWorkspace])
+  )
+  useKeybinding(
+    appSettings.previousWorkspaceKeybinding,
+    useCallback(() => cycleWorkspace(-1), [cycleWorkspace])
+  )
 
   function selectProject(projectId: string) {
     setChosenProjectId(projectId)
