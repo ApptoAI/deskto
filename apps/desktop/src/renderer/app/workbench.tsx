@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import { appSettings } from "@openappto/settings"
 
 import { personalWorkspaceId, type Selection } from "@openappto/protocol"
@@ -184,7 +191,27 @@ export function Workbench() {
     revalidateWorkspaceThreads()
   }, [revalidateThreads, revalidateWorkspaceThreads])
 
-  useThreadChanged(revalidateAllThreads)
+  const threadChangedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revalidateAfterThreadChanges = useCallback(() => {
+    if (threadChangedTimer.current !== null) {
+      clearTimeout(threadChangedTimer.current)
+    }
+    threadChangedTimer.current = setTimeout(() => {
+      threadChangedTimer.current = null
+      revalidateAllThreads()
+    }, 100)
+  }, [revalidateAllThreads])
+  useEffect(
+    () => () => {
+      if (threadChangedTimer.current !== null) {
+        clearTimeout(threadChangedTimer.current)
+        threadChangedTimer.current = null
+      }
+    },
+    [revalidateAfterThreadChanges]
+  )
+
+  useThreadChanged(revalidateAfterThreadChanges)
 
   useKeybinding(
     appSettings.newTaskKeybinding,

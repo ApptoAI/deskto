@@ -372,7 +372,7 @@ function TaskRowMenu({
   actions: InboxActions
   snoozePresets: readonly SnoozePreset[]
 }) {
-  const pinned = section === "pinned"
+  const pinned = thread.pinnedAt != null
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

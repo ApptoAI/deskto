@@ -119,6 +119,9 @@ export function threadWokeAt(
     ) {
       return shell.lastTurnCompletedAt
     }
+    if (shell.status === "failed" && isAfter(shell.failedAt, shell.snoozedAt)) {
+      return shell.failedAt
+    }
     return shell.snoozedAt
   }
   return wakeAtMs <= parseTimestampMs(options.now) ? shell.snoozedUntil : null

@@ -152,6 +152,30 @@ describe("Runtime", () => {
     expect(closed.pinnedAt).toBeNull()
     expect(closed.snoozedUntil).toBeNull()
 
+    const restored = unwrap(
+      await runtime.request({
+        method: "thread.setDone",
+        params: { threadId: created.id, done: false },
+      })
+    )
+    expect(restored.doneOverride).toBe("active")
+
+    const restoredAndPinned = unwrap(
+      await runtime.request({
+        method: "thread.setPinned",
+        params: { threadId: created.id, pinned: true },
+      })
+    )
+    expect(restoredAndPinned.doneOverride).toBe("active")
+
+    const restoredAndUnpinned = unwrap(
+      await runtime.request({
+        method: "thread.setPinned",
+        params: { threadId: created.id, pinned: false },
+      })
+    )
+    expect(restoredAndUnpinned.doneOverride).toBe("active")
+
     unwrap(
       await runtime.request({
         method: "thread.snooze",

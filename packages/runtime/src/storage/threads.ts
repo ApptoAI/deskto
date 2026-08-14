@@ -187,7 +187,7 @@ export class Threads {
     if (pinned) {
       // Pinning a done task reopens it: pinned means "keep in front of me".
       return this.#updateReturning(
-        "UPDATE threads SET pinned_at = ?, done_override = NULL, done_at = NULL WHERE id = ? RETURNING *",
+        "UPDATE threads SET pinned_at = ?, done_override = CASE WHEN done_override = 'active' THEN 'active' ELSE NULL END, done_at = NULL WHERE id = ? RETURNING *",
         new Date().toISOString(),
         id
       )

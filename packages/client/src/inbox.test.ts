@@ -9,6 +9,7 @@ import {
   partitionInbox,
   resolveSnoozePresets,
   snoozeWakeLabel,
+  threadCameBack,
   threadWokeAt,
 } from "./inbox.js"
 
@@ -236,6 +237,39 @@ describe("threadWokeAt", () => {
         { now }
       )
     ).toBe("2026-08-14T11:30:00.000Z")
+  })
+})
+
+describe("threadCameBack", () => {
+  it("stays visible until the task is visited after its timer wake", () => {
+    const shell = {
+      snoozedUntil: "2026-08-14T11:00:00.000Z",
+      snoozedAt: "2026-08-13T11:00:00.000Z",
+    }
+    expect(
+      threadCameBack(
+        thread({ ...shell, lastVisitedAt: "2026-08-14T10:00:00.000Z" }),
+        { now }
+      )
+    ).toBe(true)
+    expect(
+      threadCameBack(
+        thread({ ...shell, lastVisitedAt: "2026-08-14T11:30:00.000Z" }),
+        { now }
+      )
+    ).toBe(false)
+  })
+
+  it("uses the failure time for an early wake", () => {
+    const shell = thread({
+      status: "failed",
+      snoozedUntil: "2026-08-20T09:00:00.000Z",
+      snoozedAt: "2026-08-14T10:00:00.000Z",
+      failedAt: "2026-08-14T11:00:00.000Z",
+      lastVisitedAt: "2026-08-14T10:30:00.000Z",
+    })
+    expect(threadWokeAt(shell, { now })).toBe("2026-08-14T11:00:00.000Z")
+    expect(threadCameBack(shell, { now })).toBe(true)
   })
 })
 

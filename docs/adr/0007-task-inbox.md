@@ -30,6 +30,6 @@ The Runtime validates every organization command (`thread.setDone`, `thread.snoo
 ## Consequences
 
 - The sidebar stops jumping while agents work; a row's position changes only at lifecycle transitions, so muscle memory holds.
-- Eight new nullable columns on `threads` and five new protocol methods; no new tables. The classifier lives in `@openappto/client` and is shared by any future Surface.
+- Nine new nullable columns on `threads` and five new protocol methods; no new tables. The classifier lives in `@openappto/client` and is shared by any future Surface.
 - Failed and blocked tasks cannot be hidden by any combination of done and snooze, so an agent waiting on the user is always visible.
 - Manual ordering of pinned tasks, a settings entry for the auto-close window, and wake sources beyond the harness (calendar, linked artifacts) are deferred; the fields and guards above already leave room for them.
