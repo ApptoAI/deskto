@@ -3,7 +3,10 @@ import type { HarnessFailure } from "./types.js"
 const usageLimitPatterns = [
   /\bsession limit\b/i,
   /\busage limit\b/i,
-  /\brate limit\b/i,
+  // A bare "rate limit" also appears in unrelated transport errors
+  // ("could not parse rate limit response"), so require an exhaustion word.
+  /\brate limit\w*\b.{0,40}\b(?:reached|exceeded|hit)\b/i,
+  /\b(?:reached|exceeded|hit)\b.{0,40}\brate limit\b/i,
   /\bquota (?:exceeded|reached|exhausted)\b/i,
   /\byou(?:'|’)ve hit your\b.*\blimit\b/i,
 ]

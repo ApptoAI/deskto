@@ -54,6 +54,20 @@ export function applyThreadDelta(
     return { outcome: "applied", view: { ...view, activities, seq: event.seq } }
   }
 
+  if (change.type === "approval.requested") {
+    return {
+      outcome: "applied",
+      view: { ...view, pendingApproval: change.approval, seq: event.seq },
+    }
+  }
+
+  if (change.type === "approval.resolved") {
+    const { pendingApproval, ...rest } = view
+    const next =
+      pendingApproval && pendingApproval.id === change.approvalId ? rest : view
+    return { outcome: "applied", view: { ...next, seq: event.seq } }
+  }
+
   return {
     outcome: "applied",
     view: { ...view, thread: change.thread, seq: event.seq },

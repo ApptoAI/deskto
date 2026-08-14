@@ -130,12 +130,22 @@ export class Turns {
    */
   addSegment(threadId: string, turnId: string, ordinal: number): Message {
     const id = randomUUID()
+    const createdAt = new Date().toISOString()
     this.database
       .prepare(
         "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', ?, ?)"
       )
-      .run(id, threadId, turnId, ordinal, new Date().toISOString())
-    return this.requireMessage(id)
+      .run(id, threadId, turnId, ordinal, createdAt)
+    return {
+      id,
+      threadId,
+      turnId,
+      role: "assistant",
+      content: "",
+      state: "streaming",
+      ordinal,
+      createdAt,
+    }
   }
 
   /** Settles a streaming segment when work moves on past it. */
@@ -161,7 +171,7 @@ export class Turns {
     threadId: string,
     turnId: string,
     approval: Pick<Approval, "id" | "kind" | "title" | "detail">
-  ): void {
+  ): Approval {
     const now = new Date().toISOString()
     transaction(this.database, () => {
       const pending = this.database
@@ -197,6 +207,15 @@ export class Turns {
         )
         .run(now, threadId)
     })
+    return {
+      id: approval.id,
+      threadId,
+      kind: approval.kind,
+      title: approval.title,
+      status: "pending",
+      createdAt: now,
+      ...(approval.detail ? { detail: approval.detail } : {}),
+    }
   }
 
   assertPendingApproval(threadId: string, approvalId: string): void {

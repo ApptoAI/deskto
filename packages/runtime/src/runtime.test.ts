@@ -840,6 +840,77 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("orders prose after the tool work it follows and settles leftovers by outcome", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Check the tests" },
+      })
+    )
+
+    // The very first harness output is a tool call, before any prose.
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "tool-1",
+        name: "Run command",
+        detail: "pnpm test",
+        payload: { kind: "tool", tool: "command" },
+      },
+    })
+    run.emit({ type: "message.delta", text: "Tests pass." })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    const view = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    const activity = view.activities[0]!
+    const summary = view.messages.find(
+      (message) => message.content === "Tests pass."
+    )!
+    // The narration sorts after the tool row it describes.
+    expect(summary.ordinal).toBeGreaterThan(activity.ordinal!)
+    // The tool never reported completion; a finished turn settles it as
+    // completed rather than blaming it with a failure mark.
+    expect(activity.status).toBe("completed")
+    await runtime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

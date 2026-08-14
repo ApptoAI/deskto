@@ -262,7 +262,8 @@ describe("ClaudeAdapter", () => {
           },
         },
       },
-      { type: "activity.completed", id: "claude-plan", outcome: "completed" },
+      // No synthetic completion: the runtime settles still-running
+      // activities by the turn's outcome.
       { type: "turn.completed" },
     ])
   })

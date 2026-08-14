@@ -452,7 +452,10 @@ export function Workbench() {
             key={activeProject.id}
             project={activeProject}
             harnesses={harnesses.state}
-            onTaskCreated={revalidateThreads}
+            onTaskCreated={() => {
+              revalidateThreads()
+              revalidateWorkspaceThreads()
+            }}
             onTaskStarted={openThread}
           />
         )}

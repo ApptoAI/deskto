@@ -19,6 +19,8 @@ import {
   type PlanStep,
 } from "@openappto/harness-sdk"
 
+import { normalizePlanStepStatus } from "../plan-status.js"
+import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 
 import { claudePluginsFor } from "./claude-packs.js"
@@ -222,7 +224,7 @@ class ClaudeSession implements HarnessSession {
     if (message.type === "rate_limit_event") {
       if (message.rate_limit_info.status === "rejected") {
         this.#usageLimitResetAt = message.rate_limit_info.resetsAt
-          ? isoFromUnixTimestamp(message.rate_limit_info.resetsAt)
+          ? isoFromEpoch(message.rate_limit_info.resetsAt)
           : undefined
         this.#emitUsageLimit({
           kind: "usage-limit",
@@ -254,6 +256,9 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.type === "stream_event") {
+      // Sidechain (subagent) streams narrate their own work; mixing them into
+      // the main message would garble the prose character by character.
+      if (message.parent_tool_use_id !== null) return
       const event = message.event
       if (
         event.type === "content_block_delta" &&
@@ -398,15 +403,6 @@ class ClaudeSession implements HarnessSession {
     event: Extract<HarnessEvent, { type: "turn.completed" | "turn.failed" }>
   ): void {
     if (this.#terminalEventEmitted) return
-    // A finished turn settles the plan; an interrupted one leaves it to the
-    // Runtime, which marks still-running activities as failed.
-    if (event.type === "turn.completed" && this.#planStarted) {
-      this.#queue.push({
-        type: "activity.completed",
-        id: planActivityId,
-        outcome: "completed",
-      })
-    }
     this.#queue.push(event)
     this.#terminalEventEmitted = true
   }
@@ -539,13 +535,8 @@ export function planStepsFromTodos(input: unknown): PlanStep[] {
   if (!isRecord(input) || !Array.isArray(input.todos)) return []
   return input.todos.flatMap((todo) => {
     if (!isRecord(todo) || typeof todo.content !== "string") return []
-    const status =
-      todo.status === "completed"
-        ? ("done" as const)
-        : todo.status === "in_progress"
-          ? ("active" as const)
-          : ("pending" as const)
-    return [{ text: todo.content, status }]
+    const status = typeof todo.status === "string" ? todo.status : undefined
+    return [{ text: todo.content, status: normalizePlanStepStatus(status) }]
   })
 }
 
@@ -632,10 +623,4 @@ export function claudeAssistantFailure(
     message: text || "Claude Code usage limit reached",
     ...(resetAt ? { resetAt } : {}),
   }
-}
-
-function isoFromUnixTimestamp(seconds: number): string | undefined {
-  const milliseconds = seconds > 10_000_000_000 ? seconds : seconds * 1000
-  const date = new Date(milliseconds)
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
 }

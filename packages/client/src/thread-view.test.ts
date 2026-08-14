@@ -145,6 +145,51 @@ describe("applyThreadDelta", () => {
     expect(updated.view.activities[0]?.status).toBe("completed")
   })
 
+  it("adds a pending approval and clears it on resolution", () => {
+    const approval = {
+      id: "ap1",
+      threadId: "t1",
+      kind: "command" as const,
+      title: "Allow this command?",
+      status: "pending" as const,
+      createdAt: "2026-08-14T10:00:02.000Z",
+    }
+    const requested = applyThreadDelta(
+      view(),
+      delta(6, { type: "approval.requested", approval })
+    )
+    expect(requested.outcome).toBe("applied")
+    if (requested.outcome !== "applied") return
+    expect(requested.view.pendingApproval).toEqual(approval)
+
+    const resolved = applyThreadDelta(
+      requested.view,
+      delta(7, { type: "approval.resolved", approvalId: "ap1" })
+    )
+    expect(resolved.outcome).toBe("applied")
+    if (resolved.outcome !== "applied") return
+    expect(resolved.view.pendingApproval).toBeUndefined()
+    expect(resolved.view.seq).toBe(7)
+  })
+
+  it("keeps an unrelated pending approval on resolution", () => {
+    const approval = {
+      id: "ap1",
+      threadId: "t1",
+      kind: "command" as const,
+      title: "Allow this command?",
+      status: "pending" as const,
+      createdAt: "2026-08-14T10:00:02.000Z",
+    }
+    const result = applyThreadDelta(
+      view({ pendingApproval: approval, seq: 5 }),
+      delta(6, { type: "approval.resolved", approvalId: "other" })
+    )
+    expect(result.outcome).toBe("applied")
+    if (result.outcome !== "applied") return
+    expect(result.view.pendingApproval).toEqual(approval)
+  })
+
   it("replaces the thread record", () => {
     const current = view()
     const result = applyThreadDelta(

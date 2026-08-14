@@ -14,6 +14,11 @@ export type RuntimeQuery<T> = {
   revalidate: () => void
   /** Applies a response a mutation already returned. */
   replace: (data: T) => void
+  /**
+   * Applies an incremental update without cancelling an in-flight read.
+   * Unlike replace, a reload racing with a stream of patches still lands.
+   */
+  patch: (data: T) => void
 }
 
 type Load<T> = (() => Promise<T>) | null
@@ -84,9 +89,21 @@ export function useRuntimeQuery<T>(load: Load<T>): RuntimeQuery<T> {
     [load]
   )
 
+  const patch = useCallback(
+    (data: T) => {
+      setSnapshot((current) =>
+        current.load === load
+          ? { load, state: { status: "ready", data } }
+          : current
+      )
+    },
+    [load]
+  )
+
   return {
     state: snapshot.load === load ? snapshot.state : startingState(load),
     revalidate,
     replace,
+    patch,
   }
 }

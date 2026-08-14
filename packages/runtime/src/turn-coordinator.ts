@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto"
 
-import type {
-  ActivityStart,
-  ActivityUpdate,
-  ApprovalDecision,
-  ContextUsage,
-  HarnessEvent,
-  HarnessFailure,
-  HarnessSession,
+import {
+  harnessFailure,
+  type ActivityStart,
+  type ActivityUpdate,
+  type ApprovalDecision,
+  type ContextUsage,
+  type HarnessEvent,
+  type HarnessFailure,
+  type HarnessSession,
 } from "@openappto/harness-sdk"
 import type { ThreadDeltaChange, ThreadView } from "@openappto/protocol"
 
@@ -42,8 +43,6 @@ type ActiveRun = ActiveTurnRecord & {
   activityIds: Map<string, string>
   /** Streaming assistant message currently receiving text, if one is open. */
   segmentMessageId?: string
-  /** Whether the open segment holds flushed text a tool row should follow. */
-  segmentHasText: boolean
   /** Most recently created assistant message; terminal states land on it. */
   lastMessageId: string
   /** Next shared position for messages and activities within this Turn. */
@@ -118,7 +117,6 @@ export class TurnCoordinator {
         approvalIds: new Map(),
         activityIds: new Map(),
         segmentMessageId: turn.assistantMessageId,
-        segmentHasText: false,
         lastMessageId: turn.assistantMessageId,
         // The user message holds 0 and the first assistant segment holds 1.
         ordinal: 2,
@@ -131,7 +129,7 @@ export class TurnCoordinator {
           threadId,
           turn.turnId,
           turn.assistantMessageId,
-          genericFailure(errorMessage(error))
+          harnessFailure(errorMessage(error))
         )
         this.events.changed(threadId)
       }
@@ -162,12 +160,12 @@ export class TurnCoordinator {
     } catch (error) {
       run.terminal = true
       const message = `Could not stop the harness: ${errorMessage(error)}`
-      this.store.activities.failRunning(run.turnId)
+      this.store.activities.settleRunning(run.turnId, "failed")
       this.store.turns.fail(
         threadId,
         run.turnId,
         this.#terminalMessageId(run),
-        genericFailure(message)
+        harnessFailure(message)
       )
       this.#runs.delete(threadId)
       this.events.changed(threadId)
@@ -175,7 +173,7 @@ export class TurnCoordinator {
     }
     if (!run.terminal) {
       run.terminal = true
-      this.store.activities.failRunning(run.turnId)
+      this.store.activities.settleRunning(run.turnId, "failed")
       this.store.turns.cancel(
         threadId,
         run.turnId,
@@ -206,12 +204,17 @@ export class TurnCoordinator {
     }
     this.store.turns.resolveApproval(threadId, approvalId, decision)
     run.approvalIds.delete(approvalId)
+    this.events.delta(threadId, { type: "approval.resolved", approvalId })
+    this.events.delta(threadId, {
+      type: "thread.updated",
+      thread: this.store.threads.get(threadId),
+    })
     this.events.changed(threadId)
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
       const message = `Could not answer the harness: ${errorMessage(error)}`
-      this.#fail(threadId, run, genericFailure(message))
+      this.#fail(threadId, run, harnessFailure(message))
       await run.session.cancel().catch(() => undefined)
       throw new RuntimeError("approval-failed", message)
     }
@@ -231,7 +234,7 @@ export class TurnCoordinator {
       await run.session.cancel().catch(() => undefined)
       if (!run.terminal) {
         run.terminal = true
-        this.store.activities.failRunning(run.turnId)
+        this.store.activities.settleRunning(run.turnId, "failed")
         this.store.turns.cancel(
           threadId,
           run.turnId,
@@ -253,12 +256,18 @@ export class TurnCoordinator {
         this.#fail(
           threadId,
           run,
-          genericFailure("Harness ended without completing the turn")
+          harnessFailure("Harness ended without completing the turn")
         )
+      }
+      // A terminal event can arrive while the provider still streams (a
+      // usage-limit frame, for example). Stop the session so no orphaned
+      // process keeps working on a turn the app already settled.
+      if (run.terminal && !run.cancelled) {
+        await run.session.cancel().catch(() => undefined)
       }
     } catch (error) {
       if (!run.cancelled && !run.terminal) {
-        this.#fail(threadId, run, genericFailure(errorMessage(error)))
+        this.#fail(threadId, run, harnessFailure(errorMessage(error)))
         await run.session.cancel().catch(() => undefined)
       }
     } finally {
@@ -307,7 +316,9 @@ export class TurnCoordinator {
       case "turn.completed":
         this.#flush(run)
         run.terminal = true
-        this.store.activities.failRunning(run.turnId)
+        // A finished turn settles leftover rows as completed; a red failure
+        // mark on a good turn would blame work that simply never reported.
+        this.store.activities.settleRunning(run.turnId, "completed")
         this.store.turns.complete(
           threadId,
           run.turnId,
@@ -333,7 +344,7 @@ export class TurnCoordinator {
   #fail(threadId: string, run: ActiveRun, failure: HarnessFailure): void {
     this.#flush(run)
     run.terminal = true
-    this.store.activities.failRunning(run.turnId)
+    this.store.activities.settleRunning(run.turnId, "failed")
     this.store.turns.fail(
       threadId,
       run.turnId,
@@ -356,9 +367,14 @@ export class TurnCoordinator {
   ): void {
     const approvalId = randomUUID()
     run.approvalIds.set(approvalId, request.id)
-    this.store.turns.requestApproval(threadId, run.turnId, {
+    const approval = this.store.turns.requestApproval(threadId, run.turnId, {
       ...request,
       id: approvalId,
+    })
+    this.events.delta(threadId, { type: "approval.requested", approval })
+    this.events.delta(threadId, {
+      type: "thread.updated",
+      thread: this.store.threads.get(threadId),
     })
   }
 
@@ -427,12 +443,15 @@ export class TurnCoordinator {
       })
   }
 
+  // Closes the open segment even when it is still empty: leaving it open
+  // would collect prose written after this tool row under an earlier ordinal,
+  // rendering the narration above the work it describes. An empty settled
+  // segment is skipped by the renderer.
   #closeSegment(threadId: string, run: ActiveRun): void {
     this.#flush(run)
-    if (!run.segmentMessageId || !run.segmentHasText) return
+    if (!run.segmentMessageId) return
     const closed = this.store.turns.closeSegment(run.segmentMessageId)
     run.segmentMessageId = undefined
-    run.segmentHasText = false
     if (closed)
       this.events.delta(threadId, {
         type: "message.upserted",
@@ -469,10 +488,5 @@ export class TurnCoordinator {
       text: run.pendingText,
     })
     run.pendingText = ""
-    run.segmentHasText = true
   }
-}
-
-function genericFailure(message: string): HarnessFailure {
-  return { kind: "error", message }
 }

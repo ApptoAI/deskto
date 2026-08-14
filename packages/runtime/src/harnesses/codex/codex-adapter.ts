@@ -16,6 +16,8 @@ import {
   type PlanStep,
 } from "@openappto/harness-sdk"
 
+import { normalizePlanStepStatus } from "../plan-status.js"
+import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 
 import type {
@@ -82,6 +84,7 @@ export class CodexAdapter implements HarnessAdapterFactory {
 class CodexSession implements HarnessSession {
   readonly #queue = new AsyncQueue<HarnessEvent>()
   readonly #approvalQueue: PendingApproval[] = []
+  readonly #lastActivityShape = new Map<string, string>()
   readonly events = this.#queue
   #activeApproval?: PendingApproval
   #threadId?: string
@@ -242,8 +245,14 @@ class CodexSession implements HarnessSession {
       const activity = codexActivity(item)
       if (!activity) return
       if (notification.method === "item/started") {
+        this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
         this.#queue.push({ type: "activity.started", activity })
       } else if (notification.method === "item/updated") {
+        // Codex repeats item/updated while an item runs; identical shapes
+        // would burn a write, a sequence number, and a renderer pass each.
+        const shape = JSON.stringify(activity)
+        if (this.#lastActivityShape.get(activity.id) === shape) return
+        this.#lastActivityShape.set(activity.id, shape)
         this.#queue.push({
           type: "activity.updated",
           update: {
@@ -255,13 +264,14 @@ class CodexSession implements HarnessSession {
         })
       } else {
         const status = getString(item, "status")
+        const type = getString(item, "type")
         this.#queue.push({
           type: "activity.completed",
           id: activity.id,
-          // An item that ends without a status, e.g. a settled plan, counts
-          // as completed; only an explicit non-completed status fails it.
+          // A plan that ends without a status settled fine; for every other
+          // item a missing status means it never ran to completion.
           outcome:
-            status === undefined || status === "completed"
+            status === "completed" || (status === undefined && type === "plan")
               ? "completed"
               : "failed",
         })
@@ -485,9 +495,7 @@ export function codexLimitResetAt(value: unknown): string | undefined {
     .sort((left, right) => right.usedPercent - left.usedPercent)
   const reset = slots[0]?.reset
   if (reset === undefined) return undefined
-  const milliseconds = reset > 10_000_000_000 ? reset : reset * 1000
-  const date = new Date(milliseconds)
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
+  return isoFromEpoch(reset)
 }
 
 export function codexActivity(
@@ -604,17 +612,8 @@ export function codexPlanSteps(item: Record<string, unknown>): PlanStep[] {
       getString(entry, "content") ??
       getString(entry, "title")
     if (!text) return []
-    const status = getString(entry, "status")
     return [
-      {
-        text,
-        status:
-          status === "completed" || status === "done"
-            ? ("done" as const)
-            : status === "inProgress" || status === "in_progress"
-              ? ("active" as const)
-              : ("pending" as const),
-      },
+      { text, status: normalizePlanStepStatus(getString(entry, "status")) },
     ]
   })
 }

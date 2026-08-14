@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import {
   activitySchema,
+  approvalSchema,
   harnessSchema,
   executionProfileSchema,
   messageSchema,
@@ -185,10 +186,10 @@ export type RuntimeResponse<M extends RuntimeMethod = RuntimeMethod> =
   | { ok: false; error: { code: string; message: string } }
 
 /**
- * One incremental change to an open Thread view. Deltas cover the
- * high-frequency stream of a running Turn (text chunks, activity rows, usage);
- * lifecycle transitions such as turn start, approvals, and completion still go
- * through `thread.changed` and a full reload.
+ * One incremental change to an open Thread view. Deltas cover everything that
+ * changes while a Turn runs (text chunks, activity rows, approvals, usage);
+ * turn start and completion still go through `thread.changed` and a full
+ * reload.
  */
 export const threadDeltaChangeSchema = z.discriminatedUnion("type", [
   z.object({
@@ -198,6 +199,11 @@ export const threadDeltaChangeSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("message.upserted"), message: messageSchema }),
   z.object({ type: z.literal("activity.upserted"), activity: activitySchema }),
+  z.object({ type: z.literal("approval.requested"), approval: approvalSchema }),
+  z.object({
+    type: z.literal("approval.resolved"),
+    approvalId: z.string(),
+  }),
   z.object({ type: z.literal("thread.updated"), thread: threadSchema }),
 ])
 

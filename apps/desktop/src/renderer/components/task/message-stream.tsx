@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import CircleCheckIcon from "lucide-react/dist/esm/icons/circle-check"
 import CircleXIcon from "lucide-react/dist/esm/icons/circle-x"
@@ -43,7 +44,10 @@ export function MessageStream({
 }) {
   const lastMessage = messages.at(-1)
   const awaitingFirstOutput = running && lastMessage?.role !== "assistant"
-  const turns = interleaveTurns(messages, activities)
+  const turns = useMemo(
+    () => interleaveTurns(messages, activities),
+    [messages, activities]
+  )
 
   return (
     <MessageList className="px-6" aria-label="Task conversation">
@@ -122,7 +126,13 @@ function turnKey(entry: TurnEntry): string {
   return entry.activity.turnId
 }
 
-function MessageEntry({ message }: { message: Message }) {
+// Memoized so a streaming flush re-parses only the message it touched; the
+// delta fold preserves identity for every row it did not change.
+const MessageEntry = memo(function MessageEntry({
+  message,
+}: {
+  message: Message
+}) {
   if (message.role === "user") {
     return (
       <MessageRow role="user" className="enter-rise">
@@ -174,51 +184,68 @@ function MessageEntry({ message }: { message: Message }) {
       </MessageBody>
     </MessageRow>
   )
-}
+})
 
 /** One unit of tool work, rendered by its provider-neutral kind. */
-function ActivityEntry({
-  activity,
-  childActivities,
-}: {
-  activity: Activity
-  childActivities: Activity[]
-}) {
-  if (activity.payload?.kind === "plan") {
+const ActivityEntry = memo(
+  function ActivityEntry({
+    activity,
+    childActivities,
+  }: {
+    activity: Activity
+    childActivities: Activity[]
+  }) {
+    if (activity.payload?.kind === "plan") {
+      return (
+        <div className="enter-rise w-full">
+          <Plan title={activity.name} steps={activity.payload.steps} />
+        </div>
+      )
+    }
+
+    if (activity.payload?.kind === "subagent") {
+      return (
+        <div className="enter-rise flex w-full flex-col gap-1">
+          <ActivityLine activity={activity} icon={BotIcon} />
+          {childActivities.length > 0 ? (
+            <div className="ml-4 flex flex-col gap-1 border-l border-border/60 pl-2.5">
+              {childActivities.map((child) => (
+                <ActivityLine
+                  key={child.id}
+                  activity={child}
+                  icon={activityIcon(child)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )
+    }
+
     return (
       <div className="enter-rise w-full">
-        <Plan title={activity.name} steps={activity.payload.steps} />
+        <ActivityLine activity={activity} icon={activityIcon(activity)} />
       </div>
     )
-  }
-
-  if (activity.payload?.kind === "subagent") {
-    return (
-      <div className="enter-rise flex w-full flex-col gap-1">
-        <ActivityLine activity={activity} icon={BotIcon} />
-        {childActivities.length > 0 ? (
-          <div className="ml-4 flex flex-col gap-1 border-l border-border/60 pl-2.5">
-            {childActivities.map((child) => (
-              <ActivityLine
-                key={child.id}
-                activity={child}
-                icon={activityIcon(child)}
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
+  },
+  // Child arrays are rebuilt on every interleave; compare their rows instead
+  // so an untouched subagent block skips its render.
+  (prev, next) =>
+    prev.activity === next.activity &&
+    prev.childActivities.length === next.childActivities.length &&
+    prev.childActivities.every(
+      (child, index) => child === next.childActivities[index]
     )
-  }
-
-  return (
-    <div className="enter-rise w-full">
-      <ActivityLine activity={activity} icon={activityIcon(activity)} />
-    </div>
-  )
-}
+)
 
 type Icon = typeof TerminalIcon
+
+const toolIcons: Record<string, Icon> = {
+  command: TerminalIcon,
+  search: SearchIcon,
+  web: GlobeIcon,
+  mcp: WrenchIcon,
+}
 
 function activityIcon(activity: Activity): Icon | undefined {
   const payload = activity.payload
@@ -226,13 +253,7 @@ function activityIcon(activity: Activity): Icon | undefined {
   if (payload.kind === "file-change") return FilePenIcon
   if (payload.kind === "subagent") return BotIcon
   if (payload.kind !== "tool") return undefined
-  const icons: Record<string, Icon> = {
-    command: TerminalIcon,
-    search: SearchIcon,
-    web: GlobeIcon,
-    mcp: WrenchIcon,
-  }
-  return icons[payload.tool]
+  return toolIcons[payload.tool]
 }
 
 const statusIcons: Record<Activity["status"], Icon> = {

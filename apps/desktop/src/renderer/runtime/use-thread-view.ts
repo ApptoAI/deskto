@@ -16,19 +16,31 @@ import { useThreadChanged } from "./use-thread-changed.js"
  */
 export function useThreadView(threadId: string): RuntimeQuery<ThreadView> {
   const client = useRuntimeClient()
-  const load = useCallback(() => client.getThread(threadId), [client, threadId])
-  const query = useRuntimeQuery(load)
 
   // The delta handler writes the ref itself, so a burst of deltas inside one
   // React commit folds sequentially instead of tripping the sequence guard.
-  // The effect re-baselines it whenever a load or reload lands.
+  // The effect re-baselines it whenever a load, reload, or mutation lands.
   const viewRef = useRef<ThreadView | undefined>(undefined)
+
+  // A reload can resolve with a snapshot older than deltas folded while it
+  // was in flight; keeping the newer view prevents a brief step backwards.
+  const load = useCallback(async () => {
+    const fetched = await client.getThread(threadId)
+    const held = viewRef.current
+    return held &&
+      held.thread.id === fetched.thread.id &&
+      held.seq > fetched.seq
+      ? held
+      : fetched
+  }, [client, threadId])
+  const query = useRuntimeQuery(load)
+
   const view = query.state.status === "ready" ? query.state.data : undefined
   useEffect(() => {
     viewRef.current = view
   }, [view])
 
-  const { replace, revalidate } = query
+  const { patch, revalidate } = query
   useRuntimeEvent(
     "thread.delta",
     useCallback(
@@ -39,12 +51,15 @@ export function useThreadView(threadId: string): RuntimeQuery<ThreadView> {
         const result = applyThreadDelta(view, event)
         if (result.outcome === "applied") {
           viewRef.current = result.view
-          replace(result.view)
+          // patch, not replace: replace would cancel a reload the runtime
+          // asked for through thread.changed, and a folded delta can never
+          // bring back what only that reload carries (a pending approval).
+          patch(result.view)
         } else if (result.outcome === "gap") {
           revalidate()
         }
       },
-      [threadId, replace, revalidate]
+      [threadId, patch, revalidate]
     )
   )
 
