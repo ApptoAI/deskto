@@ -1,0 +1,37 @@
+# @openappto/client
+
+A typed client for the Appto Runtime. Any Surface (the desktop app today, web or mobile later) constructs one `RuntimeClient` around a transport and calls task-oriented methods instead of building protocol requests by hand.
+
+## Why it exists
+
+The Client sits on the user-facing side of the Client/Runtime boundary. It knows nothing about Node, SQLite, Electron, or provider SDKs. It only knows the `RuntimeTransport` interface from `@openappto/protocol`, so the same code works whether the Runtime lives in the Electron main process or, someday, behind HTTP and WebSocket.
+
+## What it does
+
+`RuntimeClient` wraps every protocol method in a named function:
+
+- Harnesses: `listHarnesses()`, `setHarnessEnabled(harnessId, enabled)`, `refreshHarnesses()`
+- Workspaces: `listWorkspaces()`, `addWorkspace(path, name)`
+- Threads: `listThreads(workspaceId)`, `createThread(workspaceId, harnessId, executionProfile?)`, `configureThread(threadId, executionProfile)`, `getThread(threadId)`
+- Turns and approvals: `startTurn(threadId, prompt)`, `cancelTurn(threadId)`, `resolveApproval(threadId, approvalId, decision)`
+- Preferences: `getPreferences()`
+
+Each call unwraps the protocol's `{ ok, data | error }` envelope. On failure it throws `RuntimeClientError`, which carries the protocol error `code` alongside the message.
+
+`subscribe(listener)` forwards Runtime events (`thread.changed`, `harness.changed`) and returns an unsubscribe function. Events only signal that something changed; the Surface refetches state through queries.
+
+## Usage
+
+```ts
+import { RuntimeClient } from "@openappto/client"
+
+const client = new RuntimeClient(transport)
+
+const view = await client.startTurn(thread.id, prompt)
+
+const unsubscribe = client.subscribe((event) => {
+  if (event.type === "thread.changed") reloadThread(event.threadId)
+})
+```
+
+The desktop app provides the client through React context (`RuntimeClientProvider` and `useRuntimeClient` in `apps/desktop`), with `IpcRuntimeTransport` as the transport over the Electron preload bridge.
