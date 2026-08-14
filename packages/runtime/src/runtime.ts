@@ -12,6 +12,7 @@ import { RequestRouter } from "./request-router.js"
 import { openDatabase } from "./storage/database.js"
 import { Store } from "./storage/store.js"
 import { TurnCoordinator } from "./turn-coordinator.js"
+import { UserSettings } from "./user-settings.js"
 
 export type RuntimeOptions = {
   databasePath: string
@@ -49,7 +50,14 @@ export class Runtime implements RuntimeTransport {
       this.#harnesses,
       (threadId) => this.#emit({ type: "thread.changed", threadId })
     )
-    this.#router = new RequestRouter(this.#store, this.#harnesses, this.#turns)
+    this.#router = new RequestRouter(
+      this.#store,
+      this.#harnesses,
+      this.#turns,
+      new UserSettings(this.#store.settings, () =>
+        this.#emit({ type: "settings.changed" })
+      )
+    )
   }
 
   request<M extends RuntimeMethod>(

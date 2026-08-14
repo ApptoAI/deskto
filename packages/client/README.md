@@ -15,10 +15,11 @@ The Client sits on the user-facing side of the Client/Runtime boundary. It knows
 - Threads: `listThreads(workspaceId)`, `createThread(workspaceId, harnessId, executionProfile?)`, `configureThread(threadId, executionProfile)`, `getThread(threadId)`
 - Turns and approvals: `startTurn(threadId, prompt)`, `cancelTurn(threadId)`, `resolveApproval(threadId, approvalId, decision)`
 - Preferences: `getPreferences()`
+- Settings: `getSettings()`, `updateSettings(entries)` — a null entry clears that override back to its default
 
 Each call unwraps the protocol's `{ ok, data | error }` envelope. On failure it throws `RuntimeClientError`, which carries the protocol error `code` alongside the message.
 
-`subscribe(listener)` forwards Runtime events (`thread.changed`, `harness.changed`) and returns an unsubscribe function. Events only signal that something changed; the Surface refetches state through queries.
+`subscribe(listener)` forwards Runtime events (`thread.changed`, `harness.changed`, `settings.changed`) and returns an unsubscribe function. Events only signal that something changed; the Surface refetches state through queries.
 
 ## Usage
 

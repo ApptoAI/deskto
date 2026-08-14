@@ -14,6 +14,7 @@ import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
+import type { UserSettings } from "./user-settings.js"
 
 const lastProfileSettingKey = "preferences.lastProfile"
 
@@ -21,7 +22,8 @@ export class RequestRouter {
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
-    private readonly turns: TurnCoordinator
+    private readonly turns: TurnCoordinator,
+    private readonly userSettings: UserSettings
   ) {}
 
   async request<M extends RuntimeMethod>(
@@ -60,6 +62,10 @@ export class RequestRouter {
         )
         return { lastProfile: stored.success ? stored.data : null }
       }
+      case "settings.get":
+        return this.userSettings.snapshot()
+      case "settings.update":
+        return this.userSettings.update(request.params.entries)
       case "workspace.list":
         return this.store.workspaces.list()
       case "workspace.add": {

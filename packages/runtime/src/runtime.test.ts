@@ -270,6 +270,62 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
+  it("stores setting overrides across restarts and rejects invalid ones", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const runtime = createRuntime({ databasePath, harnesses: [] })
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
+    const defaults = unwrap(
+      await runtime.request({ method: "settings.get", params: {} })
+    )
+    expect(defaults.values["keybindings.new-task"]).toBe("mod+n")
+    expect(defaults.overrides).toEqual({})
+
+    const updated = unwrap(
+      await runtime.request({
+        method: "settings.update",
+        params: { entries: { "keybindings.new-task": "mod+shift+n" } },
+      })
+    )
+    expect(updated.values["keybindings.new-task"]).toBe("mod+shift+n")
+    expect(updated.overrides["keybindings.new-task"]).toBe("mod+shift+n")
+    expect(events).toEqual(["settings.changed"])
+
+    const invalidValue = await runtime.request({
+      method: "settings.update",
+      params: { entries: { "keybindings.new-task": 7 } },
+    })
+    expect(invalidValue.ok).toBe(false)
+    if (!invalidValue.ok)
+      expect(invalidValue.error.code).toBe("invalid-setting")
+
+    const unknownKey = await runtime.request({
+      method: "settings.update",
+      params: { entries: { "no-such-setting": true } },
+    })
+    expect(unknownKey.ok).toBe(false)
+    await runtime.close()
+
+    const resumedRuntime = createRuntime({ databasePath, harnesses: [] })
+    const persisted = unwrap(
+      await resumedRuntime.request({ method: "settings.get", params: {} })
+    )
+    expect(persisted.values["keybindings.new-task"]).toBe("mod+shift+n")
+
+    const cleared = unwrap(
+      await resumedRuntime.request({
+        method: "settings.update",
+        params: { entries: { "keybindings.new-task": null } },
+      })
+    )
+    expect(cleared.values["keybindings.new-task"]).toBe("mod+n")
+    expect(cleared.overrides).toEqual({})
+    await resumedRuntime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

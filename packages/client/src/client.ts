@@ -51,6 +51,15 @@ export class RuntimeClient {
     return this.request({ method: "preferences.get", params: {} })
   }
 
+  getSettings() {
+    return this.request({ method: "settings.get", params: {} })
+  }
+
+  /** Applies setting overrides; a null entry clears one back to its default. */
+  updateSettings(entries: Record<string, unknown>) {
+    return this.request({ method: "settings.update", params: { entries } })
+  }
+
   listWorkspaces() {
     return this.request({ method: "workspace.list", params: {} })
   }

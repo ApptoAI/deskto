@@ -1,5 +1,5 @@
 {
-  "name": "@openappto/runtime",
+  "name": "@openappto/settings",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,13 +13,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.231",
-    "@openappto/harness-sdk": "workspace:*",
-    "@openappto/protocol": "workspace:*",
-    "@openappto/settings": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^9",

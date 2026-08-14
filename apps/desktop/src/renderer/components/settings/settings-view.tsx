@@ -14,6 +14,7 @@ import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { HarnessLogo } from "../brand-logos.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
+import { ShortcutSettings } from "./shortcut-settings.js"
 
 // Key used for the refresh button in the pending set, next to harness ids.
 const refreshKey = "refresh"
@@ -136,6 +137,8 @@ export function SettingsView({
               </ul>
             )}
           </section>
+
+          <ShortcutSettings />
         </div>
       </div>
     </>

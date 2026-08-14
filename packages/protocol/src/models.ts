@@ -62,6 +62,20 @@ export const preferencesSchema = z.object({
 
 export type Preferences = z.infer<typeof preferencesSchema>
 
+/**
+ * Effective settings after user overrides are applied to the defaults. Values
+ * are opaque JSON at the protocol level; both sides read them through the
+ * setting definitions in `@openappto/settings`.
+ */
+export const settingsSnapshotSchema = z.object({
+  /** Every setting key mapped to the value currently in effect. */
+  values: z.record(z.string(), z.unknown()),
+  /** The subset the user has changed, keyed the same way. */
+  overrides: z.record(z.string(), z.unknown()),
+})
+
+export type SettingsSnapshot = z.infer<typeof settingsSnapshotSchema>
+
 export const threadStatusSchema = z.enum([
   "idle",
   "running",
