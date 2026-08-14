@@ -5,9 +5,13 @@ import type { Project } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { toProject, type ProjectRow } from "./records.js"
+import type { Workspaces } from "./workspaces.js"
 
 export class Projects {
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(
+    private readonly database: DatabaseSync,
+    private readonly workspaces: Workspaces
+  ) {}
 
   list(): Project[] {
     const rows = this.database
@@ -16,7 +20,9 @@ export class Projects {
     return rows.map(toProject)
   }
 
-  add(path: string, name: string): Project {
+  /** A folder registers once; re-adding it returns the project where it already lives. */
+  add(path: string, name: string, workspaceId: string): Project {
+    this.workspaces.get(workspaceId)
     const existing = this.database
       .prepare("SELECT * FROM projects WHERE path = ?")
       .get(path) as ProjectRow | undefined
@@ -25,6 +31,7 @@ export class Projects {
     const now = new Date().toISOString()
     const project = {
       id: randomUUID(),
+      workspaceId,
       name,
       path,
       createdAt: now,
@@ -32,16 +39,28 @@ export class Projects {
     }
     this.database
       .prepare(
-        "INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO projects (id, workspace_id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
       )
       .run(
         project.id,
+        project.workspaceId,
         project.name,
         project.path,
         project.createdAt,
         project.updatedAt
       )
     return project
+  }
+
+  move(projectId: string, workspaceId: string): Project {
+    this.get(projectId)
+    this.workspaces.get(workspaceId)
+    this.database
+      .prepare(
+        "UPDATE projects SET workspace_id = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(workspaceId, new Date().toISOString(), projectId)
+    return this.get(projectId)
   }
 
   get(id: string): Project {

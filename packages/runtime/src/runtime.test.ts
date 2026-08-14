@@ -29,7 +29,7 @@ describe("Runtime", () => {
     const project = unwrap(
       await runtime.request({
         method: "project.add",
-        params: { path: directory, name: "Example" },
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const thread = unwrap(
@@ -237,7 +237,7 @@ describe("Runtime", () => {
     const project = unwrap(
       await runtime.request({
         method: "project.add",
-        params: { path: directory, name: "Example" },
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const blocked = await runtime.request({
@@ -276,7 +276,7 @@ describe("Runtime", () => {
     const project = unwrap(
       await runtime.request({
         method: "project.add",
-        params: { path: directory, name: "Example" },
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     unwrap(
@@ -377,6 +377,72 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
+  it("groups projects into workspaces and keeps them when a workspace goes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
+    const initial = unwrap(
+      await runtime.request({ method: "workspace.list", params: {} })
+    )
+    expect(initial).toMatchObject([{ id: "personal", name: "Personal" }])
+
+    const press = unwrap(
+      await runtime.request({
+        method: "workspace.create",
+        params: { name: "Press", color: "blue", icon: "newspaper" },
+      })
+    )
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: press.id },
+      })
+    )
+    expect(project.workspaceId).toBe(press.id)
+
+    unwrap(
+      await runtime.request({
+        method: "selection.set",
+        params: { workspaceId: press.id, projectId: project.id },
+      })
+    )
+
+    const remaining = unwrap(
+      await runtime.request({
+        method: "workspace.delete",
+        params: { workspaceId: press.id },
+      })
+    )
+    expect(remaining.map((workspace) => workspace.id)).toEqual(["personal"])
+
+    const projects = unwrap(
+      await runtime.request({ method: "project.list", params: {} })
+    )
+    expect(projects).toMatchObject([{ id: project.id, workspaceId: "personal" }])
+
+    const selection = unwrap(
+      await runtime.request({ method: "selection.get", params: {} })
+    )
+    expect(selection).toEqual({ lastWorkspaceId: null, lastProjectIds: {} })
+
+    const undeletable = await runtime.request({
+      method: "workspace.delete",
+      params: { workspaceId: "personal" },
+    })
+    expect(undeletable.ok).toBe(false)
+    if (!undeletable.ok)
+      expect(undeletable.error.code).toBe("workspace-not-deletable")
+
+    expect(events.filter((type) => type === "workspace.changed").length).toBe(3)
+    await runtime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)
@@ -414,7 +480,7 @@ describe("Runtime", () => {
     const project = unwrap(
       await runtime.request({
         method: "project.add",
-        params: { path: directory, name: "Example" },
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const thread = unwrap(

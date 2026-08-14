@@ -4,10 +4,12 @@ import {
   harnessSchema,
   executionProfileSchema,
   preferencesSchema,
+  selectionSchema,
   settingsSnapshotSchema,
   threadSchema,
   threadViewSchema,
   projectSchema,
+  workspaceSchema,
 } from "./models.js"
 
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
@@ -24,10 +26,51 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     // A null entry clears that override back to its default value.
     params: z.object({ entries: z.record(z.string(), z.unknown()) }),
   }),
+  z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
+  z.object({
+    method: z.literal("workspace.create"),
+    params: z.object({
+      name: z.string().min(1),
+      color: z.string().min(1),
+      icon: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("workspace.update"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      name: z.string().min(1).optional(),
+      color: z.string().min(1).optional(),
+      icon: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({
+    method: z.literal("workspace.delete"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
+  z.object({ method: z.literal("selection.get"), params: z.object({}) }),
+  z.object({
+    method: z.literal("selection.set"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      projectId: z.string().min(1).optional(),
+    }),
+  }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),
   z.object({
     method: z.literal("project.add"),
-    params: z.object({ path: z.string().min(1), name: z.string().min(1) }),
+    params: z.object({
+      path: z.string().min(1),
+      name: z.string().min(1),
+      workspaceId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.move"),
+    params: z.object({
+      projectId: z.string().min(1),
+      workspaceId: z.string().min(1),
+    }),
   }),
   z.object({
     method: z.literal("thread.list"),
@@ -87,8 +130,15 @@ export interface RuntimeResponses {
   "preferences.get": z.infer<typeof preferencesSchema>
   "settings.get": z.infer<typeof settingsSnapshotSchema>
   "settings.update": z.infer<typeof settingsSnapshotSchema>
+  "workspace.list": z.infer<typeof workspaceSchema>[]
+  "workspace.create": z.infer<typeof workspaceSchema>
+  "workspace.update": z.infer<typeof workspaceSchema>
+  "workspace.delete": z.infer<typeof workspaceSchema>[]
+  "selection.get": z.infer<typeof selectionSchema>
+  "selection.set": z.infer<typeof selectionSchema>
   "project.list": z.infer<typeof projectSchema>[]
   "project.add": z.infer<typeof projectSchema>
+  "project.move": z.infer<typeof projectSchema>
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
   "thread.configure": z.infer<typeof threadViewSchema>
@@ -106,6 +156,7 @@ export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
   z.object({ type: z.literal("harness.changed") }),
   z.object({ type: z.literal("settings.changed") }),
+  z.object({ type: z.literal("workspace.changed") }),
 ])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>

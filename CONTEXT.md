@@ -13,7 +13,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Runtime**: The application service that owns projects, threads, turns, persistence, and Harness sessions.
 - **Environment**: A place where a Runtime runs and where work executes. The MVP has one local Environment inside the Electron main process.
 - **Connection**: Client configuration for reaching an Environment. Desktop uses Electron IPC. A future hosted Runtime can use HTTP and WebSocket without changing Client use cases.
-- **Project**: A folder the user has opened as a project. Use "project" in UI copy and `Project` in code.
+- **Workspace**: A container of Projects for one area of life or work, modeled on Arc browser Spaces. It owns a name, color, icon, its attached Packs, and the last active Project. Every install has a non-deletable Personal Workspace.
+- **Project**: A folder the user has opened as a project. It belongs to exactly one Workspace. Use "project" in UI copy and `Project` in code.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Turn**: One user request and one Harness execution in a Thread.
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
@@ -26,7 +27,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 
 ## Core rules
 
-- A Project points to one folder and owns its Threads.
+- A Project points to one folder, belongs to one Workspace, and owns its Threads.
+- Deleting a Workspace moves its Projects to the Personal Workspace. Nothing on disk is touched.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.

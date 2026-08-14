@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react"
 import { appSettings } from "@openappto/settings"
 
+import { personalWorkspaceId } from "@openappto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
@@ -86,7 +87,11 @@ export function Workbench() {
       const picked = await pickProjectFolder()
       if (!picked) return
 
-      const project = await client.addProject(picked.path, picked.name)
+      const project = await client.addProject(
+        picked.path,
+        picked.name,
+        personalWorkspaceId
+      )
       projectsQuery.revalidate()
       selectProject(project.id)
     } catch (error) {

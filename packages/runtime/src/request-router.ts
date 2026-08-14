@@ -2,12 +2,14 @@ import { realpath, stat } from "node:fs/promises"
 
 import {
   lastProfileSchema,
+  selectionSchema,
   type ExecutionProfile,
   type RequestFor,
   type RuntimeMethod,
   type RuntimeRequest,
   type RuntimeResponse,
   type RuntimeResponses,
+  type Selection,
 } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
@@ -17,13 +19,20 @@ import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
 
 const lastProfileSettingKey = "preferences.lastProfile"
+const selectionSettingKey = "ui.selection"
+
+export type RouterEvents = {
+  /** The workspace or project lists changed; open views should refetch. */
+  workspaceChanged: () => void
+}
 
 export class RequestRouter {
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
     private readonly turns: TurnCoordinator,
-    private readonly userSettings: UserSettings
+    private readonly userSettings: UserSettings,
+    private readonly events: RouterEvents
   ) {}
 
   async request<M extends RuntimeMethod>(
@@ -66,17 +75,78 @@ export class RequestRouter {
         return this.userSettings.snapshot()
       case "settings.update":
         return this.userSettings.update(request.params.entries)
+      case "workspace.list":
+        return this.store.workspaces.list()
+      case "workspace.create": {
+        const workspace = this.store.workspaces.create(
+          requiredName(request.params.name),
+          request.params.color,
+          request.params.icon
+        )
+        this.events.workspaceChanged()
+        return workspace
+      }
+      case "workspace.update": {
+        const workspace = this.store.workspaces.update(
+          request.params.workspaceId,
+          {
+            ...(request.params.name === undefined
+              ? {}
+              : { name: requiredName(request.params.name) }),
+            ...(request.params.color === undefined
+              ? {}
+              : { color: request.params.color }),
+            ...(request.params.icon === undefined
+              ? {}
+              : { icon: request.params.icon }),
+          }
+        )
+        this.events.workspaceChanged()
+        return workspace
+      }
+      case "workspace.delete": {
+        const remaining = this.store.workspaces.delete(
+          request.params.workspaceId
+        )
+        this.#forgetSelection(request.params.workspaceId)
+        this.events.workspaceChanged()
+        return remaining
+      }
+      case "selection.get":
+        return this.#selection()
+      case "selection.set": {
+        const current = this.#selection()
+        const next: Selection = {
+          lastWorkspaceId: request.params.workspaceId,
+          lastProjectIds: request.params.projectId
+            ? {
+                ...current.lastProjectIds,
+                [request.params.workspaceId]: request.params.projectId,
+              }
+            : current.lastProjectIds,
+        }
+        this.store.settings.set(selectionSettingKey, next)
+        return next
+      }
       case "project.list":
         return this.store.projects.list()
       case "project.add": {
         const path = await validDirectory(request.params.path)
-        const name = request.params.name.trim()
-        if (!name)
-          throw new RuntimeError(
-            "invalid-project",
-            "Project name is required"
-          )
-        return this.store.projects.add(path, name)
+        const project = this.store.projects.add(
+          path,
+          requiredName(request.params.name),
+          request.params.workspaceId
+        )
+        this.events.workspaceChanged()
+        return project
+      }
+      case "project.move": {
+        const project = this.store.projects.move(
+          request.params.projectId,
+          request.params.workspaceId
+        )
+        this.events.workspaceChanged()
+        return project
       }
       case "thread.list":
         return this.store.threads.list(request.params.projectId)
@@ -123,6 +193,34 @@ export class RequestRouter {
       executionProfile,
     })
   }
+
+  #selection(): Selection {
+    const stored = selectionSchema.safeParse(
+      this.store.settings.get(selectionSettingKey)
+    )
+    return stored.success
+      ? stored.data
+      : { lastWorkspaceId: null, lastProjectIds: {} }
+  }
+
+  #forgetSelection(workspaceId: string) {
+    const current = this.#selection()
+    const lastProjectIds = { ...current.lastProjectIds }
+    delete lastProjectIds[workspaceId]
+    this.store.settings.set(selectionSettingKey, {
+      lastWorkspaceId:
+        current.lastWorkspaceId === workspaceId
+          ? null
+          : current.lastWorkspaceId,
+      lastProjectIds,
+    })
+  }
+}
+
+function requiredName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) throw new RuntimeError("invalid-name", "A name is required")
+  return trimmed
 }
 
 async function validDirectory(path: string): Promise<string> {

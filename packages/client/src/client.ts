@@ -60,12 +60,58 @@ export class RuntimeClient {
     return this.request({ method: "settings.update", params: { entries } })
   }
 
+  listWorkspaces() {
+    return this.request({ method: "workspace.list", params: {} })
+  }
+
+  createWorkspace(name: string, color: string, icon: string) {
+    return this.request({
+      method: "workspace.create",
+      params: { name, color, icon },
+    })
+  }
+
+  updateWorkspace(
+    workspaceId: string,
+    patch: { name?: string; color?: string; icon?: string }
+  ) {
+    return this.request({
+      method: "workspace.update",
+      params: { workspaceId, ...patch },
+    })
+  }
+
+  deleteWorkspace(workspaceId: string) {
+    return this.request({ method: "workspace.delete", params: { workspaceId } })
+  }
+
+  getSelection() {
+    return this.request({ method: "selection.get", params: {} })
+  }
+
+  setSelection(workspaceId: string, projectId?: string) {
+    return this.request({
+      method: "selection.set",
+      params: { workspaceId, projectId },
+    })
+  }
+
   listProjects() {
     return this.request({ method: "project.list", params: {} })
   }
 
-  addProject(path: string, name: string) {
-    return this.request({ method: "project.add", params: { path, name } })
+  addProject(path: string, name: string, workspaceId: string) {
+    return this.request({
+      method: "project.add",
+      params: { path, name, workspaceId },
+    })
+  }
+
+  moveProject(projectId: string, workspaceId: string) {
+    return this.request({
+      method: "project.move",
+      params: { projectId, workspaceId },
+    })
   }
 
   listThreads(projectId: string) {

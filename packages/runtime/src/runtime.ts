@@ -56,7 +56,10 @@ export class Runtime implements RuntimeTransport {
       this.#turns,
       new UserSettings(this.#store.settings, () =>
         this.#emit({ type: "settings.changed" })
-      )
+      ),
+      {
+        workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
+      }
     )
   }
 
