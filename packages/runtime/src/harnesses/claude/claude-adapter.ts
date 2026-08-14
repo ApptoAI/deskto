@@ -7,9 +7,11 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 import {
   AsyncQueue,
+  harnessFailure,
   type ApprovalDecision,
   type HarnessAdapterFactory,
   type HarnessEvent,
+  type HarnessFailure,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
@@ -77,9 +79,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
-    return Promise.resolve(
-      new ClaudeSession(input, signal, this.options)
-    )
+    return Promise.resolve(new ClaudeSession(input, signal, this.options))
   }
 }
 
@@ -95,6 +95,8 @@ class ClaudeSession implements HarnessSession {
   #lastUsedTokens = 0
   #lastKnownMaxTokens?: number
   #primaryModel?: string
+  #usageLimitResetAt?: string
+  #terminalEventEmitted = false
 
   constructor(
     input: HarnessRunInput,
@@ -203,7 +205,10 @@ class ClaudeSession implements HarnessSession {
       for await (const message of this.#query) this.#mapMessage(message)
     } catch (error) {
       if (!this.#abortController.signal.aborted) {
-        this.#queue.push({ type: "turn.failed", message: errorMessage(error) })
+        this.#emitTerminal({
+          type: "turn.failed",
+          failure: harnessFailure(errorMessage(error), this.#usageLimitResetAt),
+        })
       }
     } finally {
       this.#finish()
@@ -211,6 +216,31 @@ class ClaudeSession implements HarnessSession {
   }
 
   #mapMessage(message: SDKMessage): void {
+    if (message.type === "rate_limit_event") {
+      if (message.rate_limit_info.status === "rejected") {
+        this.#usageLimitResetAt = message.rate_limit_info.resetsAt
+          ? isoFromUnixTimestamp(message.rate_limit_info.resetsAt)
+          : undefined
+        this.#emitUsageLimit({
+          kind: "usage-limit",
+          message: "Claude Code usage limit reached",
+          ...(this.#usageLimitResetAt
+            ? { resetAt: this.#usageLimitResetAt }
+            : {}),
+        })
+      }
+      return
+    }
+
+    const assistantFailure = claudeAssistantFailure(
+      message,
+      this.#usageLimitResetAt
+    )
+    if (assistantFailure) {
+      this.#emitUsageLimit(assistantFailure)
+      return
+    }
+
     if (message.type === "system" && message.subtype === "init") {
       this.#queue.push({
         type: "session.started",
@@ -294,12 +324,14 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.subtype === "success") {
-      this.#queue.push({ type: "turn.completed" })
+      this.#emitTerminal({ type: "turn.completed" })
     } else {
-      this.#queue.push({
+      this.#emitTerminal({
         type: "turn.failed",
-        message:
+        failure: harnessFailure(
           message.errors.join("\n") || "Claude could not complete the task",
+          this.#usageLimitResetAt
+        ),
       })
     }
   }
@@ -333,6 +365,18 @@ class ClaudeSession implements HarnessSession {
           : {}),
       },
     })
+  }
+
+  #emitUsageLimit(failure: HarnessFailure): void {
+    this.#emitTerminal({ type: "turn.failed", failure })
+  }
+
+  #emitTerminal(
+    event: Extract<HarnessEvent, { type: "turn.completed" | "turn.failed" }>
+  ): void {
+    if (this.#terminalEventEmitted) return
+    this.#queue.push(event)
+    this.#terminalEventEmitted = true
   }
 
   #denyPending(): void {
@@ -436,4 +480,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Claude stopped unexpectedly"
+}
+
+/** Maps Claude's assistant error frame, which may still be followed by a successful result. */
+export function claudeAssistantFailure(
+  message: SDKMessage,
+  resetAt?: string
+): HarnessFailure | undefined {
+  if (message.type !== "assistant" || message.error !== "rate_limit") {
+    return undefined
+  }
+  const text = message.message.content
+    .flatMap((block) => (block.type === "text" ? [block.text] : []))
+    .join("\n")
+    .trim()
+  return {
+    kind: "usage-limit",
+    message: text || "Claude Code usage limit reached",
+    ...(resetAt ? { resetAt } : {}),
+  }
+}
+
+function isoFromUnixTimestamp(seconds: number): string | undefined {
+  const milliseconds = seconds > 10_000_000_000 ? seconds : seconds * 1000
+  const date = new Date(milliseconds)
+  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
 }

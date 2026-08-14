@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import type { HarnessAdapterFactory } from "@openappto/harness-sdk"
+import {
+  harnessFailure,
+  type HarnessAdapterFactory,
+} from "@openappto/harness-sdk"
 import { ScriptedHarness } from "@openappto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -20,6 +23,83 @@ afterEach(async () => {
 })
 
 describe("Runtime", () => {
+  it("persists a provider-neutral usage limit in the thread", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const harness = new ScriptedHarness({ id: "future", name: "Future" })
+    const runtime = createRuntime({ databasePath, harnesses: [harness] })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "future" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Continue" },
+      })
+    )
+
+    harness.runs[0]?.emit({
+      type: "turn.failed",
+      failure: {
+        kind: "usage-limit",
+        message: "You've hit your session limit",
+        resetAt: "2026-08-14T16:30:00.000Z",
+      },
+    })
+    harness.runs[0]?.finish()
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "failed"
+    })
+    await runtime.close()
+
+    const reopened = createRuntime({
+      databasePath,
+      harnesses: [new ScriptedHarness({ id: "future", name: "Future" })],
+    })
+    const persisted = unwrap(
+      await reopened.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(persisted.messages.at(-1)?.failure).toEqual({
+      kind: "usage-limit",
+      message: "You've hit your session limit",
+      resetAt: "2026-08-14T16:30:00.000Z",
+    })
+    await reopened.close()
+  })
+
+  it("classifies Codex and Claude Code limit messages alike", () => {
+    expect(
+      harnessFailure(
+        "You've hit your session limit · resets 6:30pm (Europe/Warsaw)"
+      ).kind
+    ).toBe("usage-limit")
+    expect(harnessFailure("Claude usage limit reached").kind).toBe(
+      "usage-limit"
+    )
+    expect(harnessFailure("Provider process exited").kind).toBe("error")
+  })
+
   it("persists a resumable session and forwards an approval to its active harness", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 
 import {
   AsyncQueue,
+  harnessFailure,
   type ApprovalDecision,
   type ContextUsage,
   type HarnessAdapterFactory,
@@ -82,6 +83,7 @@ class CodexSession implements HarnessSession {
   #activeApproval?: PendingApproval
   #threadId?: string
   #turnId?: string
+  #usageLimitResetAt?: string
   #closed = false
 
   private constructor(
@@ -91,7 +93,10 @@ class CodexSession implements HarnessSession {
     client.onNotification((notification) => this.#onNotification(notification))
     client.onRequest((request) => this.#onRequest(request))
     client.onFailure((error) => {
-      this.#queue.push({ type: "turn.failed", message: error.message })
+      this.#queue.push({
+        type: "turn.failed",
+        failure: harnessFailure(error.message, this.#usageLimitResetAt),
+      })
       this.#discardApprovals()
       this.#finish()
     })
@@ -220,6 +225,11 @@ class CodexSession implements HarnessSession {
       return
     }
 
+    if (notification.method === "account/rateLimits/updated") {
+      this.#usageLimitResetAt = codexLimitResetAt(params)
+      return
+    }
+
     if (
       notification.method === "item/started" ||
       notification.method === "item/completed"
@@ -244,7 +254,10 @@ class CodexSession implements HarnessSession {
       const error = isRecord(params.error) ? params.error : undefined
       this.#queue.push({
         type: "turn.failed",
-        message: getString(error, "message") ?? "Codex stopped unexpectedly",
+        failure: harnessFailure(
+          getString(error, "message") ?? "Codex stopped unexpectedly",
+          this.#usageLimitResetAt
+        ),
       })
       this.#finish()
       return
@@ -259,8 +272,10 @@ class CodexSession implements HarnessSession {
       const error = isRecord(turn?.error) ? turn.error : undefined
       this.#queue.push({
         type: "turn.failed",
-        message:
+        failure: harnessFailure(
           getString(error, "message") ?? "Codex could not complete the task",
+          this.#usageLimitResetAt
+        ),
       })
     }
     this.#finish()
@@ -423,6 +438,37 @@ function codexContextUsage(value: unknown): ContextUsage | undefined {
   if (!usedTokens) return undefined
   const maxTokens = positiveTokens(value.modelContextWindow)
   return { usedTokens, ...(maxTokens ? { maxTokens } : {}) }
+}
+
+export function codexLimitResetAt(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined
+  const limits = isRecord(value.rateLimits) ? value.rateLimits : value
+  const slots = [limits.primary, limits.secondary]
+    .filter(isRecord)
+    .map((slot) => ({
+      usedPercent:
+        typeof slot.usedPercent === "number"
+          ? slot.usedPercent
+          : typeof slot.used_percent === "number"
+            ? slot.used_percent
+            : -1,
+      reset:
+        typeof slot.resetsAt === "number"
+          ? slot.resetsAt
+          : typeof slot.resets_at === "number"
+            ? slot.resets_at
+            : undefined,
+    }))
+    .filter(
+      (slot): slot is { usedPercent: number; reset: number } =>
+        slot.reset !== undefined
+    )
+    .sort((left, right) => right.usedPercent - left.usedPercent)
+  const reset = slots[0]?.reset
+  if (reset === undefined) return undefined
+  const milliseconds = reset > 10_000_000_000 ? reset : reset * 1000
+  const date = new Date(milliseconds)
+  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
 }
 
 function codexActivity(

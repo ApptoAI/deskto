@@ -1,4 +1,5 @@
 export { AsyncQueue } from "./async-queue.js"
+export { harnessFailure } from "./failures.js"
 export type {
   ApprovalDecision,
   ApprovalKind,
@@ -9,6 +10,8 @@ export type {
   HarnessAvailability,
   HarnessDescriptor,
   HarnessEvent,
+  HarnessFailure,
+  HarnessFailureKind,
   HarnessModelOption,
   HarnessRunInput,
   HarnessSession,

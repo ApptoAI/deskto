@@ -153,6 +153,14 @@ export const threadSchema = z.object({
 
 export type Thread = z.infer<typeof threadSchema>
 
+export const harnessFailureSchema = z.object({
+  kind: z.enum(["usage-limit", "error"]),
+  message: z.string(),
+  resetAt: z.iso.datetime().optional(),
+})
+
+export type HarnessFailure = z.infer<typeof harnessFailureSchema>
+
 export const messageSchema = z.object({
   id: z.string(),
   threadId: z.string(),
@@ -160,6 +168,8 @@ export const messageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
   state: z.enum(["streaming", "complete", "error"]),
+  failure: harnessFailureSchema.optional(),
+  /** Kept while existing databases migrate to the structured failure. */
   error: z.string().optional(),
   createdAt: z.string(),
 })

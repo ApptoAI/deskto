@@ -154,6 +154,12 @@ const migrations = [
       );
     DELETE FROM settings WHERE key = 'preferences.lastProfile';
   `,
+  `
+    ALTER TABLE messages ADD COLUMN failure_kind TEXT;
+    ALTER TABLE messages ADD COLUMN failure_reset_at TEXT;
+    ALTER TABLE turns ADD COLUMN failure_kind TEXT;
+    ALTER TABLE turns ADD COLUMN failure_reset_at TEXT;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

@@ -70,6 +70,16 @@ export type ContextUsage = {
   maxTokens?: number
 }
 
+export type HarnessFailureKind = "usage-limit" | "error"
+
+/** Provider-neutral reason why a Harness could not finish a Turn. */
+export type HarnessFailure = {
+  kind: HarnessFailureKind
+  message: string
+  /** ISO timestamp reported by the Harness, when it provides one. */
+  resetAt?: string
+}
+
 export type HarnessEvent =
   | { type: "session.started"; providerSessionId: string }
   | { type: "message.delta"; text: string }
@@ -85,7 +95,7 @@ export type HarnessEvent =
     }
   | { type: "approval.requested"; request: ApprovalRequest }
   | { type: "turn.completed" }
-  | { type: "turn.failed"; message: string }
+  | { type: "turn.failed"; failure: HarnessFailure }
 
 export interface HarnessSession {
   /** Emits at most one unresolved approval request at a time. */
