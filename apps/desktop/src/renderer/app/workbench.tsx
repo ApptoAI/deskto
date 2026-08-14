@@ -7,6 +7,7 @@ import { Button } from "@workspace/ui/components/button"
 import { InlineError } from "../components/inline-error.js"
 import { SettingsView } from "../components/settings/settings-view.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
+import type { InboxActions } from "../components/sidebar/task-list.js"
 import { WorkspaceRail } from "../components/sidebar/workspace-rail.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
@@ -126,13 +127,6 @@ export function Workbench() {
     null
   const activeProjectId = activeProject?.id ?? null
 
-  const loadThreads = useMemo(
-    () => (activeProjectId ? () => client.listThreads(activeProjectId) : null),
-    [client, activeProjectId]
-  )
-  const threads = useRuntimeQuery(loadThreads)
-  const revalidateThreads = threads.revalidate
-
   // Whether the sidebar shows one project's tasks or every project's, divided
   // into sections. Pure UI state, persisted per workspace in localStorage the
   // same way the composer remembers the last model.
@@ -142,6 +136,18 @@ export function Workbench() {
   const allProjects = activeWorkspaceId
     ? (projectScopeMap[activeWorkspaceId] ?? "project") === "all"
     : false
+
+  // Gated on the visible scope: in all-projects mode this query's result is
+  // never rendered, and every thread.changed would refetch it for nothing.
+  const loadThreads = useMemo(
+    () =>
+      activeProjectId && !allProjects
+        ? () => client.listThreads(activeProjectId)
+        : null,
+    [client, activeProjectId, allProjects]
+  )
+  const threads = useRuntimeQuery(loadThreads)
+  const revalidateThreads = threads.revalidate
   const setProjectScope = useCallback(
     (scope: ProjectScope) => {
       if (!activeWorkspaceId) return
@@ -171,12 +177,14 @@ export function Workbench() {
   const workspaceThreads = useRuntimeQuery(loadWorkspaceThreads)
   const revalidateWorkspaceThreads = workspaceThreads.revalidate
 
-  useThreadChanged(
-    useCallback(() => {
-      revalidateThreads()
-      revalidateWorkspaceThreads()
-    }, [revalidateThreads, revalidateWorkspaceThreads])
-  )
+  // Only the active scope's query has a loader; the other revalidate is a
+  // no-op, so this refreshes exactly the list on screen.
+  const revalidateAllThreads = useCallback(() => {
+    revalidateThreads()
+    revalidateWorkspaceThreads()
+  }, [revalidateThreads, revalidateWorkspaceThreads])
+
+  useThreadChanged(revalidateAllThreads)
 
   useKeybinding(
     appSettings.newTaskKeybinding,
@@ -287,6 +295,25 @@ export function Workbench() {
     )
   }
 
+  // Mutation responses are ignored on purpose: each one emits thread.changed,
+  // and the list queries refetch from there like every other thread update.
+  // Memoized so every task row is not handed a fresh identity per render.
+  const inboxActions: InboxActions = useMemo(() => {
+    const run = (action: () => Promise<unknown>) => {
+      setActionError(null)
+      action().catch((error: unknown) => setActionError(describeError(error)))
+    }
+    return {
+      onSetDone: (threadId, done) =>
+        run(() => client.setThreadDone(threadId, done)),
+      onSnooze: (threadId, until) =>
+        run(() => client.snoozeThread(threadId, until)),
+      onWake: (threadId) => run(() => client.wakeThread(threadId)),
+      onSetPinned: (threadId, pinned) =>
+        run(() => client.setThreadPinned(threadId, pinned)),
+    }
+  }, [client])
+
   function submitWorkspace(draft: WorkspaceDraft) {
     return reportErrors(async () => {
       if (workspaceDialog?.mode === "edit" && activeWorkspace) {
@@ -379,11 +406,9 @@ export function Workbench() {
         openThreadId={openThreadId}
         onOpenThread={openThread}
         onNewTask={() => setView({ kind: "new-task" })}
-        onRetryThreads={() => {
-          revalidateThreads()
-          revalidateWorkspaceThreads()
-        }}
+        onRetryThreads={revalidateAllThreads}
         onOpenSettings={() => setView({ kind: "settings" })}
+        inboxActions={inboxActions}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -452,7 +477,7 @@ export function Workbench() {
             key={activeProject.id}
             project={activeProject}
             harnesses={harnesses.state}
-            onTaskCreated={revalidateThreads}
+            onTaskCreated={revalidateAllThreads}
             onTaskStarted={openThread}
           />
         )}

@@ -65,6 +65,8 @@ export class Runtime implements RuntimeTransport {
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),
+        threadChanged: (threadId) =>
+          this.#emit({ type: "thread.changed", threadId }),
       }
     )
   }

@@ -38,6 +38,15 @@ export type ThreadRow = {
   permission_mode: Thread["executionProfile"]["permissionMode"]
   context_used_tokens: number | null
   context_max_tokens: number | null
+  last_user_message_at: string | null
+  last_turn_completed_at: string | null
+  last_visited_at: string | null
+  failed_at: string | null
+  pinned_at: string | null
+  snoozed_until: string | null
+  snoozed_at: string | null
+  done_override: Thread["doneOverride"]
+  done_at: string | null
   created_at: string
   updated_at: string
 }
@@ -140,6 +149,15 @@ export function toThread(row: ThreadRow): Thread {
       permissionMode: row.permission_mode,
     },
     ...(contextUsage ? { contextUsage } : {}),
+    lastUserMessageAt: row.last_user_message_at,
+    lastTurnCompletedAt: row.last_turn_completed_at,
+    lastVisitedAt: row.last_visited_at,
+    failedAt: row.failed_at,
+    pinnedAt: row.pinned_at,
+    snoozedUntil: row.snoozed_until,
+    snoozedAt: row.snoozed_at,
+    doneOverride: row.done_override,
+    doneAt: row.done_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

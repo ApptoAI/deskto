@@ -121,6 +121,26 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("thread.setDone"),
+    params: z.object({ threadId: z.string(), done: z.boolean() }),
+  }),
+  z.object({
+    method: z.literal("thread.snooze"),
+    params: z.object({ threadId: z.string(), until: z.iso.datetime() }),
+  }),
+  z.object({
+    method: z.literal("thread.wake"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
+    method: z.literal("thread.setPinned"),
+    params: z.object({ threadId: z.string(), pinned: z.boolean() }),
+  }),
+  z.object({
+    method: z.literal("thread.markVisited"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
     method: z.literal("turn.start"),
     params: z.object({
       threadId: z.string(),
@@ -173,6 +193,11 @@ export interface RuntimeResponses {
   "thread.create": z.infer<typeof threadSchema>
   "thread.configure": z.infer<typeof threadViewSchema>
   "thread.get": z.infer<typeof threadViewSchema>
+  "thread.setDone": z.infer<typeof threadSchema>
+  "thread.snooze": z.infer<typeof threadSchema>
+  "thread.wake": z.infer<typeof threadSchema>
+  "thread.setPinned": z.infer<typeof threadSchema>
+  "thread.markVisited": z.infer<typeof threadSchema>
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
   "approval.resolve": z.infer<typeof threadViewSchema>

@@ -166,6 +166,29 @@ export class RuntimeClient {
     return this.request({ method: "thread.get", params: { threadId } })
   }
 
+  setThreadDone(threadId: string, done: boolean) {
+    return this.request({ method: "thread.setDone", params: { threadId, done } })
+  }
+
+  snoozeThread(threadId: string, until: string) {
+    return this.request({ method: "thread.snooze", params: { threadId, until } })
+  }
+
+  wakeThread(threadId: string) {
+    return this.request({ method: "thread.wake", params: { threadId } })
+  }
+
+  setThreadPinned(threadId: string, pinned: boolean) {
+    return this.request({
+      method: "thread.setPinned",
+      params: { threadId, pinned },
+    })
+  }
+
+  markThreadVisited(threadId: string) {
+    return this.request({ method: "thread.markVisited", params: { threadId } })
+  }
+
   startTurn(threadId: string, prompt: string) {
     return this.request({ method: "turn.start", params: { threadId, prompt } })
   }
