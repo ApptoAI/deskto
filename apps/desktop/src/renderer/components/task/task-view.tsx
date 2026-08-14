@@ -16,6 +16,7 @@ import {
   type QueryState,
 } from "../../runtime/use-runtime-query.js"
 import { useThreadChanged } from "../../runtime/use-thread-changed.js"
+import { HarnessLogo } from "../brand-logos.js"
 import { Composer } from "../composer.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { InlineError } from "../inline-error.js"
@@ -89,6 +90,7 @@ export function TaskView({
           {thread.title}
         </h1>
         <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          <HarnessLogo harnessId={thread.harnessId} className="size-3.5" />
           <span>{harnessLabel(options, thread.harnessId)}</span>
           <span aria-hidden>·</span>
           <span className={status.textClassName}>{status.label}</span>

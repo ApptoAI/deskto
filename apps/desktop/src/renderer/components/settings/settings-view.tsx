@@ -11,6 +11,7 @@ import { describeHarnessHealth } from "../../lib/harness.js"
 import { describeError } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
+import { HarnessLogo } from "../brand-logos.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 
@@ -98,6 +99,10 @@ export function SettingsView({
                       key={harness.id}
                       className="flex items-center gap-4 px-4 py-3"
                     >
+                      <HarnessLogo
+                        harnessId={harness.id}
+                        className="size-5 shrink-0"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span

@@ -15,6 +15,7 @@ import {
   harnessUnavailableReason,
   isHarnessAvailable,
 } from "../lib/harness.js"
+import { HarnessLogo } from "./brand-logos.js"
 
 export function HarnessMenu({
   harnesses,
@@ -34,6 +35,7 @@ export function HarnessMenu({
           <Button variant="ghost" size="sm" className="text-muted-foreground" />
         }
       >
+        {selected ? <HarnessLogo harnessId={selected.id} /> : null}
         {selected?.name ?? "Choose an agent"}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
@@ -52,7 +54,10 @@ export function HarnessMenu({
                 closeOnClick
               >
                 <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-                  <span>{harness.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <HarnessLogo harnessId={harness.id} />
+                    {harness.name}
+                  </span>
                   {reason ? (
                     <span className="text-xs leading-snug text-muted-foreground">
                       {reason}
