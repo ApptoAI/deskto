@@ -59,6 +59,7 @@ export function WorkspaceThreadList({
               type="button"
               onClick={() => onSelectProject(project.id)}
               title={`Show only ${project.name}`}
+              aria-label={`Show only ${project.name}`}
               className="group flex w-full items-center gap-2 rounded-sm px-4 pb-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               <span className="truncate text-xs font-medium text-muted-foreground transition-colors duration-150 group-hover:text-foreground">

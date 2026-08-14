@@ -79,9 +79,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
-    return Promise.resolve(
-      new ClaudeSession(input, signal, this.options)
-    )
+    return Promise.resolve(new ClaudeSession(input, signal, this.options))
   }
 }
 
@@ -98,7 +96,7 @@ class ClaudeSession implements HarnessSession {
   #lastKnownMaxTokens?: number
   #primaryModel?: string
   #usageLimitResetAt?: string
-  #usageLimitFailureEmitted = false
+  #terminalEventEmitted = false
 
   constructor(
     input: HarnessRunInput,
@@ -207,7 +205,7 @@ class ClaudeSession implements HarnessSession {
       for await (const message of this.#query) this.#mapMessage(message)
     } catch (error) {
       if (!this.#abortController.signal.aborted) {
-        this.#queue.push({
+        this.#emitTerminal({
           type: "turn.failed",
           failure: harnessFailure(errorMessage(error), this.#usageLimitResetAt),
         })
@@ -326,9 +324,9 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.subtype === "success") {
-      this.#queue.push({ type: "turn.completed" })
+      this.#emitTerminal({ type: "turn.completed" })
     } else {
-      this.#queue.push({
+      this.#emitTerminal({
         type: "turn.failed",
         failure: harnessFailure(
           message.errors.join("\n") || "Claude could not complete the task",
@@ -370,9 +368,15 @@ class ClaudeSession implements HarnessSession {
   }
 
   #emitUsageLimit(failure: HarnessFailure): void {
-    if (this.#usageLimitFailureEmitted) return
-    this.#usageLimitFailureEmitted = true
-    this.#queue.push({ type: "turn.failed", failure })
+    this.#emitTerminal({ type: "turn.failed", failure })
+  }
+
+  #emitTerminal(
+    event: Extract<HarnessEvent, { type: "turn.completed" | "turn.failed" }>
+  ): void {
+    if (this.#terminalEventEmitted) return
+    this.#queue.push(event)
+    this.#terminalEventEmitted = true
   }
 
   #denyPending(): void {

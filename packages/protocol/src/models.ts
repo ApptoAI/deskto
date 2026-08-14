@@ -156,7 +156,7 @@ export type Thread = z.infer<typeof threadSchema>
 export const harnessFailureSchema = z.object({
   kind: z.enum(["usage-limit", "error"]),
   message: z.string(),
-  resetAt: z.string().optional(),
+  resetAt: z.iso.datetime().optional(),
 })
 
 export type HarnessFailure = z.infer<typeof harnessFailureSchema>
