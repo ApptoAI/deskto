@@ -158,14 +158,14 @@ export interface RuntimeResponses {
   "workspace.list": z.infer<typeof workspaceSchema>[]
   "workspace.create": z.infer<typeof workspaceSchema>
   "workspace.update": z.infer<typeof workspaceSchema>
-  "workspace.delete": z.infer<typeof workspaceSchema>[]
+  "workspace.delete": null
   "selection.get": z.infer<typeof selectionSchema>
   "selection.set": z.infer<typeof selectionSchema>
   "pack.list": z.infer<typeof packSchema>[]
   "pack.create": z.infer<typeof packSchema>
   "pack.import": z.infer<typeof packSchema>
-  "pack.remove": z.infer<typeof packSchema>[]
-  "workspace.setPack": z.infer<typeof packSchema>[]
+  "pack.remove": null
+  "workspace.setPack": null
   "project.list": z.infer<typeof projectSchema>[]
   "project.add": z.infer<typeof projectSchema>
   "project.move": z.infer<typeof projectSchema>

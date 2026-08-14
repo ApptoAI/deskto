@@ -21,6 +21,8 @@ import { claudePluginsFor } from "./claude-packs.js"
 
 type ClaudeAdapterOptions = {
   executablePath?: string
+  /** Stable app-owned directory for generated pack plugin shims. */
+  packShimsPath?: string
 }
 
 type PendingApproval = {
@@ -76,7 +78,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return Promise.resolve(
-      new ClaudeSession(input, signal, this.options.executablePath)
+      new ClaudeSession(input, signal, this.options)
     )
   }
 }
@@ -97,13 +99,16 @@ class ClaudeSession implements HarnessSession {
   constructor(
     input: HarnessRunInput,
     signal: AbortSignal,
-    executablePath?: string
+    { executablePath, packShimsPath }: ClaudeAdapterOptions
   ) {
     if (signal.aborted) this.#abortController.abort()
     signal.addEventListener("abort", () => this.#abortController.abort(), {
       once: true,
     })
-    const pluginShims = claudePluginsFor(input.customization.skillRoots)
+    const pluginShims = claudePluginsFor(
+      input.customization.skillRoots,
+      packShimsPath
+    )
     const canUseTool: CanUseTool = (toolName, toolInput, options) =>
       new Promise((resolve) => {
         const approvalId = options.toolUseID

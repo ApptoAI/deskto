@@ -413,11 +413,14 @@ describe("Runtime", () => {
       })
     )
 
-    const remaining = unwrap(
+    unwrap(
       await runtime.request({
         method: "workspace.delete",
         params: { workspaceId: press.id },
       })
+    )
+    const remaining = unwrap(
+      await runtime.request({ method: "workspace.list", params: {} })
     )
     expect(remaining.map((workspace) => workspace.id)).toEqual(["personal"])
 
@@ -439,7 +442,21 @@ describe("Runtime", () => {
     if (!undeletable.ok)
       expect(undeletable.error.code).toBe("workspace-not-deletable")
 
-    expect(events.filter((type) => type === "workspace.changed").length).toBe(3)
+    const other = unwrap(
+      await runtime.request({
+        method: "workspace.create",
+        params: { name: "Other", color: "rose", icon: "star" },
+      })
+    )
+    const conflict = await runtime.request({
+      method: "project.add",
+      params: { path: directory, name: "Example", workspaceId: other.id },
+    })
+    expect(conflict.ok).toBe(false)
+    if (!conflict.ok)
+      expect(conflict.error.code).toBe("project-in-other-workspace")
+
+    expect(events.filter((type) => type === "workspace.changed").length).toBe(4)
     await runtime.close()
   })
 
@@ -504,7 +521,7 @@ describe("Runtime", () => {
       })
     )
     expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
-      join(created.path, "skills"),
+      { path: join(created.path, "skills"), name: "Press tools" },
     ])
     await runtime.close()
   })

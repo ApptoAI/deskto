@@ -76,7 +76,7 @@ export class TurnCoordinator {
           executionProfile: turn.executionProfile,
           customization: {
             skillRoots: existingSkillRoots(
-              this.store.packs.pathsForWorkspace(turn.workspaceId)
+              this.store.packs.attachedToWorkspace(turn.workspaceId)
             ),
           },
           ...(turn.providerSessionId

@@ -146,6 +146,14 @@ const migrations = [
       PRIMARY KEY (workspace_id, pack_id)
     );
   `,
+  `
+    UPDATE settings SET key = 'preferences.lastProfile.personal'
+    WHERE key = 'preferences.lastProfile'
+      AND NOT EXISTS (
+        SELECT 1 FROM settings WHERE key = 'preferences.lastProfile.personal'
+      );
+    DELETE FROM settings WHERE key = 'preferences.lastProfile';
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

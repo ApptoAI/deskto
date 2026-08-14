@@ -86,6 +86,25 @@ export function toWorkspace(row: WorkspaceRow): Workspace {
   }
 }
 
+export type PackRow = {
+  id: string
+  name: string
+  path: string
+  created_at: string
+  updated_at: string
+}
+
+/** The database half of a Pack; skills and attachments are composed on top. */
+export function toPackRecord(row: PackRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    path: row.path,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
 export function toProject(row: ProjectRow): Project {
   return {
     id: row.id,

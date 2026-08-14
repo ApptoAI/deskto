@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react"
 import { appSettings } from "@openappto/settings"
 
-import { personalWorkspaceId } from "@openappto/protocol"
+import { personalWorkspaceId, type Selection } from "@openappto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
@@ -15,7 +15,7 @@ import {
   WorkspaceDialog,
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
-import { pickProjectFolder } from "../lib/desktop.js"
+import { pickPackFolder, pickProjectFolder } from "../lib/desktop.js"
 import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
@@ -52,9 +52,21 @@ export function Workbench() {
   const loadProjects = useCallback(() => client.listProjects(), [client])
   const projectsQuery = useRuntimeQuery(loadProjects)
 
-  const loadPacks = useCallback(() => client.listPacks(), [client])
+  const [view, setView] = useState<MainView>({ kind: "new-task" })
+  const [addingProject, setAddingProject] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [workspaceDialog, setWorkspaceDialog] =
+    useState<WorkspaceDialogState>(null)
+
+  // Packs are only visible inside the workspace dialog, so the query (which
+  // scans pack directories on disk) stands down until the dialog opens.
+  const loadPacks = useMemo(
+    () => (workspaceDialog ? () => client.listPacks() : null),
+    [client, workspaceDialog]
+  )
   const packsQuery = useRuntimeQuery(loadPacks)
 
+  // Mutation responses stay slim; these events are the one refetch trigger.
   const revalidateWorkspaces = workspacesQuery.revalidate
   const revalidateProjects = projectsQuery.revalidate
   useWorkspaceChanged(
@@ -65,16 +77,6 @@ export function Workbench() {
   )
   const revalidatePacks = packsQuery.revalidate
   usePackChanged(useCallback(() => revalidatePacks(), [revalidatePacks]))
-
-  const [chosenWorkspaceId, setChosenWorkspaceId] = useState<string | null>(
-    null
-  )
-  const [chosenProjectId, setChosenProjectId] = useState<string | null>(null)
-  const [view, setView] = useState<MainView>({ kind: "new-task" })
-  const [addingProject, setAddingProject] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [workspaceDialog, setWorkspaceDialog] =
-    useState<WorkspaceDialogState>(null)
 
   const workspacesState = workspacesQuery.state
   const workspaces = useMemo(
@@ -88,15 +90,17 @@ export function Workbench() {
   const packs =
     packsQuery.state.status === "ready" ? packsQuery.state.data : []
 
-  // A restart reopens the last used workspace and its last used project;
-  // explicit clicks in this session win over what was remembered.
-  const activeWorkspace =
-    workspaces.find(
-      (workspace) =>
-        workspace.id === (chosenWorkspaceId ?? selection?.lastWorkspaceId)
-    ) ??
-    workspaces[0] ??
-    null
+  // The persisted Selection is the single source of truth for where the user
+  // is; selecting updates it optimistically and the runtime write follows.
+  // Nothing activates until the selection loads, so a restart cannot flash
+  // (and fetch for) the wrong workspace while the remembered one is in flight.
+  const activeWorkspace = selection
+    ? (workspaces.find(
+        (workspace) => workspace.id === selection.lastWorkspaceId
+      ) ??
+      workspaces[0] ??
+      null)
+    : null
   const activeWorkspaceId = activeWorkspace?.id ?? null
 
   const workspaceProjects = projects.filter(
@@ -106,9 +110,7 @@ export function Workbench() {
     ? (selection?.lastProjectIds[activeWorkspaceId] ?? null)
     : null
   const activeProject =
-    workspaceProjects.find(
-      (project) => project.id === (chosenProjectId ?? rememberedProjectId)
-    ) ??
+    workspaceProjects.find((project) => project.id === rememberedProjectId) ??
     workspaceProjects[0] ??
     null
   const activeProjectId = activeProject?.id ?? null
@@ -133,12 +135,33 @@ export function Workbench() {
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
-      setChosenWorkspaceId(workspaceId)
-      setChosenProjectId(null)
       setView({ kind: "new-task" })
+      replaceSelection({
+        lastWorkspaceId: workspaceId,
+        lastProjectIds: selection?.lastProjectIds ?? {},
+      })
       client.setSelection(workspaceId).then(replaceSelection, () => {})
     },
-    [client, replaceSelection]
+    [client, replaceSelection, selection]
+  )
+
+  const selectProject = useCallback(
+    (projectId: string) => {
+      if (!activeWorkspaceId) return
+      setView({ kind: "new-task" })
+      const next: Selection = {
+        lastWorkspaceId: activeWorkspaceId,
+        lastProjectIds: {
+          ...(selection?.lastProjectIds ?? {}),
+          [activeWorkspaceId]: projectId,
+        },
+      }
+      replaceSelection(next)
+      client
+        .setSelection(activeWorkspaceId, projectId)
+        .then(replaceSelection, () => {})
+    },
+    [client, replaceSelection, selection, activeWorkspaceId]
   )
 
   const cycleWorkspace = useCallback(
@@ -165,146 +188,113 @@ export function Workbench() {
     useCallback(() => cycleWorkspace(-1), [cycleWorkspace])
   )
 
-  function selectProject(projectId: string) {
-    setChosenProjectId(projectId)
-    setView({ kind: "new-task" })
-    if (activeWorkspaceId)
-      client
-        .setSelection(activeWorkspaceId, projectId)
-        .then(replaceSelection, () => {})
-  }
-
   function openThread(threadId: string) {
     setView({ kind: "task", threadId })
+  }
+
+  /** Shows failures in the inline error strip and rethrows for callers that care. */
+  async function reportErrors<T>(action: () => Promise<T>): Promise<T> {
+    setActionError(null)
+    try {
+      return await action()
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
   }
 
   async function addProject() {
     if (!activeWorkspaceId) return
     setAddingProject(true)
-    setActionError(null)
     try {
-      const picked = await pickProjectFolder()
-      if (!picked) return
-
-      const project = await client.addProject(
-        picked.path,
-        picked.name,
-        activeWorkspaceId
-      )
-      projectsQuery.revalidate()
-      selectProject(project.id)
-    } catch (error) {
-      setActionError(describeError(error))
+      await reportErrors(async () => {
+        const picked = await pickProjectFolder()
+        if (!picked) return
+        const project = await client.addProject(
+          picked.path,
+          picked.name,
+          activeWorkspaceId
+        )
+        selectProject(project.id)
+      })
+    } catch {
+      // Already surfaced through the error strip.
     } finally {
       setAddingProject(false)
     }
   }
 
-  async function moveProject(projectId: string, workspaceId: string) {
-    setActionError(null)
-    try {
-      await client.moveProject(projectId, workspaceId)
-      setChosenProjectId(null)
-      projectsQuery.revalidate()
-    } catch (error) {
-      setActionError(describeError(error))
-    }
+  function moveProject(projectId: string, workspaceId: string) {
+    reportErrors(() => client.moveProject(projectId, workspaceId)).catch(
+      () => {}
+    )
   }
 
-  async function submitWorkspace(draft: WorkspaceDraft) {
-    setActionError(null)
-    try {
+  function submitWorkspace(draft: WorkspaceDraft) {
+    return reportErrors(async () => {
       if (workspaceDialog?.mode === "edit" && activeWorkspace) {
         await client.updateWorkspace(activeWorkspace.id, draft)
-        revalidateWorkspaces()
       } else {
         const created = await client.createWorkspace(
           draft.name,
           draft.color,
           draft.icon
         )
-        revalidateWorkspaces()
         selectWorkspace(created.id)
       }
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
+    })
   }
 
-  const replacePacks = packsQuery.replace
-
-  async function togglePack(packId: string, attached: boolean) {
-    if (!activeWorkspaceId) return
-    setActionError(null)
-    try {
-      replacePacks(
-        await client.setWorkspacePack(activeWorkspaceId, packId, attached)
-      )
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
+  function deleteActiveWorkspace() {
+    return reportErrors(async () => {
+      if (!activeWorkspace) return
+      await client.deleteWorkspace(activeWorkspace.id)
+      setView({ kind: "new-task" })
+      selectionQuery.revalidate()
+    })
   }
 
   // A pack created or imported while editing a workspace is meant for it, so
   // it attaches right away.
-  async function createPack(name: string) {
-    if (!activeWorkspaceId) return
-    setActionError(null)
-    try {
-      const pack = await client.createPack(name)
-      replacePacks(
+  const packActions = {
+    onToggle: (packId: string, attached: boolean) =>
+      reportErrors(async () => {
+        if (!activeWorkspaceId) return
+        await client.setWorkspacePack(activeWorkspaceId, packId, attached)
+      }),
+    onCreate: (name: string) =>
+      reportErrors(async () => {
+        if (!activeWorkspaceId) return
+        const pack = await client.createPack(name)
         await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
-      )
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
-  }
-
-  async function importPack() {
-    if (!activeWorkspaceId) return
-    setActionError(null)
-    try {
-      const picked = await pickProjectFolder()
-      if (!picked) return
-      const pack = await client.importPack(picked.path)
-      replacePacks(
+      }),
+    onImport: () =>
+      reportErrors(async () => {
+        if (!activeWorkspaceId) return
+        const picked = await pickPackFolder()
+        if (!picked) return
+        const pack = await client.importPack(picked.path)
         await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
-      )
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
+      }),
+    onRemove: (packId: string) =>
+      reportErrors(async () => {
+        await client.removePack(packId)
+      }),
   }
 
-  async function removePack(packId: string) {
-    setActionError(null)
-    try {
-      replacePacks(await client.removePack(packId))
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
-  }
-
-  async function deleteActiveWorkspace() {
-    if (!activeWorkspace) return
-    setActionError(null)
-    try {
-      await client.deleteWorkspace(activeWorkspace.id)
-      setChosenWorkspaceId(null)
-      setChosenProjectId(null)
-      setView({ kind: "new-task" })
-      revalidateWorkspaces()
-      revalidateProjects()
-      selectionQuery.revalidate()
-    } catch (error) {
-      setActionError(describeError(error))
-      throw error
-    }
-  }
+  const listsLoading = [
+    workspacesQuery.state.status,
+    projectsQuery.state.status,
+    selectionQuery.state.status,
+  ].some((status) => status === "loading" || status === "idle")
+  const listsError =
+    workspacesQuery.state.status === "error"
+      ? workspacesQuery.state.message
+      : projectsQuery.state.status === "error"
+        ? projectsQuery.state.message
+        : selectionQuery.state.status === "error"
+          ? selectionQuery.state.message
+          : null
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
@@ -354,22 +344,27 @@ export function Workbench() {
 
         {view.kind === "settings" ? (
           <SettingsView harnesses={harnesses} />
-        ) : projectsQuery.state.status === "loading" ||
-          projectsQuery.state.status === "idle" ? (
-          <Screen>
-            <StatusPanel title="Loading your projects…" />
-          </Screen>
-        ) : projectsQuery.state.status === "error" ? (
+        ) : listsError ? (
           <Screen>
             <StatusPanel
               title="Appto cannot reach the runtime"
-              description={projectsQuery.state.message}
+              description={listsError}
               tone="danger"
             >
-              <Button variant="outline" onClick={projectsQuery.revalidate}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  revalidateWorkspaces()
+                  revalidateProjects()
+                }}
+              >
                 Try again
               </Button>
             </StatusPanel>
+          </Screen>
+        ) : listsLoading ? (
+          <Screen>
+            <StatusPanel title="Loading your projects…" />
           </Screen>
         ) : !activeProject ? (
           <Screen>
@@ -407,12 +402,7 @@ export function Workbench() {
         workspace={workspaceDialog?.mode === "edit" ? activeWorkspace : null}
         canDelete={activeWorkspace?.id !== personalWorkspaceId}
         packs={packs}
-        packActions={{
-          onToggle: togglePack,
-          onCreate: createPack,
-          onImport: importPack,
-          onRemove: removePack,
-        }}
+        packActions={packActions}
         onSubmit={submitWorkspace}
         onDelete={deleteActiveWorkspace}
       />

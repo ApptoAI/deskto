@@ -6,3 +6,7 @@ export function openExternal(url: string): void {
 export function pickProjectFolder() {
   return window.appto.pickProject()
 }
+
+export function pickPackFolder() {
+  return window.appto.pickPack()
+}

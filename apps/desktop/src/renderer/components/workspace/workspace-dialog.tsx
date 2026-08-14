@@ -248,6 +248,15 @@ function PackSection({
     }
   }
 
+  function createNewPack() {
+    const name = newPackName.trim()
+    if (!name || busy) return
+    void run(async () => {
+      await onCreate(name)
+      setNewPackName("")
+    })
+  }
+
   return (
     <div className="space-y-2 border-t border-border pt-3">
       <Label>Packs</Label>
@@ -296,11 +305,7 @@ function PackSection({
           onKeyDown={(event) => {
             if (event.key !== "Enter") return
             event.preventDefault()
-            if (newPackName.trim() && !busy)
-              void run(async () => {
-                await onCreate(newPackName.trim())
-                setNewPackName("")
-              })
+            createNewPack()
           }}
           placeholder="New pack name"
           className="h-7 flex-1 text-sm"
@@ -310,12 +315,7 @@ function PackSection({
           variant="outline"
           size="sm"
           disabled={busy || !newPackName.trim()}
-          onClick={() =>
-            void run(async () => {
-              await onCreate(newPackName.trim())
-              setNewPackName("")
-            })
-          }
+          onClick={createNewPack}
         >
           Create
         </Button>

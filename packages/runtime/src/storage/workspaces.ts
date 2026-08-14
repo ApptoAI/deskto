@@ -63,21 +63,23 @@ export class Workspaces {
     patch: { name?: string; color?: string; icon?: string }
   ): Workspace {
     const current = this.get(id)
-    const next = {
+    const next: Workspace = {
+      ...current,
       name: patch.name ?? current.name,
       color: patch.color ?? current.color,
       icon: patch.icon ?? current.icon,
+      updatedAt: new Date().toISOString(),
     }
     this.database
       .prepare(
         "UPDATE workspaces SET name = ?, color = ?, icon = ?, updated_at = ? WHERE id = ?"
       )
-      .run(next.name, next.color, next.icon, new Date().toISOString(), id)
-    return this.get(id)
+      .run(next.name, next.color, next.icon, next.updatedAt, id)
+    return next
   }
 
   /** Projects survive: they move to the Personal workspace, which itself cannot go. */
-  delete(id: string): Workspace[] {
+  delete(id: string): void {
     if (id === personalWorkspaceId)
       throw new RuntimeError(
         "workspace-not-deletable",
@@ -93,6 +95,5 @@ export class Workspaces {
         .run(personalWorkspaceId, now, id)
       this.database.prepare("DELETE FROM workspaces WHERE id = ?").run(id)
     })
-    return this.list()
   }
 }

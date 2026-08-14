@@ -198,7 +198,9 @@ class CodexSession implements HarnessSession {
     const { skillRoots } = this.input.customization
     if (skillRoots.length === 0) return
     await this.client
-      .request("skills/extraRoots/set", { extraRoots: skillRoots })
+      .request("skills/extraRoots/set", {
+        extraRoots: skillRoots.map((root) => root.path),
+      })
       .catch(() => undefined)
   }
 

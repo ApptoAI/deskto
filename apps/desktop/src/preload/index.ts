@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron"
 
 import {
   openExternalChannel,
+  pickPackChannel,
   pickProjectChannel,
   runtimeEventChannel,
   runtimeRequestChannel,
@@ -23,6 +24,7 @@ const api: DesktopApi = {
     },
   },
   pickProject: () => ipcRenderer.invoke(pickProjectChannel),
+  pickPack: () => ipcRenderer.invoke(pickPackChannel),
   openExternal: (url) => ipcRenderer.invoke(openExternalChannel, url),
 }
 

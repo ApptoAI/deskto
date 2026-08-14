@@ -15,5 +15,6 @@ export interface DesktopApi {
     subscribe(listener: (event: RuntimeEvent) => void): () => void
   }
   pickProject(): Promise<PickedProject | undefined>
+  pickPack(): Promise<PickedProject | undefined>
   openExternal(url: string): Promise<void>
 }

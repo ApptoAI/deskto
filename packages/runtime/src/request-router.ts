@@ -1,5 +1,3 @@
-import { realpath, stat } from "node:fs/promises"
-
 import {
   lastProfileSchema,
   selectionSchema,
@@ -18,19 +16,19 @@ import {
   createPackDirectory,
   readPackName,
   readPackSkills,
+  resolvedDirectory,
   validatePackDirectory,
 } from "./packs/pack-files.js"
-import type { PackRow } from "./storage/packs.js"
+import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
 
-// The un-suffixed key is the pre-workspace value and still serves as fallback.
-const lastProfileSettingKey = "preferences.lastProfile"
+// A migration moved the pre-workspace value under the personal workspace.
 const selectionSettingKey = "ui.selection"
 
 function lastProfileKeyFor(workspaceId: string): string {
-  return `${lastProfileSettingKey}.${workspaceId}`
+  return `preferences.lastProfile.${workspaceId}`
 }
 
 export type RouterEvents = {
@@ -81,16 +79,12 @@ export class RequestRouter {
       case "harness.refresh":
         return this.harnesses.refresh()
       case "preferences.get": {
-        const scoped = lastProfileSchema.safeParse(
+        const stored = lastProfileSchema.safeParse(
           this.store.settings.get(
             lastProfileKeyFor(request.params.workspaceId)
           )
         )
-        if (scoped.success) return { lastProfile: scoped.data }
-        const legacy = lastProfileSchema.safeParse(
-          this.store.settings.get(lastProfileSettingKey)
-        )
-        return { lastProfile: legacy.success ? legacy.data : null }
+        return { lastProfile: stored.success ? stored.data : null }
       }
       case "settings.get":
         return this.userSettings.snapshot()
@@ -126,12 +120,15 @@ export class RequestRouter {
         return workspace
       }
       case "workspace.delete": {
-        const remaining = this.store.workspaces.delete(
-          request.params.workspaceId
-        )
+        this.store.workspaces.delete(request.params.workspaceId)
         this.#forgetSelection(request.params.workspaceId)
+        this.store.settings.delete(
+          lastProfileKeyFor(request.params.workspaceId)
+        )
         this.events.workspaceChanged()
-        return remaining
+        // The FK cascade also detached the workspace's packs.
+        this.events.packChanged()
+        return null
       }
       case "selection.get":
         return this.#selection()
@@ -167,7 +164,7 @@ export class RequestRouter {
       case "pack.remove": {
         this.store.packs.remove(request.params.packId)
         this.events.packChanged()
-        return this.#packViews()
+        return null
       }
       case "workspace.setPack": {
         this.store.workspaces.get(request.params.workspaceId)
@@ -177,7 +174,7 @@ export class RequestRouter {
           request.params.attached
         )
         this.events.packChanged()
-        return this.#packViews()
+        return null
       }
       case "project.list":
         return this.store.projects.list()
@@ -259,21 +256,22 @@ export class RequestRouter {
     })
   }
 
-  async #packView(row: PackRow) {
+  async #packView(row: PackRow, workspaceIds?: string[]) {
     return {
-      id: row.id,
-      name: row.name,
-      path: row.path,
+      ...toPackRecord(row),
       skills: await readPackSkills(row.path),
-      workspaceIds: this.store.packs.workspaceIds(row.id),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      workspaceIds:
+        workspaceIds ??
+        (this.store.packs.attachedWorkspaceIds().get(row.id) ?? []),
     }
   }
 
   #packViews() {
+    const attachments = this.store.packs.attachedWorkspaceIds()
     return Promise.all(
-      this.store.packs.list().map((row) => this.#packView(row))
+      this.store.packs
+        .list()
+        .map((row) => this.#packView(row, attachments.get(row.id) ?? []))
     )
   }
 
@@ -306,16 +304,10 @@ function requiredName(name: string): string {
   return trimmed
 }
 
-async function validDirectory(path: string): Promise<string> {
-  let resolved: string
-  try {
-    resolved = await realpath(path)
-  } catch {
-    throw new RuntimeError("invalid-project", "Project folder does not exist")
-  }
-
-  if (!(await stat(resolved)).isDirectory()) {
-    throw new RuntimeError("invalid-project", "Project path is not a folder")
-  }
-  return resolved
+function validDirectory(path: string): Promise<string> {
+  return resolvedDirectory(path, {
+    code: "invalid-project",
+    missing: "Project folder does not exist",
+    notFolder: "Project path is not a folder",
+  })
 }

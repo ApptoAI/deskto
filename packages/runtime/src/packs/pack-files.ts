@@ -2,6 +2,7 @@ import { existsSync } from "node:fs"
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
 
+import type { SkillRoot } from "@openappto/harness-sdk"
 import type { PackSkill } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
@@ -16,12 +17,34 @@ export function skillsDirectory(packPath: string): string {
 }
 
 /** Skill roots that actually exist right now; packs can vanish from disk. */
-export function existingSkillRoots(packPaths: string[]): string[] {
-  return packPaths
-    .map((packPath) => skillsDirectory(packPath))
-    .filter((path) => existsSync(path))
+export function existingSkillRoots(
+  packs: { path: string; name: string }[]
+): SkillRoot[] {
+  return packs
+    .map((pack) => ({ path: skillsDirectory(pack.path), name: pack.name }))
+    .filter((root) => existsSync(root.path))
 }
 
+/** Resolves a path and asserts it is a directory, with caller-owned wording. */
+export async function resolvedDirectory(
+  path: string,
+  error: { code: string; missing: string; notFolder: string }
+): Promise<string> {
+  let resolved: string
+  try {
+    resolved = await realpath(path)
+  } catch {
+    throw new RuntimeError(error.code, error.missing)
+  }
+  if (!(await stat(resolved)).isDirectory())
+    throw new RuntimeError(error.code, error.notFolder)
+  return resolved
+}
+
+/**
+ * Creates the pack directory, adopting a leftover folder with the same slug
+ * (pack.remove keeps directories on disk) instead of failing on it.
+ */
 export async function createPackDirectory(
   packsRoot: string,
   name: string
@@ -30,26 +53,22 @@ export async function createPackDirectory(
   if (!slug)
     throw new RuntimeError("invalid-pack", "Pack name needs letters or digits")
   const path = join(packsRoot, slug)
-  if (existsSync(path))
-    throw new RuntimeError("pack-exists", "A pack folder with this name exists")
 
   await mkdir(skillsDirectory(path), { recursive: true })
-  await writeFile(
-    join(path, "pack.json"),
-    `${JSON.stringify({ name }, null, 2)}\n`
-  )
+  if (!existsSync(join(path, "pack.json")))
+    await writeFile(
+      join(path, "pack.json"),
+      `${JSON.stringify({ name }, null, 2)}\n`
+    )
   return path
 }
 
 export async function validatePackDirectory(path: string): Promise<string> {
-  let resolved: string
-  try {
-    resolved = await realpath(path)
-  } catch {
-    throw new RuntimeError("invalid-pack", "Pack folder does not exist")
-  }
-  if (!(await stat(resolved)).isDirectory())
-    throw new RuntimeError("invalid-pack", "Pack path is not a folder")
+  const resolved = await resolvedDirectory(path, {
+    code: "invalid-pack",
+    missing: "Pack folder does not exist",
+    notFolder: "Pack path is not a folder",
+  })
   if (!existsSync(skillsDirectory(resolved)))
     throw new RuntimeError(
       "invalid-pack",
@@ -80,12 +99,13 @@ export async function readPackSkills(packPath: string): Promise<PackSkill[]> {
     return []
   }
 
-  const skills: PackSkill[] = []
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const skill = await readSkill(join(root, entry.name), entry.name)
-    if (skill) skills.push(skill)
-  }
+  const skills = (
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => readSkill(join(root, entry.name), entry.name))
+    )
+  ).filter((skill): skill is PackSkill => skill !== null)
   return skills.sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -112,7 +132,7 @@ function frontmatterValue(frontmatter: string, key: string): string | null {
   return match[1]!.trim().replace(/^["']|["']$/g, "")
 }
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   return name
     .toLowerCase()
     .normalize("NFKD")

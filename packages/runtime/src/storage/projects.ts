@@ -20,12 +20,21 @@ export class Projects {
     return rows.map(toProject)
   }
 
-  /** A folder registers once; re-adding it returns the project where it already lives. */
+  /**
+   * A folder registers once. Re-adding it in its own workspace returns the
+   * existing project; in another workspace it fails loudly, because silently
+   * returning a project the caller's workspace cannot show reads as a no-op.
+   */
   add(path: string, name: string, workspaceId: string): Project {
     this.workspaces.get(workspaceId)
     const existing = this.database
       .prepare("SELECT * FROM projects WHERE path = ?")
       .get(path) as ProjectRow | undefined
+    if (existing && existing.workspace_id !== workspaceId)
+      throw new RuntimeError(
+        "project-in-other-workspace",
+        "This folder is already a project in another workspace. Move it instead."
+      )
     if (existing) return toProject(existing)
 
     const now = new Date().toISOString()
@@ -53,14 +62,15 @@ export class Projects {
   }
 
   move(projectId: string, workspaceId: string): Project {
-    this.get(projectId)
+    const current = this.get(projectId)
     this.workspaces.get(workspaceId)
+    const updatedAt = new Date().toISOString()
     this.database
       .prepare(
         "UPDATE projects SET workspace_id = ?, updated_at = ? WHERE id = ?"
       )
-      .run(workspaceId, new Date().toISOString(), projectId)
-    return this.get(projectId)
+      .run(workspaceId, updatedAt, projectId)
+    return { ...current, workspaceId, updatedAt }
   }
 
   get(id: string): Project {

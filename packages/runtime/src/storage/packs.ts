@@ -2,14 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
 import { RuntimeError } from "../errors.js"
-
-export type PackRow = {
-  id: string
-  name: string
-  path: string
-  created_at: string
-  updated_at: string
-}
+import type { PackRow } from "./records.js"
 
 /** Registration only; a Pack's content lives in its directory on disk. */
 export class Packs {
@@ -58,13 +51,20 @@ export class Packs {
     this.database.prepare("DELETE FROM packs WHERE id = ?").run(id)
   }
 
-  workspaceIds(packId: string): string[] {
+  /** All attachments in one query, for list views over every pack. */
+  attachedWorkspaceIds(): Map<string, string[]> {
     const rows = this.database
       .prepare(
-        "SELECT workspace_id FROM workspace_packs WHERE pack_id = ? ORDER BY workspace_id"
+        "SELECT pack_id, workspace_id FROM workspace_packs ORDER BY workspace_id"
       )
-      .all(packId) as { workspace_id: string }[]
-    return rows.map((row) => row.workspace_id)
+      .all() as { pack_id: string; workspace_id: string }[]
+    const byPack = new Map<string, string[]>()
+    for (const row of rows) {
+      const ids = byPack.get(row.pack_id) ?? []
+      ids.push(row.workspace_id)
+      byPack.set(row.pack_id, ids)
+    }
+    return byPack
   }
 
   setAttached(workspaceId: string, packId: string, attached: boolean): void {
@@ -84,13 +84,12 @@ export class Packs {
     }
   }
 
-  /** Pack directories attached to this workspace, for session customization. */
-  pathsForWorkspace(workspaceId: string): string[] {
-    const rows = this.database
+  /** Packs attached to this workspace, for session customization. */
+  attachedToWorkspace(workspaceId: string): { path: string; name: string }[] {
+    return this.database
       .prepare(
-        "SELECT p.path FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"
+        "SELECT p.path, p.name FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"
       )
-      .all(workspaceId) as { path: string }[]
-    return rows.map((row) => row.path)
+      .all(workspaceId) as { path: string; name: string }[]
   }
 }
