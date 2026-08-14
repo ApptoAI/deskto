@@ -8,7 +8,7 @@ The application service behind Appto. The Runtime owns workspaces, threads, turn
 
 Internally the Runtime is four collaborators:
 
-- The request router dispatches the 13 protocol methods (`workspace.add`, `thread.create`, `turn.start`, `approval.resolve`, and so on) and wraps results in the protocol's `{ ok, data | error }` envelope.
+- The request router dispatches the 15 protocol methods (`workspace.add`, `thread.create`, `turn.start`, `approval.resolve`, and so on) and wraps results in the protocol's `{ ok, data | error }` envelope.
 - The harness registry tracks the installed adapters, probes their availability on a timer (every 5 minutes by default), persists which ones the user enabled, and resolves execution profiles against each harness's model catalog.
 - The turn coordinator runs a turn: it persists the user message first, starts a harness session, then consumes the session's event stream and turns it into stored messages, activities, and approvals, emitting `thread.changed` so open views refetch.
 - The store persists everything in SQLite through Node's built-in `node:sqlite`, with WAL mode and migrations versioned by `PRAGMA user_version`. On startup, `recoverInterrupted()` marks turns that were running when the process died as failed, so the app never reopens into a phantom "running" state.

@@ -3,6 +3,7 @@ import { RuntimeClient } from "@openappto/client"
 import { StatusPanel } from "../components/status-panel.js"
 import { IpcRuntimeTransport } from "../runtime/ipc-runtime-transport.js"
 import { RuntimeClientProvider } from "../runtime/runtime-client-context.js"
+import { SettingsProvider } from "../settings/settings-context.js"
 import { Workbench } from "./workbench.js"
 
 const bridge: typeof window.appto | undefined = window.appto
@@ -26,7 +27,9 @@ export function App() {
 
   return (
     <RuntimeClientProvider client={client}>
-      <Workbench />
+      <SettingsProvider>
+        <Workbench />
+      </SettingsProvider>
     </RuntimeClientProvider>
   )
 }

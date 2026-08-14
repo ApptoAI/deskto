@@ -4,6 +4,7 @@ import {
   harnessSchema,
   executionProfileSchema,
   preferencesSchema,
+  settingsSnapshotSchema,
   threadSchema,
   threadViewSchema,
   workspaceSchema,
@@ -17,6 +18,12 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ method: z.literal("harness.refresh"), params: z.object({}) }),
   z.object({ method: z.literal("preferences.get"), params: z.object({}) }),
+  z.object({ method: z.literal("settings.get"), params: z.object({}) }),
+  z.object({
+    method: z.literal("settings.update"),
+    // A null entry clears that override back to its default value.
+    params: z.object({ entries: z.record(z.string(), z.unknown()) }),
+  }),
   z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
   z.object({
     method: z.literal("workspace.add"),
@@ -78,6 +85,8 @@ export interface RuntimeResponses {
   "harness.setEnabled": z.infer<typeof harnessSchema>[]
   "harness.refresh": z.infer<typeof harnessSchema>[]
   "preferences.get": z.infer<typeof preferencesSchema>
+  "settings.get": z.infer<typeof settingsSnapshotSchema>
+  "settings.update": z.infer<typeof settingsSnapshotSchema>
   "workspace.list": z.infer<typeof workspaceSchema>[]
   "workspace.add": z.infer<typeof workspaceSchema>
   "thread.list": z.infer<typeof threadSchema>[]
@@ -96,6 +105,7 @@ export type RuntimeResponse<M extends RuntimeMethod = RuntimeMethod> =
 export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
   z.object({ type: z.literal("harness.changed") }),
+  z.object({ type: z.literal("settings.changed") }),
 ])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>

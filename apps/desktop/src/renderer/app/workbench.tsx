@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react"
+import { appSettings } from "@openappto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -14,6 +15,7 @@ import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
 import { useThreadChanged } from "../runtime/use-thread-changed.js"
+import { useKeybinding } from "../settings/use-keybinding.js"
 
 // One value per possible main pane, so navigation cannot leave a stale
 // combination behind (e.g. a task opening underneath the settings screen).
@@ -60,6 +62,11 @@ export function Workbench() {
   const revalidateThreads = threads.revalidate
 
   useThreadChanged(useCallback(() => revalidateThreads(), [revalidateThreads]))
+
+  useKeybinding(
+    appSettings.newTaskKeybinding,
+    useCallback(() => setView({ kind: "new-task" }), [])
+  )
 
   const openThreadId = view.kind === "task" ? view.threadId : null
 
