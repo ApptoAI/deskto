@@ -32,6 +32,26 @@ describe("generateTextWithSession", () => {
     expect(harness.runs[0]!.input.providerSessionId).toBeUndefined()
   })
 
+  it("denies approval requests during generation", async () => {
+    const harness = new ScriptedHarness()
+    const generated = generateTextWithSession(
+      (run, signal) => harness.start(run, signal),
+      input,
+      new AbortController().signal
+    )
+    await waitForRun(harness.runs)
+    harness.runs[0]!.emit({
+      type: "approval.requested",
+      request: { id: "approval-1", kind: "command", title: "Run a command" },
+    })
+    harness.runs[0]!.emit({ type: "message.delta", text: "Short title" })
+    harness.runs[0]!.emit({ type: "turn.completed" })
+    harness.runs[0]!.finish()
+
+    await expect(generated).resolves.toBe("Short title")
+    expect(harness.runs[0]!.approvals.get("approval-1")).toBe("deny")
+  })
+
   it("cancels a session when the request is aborted", async () => {
     const harness = new ScriptedHarness()
     const controller = new AbortController()

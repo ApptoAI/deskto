@@ -72,15 +72,6 @@ export class TurnCoordinator {
     }
     this.#runs.set(threadId, starting)
     this.changed(threadId)
-    if (turn.generateTitle) {
-      this.#titles.start({
-        threadId,
-        projectPath: turn.projectPath,
-        prompt,
-        harnessId: turn.harnessId,
-        executionProfile: turn.executionProfile,
-      })
-    }
 
     try {
       const session = await harness.start(
@@ -117,6 +108,15 @@ export class TurnCoordinator {
         activityIds: new Map(),
       }
       this.#runs.set(threadId, run)
+      if (turn.generateTitle) {
+        this.#titles.start({
+          threadId,
+          projectPath: turn.projectPath,
+          prompt,
+          harnessId: turn.harnessId,
+          executionProfile: turn.executionProfile,
+        })
+      }
       void this.#consume(threadId, run)
     } catch (error) {
       if (!starting.cancelled) {

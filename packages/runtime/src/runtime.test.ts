@@ -192,19 +192,21 @@ describe("Runtime", () => {
       })
     )
     await waitFor(async () => writer.inputs.length === 1)
-    for (let attempts = 0; attempts < 3; attempts += 1) {
-      await Promise.resolve()
-    }
+    await runtime.close()
 
+    const reopened = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [main.factory, writer.factory],
+    })
     const view = unwrap(
-      await runtime.request({
+      await reopened.request({
         method: "thread.get",
         params: { threadId: thread.id },
       })
     )
     expect(view.thread.title).toBe("New task")
     expect(main.inputs).toEqual([])
-    await runtime.close()
+    await reopened.close()
   })
 
   it("persists a provider-neutral usage limit in the thread", async () => {

@@ -29,7 +29,9 @@ export class ThreadTitleGenerator {
     const timeout = setTimeout(() => controller.abort(), generationTimeoutMs)
     timeout.unref?.()
     const job = this.#generate(input, controller.signal)
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        console.debug("Could not generate thread title:", error)
+      })
       .finally(() => {
         clearTimeout(timeout)
         this.#controllers.delete(controller)
