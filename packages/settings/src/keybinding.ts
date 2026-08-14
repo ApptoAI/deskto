@@ -60,11 +60,21 @@ export function parseKeybinding(value: string): Keybinding | null {
   return binding
 }
 
-export const keybindingSchema = z
-  .string()
-  .refine((value) => parseKeybinding(value) !== null, {
+export const keybindingSchema = z.string().refine(
+  (value) => {
+    const binding = parseKeybinding(value)
+    return (
+      binding !== null &&
+      (binding.mod ||
+        binding.ctrl ||
+        binding.alt ||
+        functionKeyPattern.test(binding.key))
+    )
+  },
+  {
     message: 'Expected a key combination such as "mod+n"',
-  })
+  }
+)
 
 /** The event modifier state a binding requires on a platform. */
 function effectiveModifiers(binding: Keybinding, platform: Platform) {

@@ -302,6 +302,14 @@ describe("Runtime", () => {
     if (!invalidValue.ok)
       expect(invalidValue.error.code).toBe("invalid-setting")
 
+    const unsafeKeybinding = await runtime.request({
+      method: "settings.update",
+      params: { entries: { "keybindings.new-task": "n" } },
+    })
+    expect(unsafeKeybinding.ok).toBe(false)
+    if (!unsafeKeybinding.ok)
+      expect(unsafeKeybinding.error.code).toBe("invalid-setting")
+
     const unknownKey = await runtime.request({
       method: "settings.update",
       params: { entries: { "no-such-setting": true } },

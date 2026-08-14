@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   formatKeybinding,
   keybindingFromEvent,
+  keybindingSchema,
   matchesKeybinding,
   parseKeybinding,
   type KeyComboEvent,
@@ -33,6 +34,20 @@ describe("parseKeybinding", () => {
     expect(parseKeybinding("mod+shift")).toBeNull()
     expect(parseKeybinding("super+n")).toBeNull()
     expect(parseKeybinding("")).toBeNull()
+  })
+})
+
+describe("keybindingSchema", () => {
+  it("rejects typing keys without a command modifier", () => {
+    expect(keybindingSchema.safeParse("n").success).toBe(false)
+    expect(keybindingSchema.safeParse("shift+n").success).toBe(false)
+  })
+
+  it("accepts modified bindings and unmodified function keys", () => {
+    expect(keybindingSchema.safeParse("mod+n").success).toBe(true)
+    expect(keybindingSchema.safeParse("ctrl+n").success).toBe(true)
+    expect(keybindingSchema.safeParse("alt+n").success).toBe(true)
+    expect(keybindingSchema.safeParse("f5").success).toBe(true)
   })
 })
 
