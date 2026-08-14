@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { hasUnreadCompletion, threadCameBack } from "@openappto/client"
 import type { ExecutionProfile, Harness } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -45,6 +46,21 @@ export function TaskView({
       [threadId, revalidate]
     )
   )
+
+  // Looking at the task clears its indicators (unread completion, "came
+  // back" from Later). The stamp fires only when there is something to
+  // clear: each visit write emits thread.changed and refetches every list,
+  // so an unconditional stamp would double the reads on every task open.
+  // This also covers a turn finishing while the user is already looking —
+  // the refetched view arrives unread, the stamp clears it, and the next
+  // refetch reads as seen, so it cannot loop.
+  const needsVisitStamp =
+    state.status === "ready" &&
+    (hasUnreadCompletion(state.data.thread) ||
+      threadCameBack(state.data.thread, { now: new Date().toISOString() }))
+  useEffect(() => {
+    if (needsVisitStamp) client.markThreadVisited(threadId).catch(() => {})
+  }, [client, threadId, needsVisitStamp])
 
   if (state.status === "loading" || state.status === "idle") {
     return <StatusPanel title="Opening the task…" />

@@ -160,6 +160,31 @@ const migrations = [
     ALTER TABLE turns ADD COLUMN failure_kind TEXT;
     ALTER TABLE turns ADD COLUMN failure_reset_at TEXT;
   `,
+  `
+    ALTER TABLE threads ADD COLUMN last_user_message_at TEXT;
+    ALTER TABLE threads ADD COLUMN last_turn_completed_at TEXT;
+    ALTER TABLE threads ADD COLUMN last_visited_at TEXT;
+    ALTER TABLE threads ADD COLUMN failed_at TEXT;
+    ALTER TABLE threads ADD COLUMN pinned_at TEXT;
+    ALTER TABLE threads ADD COLUMN snoozed_until TEXT;
+    ALTER TABLE threads ADD COLUMN snoozed_at TEXT;
+    ALTER TABLE threads ADD COLUMN done_override TEXT;
+    ALTER TABLE threads ADD COLUMN done_at TEXT;
+
+    UPDATE threads SET last_user_message_at = (
+      SELECT MAX(created_at) FROM messages
+      WHERE messages.thread_id = threads.id AND messages.role = 'user'
+    );
+    UPDATE threads SET last_turn_completed_at = (
+      SELECT MAX(finished_at) FROM turns
+      WHERE turns.thread_id = threads.id AND turns.status = 'completed'
+    );
+    -- Visits were never tracked before; without this backfill every existing
+    -- task would light up as an unread completion.
+    UPDATE threads SET last_visited_at = updated_at;
+    -- Best available edge for tasks already failed when the column arrives.
+    UPDATE threads SET failed_at = updated_at WHERE status = 'failed';
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {
