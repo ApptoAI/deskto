@@ -41,6 +41,9 @@ export class Runtime implements RuntimeTransport {
     const sequences = new ThreadSequences()
     this.#store = new Store(openDatabase(options.databasePath), sequences)
     this.#store.recoverInterrupted()
+    const userSettings = new UserSettings(this.#store.settings, () =>
+      this.#emit({ type: "settings.changed" })
+    )
     this.#harnesses = new HarnessRegistry(
       options.harnesses,
       this.#store.settings,
@@ -51,27 +54,32 @@ export class Runtime implements RuntimeTransport {
     )
     const refreshMs = options.harnessRefreshMs ?? defaultHarnessRefreshMs
     if (refreshMs > 0) this.#harnesses.startAutoRefresh(refreshMs)
-    this.#turns = new TurnCoordinator(this.#store, this.#harnesses, {
-      changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
-      delta: (threadId, change) =>
-        this.#emit({
-          type: "thread.delta",
-          threadId,
-          seq: sequences.next(threadId),
-          change,
-        }),
-    })
+    this.#turns = new TurnCoordinator(
+      this.#store,
+      this.#harnesses,
+      userSettings,
+      {
+        changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
+        delta: (threadId, change) =>
+          this.#emit({
+            type: "thread.delta",
+            threadId,
+            seq: sequences.next(threadId),
+            change,
+          }),
+      }
+    )
     this.#router = new RequestRouter(
       this.#store,
       this.#harnesses,
       this.#turns,
-      new UserSettings(this.#store.settings, () =>
-        this.#emit({ type: "settings.changed" })
-      ),
+      userSettings,
       options.packsPath ?? join(dirname(options.databasePath), "packs"),
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),
+        threadChanged: (threadId) =>
+          this.#emit({ type: "thread.changed", threadId }),
       }
     )
   }

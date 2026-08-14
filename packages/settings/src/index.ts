@@ -1,8 +1,11 @@
 export {
   appSettings,
+  harnessModelSettings,
+  harnessModelSelectionSchema,
   keybindingSettings,
   settingDefinition,
   settingDefinitions,
+  type HarnessModelSelection,
 } from "./app-settings.js"
 export {
   defineSetting,

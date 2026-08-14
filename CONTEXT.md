@@ -58,6 +58,6 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Hub, Catalog, remote Pack distribution, and policy enforcement
 - MCP and CLI provisioning
 - Starter project distribution
-- Search, pinning, inbox, automation, and usage screens
+- Search, automation, and usage screens
 
 The boundaries above reserve a place for these features. They do not justify placeholder services or UI in the MVP.

@@ -5,6 +5,7 @@ import { join } from "node:path"
 import {
   harnessFailure,
   type HarnessAdapterFactory,
+  type TextGenerationInput,
 } from "@openappto/harness-sdk"
 import { ScriptedHarness } from "@openappto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
@@ -23,6 +24,191 @@ afterEach(async () => {
 })
 
 describe("Runtime", () => {
+  it("generates the first Thread title with the configured model", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const mainHarness = new ScriptedHarness({ id: "main", name: "Main" })
+    const writer = recordingTitleHarness({
+      id: "writer",
+      modelId: "writer-model",
+      generate: () => Promise.resolve('  "Prepare quarterly report"  '),
+    })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [mainHarness, writer.factory],
+    })
+    unwrap(
+      await runtime.request({
+        method: "settings.update",
+        params: {
+          entries: {
+            "models.thread-title": {
+              harnessId: "writer",
+              modelId: "writer-model",
+            },
+          },
+        },
+      })
+    )
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "main" },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the quarterly report" },
+      })
+    )
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.title === "Prepare quarterly report"
+    })
+    expect(writer.inputs).toMatchObject([
+      {
+        executionProfile: {
+          modelId: "writer-model",
+          effort: null,
+          permissionMode: "approval-required",
+        },
+      },
+    ])
+    expect(writer.inputs[0]?.prompt).toContain("Prepare the quarterly report")
+    await runtime.close()
+  })
+
+  it("uses the task model for title generation by default", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = recordingTitleHarness({
+      id: "main",
+      modelId: "test-model",
+      supportedEfforts: ["high"],
+      generate: () => Promise.resolve("Prepare quarterly report"),
+    })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness.factory],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "main",
+          executionProfile: {
+            modelId: "test-model",
+            effort: "high",
+            permissionMode: "full-access",
+          },
+        },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the quarterly report" },
+      })
+    )
+    await waitFor(async () => harness.inputs.length === 1)
+
+    expect(harness.inputs[0]?.executionProfile).toEqual({
+      modelId: "test-model",
+      effort: null,
+      permissionMode: "approval-required",
+    })
+    await runtime.close()
+  })
+
+  it("does not replace an explicit title model when it fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const main = recordingTitleHarness({
+      id: "main",
+      modelId: "main-model",
+      generate: () => Promise.resolve("Unexpected fallback title"),
+    })
+    const writer = recordingTitleHarness({
+      id: "writer",
+      modelId: "writer-model",
+      generate: () => Promise.reject(new Error("Writer unavailable")),
+    })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [main.factory, writer.factory],
+    })
+    unwrap(
+      await runtime.request({
+        method: "settings.update",
+        params: {
+          entries: {
+            "models.thread-title": {
+              harnessId: "writer",
+              modelId: "writer-model",
+            },
+          },
+        },
+      })
+    )
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "main" },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the quarterly report" },
+      })
+    )
+    await waitFor(async () => writer.inputs.length === 1)
+    await runtime.close()
+
+    const reopened = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [main.factory, writer.factory],
+    })
+    const view = unwrap(
+      await reopened.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(view.thread.title).toBe("New task")
+    expect(main.inputs).toEqual([])
+    await reopened.close()
+  })
+
   it("persists a provider-neutral usage limit in the thread", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)
@@ -98,6 +284,129 @@ describe("Runtime", () => {
       "usage-limit"
     )
     expect(harnessFailure("Provider process exited").kind).toBe("error")
+  })
+
+  it("stamps inbox facts and guards organization commands", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const created = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+
+    const pinned = unwrap(
+      await runtime.request({
+        method: "thread.setPinned",
+        params: { threadId: created.id, pinned: true },
+      })
+    )
+    expect(pinned.pinnedAt).not.toBeNull()
+
+    const snoozed = unwrap(
+      await runtime.request({
+        method: "thread.snooze",
+        params: { threadId: created.id, until: "2027-01-01T09:00:00.000Z" },
+      })
+    )
+    expect(snoozed.snoozedUntil).toBe("2027-01-01T09:00:00.000Z")
+    expect(snoozed.snoozedAt).not.toBeNull()
+
+    // Closing wins over pin and snooze: both clear so the task cannot sit
+    // above the inbox or come back from a snooze after the user closed it.
+    const closed = unwrap(
+      await runtime.request({
+        method: "thread.setDone",
+        params: { threadId: created.id, done: true },
+      })
+    )
+    expect(closed.doneOverride).toBe("done")
+    expect(closed.doneAt).not.toBeNull()
+    expect(closed.pinnedAt).toBeNull()
+    expect(closed.snoozedUntil).toBeNull()
+
+    const restored = unwrap(
+      await runtime.request({
+        method: "thread.setDone",
+        params: { threadId: created.id, done: false },
+      })
+    )
+    expect(restored.doneOverride).toBe("active")
+
+    const restoredAndPinned = unwrap(
+      await runtime.request({
+        method: "thread.setPinned",
+        params: { threadId: created.id, pinned: true },
+      })
+    )
+    expect(restoredAndPinned.doneOverride).toBe("active")
+
+    const restoredAndUnpinned = unwrap(
+      await runtime.request({
+        method: "thread.setPinned",
+        params: { threadId: created.id, pinned: false },
+      })
+    )
+    expect(restoredAndUnpinned.doneOverride).toBe("active")
+
+    unwrap(
+      await runtime.request({
+        method: "thread.snooze",
+        params: { threadId: created.id, until: "2027-01-01T09:00:00.000Z" },
+      })
+    )
+    const started = unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: created.id, prompt: "Summarize the folder" },
+      })
+    )
+    // A new turn is real activity: the override and the snooze cleared and
+    // the message time stamped, so the task is back in the inbox, visible.
+    expect(started.thread.doneOverride).toBeNull()
+    expect(started.thread.snoozedUntil).toBeNull()
+    expect(started.thread.lastUserMessageAt).not.toBeNull()
+
+    const blocked = await runtime.request({
+      method: "thread.setDone",
+      params: { threadId: created.id, done: true },
+    })
+    expect(blocked.ok).toBe(false)
+    if (!blocked.ok) expect(blocked.error.code).toBe("thread-blocked")
+
+    harness.runs[0]?.emit({ type: "turn.completed" })
+    harness.runs[0]?.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: created.id },
+        })
+      )
+      return view.thread.lastTurnCompletedAt !== null
+    })
+
+    const visited = unwrap(
+      await runtime.request({
+        method: "thread.markVisited",
+        params: { threadId: created.id },
+      })
+    )
+    expect(visited.lastVisitedAt).not.toBeNull()
+    await runtime.close()
   })
 
   it("persists a resumable session and forwards an approval to its active harness", async () => {
@@ -412,6 +721,10 @@ describe("Runtime", () => {
       await runtime.request({ method: "settings.get", params: {} })
     )
     expect(defaults.values["keybindings.new-task"]).toBe("mod+n")
+    expect(defaults.values["models.thread-title"]).toEqual({
+      harnessId: null,
+      modelId: null,
+    })
     expect(defaults.overrides).toEqual({})
 
     const updated = unwrap(
@@ -986,6 +1299,40 @@ describe("Runtime", () => {
     await runtime.close()
   })
 })
+
+function recordingTitleHarness(options: {
+  id: string
+  modelId: string
+  supportedEfforts?: string[]
+  generate: () => Promise<string>
+}) {
+  const scripted = new ScriptedHarness({ id: options.id, name: options.id })
+  const inputs: TextGenerationInput[] = []
+  const factory: HarnessAdapterFactory = {
+    descriptor: scripted.descriptor,
+    checkAvailability: () => scripted.checkAvailability(),
+    listModels: () =>
+      Promise.resolve([
+        {
+          id: options.modelId,
+          name: options.modelId,
+          supportedEfforts: options.supportedEfforts ?? [],
+          isDefault: true,
+          supportedPermissionModes: [
+            "approval-required",
+            "auto",
+            "full-access",
+          ],
+        },
+      ]),
+    start: (input, signal) => scripted.start(input, signal),
+    generateText: (input) => {
+      inputs.push(input)
+      return options.generate()
+    },
+  }
+  return { factory, inputs }
+}
 
 function unwrap<T>(
   response: { ok: true; data: T } | { ok: false; error: unknown }

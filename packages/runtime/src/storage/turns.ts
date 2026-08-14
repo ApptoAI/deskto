@@ -11,6 +11,7 @@ import type {
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
+import { newThreadTitle } from "./threads.js"
 
 export type ActiveTurnRecord = {
   turnId: string
@@ -21,6 +22,7 @@ export type ActiveTurnRecord = {
   workspaceId: string
   harnessId: string
   executionProfile: ExecutionProfile
+  generateTitle: boolean
 }
 
 export class Turns {
@@ -29,10 +31,14 @@ export class Turns {
   begin(threadId: string, prompt: string): ActiveTurnRecord {
     const context = this.database
       .prepare(
-        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
+        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
       )
       .get(threadId) as
-      | (ThreadRow & { project_path: string; workspace_id: string })
+      | (ThreadRow & {
+          project_path: string
+          workspace_id: string
+          has_turns: number
+        })
       | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
     if (context.status === "running" || context.status === "waiting-approval") {
@@ -46,8 +52,8 @@ export class Turns {
     const userMessageId = randomUUID()
     const assistantMessageId = randomUUID()
     const now = new Date().toISOString()
-    const title =
-      context.title === "New task" ? titleFromPrompt(prompt) : context.title
+    const generateTitle =
+      context.title === newThreadTitle && context.has_turns === 0
 
     transaction(this.database, () => {
       this.database
@@ -74,11 +80,15 @@ export class Turns {
           "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"
         )
         .run(assistantMessageId, threadId, turnId, now)
+      // A new turn is real activity: it stamps the message time and clears
+      // the done override and the snooze, so a closed task cannot swallow
+      // the reply the user just asked for and a running task cannot sit
+      // hidden on the Later shelf.
       this.database
         .prepare(
-          "UPDATE threads SET title = ?, status = 'running', updated_at = ? WHERE id = ?"
+          "UPDATE threads SET status = 'running', last_user_message_at = ?, done_override = NULL, done_at = NULL, snoozed_until = NULL, snoozed_at = NULL, failed_at = NULL, updated_at = ? WHERE id = ?"
         )
-        .run(title, now, threadId)
+        .run(now, now, threadId)
     })
 
     return {
@@ -93,6 +103,7 @@ export class Turns {
         effort: context.effort,
         permissionMode: context.permission_mode,
       },
+      generateTitle,
       ...(context.provider_session_id
         ? { providerSessionId: context.provider_session_id }
         : {}),
@@ -276,6 +287,11 @@ export class Turns {
           "UPDATE turns SET status = 'completed', finished_at = ? WHERE id = ?"
         )
         .run(now, turnId)
+      // Only a completion stamps the unread marker; a cancel was the user's
+      // own act and a failure already shows through the status.
+      this.database
+        .prepare("UPDATE threads SET last_turn_completed_at = ? WHERE id = ?")
+        .run(now, threadId)
       this.#finish(threadId, turnId, "idle", now)
     })
   }
@@ -337,13 +353,13 @@ export class Turns {
         "UPDATE approvals SET status = 'denied', resolved_at = ? WHERE turn_id = ? AND status = 'pending'"
       )
       .run(now, turnId)
+    // failed_at is the failure EDGE: stamped only on the transition into
+    // failed and cleared on any other outcome, so snooze wake rules can
+    // tell a fresh failure from one the user already snoozed past.
     this.database
-      .prepare("UPDATE threads SET status = ?, updated_at = ? WHERE id = ?")
-      .run(threadStatus, now, threadId)
+      .prepare(
+        "UPDATE threads SET status = ?, failed_at = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(threadStatus, threadStatus === "failed" ? now : null, now, threadId)
   }
-}
-
-function titleFromPrompt(prompt: string): string {
-  const normalized = prompt.replace(/\s+/g, " ").trim()
-  return normalized.length > 64 ? `${normalized.slice(0, 61)}...` : normalized
 }

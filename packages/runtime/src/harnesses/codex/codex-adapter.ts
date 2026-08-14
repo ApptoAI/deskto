@@ -14,11 +14,13 @@ import {
   type HarnessRunInput,
   type HarnessSession,
   type PlanStep,
+  type TextGenerationInput,
 } from "@openappto/harness-sdk"
 
 import { normalizePlanStepStatus } from "../plan-status.js"
 import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
+import { generateTextWithSession } from "../generate-text.js"
 
 import type {
   CodexNotification,
@@ -78,6 +80,17 @@ export class CodexAdapter implements HarnessAdapterFactory {
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return CodexSession.open(input, signal)
+  }
+
+  generateText(
+    input: TextGenerationInput,
+    signal: AbortSignal
+  ): Promise<string> {
+    return generateTextWithSession(
+      (run, runSignal) => this.start(run, runSignal),
+      input,
+      signal
+    )
   }
 }
 

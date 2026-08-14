@@ -15,6 +15,7 @@ import { HarnessLogo } from "../brand-logos.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ShortcutSettings } from "./shortcut-settings.js"
+import { HarnessModelSettings } from "./harness-model-settings.js"
 
 // Key used for the refresh button in the pending set, next to harness ids.
 const refreshKey = "refresh"
@@ -138,6 +139,7 @@ export function SettingsView({
             )}
           </section>
 
+          <HarnessModelSettings harnesses={harnesses} />
           <ShortcutSettings />
         </div>
       </div>

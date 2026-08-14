@@ -1,4 +1,4 @@
-# ADR 0007: Typed activities and thread deltas
+# ADR 0008: Typed activities and thread deltas
 
 - Status: accepted
 - Date: 2026-08-14

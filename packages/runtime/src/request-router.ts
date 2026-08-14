@@ -36,6 +36,8 @@ export type RouterEvents = {
   workspaceChanged: () => void
   /** The pack list or a workspace's attachments changed. */
   packChanged: () => void
+  /** A thread's organization fields changed outside a turn. */
+  threadChanged: (threadId: string) => void
 }
 
 export class RequestRouter {
@@ -237,6 +239,40 @@ export class RequestRouter {
       }
       case "thread.get":
         return this.store.threads.view(request.params.threadId)
+      case "thread.setDone": {
+        const thread = this.store.threads.setDone(
+          request.params.threadId,
+          request.params.done
+        )
+        this.events.threadChanged(thread.id)
+        return thread
+      }
+      case "thread.snooze": {
+        const thread = this.store.threads.snooze(
+          request.params.threadId,
+          request.params.until
+        )
+        this.events.threadChanged(thread.id)
+        return thread
+      }
+      case "thread.wake": {
+        const thread = this.store.threads.wake(request.params.threadId)
+        this.events.threadChanged(thread.id)
+        return thread
+      }
+      case "thread.setPinned": {
+        const thread = this.store.threads.setPinned(
+          request.params.threadId,
+          request.params.pinned
+        )
+        this.events.threadChanged(thread.id)
+        return thread
+      }
+      case "thread.markVisited": {
+        const thread = this.store.threads.markVisited(request.params.threadId)
+        this.events.threadChanged(thread.id)
+        return thread
+      }
       case "turn.start":
         return this.turns.start(request.params.threadId, request.params.prompt)
       case "turn.cancel":

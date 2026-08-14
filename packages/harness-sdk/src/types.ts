@@ -54,6 +54,13 @@ export type HarnessRunInput = {
   providerSessionId?: string
 }
 
+/** One stateless model call for small app-owned text, such as a Thread title. */
+export type TextGenerationInput = {
+  projectPath: string
+  prompt: string
+  executionProfile: ExecutionProfile
+}
+
 export type ApprovalKind = "command" | "file-change" | "tool"
 
 export type ApprovalRequest = {
@@ -148,4 +155,9 @@ export interface HarnessAdapterFactory {
   checkAvailability(): Promise<HarnessAvailability>
   listModels(): Promise<HarnessModelOption[]>
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession>
+  /** Optional because not every Harness can safely run stateless generation. */
+  generateText?(
+    input: TextGenerationInput,
+    signal: AbortSignal
+  ): Promise<string>
 }

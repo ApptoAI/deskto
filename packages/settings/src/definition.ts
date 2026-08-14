@@ -1,7 +1,7 @@
 import type { z } from "zod"
 
 /** How a settings screen edits the value. New editor kinds join this union. */
-export type SettingInput = { kind: "keybinding" }
+export type SettingInput = { kind: "keybinding" } | { kind: "harness-model" }
 
 /** One configurable value: a stable key, a validated shape, and a default. */
 export interface SettingDefinition<T> {
