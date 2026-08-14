@@ -396,13 +396,14 @@ function codexPermissions(
     thread: {
       approvalPolicy: "on-request",
       approvalsReviewer,
-      sandbox: "project-write",
+      // Codex wire value; "workspace" here is Codex's word, not our domain's.
+      sandbox: "workspace-write",
     },
     turn: {
       approvalPolicy: "on-request",
       approvalsReviewer,
       sandboxPolicy: {
-        type: "projectWrite",
+        type: "workspaceWrite",
         writableRoots: [],
         networkAccess: false,
         excludeTmpdirEnvVar: false,
