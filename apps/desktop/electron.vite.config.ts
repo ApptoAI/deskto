@@ -34,7 +34,11 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ["@openappto/protocol", "@openappto/runtime"],
+        exclude: [
+          "@openappto/protocol",
+          "@openappto/runtime",
+          "@openappto/settings",
+        ],
         include: ["@anthropic-ai/claude-agent-sdk"],
       }),
     ],
