@@ -283,6 +283,11 @@ describe("Runtime", () => {
     expect(harnessFailure("Claude usage limit reached").kind).toBe(
       "usage-limit"
     )
+    expect(harnessFailure("rate_limit_exceeded").kind).toBe("usage-limit")
+    expect(harnessFailure("Rate  Limit\nwas hit").kind).toBe("usage-limit")
+    expect(harnessFailure("Could not parse rate-limit response").kind).toBe(
+      "error"
+    )
     expect(harnessFailure("Provider process exited").kind).toBe("error")
   })
 
@@ -659,7 +664,10 @@ describe("Runtime", () => {
     })
 
     const empty = unwrap(
-      await runtime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
+      await runtime.request({
+        method: "preferences.get",
+        params: { workspaceId: "personal" },
+      })
     )
     expect(empty.lastProfile).toBeNull()
 
@@ -690,7 +698,10 @@ describe("Runtime", () => {
       harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
     })
     const persisted = unwrap(
-      await resumedRuntime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
+      await resumedRuntime.request({
+        method: "preferences.get",
+        params: { workspaceId: "personal" },
+      })
     )
     expect(persisted.lastProfile).toEqual({
       harnessId: "claude",
@@ -862,7 +873,9 @@ describe("Runtime", () => {
     const projects = unwrap(
       await runtime.request({ method: "project.list", params: {} })
     )
-    expect(projects).toMatchObject([{ id: project.id, workspaceId: "personal" }])
+    expect(projects).toMatchObject([
+      { id: project.id, workspaceId: "personal" },
+    ])
 
     const selection = unwrap(
       await runtime.request({ method: "selection.get", params: {} })
@@ -979,6 +992,264 @@ describe("Runtime", () => {
     expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
       { path: join(created.path, "skills"), name: "Press tools" },
     ])
+    await runtime.close()
+  })
+
+  it("interleaves typed activities with message segments and streams deltas", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const deltas: Extract<
+      import("@openappto/protocol").RuntimeEvent,
+      { type: "thread.delta" }
+    >[] = []
+    runtime.subscribe((event) => {
+      if (event.type === "thread.delta") deltas.push(event)
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Do the work" },
+      })
+    )
+
+    const run = harness.runs[0]!
+    run.emit({ type: "message.delta", text: "Starting on it." })
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "plan",
+        name: "Plan",
+        payload: {
+          kind: "plan",
+          steps: [
+            { text: "Research", status: "active" },
+            { text: "Write", status: "pending" },
+          ],
+        },
+      },
+    })
+    run.emit({
+      type: "activity.updated",
+      update: {
+        id: "plan",
+        payload: {
+          kind: "plan",
+          steps: [
+            { text: "Research", status: "done" },
+            { text: "Write", status: "active" },
+          ],
+        },
+      },
+    })
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "task-1",
+        name: "Research the topic",
+        payload: { kind: "subagent", agentType: "Explore" },
+      },
+    })
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "tool-9",
+        name: "Run command",
+        detail: "rg sources",
+        parentId: "task-1",
+        payload: { kind: "tool", tool: "command" },
+      },
+    })
+    run.emit({ type: "activity.completed", id: "tool-9", outcome: "completed" })
+    run.emit({
+      type: "activity.completed",
+      id: "task-1",
+      outcome: "completed",
+    })
+    run.emit({ type: "activity.completed", id: "plan", outcome: "completed" })
+    run.emit({ type: "message.delta", text: "All done." })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    const view = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+
+    // Prose written around tool work lands in separate, ordered segments.
+    expect(
+      view.messages.map((message) => [message.content, message.ordinal])
+    ).toEqual([
+      ["Do the work", 0],
+      ["Starting on it.", 1],
+      ["All done.", 5],
+    ])
+    expect(view.messages.every((message) => message.state === "complete")).toBe(
+      true
+    )
+
+    const plan = view.activities.find((activity) => activity.name === "Plan")
+    expect(plan).toMatchObject({
+      status: "completed",
+      ordinal: 2,
+      payload: {
+        kind: "plan",
+        steps: [
+          { text: "Research", status: "done" },
+          { text: "Write", status: "active" },
+        ],
+      },
+    })
+
+    const subagent = view.activities.find(
+      (activity) => activity.payload?.kind === "subagent"
+    )
+    const child = view.activities.find(
+      (activity) => activity.parentActivityId !== undefined
+    )
+    expect(subagent?.status).toBe("completed")
+    expect(child?.parentActivityId).toBe(subagent?.id)
+    expect(child?.payload).toEqual({ kind: "tool", tool: "command" })
+
+    // Deltas form one gap-free sequence that ends at the view's cursor.
+    expect(deltas.map((event) => event.seq)).toEqual(
+      deltas.map((_, index) => index + 1)
+    )
+    expect(view.seq).toBe(deltas.length)
+    expect(
+      deltas.some(
+        (event) =>
+          event.change.type === "message.appended" &&
+          event.change.text === "Starting on it."
+      )
+    ).toBe(true)
+    expect(
+      deltas.filter((event) => event.change.type === "activity.upserted")
+    ).toHaveLength(7)
+    await runtime.close()
+  })
+
+  it("orders prose after the tool work it follows and settles leftovers by outcome", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Check the tests" },
+      })
+    )
+
+    // The very first harness output is a tool call, before any prose.
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "tool-1",
+        name: "Run command",
+        detail: "pnpm test",
+        payload: { kind: "tool", tool: "command" },
+      },
+    })
+    run.emit({ type: "message.delta", text: "Tests pass." })
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "orphan-tool",
+        parentId: "missing-parent",
+        name: "Read file",
+        detail: "draft.md",
+        payload: { kind: "tool", tool: "other" },
+      },
+    })
+    run.emit({
+      type: "activity.updated",
+      update: { id: "orphan-tool", detail: "" },
+    })
+    run.emit({ type: "message.delta", text: "Checked the result." })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    const view = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    const activity = view.activities[0]!
+    const orphan = view.activities.find(
+      (candidate) => candidate.name === "Read file"
+    )!
+    const summary = view.messages.find(
+      (message) => message.content === "Tests pass."
+    )!
+    // The narration sorts after the tool row it describes.
+    expect(summary.ordinal).toBeGreaterThan(activity.ordinal!)
+    const following = view.messages.find(
+      (message) => message.content === "Checked the result."
+    )!
+    expect(orphan.parentActivityId).toBeUndefined()
+    expect(orphan.detail).toBeUndefined()
+    expect(following.ordinal).toBeGreaterThan(orphan.ordinal!)
+    // The tool never reported completion; a finished turn settles it as
+    // completed rather than blaming it with a failure mark.
+    expect(activity.status).toBe("completed")
     await runtime.close()
   })
 

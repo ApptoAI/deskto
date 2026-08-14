@@ -1,9 +1,10 @@
 export { RuntimeClient, RuntimeClientError } from "./client.js"
 export {
-  canMarkDone,
-  canSnooze,
-  isActivityBlocked,
-} from "@openappto/protocol"
+  applyThreadDelta,
+  type ApplyThreadDeltaResult,
+  type ThreadDeltaEvent,
+} from "./thread-view.js"
+export { canMarkDone, canSnooze, isActivityBlocked } from "@openappto/protocol"
 export {
   autoDoneAfterDays,
   effectiveDone,

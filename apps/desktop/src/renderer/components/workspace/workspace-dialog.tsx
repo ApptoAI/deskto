@@ -213,7 +213,12 @@ function WorkspaceForm({
                 : "Delete workspace"}
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={busy || !name.trim()}>

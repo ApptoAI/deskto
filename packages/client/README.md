@@ -22,7 +22,7 @@ The Client sits on the user-facing side of the Client/Runtime boundary. It knows
 
 Each call unwraps the protocol's `{ ok, data | error }` envelope. On failure it throws `RuntimeClientError`, which carries the protocol error `code` alongside the message.
 
-`subscribe(listener)` forwards Runtime events (`thread.changed`, `harness.changed`, `settings.changed`, `workspace.changed`, `pack.changed`) and returns an unsubscribe function. Events only signal that something changed; the Surface refetches state through queries.
+`subscribe(listener)` forwards Runtime events (`thread.changed`, `thread.delta`, `harness.changed`, `settings.changed`, `workspace.changed`, `pack.changed`) and returns an unsubscribe function. Most events only signal that something changed and the Surface refetches state through queries. `thread.delta` carries the change itself: `applyThreadDelta(view, event)` folds it into a held `ThreadView` and returns `applied` with the next view, `stale` when the view already contains it, or `gap` when the view must be reloaded. The fold never guesses; anything it cannot place safely becomes a reload.
 
 ## Usage
 

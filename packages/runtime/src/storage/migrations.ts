@@ -185,6 +185,12 @@ const migrations = [
     -- Best available edge for tasks already failed when the column arrives.
     UPDATE threads SET failed_at = updated_at WHERE status = 'failed';
   `,
+  `
+    ALTER TABLE activities ADD COLUMN payload TEXT;
+    ALTER TABLE activities ADD COLUMN parent_id TEXT;
+    ALTER TABLE activities ADD COLUMN ordinal INTEGER;
+    ALTER TABLE messages ADD COLUMN ordinal INTEGER;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

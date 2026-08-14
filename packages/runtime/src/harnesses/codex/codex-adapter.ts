@@ -4,16 +4,21 @@ import { randomUUID } from "node:crypto"
 import {
   AsyncQueue,
   harnessFailure,
+  type ActivityStart,
   type ApprovalDecision,
+  type ChangedFile,
   type ContextUsage,
   type HarnessAdapterFactory,
   type HarnessEvent,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type PlanStep,
   type TextGenerationInput,
 } from "@openappto/harness-sdk"
 
+import { normalizePlanStepStatus } from "../plan-status.js"
+import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
 
@@ -92,6 +97,7 @@ export class CodexAdapter implements HarnessAdapterFactory {
 class CodexSession implements HarnessSession {
   readonly #queue = new AsyncQueue<HarnessEvent>()
   readonly #approvalQueue: PendingApproval[] = []
+  readonly #lastActivityShape = new Map<string, string>()
   readonly events = this.#queue
   #activeApproval?: PendingApproval
   #threadId?: string
@@ -245,19 +251,35 @@ class CodexSession implements HarnessSession {
 
     if (
       notification.method === "item/started" ||
+      notification.method === "item/updated" ||
       notification.method === "item/completed"
     ) {
       const item = isRecord(params.item) ? params.item : undefined
       const activity = codexActivity(item)
       if (!activity) return
       if (notification.method === "item/started") {
+        this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
         this.#queue.push({ type: "activity.started", activity })
+      } else if (notification.method === "item/updated") {
+        // Codex repeats item/updated while an item runs; identical shapes
+        // would burn a write, a sequence number, and a renderer pass each.
+        this.#pushActivityUpdate(activity)
       } else {
+        const status = getString(item, "status")
+        const type = getString(item, "type")
+        // The terminal item can contain the final plan or file-change shape
+        // even when Codex did not send a matching item/updated notification.
+        this.#pushActivityUpdate(activity)
+        this.#lastActivityShape.delete(activity.id)
         this.#queue.push({
           type: "activity.completed",
           id: activity.id,
+          // A plan that ends without a status settled fine; for every other
+          // item a missing status means it never ran to completion.
           outcome:
-            getString(item, "status") === "completed" ? "completed" : "failed",
+            status === "completed" || (status === undefined && type === "plan")
+              ? "completed"
+              : "failed",
         })
       }
       return
@@ -292,6 +314,23 @@ class CodexSession implements HarnessSession {
       })
     }
     this.#finish()
+  }
+
+  #pushActivityUpdate(activity: ActivityStart): void {
+    const shape = JSON.stringify(activity)
+    if (this.#lastActivityShape.get(activity.id) === shape) return
+    this.#lastActivityShape.set(activity.id, shape)
+    this.#queue.push({
+      type: "activity.updated",
+      update: {
+        id: activity.id,
+        name: activity.name,
+        ...(activity.detail !== undefined ? { detail: activity.detail } : {}),
+        ...(activity.payload !== undefined
+          ? { payload: activity.payload }
+          : {}),
+      },
+    })
   }
 
   #onRequest(request: CodexServerRequest): void {
@@ -339,6 +378,7 @@ class CodexSession implements HarnessSession {
       }
     }
     this.#discardApprovals()
+    this.#lastActivityShape.clear()
     this.client.close()
     this.#queue.close()
   }
@@ -479,49 +519,80 @@ export function codexLimitResetAt(value: unknown): string | undefined {
     .sort((left, right) => right.usedPercent - left.usedPercent)
   const reset = slots[0]?.reset
   if (reset === undefined) return undefined
-  const milliseconds = reset > 10_000_000_000 ? reset : reset * 1000
-  const date = new Date(milliseconds)
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString()
+  return isoFromEpoch(reset)
 }
 
-function codexActivity(
+export function codexActivity(
   item: Record<string, unknown> | undefined
-): { id: string; name: string; detail?: string } | undefined {
+): ActivityStart | undefined {
   const id = getString(item, "id")
   const type = getString(item, "type")
   if (!id || !type || ignoredItemTypes.has(type)) return undefined
 
   if (type === "commandExecution") {
-    return withDetail(id, "Run command", compactDetail(item?.command))
+    return {
+      id,
+      name: "Run command",
+      ...detailOf(compactDetail(item?.command)),
+      payload: { kind: "tool", tool: "command" },
+    }
   }
   if (type === "fileChange") {
-    return withDetail(id, "Change files", changedFiles(item?.changes))
+    const files = changedFiles(item?.changes)
+    return {
+      id,
+      name: "Change files",
+      ...detailOf(fileSummary(files)),
+      payload:
+        files.length > 0
+          ? { kind: "file-change", files }
+          : { kind: "tool", tool: "other" },
+    }
+  }
+  if (type === "plan") {
+    const steps = item ? codexPlanSteps(item) : []
+    return {
+      id,
+      name: "Plan",
+      ...detailOf(steps.length === 0 ? getString(item, "text") : undefined),
+      payload:
+        steps.length > 0
+          ? { kind: "plan", steps }
+          : { kind: "tool", tool: "other" },
+    }
   }
   if (type === "mcpToolCall") {
     const server = getString(item, "server")
     const tool = getString(item, "tool")
-    return withDetail(id, tool ?? "Use MCP tool", server)
+    return {
+      id,
+      name: tool ?? "Use MCP tool",
+      ...detailOf(server),
+      payload: { kind: "tool", tool: "mcp" },
+    }
   }
   if (type === "webSearch") {
-    return withDetail(id, "Search web", getString(item, "query"))
+    return {
+      id,
+      name: "Search web",
+      ...detailOf(getString(item, "query")),
+      payload: { kind: "tool", tool: "web" },
+    }
   }
-  if (type === "imageView") return { id, name: "View image" }
-  return { id, name: wordsFromCamelCase(type) }
+  if (type === "imageView") {
+    return { id, name: "View image", payload: { kind: "tool", tool: "other" } }
+  }
+  return {
+    id,
+    name: wordsFromCamelCase(type),
+    payload: { kind: "tool", tool: "other" },
+  }
 }
 
-const ignoredItemTypes = new Set([
-  "agentMessage",
-  "userMessage",
-  "reasoning",
-  "plan",
-])
+const ignoredItemTypes = new Set(["agentMessage", "userMessage", "reasoning"])
 
-function withDetail(
-  id: string,
-  name: string,
-  detail: string | undefined
-): { id: string; name: string; detail?: string } {
-  return detail ? { id, name, detail } : { id, name }
+function detailOf(detail: string | undefined): { detail?: string } {
+  return detail ? { detail } : {}
 }
 
 function compactDetail(value: unknown): string | undefined {
@@ -535,13 +606,63 @@ function compactDetail(value: unknown): string | undefined {
   return undefined
 }
 
-function changedFiles(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined
-  const paths = value.flatMap((change) => {
+function changedFiles(value: unknown): ChangedFile[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((change) => {
     const path = getString(change, "path")
-    return path ? [path] : []
+    if (!path) return []
+    const additions = fileChangeCount(change, "additions")
+    const deletions = fileChangeCount(change, "deletions")
+    return [
+      {
+        path,
+        ...(additions !== undefined ? { additions } : {}),
+        ...(deletions !== undefined ? { deletions } : {}),
+      },
+    ]
   })
-  return paths.length ? paths.slice(0, 3).join(", ") : undefined
+}
+
+function fileChangeCount(
+  value: unknown,
+  key: "additions" | "deletions"
+): number | undefined {
+  if (!isRecord(value)) return undefined
+  const count = value[key]
+  return typeof count === "number" && Number.isInteger(count) && count >= 0
+    ? count
+    : undefined
+}
+
+function fileSummary(files: ChangedFile[]): string | undefined {
+  if (files.length === 0) return undefined
+  const shown = files.slice(0, 3).map((file) => file.path)
+  const remaining = files.length - shown.length
+  const summary = shown.join(", ")
+  return remaining > 0 ? `${summary} +${remaining} more` : summary
+}
+
+/**
+ * Codex plan items are experimental app-server surface; accept the step-list
+ * shapes seen in the wild and fall back to a plain row when none match.
+ */
+export function codexPlanSteps(item: Record<string, unknown>): PlanStep[] {
+  const candidates = [item.plan, item.steps, item.items]
+  const list = candidates.find(Array.isArray)
+  if (!list) return []
+  return list.flatMap((entry) => {
+    if (typeof entry === "string") return [{ text: entry, status: "pending" }]
+    if (!isRecord(entry)) return []
+    const text =
+      getString(entry, "step") ??
+      getString(entry, "text") ??
+      getString(entry, "content") ??
+      getString(entry, "title")
+    if (!text) return []
+    return [
+      { text, status: normalizePlanStepStatus(getString(entry, "status")) },
+    ]
+  })
 }
 
 function wordsFromCamelCase(value: string): string {

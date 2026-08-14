@@ -11,6 +11,7 @@ import {
 } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
+import type { ThreadSequences } from "../thread-sequences.js"
 import {
   toApproval,
   toActivity,
@@ -28,7 +29,8 @@ export const newThreadTitle = "New task"
 export class Threads {
   constructor(
     private readonly database: DatabaseSync,
-    private readonly projects: Projects
+    private readonly projects: Projects,
+    private readonly sequences: ThreadSequences
   ) {}
 
   list(projectId: string): Thread[] {
@@ -249,6 +251,11 @@ export class Threads {
       messages: messages.map(toMessage),
       activities: activities.map(toActivity),
       ...(approval ? { pendingApproval: toApproval(approval) } : {}),
+      seq: this.sequences.current(id),
     }
+  }
+
+  get(id: string): Thread {
+    return toThread(this.getRow(id))
   }
 }

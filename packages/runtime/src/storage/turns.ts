@@ -5,11 +5,12 @@ import type {
   Approval,
   ExecutionProfile,
   HarnessFailure,
+  Message,
 } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
-import type { ThreadRow } from "./records.js"
+import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
 import { newThreadTitle } from "./threads.js"
 
 export type ActiveTurnRecord = {
@@ -71,12 +72,12 @@ export class Turns {
         )
       this.database
         .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, created_at) VALUES (?, ?, ?, 'user', ?, 'complete', ?)"
+          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, 'complete', 0, ?)"
         )
         .run(userMessageId, threadId, turnId, prompt, now)
       this.database
         .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', ?)"
+          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"
         )
         .run(assistantMessageId, threadId, turnId, now)
       // A new turn is real activity: it stamps the message time and clears
@@ -134,11 +135,54 @@ export class Turns {
       .run(text, messageId)
   }
 
+  /**
+   * Opens a further assistant message inside a running Turn, so prose that
+   * follows tool work lands after it instead of merging into one block.
+   */
+  addSegment(threadId: string, turnId: string, ordinal: number): Message {
+    const id = randomUUID()
+    const createdAt = new Date().toISOString()
+    this.database
+      .prepare(
+        "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', ?, ?)"
+      )
+      .run(id, threadId, turnId, ordinal, createdAt)
+    return {
+      id,
+      threadId,
+      turnId,
+      role: "assistant",
+      content: "",
+      state: "streaming",
+      ordinal,
+      createdAt,
+    }
+  }
+
+  /** Settles a streaming segment when work moves on past it. */
+  closeSegment(messageId: string): Message | undefined {
+    const result = this.database
+      .prepare(
+        "UPDATE messages SET state = 'complete' WHERE id = ? AND state = 'streaming'"
+      )
+      .run(messageId)
+    if (result.changes === 0) return undefined
+    return this.requireMessage(messageId)
+  }
+
+  requireMessage(id: string): Message {
+    const row = this.database
+      .prepare("SELECT * FROM messages WHERE id = ?")
+      .get(id) as MessageRow | undefined
+    if (!row) throw new RuntimeError("message-not-found", "Message not found")
+    return toMessage(row)
+  }
+
   requestApproval(
     threadId: string,
     turnId: string,
     approval: Pick<Approval, "id" | "kind" | "title" | "detail">
-  ): void {
+  ): Approval {
     const now = new Date().toISOString()
     transaction(this.database, () => {
       const pending = this.database
@@ -174,6 +218,15 @@ export class Turns {
         )
         .run(now, threadId)
     })
+    return {
+      id: approval.id,
+      threadId,
+      kind: approval.kind,
+      title: approval.title,
+      status: "pending",
+      createdAt: now,
+      ...(approval.detail ? { detail: approval.detail } : {}),
+    }
   }
 
   assertPendingApproval(threadId: string, approvalId: string): void {
@@ -237,9 +290,7 @@ export class Turns {
       // Only a completion stamps the unread marker; a cancel was the user's
       // own act and a failure already shows through the status.
       this.database
-        .prepare(
-          "UPDATE threads SET last_turn_completed_at = ? WHERE id = ?"
-        )
+        .prepare("UPDATE threads SET last_turn_completed_at = ? WHERE id = ?")
         .run(now, threadId)
       this.#finish(threadId, turnId, "idle", now)
     })

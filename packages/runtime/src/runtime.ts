@@ -13,6 +13,7 @@ import { HarnessRegistry } from "./harness-registry.js"
 import { RequestRouter } from "./request-router.js"
 import { openDatabase } from "./storage/database.js"
 import { Store } from "./storage/store.js"
+import { ThreadSequences } from "./thread-sequences.js"
 import { TurnCoordinator } from "./turn-coordinator.js"
 import { UserSettings } from "./user-settings.js"
 
@@ -37,7 +38,8 @@ export class Runtime implements RuntimeTransport {
   readonly #router: RequestRouter
 
   constructor(options: RuntimeOptions) {
-    this.#store = new Store(openDatabase(options.databasePath))
+    const sequences = new ThreadSequences()
+    this.#store = new Store(openDatabase(options.databasePath), sequences)
     this.#store.recoverInterrupted()
     const userSettings = new UserSettings(this.#store.settings, () =>
       this.#emit({ type: "settings.changed" })
@@ -56,7 +58,16 @@ export class Runtime implements RuntimeTransport {
       this.#store,
       this.#harnesses,
       userSettings,
-      (threadId) => this.#emit({ type: "thread.changed", threadId })
+      {
+        changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
+        delta: (threadId, change) =>
+          this.#emit({
+            type: "thread.delta",
+            threadId,
+            seq: sequences.next(threadId),
+            change,
+          }),
+      }
     )
     this.#router = new RequestRouter(
       this.#store,

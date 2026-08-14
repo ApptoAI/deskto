@@ -1,9 +1,13 @@
 export { AsyncQueue } from "./async-queue.js"
 export { harnessFailure } from "./failures.js"
 export type {
+  ActivityPayload,
+  ActivityStart,
+  ActivityUpdate,
   ApprovalDecision,
   ApprovalKind,
   ApprovalRequest,
+  ChangedFile,
   ContextUsage,
   ExecutionProfile,
   HarnessAdapterFactory,
@@ -16,6 +20,8 @@ export type {
   HarnessRunInput,
   HarnessSession,
   PermissionMode,
+  PlanStep,
+  PlanStepStatus,
   ReasoningEffort,
   SessionCustomization,
   SkillRoot,
