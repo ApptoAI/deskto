@@ -29,6 +29,10 @@ release
 .DS_Store
 *.pem
 
+# agent tooling
+.agents/
+.claude/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
