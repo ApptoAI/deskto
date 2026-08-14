@@ -39,6 +39,9 @@ export class Runtime implements RuntimeTransport {
   constructor(options: RuntimeOptions) {
     this.#store = new Store(openDatabase(options.databasePath))
     this.#store.recoverInterrupted()
+    const userSettings = new UserSettings(this.#store.settings, () =>
+      this.#emit({ type: "settings.changed" })
+    )
     this.#harnesses = new HarnessRegistry(
       options.harnesses,
       this.#store.settings,
@@ -52,15 +55,14 @@ export class Runtime implements RuntimeTransport {
     this.#turns = new TurnCoordinator(
       this.#store,
       this.#harnesses,
+      userSettings,
       (threadId) => this.#emit({ type: "thread.changed", threadId })
     )
     this.#router = new RequestRouter(
       this.#store,
       this.#harnesses,
       this.#turns,
-      new UserSettings(this.#store.settings, () =>
-        this.#emit({ type: "settings.changed" })
-      ),
+      userSettings,
       options.packsPath ?? join(dirname(options.databasePath), "packs"),
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),

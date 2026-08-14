@@ -19,4 +19,5 @@ export type {
   ReasoningEffort,
   SessionCustomization,
   SkillRoot,
+  TextGenerationInput,
 } from "./types.js"

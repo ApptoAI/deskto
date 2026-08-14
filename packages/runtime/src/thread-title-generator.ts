@@ -1,0 +1,151 @@
+import {
+  appSettings,
+  settingValue,
+  type HarnessModelSelection,
+} from "@openappto/settings"
+import type { ExecutionProfile } from "@openappto/protocol"
+
+import type { HarnessRegistry } from "./harness-registry.js"
+import type { Store } from "./storage/store.js"
+import { newThreadTitle } from "./storage/threads.js"
+import type { UserSettings } from "./user-settings.js"
+
+const generationTimeoutMs = 60_000
+
+export class ThreadTitleGenerator {
+  readonly #controllers = new Set<AbortController>()
+  readonly #jobs = new Set<Promise<void>>()
+
+  constructor(
+    private readonly store: Store,
+    private readonly harnesses: HarnessRegistry,
+    private readonly settings: UserSettings,
+    private readonly changed: (threadId: string) => void
+  ) {}
+
+  start(input: ThreadTitleGenerationInput): void {
+    const controller = new AbortController()
+    this.#controllers.add(controller)
+    const timeout = setTimeout(() => controller.abort(), generationTimeoutMs)
+    timeout.unref?.()
+    const job = this.#generate(input, controller.signal)
+      .catch((error: unknown) => {
+        console.debug("Could not generate thread title:", error)
+      })
+      .finally(() => {
+        clearTimeout(timeout)
+        this.#controllers.delete(controller)
+        this.#jobs.delete(job)
+      })
+    this.#jobs.add(job)
+  }
+
+  async dispose(): Promise<void> {
+    const controllers = [...this.#controllers]
+    controllers.forEach((controller) => controller.abort())
+    await Promise.allSettled(this.#jobs)
+  }
+
+  async #generate(
+    input: ThreadTitleGenerationInput,
+    signal: AbortSignal
+  ): Promise<void> {
+    const selected = settingValue(
+      this.settings.snapshot(),
+      appSettings.threadTitleModel
+    )
+    const model = titleModel(selected, input)
+    const harness = await this.harnesses.requireAvailable(model.harnessId)
+    if (!harness.generateText || signal.aborted) return
+    const executionProfile = await this.#profileFor(model)
+    const title = sanitizeThreadTitle(
+      await harness.generateText(
+        {
+          projectPath: input.projectPath,
+          prompt: threadTitlePrompt(input.prompt),
+          executionProfile,
+        },
+        signal
+      )
+    )
+    if (!title) return
+    if (
+      this.store.threads.replaceTitle(input.threadId, newThreadTitle, title)
+    ) {
+      this.changed(input.threadId)
+    }
+  }
+
+  #profileFor(model: TitleModel): Promise<ExecutionProfile> {
+    if (model.modelId === null) {
+      return this.harnesses.resolveProfile(model.harnessId)
+    }
+    return this.harnesses.resolveProfile(model.harnessId, {
+      modelId: model.modelId,
+      effort: null,
+      permissionMode: "approval-required",
+    })
+  }
+}
+
+type ThreadTitleGenerationInput = {
+  threadId: string
+  projectPath: string
+  prompt: string
+  harnessId: string
+  executionProfile: ExecutionProfile
+}
+
+type TitleModel = {
+  harnessId: string
+  modelId: string | null
+}
+
+function titleModel(
+  selected: HarnessModelSelection,
+  thread: { harnessId: string; executionProfile: ExecutionProfile }
+): TitleModel {
+  if (selected.harnessId === null) {
+    return {
+      harnessId: thread.harnessId,
+      modelId: thread.executionProfile.modelId,
+    }
+  }
+  return { harnessId: selected.harnessId, modelId: selected.modelId }
+}
+
+export function threadTitlePrompt(message: string): string {
+  return `Generate a title that will help the user recognize this task later.
+Return only the title, with no quotes or explanation.
+
+Focus on the durable subject and desired outcome, not on instructions about tools, planning, reports, or implementation steps.
+
+Rules:
+- Use the same language as the user.
+- Use 3-8 words and fewer than 40 characters.
+- Use a compact noun phrase or clear action phrase.
+- Do not claim the work is complete.
+- Do not copy and truncate the message.
+- Avoid filler and trailing punctuation.
+
+User message:
+${message.slice(0, 8_000)}`
+}
+
+export function sanitizeThreadTitle(output: string): string | undefined {
+  const firstLine = output
+    .replace(/^```(?:text)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+  if (!firstLine) return undefined
+
+  const title = firstLine
+    .replace(/^(?:title|tytuł)\s*:\s*/i, "")
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!title || title === newThreadTitle) return undefined
+  return title.length > 64 ? title.slice(0, 64).trimEnd() : title
+}

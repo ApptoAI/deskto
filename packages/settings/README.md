@@ -11,9 +11,10 @@ Defaults never leave the registry. The Runtime stores only overrides, which mean
 ## What is in it
 
 - `SettingDefinition<T>` and `defineSetting` — one setting: `key`, `label`, `description`, `input` (which editor a settings screen shows), `schema`, and `defaultValue`.
-- `appSettings` — the registry itself. `settingDefinitions` lists every definition, `settingDefinition(key)` looks one up, and `keybindingSettings` is the derived list of shortcut settings (every definition whose `input.kind` is `"keybinding"`).
+- `appSettings` — the registry itself. `settingDefinitions` lists every definition, `settingDefinition(key)` looks one up, and editor-specific lists such as `keybindingSettings` and `harnessModelSettings` are derived from each definition's `input.kind`.
 - `resolveSettings(stored)` — applies stored overrides to the defaults and returns a `SettingsSnapshot` with `values` (every key, effective value) and `overrides` (only what the user changed). Unknown and invalid overrides are dropped, so a bad write can never break startup.
 - `settingValue(snapshot, definition)` and `isOverridden(snapshot, definition)` — typed reads. `settingValue(null, definition)` returns the default, so readers work before the snapshot loads.
+- Model selection — `appSettings.threadTitleModel` defaults to the current task's Harness and model, and can hold a dedicated Harness/model pair selected in Settings.
 - Keybinding helpers — bindings are strings such as `"mod+shift+n"`, where `mod` is ⌘ on mac and Ctrl elsewhere. `parseKeybinding` and `keybindingSchema` validate them, `matchesKeybinding(value, event, platform)` tests a keydown, `keybindingFromEvent(event, platform)` builds a binding inside a shortcut recorder, and `formatKeybinding(value, platform)` renders `⇧⌘N` or `Ctrl+Shift+N`.
 
 ## How the layers use it

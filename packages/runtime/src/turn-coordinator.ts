@@ -14,6 +14,8 @@ import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
+import { ThreadTitleGenerator } from "./thread-title-generator.js"
+import type { UserSettings } from "./user-settings.js"
 
 type StartingRun = ActiveTurnRecord & {
   threadId: string
@@ -39,12 +41,16 @@ const streamFlushIntervalMs = 50
 
 export class TurnCoordinator {
   readonly #runs = new Map<string, StartingRun | ActiveRun>()
+  readonly #titles: ThreadTitleGenerator
 
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
+    settings: UserSettings,
     private readonly changed: (threadId: string) => void
-  ) {}
+  ) {
+    this.#titles = new ThreadTitleGenerator(store, harnesses, settings, changed)
+  }
 
   async start(threadId: string, prompt: string): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
@@ -102,6 +108,15 @@ export class TurnCoordinator {
         activityIds: new Map(),
       }
       this.#runs.set(threadId, run)
+      if (turn.generateTitle) {
+        this.#titles.start({
+          threadId,
+          projectPath: turn.projectPath,
+          prompt,
+          harnessId: turn.harnessId,
+          executionProfile: turn.executionProfile,
+        })
+      }
       void this.#consume(threadId, run)
     } catch (error) {
       if (!starting.cancelled) {
@@ -193,6 +208,7 @@ export class TurnCoordinator {
   }
 
   async dispose(): Promise<void> {
+    await this.#titles.dispose()
     const runs = [...this.#runs.entries()]
     for (const [threadId, run] of runs) {
       run.cancelled = true
