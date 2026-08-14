@@ -13,6 +13,7 @@ import { MessageList } from "@workspace/ui/components/chat/message-list"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
+import { TurnFailureNotice } from "./turn-failure-notice.js"
 
 export function MessageStream({
   messages,
@@ -55,7 +56,7 @@ function MessageEntry({
 }) {
   if (message.role === "user") {
     return (
-      <MessageRow role="user">
+      <MessageRow role="user" className="enter-rise">
         <MessageBody role="user">{message.content}</MessageBody>
       </MessageRow>
     )
@@ -63,7 +64,7 @@ function MessageEntry({
 
   if (message.role === "system") {
     return (
-      <MessageRow role="system">
+      <MessageRow role="system" className="enter-rise">
         <MessageBody role="system">{message.content}</MessageBody>
       </MessageRow>
     )
@@ -74,7 +75,7 @@ function MessageEntry({
   if (hasNothingToShow) return null
 
   return (
-    <MessageRow role="assistant">
+    <MessageRow role="assistant" className="enter-rise">
       <MessageBody role="assistant" className="space-y-3">
         {activities.length > 0 ? (
           <div className="flex flex-col gap-1">
@@ -90,9 +91,14 @@ function MessageEntry({
                 {message.content}
               </Markdown>
             ) : null}
-            <p role="alert" className="text-sm text-destructive">
-              {message.error ?? "The agent stopped with an error."}
-            </p>
+            <TurnFailureNotice
+              failure={
+                message.failure ?? {
+                  kind: "error",
+                  message: message.error ?? "The agent stopped with an error.",
+                }
+              }
+            />
           </div>
         ) : message.content ? (
           <Markdown onLinkActivate={openExternal}>{message.content}</Markdown>
@@ -121,11 +127,11 @@ function ActivityRow({ activity }: { activity: Activity }) {
   const Icon = activityIcons[activity.status]
 
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs">
+    <div className="enter-rise flex min-w-0 items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs">
       <Icon
         className={cn(
           "size-3.5 shrink-0 text-muted-foreground",
-          activity.status === "running" && "animate-spin",
+          activity.status === "running" && "animate-spin [animation-duration:0.7s]",
           activity.status === "failed" && "text-destructive"
         )}
       />

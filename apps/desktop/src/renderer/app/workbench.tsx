@@ -16,6 +16,7 @@ import {
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
 import { pickPackFolder, pickProjectFolder } from "../lib/desktop.js"
+import { useLocalStorage } from "../lib/use-local-storage.js"
 import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
@@ -33,6 +34,17 @@ type MainView =
   | { kind: "settings" }
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
+type ProjectScope = "all" | "project"
+
+function decodeProjectScopeMap(value: unknown): Record<string, ProjectScope> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, ProjectScope] =>
+        entry[1] === "all" || entry[1] === "project"
+    )
+  )
+}
 
 export function Workbench() {
   const client = useRuntimeClient()
@@ -87,8 +99,7 @@ export function Workbench() {
     selectionQuery.state.status === "ready" ? selectionQuery.state.data : null
   const projects =
     projectsQuery.state.status === "ready" ? projectsQuery.state.data : []
-  const packs =
-    packsQuery.state.status === "ready" ? packsQuery.state.data : []
+  const packs = packsQuery.state.status === "ready" ? packsQuery.state.data : []
 
   // The persisted Selection is the single source of truth for where the user
   // is; selecting updates it optimistically and the runtime write follows.
@@ -116,14 +127,56 @@ export function Workbench() {
   const activeProjectId = activeProject?.id ?? null
 
   const loadThreads = useMemo(
-    () =>
-      activeProjectId ? () => client.listThreads(activeProjectId) : null,
+    () => (activeProjectId ? () => client.listThreads(activeProjectId) : null),
     [client, activeProjectId]
   )
   const threads = useRuntimeQuery(loadThreads)
   const revalidateThreads = threads.revalidate
 
-  useThreadChanged(useCallback(() => revalidateThreads(), [revalidateThreads]))
+  // Whether the sidebar shows one project's tasks or every project's, divided
+  // into sections. Pure UI state, persisted per workspace in localStorage the
+  // same way the composer remembers the last model.
+  const [projectScopeMap, setProjectScopeMap] = useLocalStorage<
+    Record<string, ProjectScope>
+  >("appto.sidebar.project-scope.v1", {}, decodeProjectScopeMap)
+  const allProjects = activeWorkspaceId
+    ? (projectScopeMap[activeWorkspaceId] ?? "project") === "all"
+    : false
+  const setProjectScope = useCallback(
+    (scope: ProjectScope) => {
+      if (!activeWorkspaceId) return
+      setProjectScopeMap((previous) => ({
+        ...previous,
+        [activeWorkspaceId]: scope,
+      }))
+    },
+    [activeWorkspaceId, setProjectScopeMap]
+  )
+
+  // The all-projects view loads every project's threads together; the joined
+  // key keeps the loader stable while the workspace's projects stay the same.
+  const workspaceProjectIdsKey = workspaceProjects
+    .map((project) => project.id)
+    .join("\n")
+  const loadWorkspaceThreads = useMemo(() => {
+    if (!allProjects || workspaceProjectIdsKey === "") return null
+    const ids = workspaceProjectIdsKey.split("\n")
+    return async () => {
+      const lists = await Promise.all(ids.map((id) => client.listThreads(id)))
+      return Object.fromEntries(
+        ids.map((id, index) => [id, lists[index]!] as const)
+      )
+    }
+  }, [client, allProjects, workspaceProjectIdsKey])
+  const workspaceThreads = useRuntimeQuery(loadWorkspaceThreads)
+  const revalidateWorkspaceThreads = workspaceThreads.revalidate
+
+  useThreadChanged(
+    useCallback(() => {
+      revalidateThreads()
+      revalidateWorkspaceThreads()
+    }, [revalidateThreads, revalidateWorkspaceThreads])
+  )
 
   useKeybinding(
     appSettings.newTaskKeybinding,
@@ -149,6 +202,7 @@ export function Workbench() {
     (projectId: string) => {
       if (!activeWorkspaceId) return
       setView({ kind: "new-task" })
+      setProjectScope("project")
       const next: Selection = {
         lastWorkspaceId: activeWorkspaceId,
         lastProjectIds: {
@@ -161,8 +215,13 @@ export function Workbench() {
         .setSelection(activeWorkspaceId, projectId)
         .then(replaceSelection, () => {})
     },
-    [client, replaceSelection, selection, activeWorkspaceId]
+    [client, replaceSelection, selection, activeWorkspaceId, setProjectScope]
   )
+
+  const selectAllProjects = useCallback(() => {
+    setView({ kind: "new-task" })
+    setProjectScope("all")
+  }, [setProjectScope])
 
   const cycleWorkspace = useCallback(
     (direction: number) => {
@@ -171,9 +230,7 @@ export function Workbench() {
         (workspace) => workspace.id === activeWorkspaceId
       )
       const next =
-        workspaces[
-          (index + direction + workspaces.length) % workspaces.length
-        ]!
+        workspaces[(index + direction + workspaces.length) % workspaces.length]!
       selectWorkspace(next.id)
     },
     [workspaces, activeWorkspaceId, selectWorkspace]
@@ -310,16 +367,22 @@ export function Workbench() {
         workspaces={workspaces}
         projects={workspaceProjects}
         activeProject={activeProject}
+        allProjects={allProjects}
         onSelectProject={selectProject}
+        onSelectAllProjects={selectAllProjects}
         onAddProject={addProject}
         onMoveProject={moveProject}
         addingProject={addingProject}
         onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
         threads={threads.state}
+        workspaceThreads={workspaceThreads.state}
         openThreadId={openThreadId}
         onOpenThread={openThread}
         onNewTask={() => setView({ kind: "new-task" })}
-        onRetryThreads={revalidateThreads}
+        onRetryThreads={() => {
+          revalidateThreads()
+          revalidateWorkspaceThreads()
+        }}
         onOpenSettings={() => setView({ kind: "settings" })}
       />
 

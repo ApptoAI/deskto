@@ -50,6 +50,8 @@ export type MessageRow = {
   content: string
   state: Message["state"]
   error: string | null
+  failure_kind: "usage-limit" | "error" | null
+  failure_reset_at: string | null
   created_at: string
 }
 
@@ -144,6 +146,13 @@ export function toThread(row: ThreadRow): Thread {
 }
 
 export function toMessage(row: MessageRow): Message {
+  const failure = row.error
+    ? {
+        kind: row.failure_kind ?? ("error" as const),
+        message: row.error,
+        ...(row.failure_reset_at ? { resetAt: row.failure_reset_at } : {}),
+      }
+    : undefined
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -151,6 +160,7 @@ export function toMessage(row: MessageRow): Message {
     role: row.role,
     content: row.content,
     state: row.state,
+    ...(failure ? { failure } : {}),
     ...(row.error ? { error: row.error } : {}),
     createdAt: row.created_at,
   }

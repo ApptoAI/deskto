@@ -4,6 +4,7 @@ import type {
   ApprovalDecision,
   ContextUsage,
   HarnessEvent,
+  HarnessFailure,
   HarnessSession,
 } from "@openappto/harness-sdk"
 import type { ThreadView } from "@openappto/protocol"
@@ -108,7 +109,7 @@ export class TurnCoordinator {
           threadId,
           turn.turnId,
           turn.assistantMessageId,
-          errorMessage(error)
+          genericFailure(errorMessage(error))
         )
         this.changed(threadId)
       }
@@ -144,7 +145,7 @@ export class TurnCoordinator {
         threadId,
         run.turnId,
         run.assistantMessageId,
-        message
+        genericFailure(message)
       )
       this.#runs.delete(threadId)
       this.changed(threadId)
@@ -184,7 +185,7 @@ export class TurnCoordinator {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
       const message = `Could not answer the harness: ${errorMessage(error)}`
-      this.#fail(threadId, run, message)
+      this.#fail(threadId, run, genericFailure(message))
       await run.session.cancel().catch(() => undefined)
       throw new RuntimeError("approval-failed", message)
     }
@@ -219,11 +220,15 @@ export class TurnCoordinator {
         if (run.terminal) break
       }
       if (!run.cancelled && !run.terminal) {
-        this.#fail(threadId, run, "Harness ended without completing the turn")
+        this.#fail(
+          threadId,
+          run,
+          genericFailure("Harness ended without completing the turn")
+        )
       }
     } catch (error) {
       if (!run.cancelled && !run.terminal) {
-        this.#fail(threadId, run, errorMessage(error))
+        this.#fail(threadId, run, genericFailure(errorMessage(error)))
         await run.session.cancel().catch(() => undefined)
       }
     } finally {
@@ -271,7 +276,7 @@ export class TurnCoordinator {
         this.store.turns.complete(threadId, run.turnId, run.assistantMessageId)
         break
       case "turn.failed":
-        this.#fail(threadId, run, event.message)
+        this.#fail(threadId, run, event.failure)
         return
       case "activity.started":
         this.#startActivity(threadId, run, event.activity)
@@ -283,11 +288,11 @@ export class TurnCoordinator {
     this.changed(threadId)
   }
 
-  #fail(threadId: string, run: ActiveRun, message: string): void {
+  #fail(threadId: string, run: ActiveRun, failure: HarnessFailure): void {
     this.#flush(run)
     run.terminal = true
     this.store.activities.failRunning(run.turnId)
-    this.store.turns.fail(threadId, run.turnId, run.assistantMessageId, message)
+    this.store.turns.fail(threadId, run.turnId, run.assistantMessageId, failure)
     this.changed(threadId)
   }
 
@@ -340,4 +345,8 @@ export class TurnCoordinator {
     run.pendingText = ""
     this.changed(run.threadId)
   }
+}
+
+function genericFailure(message: string): HarnessFailure {
+  return { kind: "error", message }
 }

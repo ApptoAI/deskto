@@ -43,7 +43,7 @@ export function TaskList({
 
   if (state.data.length === 0) {
     return (
-      <p className="px-3 py-2 text-sm text-muted-foreground">No tasks yet.</p>
+      <p className="px-4 py-1.5 text-sm text-muted-foreground">No tasks yet.</p>
     )
   }
 

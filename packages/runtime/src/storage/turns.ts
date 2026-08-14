@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { Approval, ExecutionProfile } from "@openappto/protocol"
+import type {
+  Approval,
+  ExecutionProfile,
+  HarnessFailure,
+} from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
@@ -227,18 +231,26 @@ export class Turns {
     threadId: string,
     turnId: string,
     messageId: string,
-    message: string
+    failure: HarnessFailure
   ): void {
     const now = new Date().toISOString()
     transaction(this.database, () => {
       this.database
-        .prepare("UPDATE messages SET state = 'error', error = ? WHERE id = ?")
-        .run(message, messageId)
+        .prepare(
+          "UPDATE messages SET state = 'error', error = ?, failure_kind = ?, failure_reset_at = ? WHERE id = ?"
+        )
+        .run(failure.message, failure.kind, failure.resetAt ?? null, messageId)
       this.database
         .prepare(
-          "UPDATE turns SET status = 'failed', error = ?, finished_at = ? WHERE id = ?"
+          "UPDATE turns SET status = 'failed', error = ?, failure_kind = ?, failure_reset_at = ?, finished_at = ? WHERE id = ?"
         )
-        .run(message, now, turnId)
+        .run(
+          failure.message,
+          failure.kind,
+          failure.resetAt ?? null,
+          now,
+          turnId
+        )
       this.#finish(threadId, turnId, "failed", now)
     })
   }
