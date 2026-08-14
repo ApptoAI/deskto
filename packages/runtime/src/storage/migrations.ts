@@ -91,26 +91,101 @@ const migrations = [
     ALTER TABLE threads ADD COLUMN context_used_tokens INTEGER;
     ALTER TABLE threads ADD COLUMN context_max_tokens INTEGER;
   `,
+  `
+    ALTER TABLE workspaces RENAME TO projects;
+    ALTER TABLE threads RENAME COLUMN workspace_id TO project_id;
+    DROP INDEX threads_workspace_updated_idx;
+    CREATE INDEX threads_project_updated_idx ON threads(project_id, updated_at DESC);
+  `,
+  `
+    CREATE TABLE workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL,
+      icon TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO workspaces (id, name, color, icon, sort_order, created_at, updated_at)
+    VALUES (
+      'personal', 'Personal', 'slate', 'home', 0,
+      strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+      strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    );
+
+    CREATE TABLE projects_with_workspace (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO projects_with_workspace (id, workspace_id, name, path, created_at, updated_at)
+    SELECT id, 'personal', name, path, created_at, updated_at FROM projects;
+
+    DROP TABLE projects;
+    ALTER TABLE projects_with_workspace RENAME TO projects;
+    CREATE INDEX projects_workspace_updated_idx ON projects(workspace_id, updated_at DESC);
+  `,
+  `
+    CREATE TABLE packs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE workspace_packs (
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      pack_id TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
+      PRIMARY KEY (workspace_id, pack_id)
+    );
+  `,
+  `
+    UPDATE settings SET key = 'preferences.lastProfile.personal'
+    WHERE key = 'preferences.lastProfile'
+      AND NOT EXISTS (
+        SELECT 1 FROM settings WHERE key = 'preferences.lastProfile.personal'
+      );
+    DELETE FROM settings WHERE key = 'preferences.lastProfile';
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {
   const currentVersion = database.prepare("PRAGMA user_version").get() as {
     user_version: number
   }
+  if (currentVersion.user_version >= migrations.length) return
 
-  for (
-    let index = currentVersion.user_version;
-    index < migrations.length;
-    index += 1
-  ) {
-    database.exec("BEGIN IMMEDIATE")
-    try {
-      database.exec(migrations[index]!)
-      database.exec(`PRAGMA user_version = ${index + 1}`)
-      database.exec("COMMIT")
-    } catch (error) {
-      database.exec("ROLLBACK")
-      throw error
+  // Foreign keys stay off for the whole run: a table rebuild drops the old
+  // table, and with enforcement on that DROP would cascade into dependents.
+  // Every batch is checked before commit instead.
+  database.exec("PRAGMA foreign_keys = OFF")
+  try {
+    for (
+      let index = currentVersion.user_version;
+      index < migrations.length;
+      index += 1
+    ) {
+      database.exec("BEGIN IMMEDIATE")
+      try {
+        database.exec(migrations[index]!)
+        const violations = database.prepare("PRAGMA foreign_key_check").all()
+        if (violations.length > 0)
+          throw new Error(`Migration ${index} violates foreign keys`)
+        database.exec(`PRAGMA user_version = ${index + 1}`)
+        database.exec("COMMIT")
+      } catch (error) {
+        database.exec("ROLLBACK")
+        throw error
+      }
     }
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON")
   }
 }

@@ -27,12 +27,30 @@ export type HarnessModelOption = {
   supportedPermissionModes: PermissionMode[]
 }
 
+/** A directory of SKILL.md skill folders, labeled by whoever owns its metadata. */
+export type SkillRoot = {
+  /** Absolute path to a directory whose children are SKILL.md skill folders. */
+  path: string
+  /** Human-readable source label, e.g. the pack name. */
+  name: string
+}
+
+/**
+ * Provider-neutral additions to a session, built by the Runtime from the
+ * active workspace's Packs. Adapters translate it to native mechanisms and
+ * silently skip what the installed harness version cannot honor.
+ */
+export type SessionCustomization = {
+  skillRoots: SkillRoot[]
+}
+
 export type HarnessRunInput = {
   threadId: string
   turnId: string
-  workspacePath: string
+  projectPath: string
   prompt: string
   executionProfile: ExecutionProfile
+  customization: SessionCustomization
   providerSessionId?: string
 }
 

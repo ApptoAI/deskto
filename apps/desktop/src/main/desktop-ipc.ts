@@ -4,26 +4,29 @@ import { dialog, ipcMain, shell } from "electron"
 
 import {
   openExternalChannel,
-  pickWorkspaceChannel,
+  pickPackChannel,
+  pickProjectChannel,
 } from "../shared/channels.js"
-import type { PickedWorkspace } from "../shared/desktop-api.js"
+import type { PickedProject } from "../shared/desktop-api.js"
 
 const allowedExternalProtocols = new Set(["http:", "https:"])
 
-export function registerDesktopIpc(): void {
-  ipcMain.handle(
-    pickWorkspaceChannel,
-    async (): Promise<PickedWorkspace | undefined> => {
-      const result = await dialog.showOpenDialog({
-        properties: ["openDirectory", "createDirectory"],
-        title: "Open project folder",
-      })
-      const selectedPath = result.filePaths[0]
-      if (result.canceled || !selectedPath) return undefined
+function handleFolderPick(channel: string, title: string): void {
+  ipcMain.handle(channel, async (): Promise<PickedProject | undefined> => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      title,
+    })
+    const selectedPath = result.filePaths[0]
+    if (result.canceled || !selectedPath) return undefined
 
-      return { path: selectedPath, name: path.basename(selectedPath) }
-    }
-  )
+    return { path: selectedPath, name: path.basename(selectedPath) }
+  })
+}
+
+export function registerDesktopIpc(): void {
+  handleFolderPick(pickProjectChannel, "Open project folder")
+  handleFolderPick(pickPackChannel, "Choose a pack folder")
 
   ipcMain.handle(
     openExternalChannel,

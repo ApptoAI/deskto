@@ -47,8 +47,8 @@ export class RuntimeClient {
     return this.request({ method: "harness.refresh", params: {} })
   }
 
-  getPreferences() {
-    return this.request({ method: "preferences.get", params: {} })
+  getPreferences(workspaceId: string) {
+    return this.request({ method: "preferences.get", params: { workspaceId } })
   }
 
   getSettings() {
@@ -64,22 +64,91 @@ export class RuntimeClient {
     return this.request({ method: "workspace.list", params: {} })
   }
 
-  addWorkspace(path: string, name: string) {
-    return this.request({ method: "workspace.add", params: { path, name } })
+  createWorkspace(name: string, color: string, icon: string) {
+    return this.request({
+      method: "workspace.create",
+      params: { name, color, icon },
+    })
   }
 
-  listThreads(workspaceId: string) {
-    return this.request({ method: "thread.list", params: { workspaceId } })
+  updateWorkspace(
+    workspaceId: string,
+    patch: { name?: string; color?: string; icon?: string }
+  ) {
+    return this.request({
+      method: "workspace.update",
+      params: { workspaceId, ...patch },
+    })
+  }
+
+  deleteWorkspace(workspaceId: string) {
+    return this.request({ method: "workspace.delete", params: { workspaceId } })
+  }
+
+  getSelection() {
+    return this.request({ method: "selection.get", params: {} })
+  }
+
+  setSelection(workspaceId: string, projectId?: string) {
+    return this.request({
+      method: "selection.set",
+      params: { workspaceId, projectId },
+    })
+  }
+
+  listPacks() {
+    return this.request({ method: "pack.list", params: {} })
+  }
+
+  createPack(name: string) {
+    return this.request({ method: "pack.create", params: { name } })
+  }
+
+  importPack(path: string) {
+    return this.request({ method: "pack.import", params: { path } })
+  }
+
+  removePack(packId: string) {
+    return this.request({ method: "pack.remove", params: { packId } })
+  }
+
+  setWorkspacePack(workspaceId: string, packId: string, attached: boolean) {
+    return this.request({
+      method: "workspace.setPack",
+      params: { workspaceId, packId, attached },
+    })
+  }
+
+  listProjects() {
+    return this.request({ method: "project.list", params: {} })
+  }
+
+  addProject(path: string, name: string, workspaceId: string) {
+    return this.request({
+      method: "project.add",
+      params: { path, name, workspaceId },
+    })
+  }
+
+  moveProject(projectId: string, workspaceId: string) {
+    return this.request({
+      method: "project.move",
+      params: { projectId, workspaceId },
+    })
+  }
+
+  listThreads(projectId: string) {
+    return this.request({ method: "thread.list", params: { projectId } })
   }
 
   createThread(
-    workspaceId: string,
+    projectId: string,
     harnessId: string,
     executionProfile?: RequestFor<"thread.create">["params"]["executionProfile"]
   ) {
     return this.request({
       method: "thread.create",
-      params: { workspaceId, harnessId, executionProfile },
+      params: { projectId, harnessId, executionProfile },
     })
   }
 

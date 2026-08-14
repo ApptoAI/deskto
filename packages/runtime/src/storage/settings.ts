@@ -23,4 +23,8 @@ export class Settings {
       )
       .run(key, JSON.stringify(value))
   }
+
+  delete(key: string): void {
+    this.database.prepare("DELETE FROM settings WHERE key = ?").run(key)
+  }
 }

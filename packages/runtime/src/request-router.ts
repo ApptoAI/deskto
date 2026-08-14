@@ -1,29 +1,51 @@
-import { realpath, stat } from "node:fs/promises"
-
 import {
   lastProfileSchema,
+  selectionSchema,
   type ExecutionProfile,
   type RequestFor,
   type RuntimeMethod,
   type RuntimeRequest,
   type RuntimeResponse,
   type RuntimeResponses,
+  type Selection,
 } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
+import {
+  createPackDirectory,
+  readPackName,
+  readPackSkills,
+  resolvedDirectory,
+  validatePackDirectory,
+} from "./packs/pack-files.js"
+import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
 
-const lastProfileSettingKey = "preferences.lastProfile"
+// A migration moved the pre-workspace value under the personal workspace.
+const selectionSettingKey = "ui.selection"
+
+function lastProfileKeyFor(workspaceId: string): string {
+  return `preferences.lastProfile.${workspaceId}`
+}
+
+export type RouterEvents = {
+  /** The workspace or project lists changed; open views should refetch. */
+  workspaceChanged: () => void
+  /** The pack list or a workspace's attachments changed. */
+  packChanged: () => void
+}
 
 export class RequestRouter {
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
     private readonly turns: TurnCoordinator,
-    private readonly userSettings: UserSettings
+    private readonly userSettings: UserSettings,
+    private readonly packsRoot: string,
+    private readonly events: RouterEvents
   ) {}
 
   async request<M extends RuntimeMethod>(
@@ -58,7 +80,9 @@ export class RequestRouter {
         return this.harnesses.refresh()
       case "preferences.get": {
         const stored = lastProfileSchema.safeParse(
-          this.store.settings.get(lastProfileSettingKey)
+          this.store.settings.get(
+            lastProfileKeyFor(request.params.workspaceId)
+          )
         )
         return { lastProfile: stored.success ? stored.data : null }
       }
@@ -68,26 +92,133 @@ export class RequestRouter {
         return this.userSettings.update(request.params.entries)
       case "workspace.list":
         return this.store.workspaces.list()
-      case "workspace.add": {
+      case "workspace.create": {
+        const workspace = this.store.workspaces.create(
+          requiredName(request.params.name),
+          request.params.color,
+          request.params.icon
+        )
+        this.events.workspaceChanged()
+        return workspace
+      }
+      case "workspace.update": {
+        const workspace = this.store.workspaces.update(
+          request.params.workspaceId,
+          {
+            ...(request.params.name === undefined
+              ? {}
+              : { name: requiredName(request.params.name) }),
+            ...(request.params.color === undefined
+              ? {}
+              : { color: request.params.color }),
+            ...(request.params.icon === undefined
+              ? {}
+              : { icon: request.params.icon }),
+          }
+        )
+        this.events.workspaceChanged()
+        return workspace
+      }
+      case "workspace.delete": {
+        this.store.workspaces.delete(request.params.workspaceId)
+        this.#forgetSelection(request.params.workspaceId)
+        this.store.settings.delete(
+          lastProfileKeyFor(request.params.workspaceId)
+        )
+        this.events.workspaceChanged()
+        // The FK cascade also detached the workspace's packs.
+        this.events.packChanged()
+        return null
+      }
+      case "selection.get":
+        return this.#selection()
+      case "selection.set": {
+        this.store.workspaces.get(request.params.workspaceId)
+        if (request.params.projectId) {
+          const project = this.store.projects.get(request.params.projectId)
+          if (project.workspaceId !== request.params.workspaceId)
+            throw new RuntimeError(
+              "invalid-selection",
+              "Project does not belong to workspace"
+            )
+        }
+        const current = this.#selection()
+        const next: Selection = {
+          lastWorkspaceId: request.params.workspaceId,
+          lastProjectIds: request.params.projectId
+            ? {
+                ...current.lastProjectIds,
+                [request.params.workspaceId]: request.params.projectId,
+              }
+            : current.lastProjectIds,
+        }
+        this.store.settings.set(selectionSettingKey, next)
+        return next
+      }
+      case "pack.list":
+        return this.#packViews()
+      case "pack.create": {
+        const name = requiredName(request.params.name)
+        const path = await createPackDirectory(this.packsRoot, name)
+        const row = this.store.packs.add(name, path)
+        this.events.packChanged()
+        return this.#packView(row)
+      }
+      case "pack.import": {
+        const path = await validatePackDirectory(request.params.path)
+        const row = this.store.packs.add(await readPackName(path), path)
+        this.events.packChanged()
+        return this.#packView(row)
+      }
+      case "pack.remove": {
+        this.store.packs.remove(request.params.packId)
+        this.events.packChanged()
+        return null
+      }
+      case "workspace.setPack": {
+        this.store.packs.setAttached(
+          request.params.workspaceId,
+          request.params.packId,
+          request.params.attached
+        )
+        this.events.packChanged()
+        return null
+      }
+      case "project.list":
+        return this.store.projects.list()
+      case "project.add": {
         const path = await validDirectory(request.params.path)
-        const name = request.params.name.trim()
-        if (!name)
-          throw new RuntimeError(
-            "invalid-workspace",
-            "Project name is required"
-          )
-        return this.store.workspaces.add(path, name)
+        const project = this.store.projects.add(
+          path,
+          requiredName(request.params.name),
+          request.params.workspaceId
+        )
+        this.events.workspaceChanged()
+        return project
+      }
+      case "project.move": {
+        const project = this.store.projects.move(
+          request.params.projectId,
+          request.params.workspaceId
+        )
+        this.events.workspaceChanged()
+        return project
       }
       case "thread.list":
-        return this.store.threads.list(request.params.workspaceId)
+        return this.store.threads.list(request.params.projectId)
       case "thread.create": {
         const profile = await this.harnesses.resolveProfile(
           request.params.harnessId,
           request.params.executionProfile
         )
-        this.#rememberProfile(request.params.harnessId, profile)
+        const project = this.store.projects.get(request.params.projectId)
+        this.#rememberProfile(
+          project.workspaceId,
+          request.params.harnessId,
+          profile
+        )
         return this.store.threads.create(
-          request.params.workspaceId,
+          request.params.projectId,
           request.params.harnessId,
           profile
         )
@@ -98,7 +229,12 @@ export class RequestRouter {
           thread.harness_id,
           request.params.executionProfile
         )
-        this.#rememberProfile(thread.harness_id, executionProfile)
+        const project = this.store.projects.get(thread.project_id)
+        this.#rememberProfile(
+          project.workspaceId,
+          thread.harness_id,
+          executionProfile
+        )
         return this.store.threads.configure(thread.id, executionProfile)
       }
       case "thread.get":
@@ -116,25 +252,68 @@ export class RequestRouter {
     }
   }
 
-  /** New threads start from the profile the user last used. */
-  #rememberProfile(harnessId: string, executionProfile: ExecutionProfile) {
-    this.store.settings.set(lastProfileSettingKey, {
+  /** New threads start from the profile the user last used in this workspace. */
+  #rememberProfile(
+    workspaceId: string,
+    harnessId: string,
+    executionProfile: ExecutionProfile
+  ) {
+    this.store.settings.set(lastProfileKeyFor(workspaceId), {
       harnessId,
       executionProfile,
     })
   }
+
+  async #packView(row: PackRow, workspaceIds?: string[]) {
+    return {
+      ...toPackRecord(row),
+      skills: await readPackSkills(row.path),
+      workspaceIds: workspaceIds ?? this.store.packs.workspaceIdsFor(row.id),
+    }
+  }
+
+  #packViews() {
+    const attachments = this.store.packs.attachedWorkspaceIds()
+    return Promise.all(
+      this.store.packs
+        .list()
+        .map((row) => this.#packView(row, attachments.get(row.id) ?? []))
+    )
+  }
+
+  #selection(): Selection {
+    const stored = selectionSchema.safeParse(
+      this.store.settings.get(selectionSettingKey)
+    )
+    return stored.success
+      ? stored.data
+      : { lastWorkspaceId: null, lastProjectIds: {} }
+  }
+
+  #forgetSelection(workspaceId: string) {
+    const current = this.#selection()
+    const lastProjectIds = { ...current.lastProjectIds }
+    delete lastProjectIds[workspaceId]
+    this.store.settings.set(selectionSettingKey, {
+      lastWorkspaceId:
+        current.lastWorkspaceId === workspaceId
+          ? null
+          : current.lastWorkspaceId,
+      lastProjectIds,
+    })
+  }
 }
 
-async function validDirectory(path: string): Promise<string> {
-  let resolved: string
-  try {
-    resolved = await realpath(path)
-  } catch {
-    throw new RuntimeError("invalid-workspace", "Project folder does not exist")
-  }
+function requiredName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) throw new RuntimeError("invalid-name", "A name is required")
+  return trimmed
+}
 
-  if (!(await stat(resolved)).isDirectory()) {
-    throw new RuntimeError("invalid-workspace", "Project path is not a folder")
-  }
-  return resolved
+function validDirectory(path: string): Promise<string> {
+  return resolvedDirectory(path, {
+    code: "invalid-project",
+    missing: "Project folder does not exist",
+    notFolder: "Project path is not a folder",
+  })
 }

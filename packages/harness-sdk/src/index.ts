@@ -14,4 +14,6 @@ export type {
   HarnessSession,
   PermissionMode,
   ReasoningEffort,
+  SessionCustomization,
+  SkillRoot,
 } from "./types.js"

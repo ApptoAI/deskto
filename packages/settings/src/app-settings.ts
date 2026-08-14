@@ -15,6 +15,22 @@ export const appSettings = {
     schema: keybindingSchema,
     defaultValue: "mod+n",
   }),
+  nextWorkspaceKeybinding: defineSetting({
+    key: "keybindings.next-workspace",
+    label: "Next workspace",
+    description: "Switch to the next workspace.",
+    input: { kind: "keybinding" },
+    schema: keybindingSchema,
+    defaultValue: "mod+alt+arrowright",
+  }),
+  previousWorkspaceKeybinding: defineSetting({
+    key: "keybindings.previous-workspace",
+    label: "Previous workspace",
+    description: "Switch to the previous workspace.",
+    input: { kind: "keybinding" },
+    schema: keybindingSchema,
+    defaultValue: "mod+alt+arrowleft",
+  }),
 }
 
 export const settingDefinitions: readonly SettingDefinition<unknown>[] =

@@ -3,10 +3,13 @@ import { z } from "zod"
 import {
   harnessSchema,
   executionProfileSchema,
+  packSchema,
   preferencesSchema,
+  selectionSchema,
   settingsSnapshotSchema,
   threadSchema,
   threadViewSchema,
+  projectSchema,
   workspaceSchema,
 } from "./models.js"
 
@@ -17,7 +20,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ harnessId: z.string().min(1), enabled: z.boolean() }),
   }),
   z.object({ method: z.literal("harness.refresh"), params: z.object({}) }),
-  z.object({ method: z.literal("preferences.get"), params: z.object({}) }),
+  z.object({
+    method: z.literal("preferences.get"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
   z.object({ method: z.literal("settings.get"), params: z.object({}) }),
   z.object({
     method: z.literal("settings.update"),
@@ -26,17 +32,79 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
   z.object({
-    method: z.literal("workspace.add"),
-    params: z.object({ path: z.string().min(1), name: z.string().min(1) }),
+    method: z.literal("workspace.create"),
+    params: z.object({
+      name: z.string().min(1),
+      color: z.string().min(1),
+      icon: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("workspace.update"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      name: z.string().min(1).optional(),
+      color: z.string().min(1).optional(),
+      icon: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({
+    method: z.literal("workspace.delete"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
+  z.object({ method: z.literal("selection.get"), params: z.object({}) }),
+  z.object({
+    method: z.literal("selection.set"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      projectId: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({ method: z.literal("pack.list"), params: z.object({}) }),
+  z.object({
+    method: z.literal("pack.create"),
+    params: z.object({ name: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("pack.import"),
+    params: z.object({ path: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("pack.remove"),
+    params: z.object({ packId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("workspace.setPack"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      packId: z.string().min(1),
+      attached: z.boolean(),
+    }),
+  }),
+  z.object({ method: z.literal("project.list"), params: z.object({}) }),
+  z.object({
+    method: z.literal("project.add"),
+    params: z.object({
+      path: z.string().min(1),
+      name: z.string().min(1),
+      workspaceId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.move"),
+    params: z.object({
+      projectId: z.string().min(1),
+      workspaceId: z.string().min(1),
+    }),
   }),
   z.object({
     method: z.literal("thread.list"),
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ projectId: z.string() }),
   }),
   z.object({
     method: z.literal("thread.create"),
     params: z.object({
-      workspaceId: z.string(),
+      projectId: z.string(),
       harnessId: z.string(),
       executionProfile: executionProfileSchema.optional(),
     }),
@@ -88,7 +156,19 @@ export interface RuntimeResponses {
   "settings.get": z.infer<typeof settingsSnapshotSchema>
   "settings.update": z.infer<typeof settingsSnapshotSchema>
   "workspace.list": z.infer<typeof workspaceSchema>[]
-  "workspace.add": z.infer<typeof workspaceSchema>
+  "workspace.create": z.infer<typeof workspaceSchema>
+  "workspace.update": z.infer<typeof workspaceSchema>
+  "workspace.delete": null
+  "selection.get": z.infer<typeof selectionSchema>
+  "selection.set": z.infer<typeof selectionSchema>
+  "pack.list": z.infer<typeof packSchema>[]
+  "pack.create": z.infer<typeof packSchema>
+  "pack.import": z.infer<typeof packSchema>
+  "pack.remove": null
+  "workspace.setPack": null
+  "project.list": z.infer<typeof projectSchema>[]
+  "project.add": z.infer<typeof projectSchema>
+  "project.move": z.infer<typeof projectSchema>
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
   "thread.configure": z.infer<typeof threadViewSchema>
@@ -106,6 +186,8 @@ export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
   z.object({ type: z.literal("harness.changed") }),
   z.object({ type: z.literal("settings.changed") }),
+  z.object({ type: z.literal("workspace.changed") }),
+  z.object({ type: z.literal("pack.changed") }),
 ])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>

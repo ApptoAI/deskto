@@ -4,7 +4,7 @@ import type {
   RuntimeResponse,
 } from "@openappto/protocol"
 
-export type PickedWorkspace = {
+export type PickedProject = {
   path: string
   name: string
 }
@@ -14,6 +14,7 @@ export interface DesktopApi {
     request(request: RuntimeRequest): Promise<RuntimeResponse>
     subscribe(listener: (event: RuntimeEvent) => void): () => void
   }
-  pickWorkspace(): Promise<PickedWorkspace | undefined>
+  pickProject(): Promise<PickedProject | undefined>
+  pickPack(): Promise<PickedProject | undefined>
   openExternal(url: string): Promise<void>
 }

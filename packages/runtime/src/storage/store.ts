@@ -5,10 +5,14 @@ import { Activities } from "./activities.js"
 import { Settings } from "./settings.js"
 import { Threads } from "./threads.js"
 import { Turns } from "./turns.js"
+import { Packs } from "./packs.js"
+import { Projects } from "./projects.js"
 import { Workspaces } from "./workspaces.js"
 
 export class Store {
   readonly workspaces: Workspaces
+  readonly projects: Projects
+  readonly packs: Packs
   readonly activities: Activities
   readonly threads: Threads
   readonly turns: Turns
@@ -16,8 +20,10 @@ export class Store {
 
   constructor(private readonly database: DatabaseSync) {
     this.workspaces = new Workspaces(database)
+    this.projects = new Projects(database, this.workspaces)
+    this.packs = new Packs(database, this.workspaces)
     this.activities = new Activities(database)
-    this.threads = new Threads(database, this.workspaces)
+    this.threads = new Threads(database, this.projects)
     this.turns = new Turns(database)
     this.settings = new Settings(database)
   }

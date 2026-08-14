@@ -3,11 +3,23 @@ import type {
   Approval,
   Message,
   Thread,
+  Project,
   Workspace,
 } from "@openappto/protocol"
 
 export type WorkspaceRow = {
   id: string
+  name: string
+  color: string
+  icon: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type ProjectRow = {
+  id: string
+  workspace_id: string
   name: string
   path: string
   created_at: string
@@ -16,7 +28,7 @@ export type WorkspaceRow = {
 
 export type ThreadRow = {
   id: string
-  workspace_id: string
+  project_id: string
   title: string
   harness_id: string
   status: Thread["status"]
@@ -66,6 +78,38 @@ export function toWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
     name: row.name,
+    color: row.color,
+    icon: row.icon,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+export type PackRow = {
+  id: string
+  name: string
+  path: string
+  created_at: string
+  updated_at: string
+}
+
+/** The database half of a Pack; skills and attachments are composed on top. */
+export function toPackRecord(row: PackRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    path: row.path,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+export function toProject(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
     path: row.path,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -84,7 +128,7 @@ export function toThread(row: ThreadRow): Thread {
       : undefined
   return {
     id: row.id,
-    workspaceId: row.workspace_id,
+    projectId: row.project_id,
     title: row.title,
     harnessId: row.harness_id,
     status: row.status,

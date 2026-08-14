@@ -15,7 +15,7 @@ An adapter implements `HarnessAdapterFactory`:
 - `listModels()`, returning `HarnessModelOption` entries with supported reasoning efforts and permission modes, used to build the model picker
 - `start(input, signal)`, which begins a turn and returns a `HarnessSession`
 
-`HarnessRunInput` carries the thread, turn, workspace path, prompt, execution profile, and an optional `providerSessionId`, the opaque token that lets a provider resume an earlier session.
+`HarnessRunInput` carries the thread, turn, project path, prompt, execution profile, a `customization` value, and an optional `providerSessionId`, the opaque token that lets a provider resume an earlier session. The customization holds `skillRoots`: labeled directories of SKILL.md skill folders (`{ path, name }`) the adapter should make available to the session. Adapters translate it into native mechanisms and silently skip what the installed harness version cannot honor.
 
 A `HarnessSession` exposes `events` (an `AsyncIterable<HarnessEvent>`), `cancel()`, and `respondToApproval(approvalId, decision)`. The event union has eight members: `session.started`, `message.delta`, `usage.updated`, `activity.started`, `activity.completed`, `approval.requested`, `turn.completed`, and `turn.failed`. A session emits at most one unresolved approval request at a time, and `usage.updated` reports how full the provider's context window is (`ContextUsage`).
 

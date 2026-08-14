@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -6,6 +6,7 @@ import type { HarnessAdapterFactory } from "@openappto/harness-sdk"
 import { ScriptedHarness } from "@openappto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { existingSkillRoots } from "./packs/pack-files.js"
 import { createRuntime } from "./runtime.js"
 
 const directories: string[] = []
@@ -26,16 +27,16 @@ describe("Runtime", () => {
     const firstHarness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({ databasePath, harnesses: [firstHarness] })
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
-        params: { path: directory, name: "Example" },
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const thread = unwrap(
       await runtime.request({
         method: "thread.create",
-        params: { workspaceId: workspace.id, harnessId: "claude" },
+        params: { projectId: project.id, harnessId: "claude" },
       })
     )
     const configured = unwrap(
@@ -234,15 +235,15 @@ describe("Runtime", () => {
     // The response already carries the new state; no event echoes it back.
     expect(events).toEqual([])
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
-        params: { path: directory, name: "Example" },
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const blocked = await runtime.request({
       method: "thread.create",
-      params: { workspaceId: workspace.id, harnessId: "claude" },
+      params: { projectId: project.id, harnessId: "claude" },
     })
     expect(blocked.ok).toBe(false)
     if (!blocked.ok) expect(blocked.error.code).toBe("harness-disabled")
@@ -269,21 +270,21 @@ describe("Runtime", () => {
     })
 
     const empty = unwrap(
-      await runtime.request({ method: "preferences.get", params: {} })
+      await runtime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
     )
     expect(empty.lastProfile).toBeNull()
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
-        params: { path: directory, name: "Example" },
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     unwrap(
       await runtime.request({
         method: "thread.create",
         params: {
-          workspaceId: workspace.id,
+          projectId: project.id,
           harnessId: "claude",
           executionProfile: {
             modelId: "test-model",
@@ -300,7 +301,7 @@ describe("Runtime", () => {
       harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
     })
     const persisted = unwrap(
-      await resumedRuntime.request({ method: "preferences.get", params: {} })
+      await resumedRuntime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
     )
     expect(persisted.lastProfile).toEqual({
       harnessId: "claude",
@@ -377,6 +378,217 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
+  it("groups projects into workspaces and keeps them when a workspace goes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+    })
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
+    const initial = unwrap(
+      await runtime.request({ method: "workspace.list", params: {} })
+    )
+    expect(initial).toMatchObject([{ id: "personal", name: "Personal" }])
+
+    const press = unwrap(
+      await runtime.request({
+        method: "workspace.create",
+        params: { name: "Press", color: "blue", icon: "newspaper" },
+      })
+    )
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: press.id },
+      })
+    )
+    expect(project.workspaceId).toBe(press.id)
+
+    const other = unwrap(
+      await runtime.request({
+        method: "workspace.create",
+        params: { name: "Other", color: "rose", icon: "star" },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "selection.set",
+        params: { workspaceId: press.id, projectId: project.id },
+      })
+    )
+
+    const mismatchedSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: other.id, projectId: project.id },
+    })
+    expect(mismatchedSelection.ok).toBe(false)
+    if (!mismatchedSelection.ok)
+      expect(mismatchedSelection.error.code).toBe("invalid-selection")
+
+    const missingWorkspaceSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: "missing" },
+    })
+    expect(missingWorkspaceSelection.ok).toBe(false)
+    if (!missingWorkspaceSelection.ok)
+      expect(missingWorkspaceSelection.error.code).toBe("workspace-not-found")
+
+    const missingProjectSelection = await runtime.request({
+      method: "selection.set",
+      params: { workspaceId: press.id, projectId: "missing" },
+    })
+    expect(missingProjectSelection.ok).toBe(false)
+    if (!missingProjectSelection.ok)
+      expect(missingProjectSelection.error.code).toBe("project-not-found")
+
+    expect(
+      unwrap(await runtime.request({ method: "selection.get", params: {} }))
+    ).toEqual({
+      lastWorkspaceId: press.id,
+      lastProjectIds: { [press.id]: project.id },
+    })
+
+    unwrap(
+      await runtime.request({
+        method: "workspace.delete",
+        params: { workspaceId: press.id },
+      })
+    )
+    const remaining = unwrap(
+      await runtime.request({ method: "workspace.list", params: {} })
+    )
+    expect(remaining.map((workspace) => workspace.id)).toEqual([
+      "personal",
+      other.id,
+    ])
+
+    const projects = unwrap(
+      await runtime.request({ method: "project.list", params: {} })
+    )
+    expect(projects).toMatchObject([{ id: project.id, workspaceId: "personal" }])
+
+    const selection = unwrap(
+      await runtime.request({ method: "selection.get", params: {} })
+    )
+    expect(selection).toEqual({ lastWorkspaceId: null, lastProjectIds: {} })
+
+    const undeletable = await runtime.request({
+      method: "workspace.delete",
+      params: { workspaceId: "personal" },
+    })
+    expect(undeletable.ok).toBe(false)
+    if (!undeletable.ok)
+      expect(undeletable.error.code).toBe("workspace-not-deletable")
+
+    const conflict = await runtime.request({
+      method: "project.add",
+      params: { path: directory, name: "Example", workspaceId: other.id },
+    })
+    expect(conflict.ok).toBe(false)
+    if (!conflict.ok)
+      expect(conflict.error.code).toBe("project-in-other-workspace")
+
+    expect(events).toEqual([
+      "workspace.changed",
+      "workspace.changed",
+      "workspace.changed",
+      "workspace.changed",
+      "pack.changed",
+    ])
+    await runtime.close()
+  })
+
+  it("delivers workspace pack skills to the harness session", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      packsPath: join(directory, "packs"),
+      harnesses: [harness],
+    })
+
+    const created = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Press tools" },
+      })
+    )
+    expect(created.path).toBe(join(directory, "packs", "press-tools"))
+    expect(created.skills).toEqual([])
+
+    const malformedPackPath = join(directory, "malformed-pack")
+    await mkdir(malformedPackPath)
+    await writeFile(join(malformedPackPath, "skills"), "not a directory")
+    const malformedPack = await runtime.request({
+      method: "pack.import",
+      params: { path: malformedPackPath },
+    })
+    expect(malformedPack.ok).toBe(false)
+    if (!malformedPack.ok) expect(malformedPack.error.code).toBe("invalid-pack")
+    expect(
+      existingSkillRoots([{ path: malformedPackPath, name: "Malformed" }])
+    ).toEqual([])
+
+    const invalidAttachment = await runtime.request({
+      method: "workspace.setPack",
+      params: { workspaceId: "missing", packId: created.id, attached: true },
+    })
+    expect(invalidAttachment.ok).toBe(false)
+    if (!invalidAttachment.ok)
+      expect(invalidAttachment.error.code).toBe("workspace-not-found")
+
+    await mkdir(join(created.path, "skills", "summarize"), { recursive: true })
+    await writeFile(
+      join(created.path, "skills", "summarize", "SKILL.md"),
+      '---\nname: summarize\ndescription: "Summarize articles"\n---\n\nDo it.\n'
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: { workspaceId: "personal", packId: created.id, attached: true },
+      })
+    )
+    const listed = unwrap(
+      await runtime.request({ method: "pack.list", params: {} })
+    )
+    expect(listed).toMatchObject([
+      {
+        name: "Press tools",
+        workspaceIds: ["personal"],
+        skills: [{ name: "summarize", description: "Summarize articles" }],
+      },
+    ])
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Summarize this" },
+      })
+    )
+    expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
+      { path: join(created.path, "skills"), name: "Press tools" },
+    ])
+    await runtime.close()
+  })
+
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)
@@ -411,16 +623,16 @@ describe("Runtime", () => {
       databasePath: join(directory, "runtime.sqlite"),
       harnesses: [harness],
     })
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
-        params: { path: directory, name: "Example" },
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
     const thread = unwrap(
       await runtime.request({
         method: "thread.create",
-        params: { workspaceId: workspace.id, harnessId: "slow" },
+        params: { projectId: project.id, harnessId: "slow" },
       })
     )
 

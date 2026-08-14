@@ -10,6 +10,7 @@ import type { ThreadView } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
+import { existingSkillRoots } from "./packs/pack-files.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
 
@@ -70,9 +71,14 @@ export class TurnCoordinator {
         {
           threadId,
           turnId: turn.turnId,
-          workspacePath: turn.workspacePath,
+          projectPath: turn.projectPath,
           prompt,
           executionProfile: turn.executionProfile,
+          customization: {
+            skillRoots: existingSkillRoots(
+              this.store.packs.attachedToWorkspace(turn.workspaceId)
+            ),
+          },
           ...(turn.providerSessionId
             ? { providerSessionId: turn.providerSessionId }
             : {}),

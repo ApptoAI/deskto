@@ -101,7 +101,7 @@ class CodexSession implements HarnessSession {
     input: HarnessRunInput,
     signal: AbortSignal
   ): Promise<CodexSession> {
-    const client = new JsonlClient("codex", input.workspacePath)
+    const client = new JsonlClient("codex", input.projectPath)
     const session = new CodexSession(client, input)
     const abort = () => client.close()
     signal.addEventListener("abort", abort, { once: true })
@@ -150,12 +150,13 @@ class CodexSession implements HarnessSession {
 
   async #start(): Promise<void> {
     await initialize(this.client)
+    await this.#offerSkillRoots()
 
     const permissions = codexPermissions(
       this.input.executionProfile.permissionMode
     )
     const params = {
-      cwd: this.input.workspacePath,
+      cwd: this.input.projectPath,
       ...permissions.thread,
       ...(this.input.executionProfile.modelId
         ? { model: this.input.executionProfile.modelId }
@@ -186,6 +187,21 @@ class CodexSession implements HarnessSession {
         : {}),
     })
     this.#turnId = turn.turn.id
+  }
+
+  /**
+   * Best effort: the app-server RPC surface is experimental and versioned
+   * with the locally installed codex, so a pack the binary cannot accept
+   * degrades silently instead of blocking the turn.
+   */
+  async #offerSkillRoots(): Promise<void> {
+    const { skillRoots } = this.input.customization
+    if (skillRoots.length === 0) return
+    await this.client
+      .request("skills/extraRoots/set", {
+        extraRoots: skillRoots.map((root) => root.path),
+      })
+      .catch(() => undefined)
   }
 
   #onNotification(notification: CodexNotification): void {
@@ -382,6 +398,7 @@ function codexPermissions(
     thread: {
       approvalPolicy: "on-request",
       approvalsReviewer,
+      // Codex wire value; "workspace" here is Codex's word, not our domain's.
       sandbox: "workspace-write",
     },
     turn: {
