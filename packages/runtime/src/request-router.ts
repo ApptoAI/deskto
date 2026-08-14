@@ -18,8 +18,13 @@ import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
 
+// The un-suffixed key is the pre-workspace value and still serves as fallback.
 const lastProfileSettingKey = "preferences.lastProfile"
 const selectionSettingKey = "ui.selection"
+
+function lastProfileKeyFor(workspaceId: string): string {
+  return `${lastProfileSettingKey}.${workspaceId}`
+}
 
 export type RouterEvents = {
   /** The workspace or project lists changed; open views should refetch. */
@@ -66,10 +71,16 @@ export class RequestRouter {
       case "harness.refresh":
         return this.harnesses.refresh()
       case "preferences.get": {
-        const stored = lastProfileSchema.safeParse(
+        const scoped = lastProfileSchema.safeParse(
+          this.store.settings.get(
+            lastProfileKeyFor(request.params.workspaceId)
+          )
+        )
+        if (scoped.success) return { lastProfile: scoped.data }
+        const legacy = lastProfileSchema.safeParse(
           this.store.settings.get(lastProfileSettingKey)
         )
-        return { lastProfile: stored.success ? stored.data : null }
+        return { lastProfile: legacy.success ? legacy.data : null }
       }
       case "settings.get":
         return this.userSettings.snapshot()
@@ -155,7 +166,12 @@ export class RequestRouter {
           request.params.harnessId,
           request.params.executionProfile
         )
-        this.#rememberProfile(request.params.harnessId, profile)
+        const project = this.store.projects.get(request.params.projectId)
+        this.#rememberProfile(
+          project.workspaceId,
+          request.params.harnessId,
+          profile
+        )
         return this.store.threads.create(
           request.params.projectId,
           request.params.harnessId,
@@ -168,7 +184,12 @@ export class RequestRouter {
           thread.harness_id,
           request.params.executionProfile
         )
-        this.#rememberProfile(thread.harness_id, executionProfile)
+        const project = this.store.projects.get(thread.project_id)
+        this.#rememberProfile(
+          project.workspaceId,
+          thread.harness_id,
+          executionProfile
+        )
         return this.store.threads.configure(thread.id, executionProfile)
       }
       case "thread.get":
@@ -186,9 +207,13 @@ export class RequestRouter {
     }
   }
 
-  /** New threads start from the profile the user last used. */
-  #rememberProfile(harnessId: string, executionProfile: ExecutionProfile) {
-    this.store.settings.set(lastProfileSettingKey, {
+  /** New threads start from the profile the user last used in this workspace. */
+  #rememberProfile(
+    workspaceId: string,
+    harnessId: string,
+    executionProfile: ExecutionProfile
+  ) {
+    this.store.settings.set(lastProfileKeyFor(workspaceId), {
       harnessId,
       executionProfile,
     })

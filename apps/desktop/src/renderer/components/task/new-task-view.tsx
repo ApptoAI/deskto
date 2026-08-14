@@ -36,7 +36,10 @@ export function NewTaskView({
     null
   )
 
-  const loadPreferences = useCallback(() => client.getPreferences(), [client])
+  const loadPreferences = useCallback(
+    () => client.getPreferences(project.workspaceId),
+    [client, project.workspaceId]
+  )
   const preferences = useRuntimeQuery(loadPreferences)
   const lastProfile =
     preferences.state.status === "ready"

@@ -47,8 +47,8 @@ export class RuntimeClient {
     return this.request({ method: "harness.refresh", params: {} })
   }
 
-  getPreferences() {
-    return this.request({ method: "preferences.get", params: {} })
+  getPreferences(workspaceId: string) {
+    return this.request({ method: "preferences.get", params: { workspaceId } })
   }
 
   getSettings() {

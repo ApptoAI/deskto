@@ -269,7 +269,7 @@ describe("Runtime", () => {
     })
 
     const empty = unwrap(
-      await runtime.request({ method: "preferences.get", params: {} })
+      await runtime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
     )
     expect(empty.lastProfile).toBeNull()
 
@@ -300,7 +300,7 @@ describe("Runtime", () => {
       harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
     })
     const persisted = unwrap(
-      await resumedRuntime.request({ method: "preferences.get", params: {} })
+      await resumedRuntime.request({ method: "preferences.get", params: { workspaceId: "personal" } })
     )
     expect(persisted.lastProfile).toEqual({
       harnessId: "claude",

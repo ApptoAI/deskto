@@ -19,7 +19,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ harnessId: z.string().min(1), enabled: z.boolean() }),
   }),
   z.object({ method: z.literal("harness.refresh"), params: z.object({}) }),
-  z.object({ method: z.literal("preferences.get"), params: z.object({}) }),
+  z.object({
+    method: z.literal("preferences.get"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
   z.object({ method: z.literal("settings.get"), params: z.object({}) }),
   z.object({
     method: z.literal("settings.update"),
