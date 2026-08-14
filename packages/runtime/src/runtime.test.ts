@@ -70,6 +70,12 @@ describe("Runtime", () => {
     firstRun.emit({ type: "session.started", providerSessionId: "session-42" })
     firstRun.emit({ type: "message.delta", text: "Draft ready." })
     firstRun.emit({
+      type: "usage.updated",
+      usage: { usedTokens: 84_000, maxTokens: 200_000 },
+    })
+    // A max-less reading keeps the last known window.
+    firstRun.emit({ type: "usage.updated", usage: { usedTokens: 90_000 } })
+    firstRun.emit({
       type: "activity.started",
       activity: {
         id: "tool-1",
@@ -146,6 +152,43 @@ describe("Runtime", () => {
         status: "completed",
       },
     ])
+    expect(persisted.thread.contextUsage).toEqual({
+      usedTokens: 90_000,
+      maxTokens: 200_000,
+    })
+
+    const sameModel = unwrap(
+      await resumedRuntime.request({
+        method: "thread.configure",
+        params: {
+          threadId: thread.id,
+          executionProfile: {
+            modelId: "test-model",
+            effort: "medium",
+            permissionMode: "full-access",
+          },
+        },
+      })
+    )
+    expect(sameModel.thread.contextUsage).toEqual({
+      usedTokens: 90_000,
+      maxTokens: 200_000,
+    })
+
+    const changedModel = unwrap(
+      await resumedRuntime.request({
+        method: "thread.configure",
+        params: {
+          threadId: thread.id,
+          executionProfile: {
+            modelId: null,
+            effort: null,
+            permissionMode: "full-access",
+          },
+        },
+      })
+    )
+    expect(changedModel.thread.contextUsage).toBeUndefined()
 
     unwrap(
       await resumedRuntime.request({

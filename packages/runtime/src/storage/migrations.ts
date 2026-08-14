@@ -87,6 +87,10 @@ const migrations = [
       value TEXT NOT NULL
     );
   `,
+  `
+    ALTER TABLE threads ADD COLUMN context_used_tokens INTEGER;
+    ALTER TABLE threads ADD COLUMN context_max_tokens INTEGER;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

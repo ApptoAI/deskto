@@ -4,12 +4,15 @@ import { randomUUID } from "node:crypto"
 import {
   AsyncQueue,
   type ApprovalDecision,
+  type ContextUsage,
   type HarnessAdapterFactory,
   type HarnessEvent,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
 } from "@openappto/harness-sdk"
+
+import { positiveTokens } from "../token-usage.js"
 
 import type {
   CodexNotification,
@@ -192,6 +195,12 @@ class CodexSession implements HarnessSession {
     if (notification.method === "item/agentMessage/delta") {
       const delta = getString(params, "delta")
       if (delta) this.#queue.push({ type: "message.delta", text: delta })
+      return
+    }
+
+    if (notification.method === "thread/tokenUsage/updated") {
+      const usage = codexContextUsage(params.tokenUsage)
+      if (usage) this.#queue.push({ type: "usage.updated", usage })
       return
     }
 
@@ -387,6 +396,16 @@ function codexPermissions(
       },
     },
   }
+}
+
+/** `tokenUsage.last` describes the latest model call, so its total is the current context occupancy. */
+function codexContextUsage(value: unknown): ContextUsage | undefined {
+  if (!isRecord(value)) return undefined
+  const last = isRecord(value.last) ? value.last : undefined
+  const usedTokens = positiveTokens(last?.totalTokens)
+  if (!usedTokens) return undefined
+  const maxTokens = positiveTokens(value.modelContextWindow)
+  return { usedTokens, ...(maxTokens ? { maxTokens } : {}) }
 }
 
 function codexActivity(

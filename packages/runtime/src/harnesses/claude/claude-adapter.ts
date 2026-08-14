@@ -15,6 +15,8 @@ import {
   type HarnessSession,
 } from "@openappto/harness-sdk"
 
+import { positiveTokens } from "../token-usage.js"
+
 type ClaudeAdapterOptions = {
   executablePath?: string
 }
@@ -86,6 +88,9 @@ class ClaudeSession implements HarnessSession {
   #activeApproval?: PendingApproval
   #closed = false
   #drainingApprovals = false
+  #lastUsedTokens = 0
+  #lastKnownMaxTokens?: number
+  #primaryModel?: string
 
   constructor(
     input: HarnessRunInput,
@@ -202,6 +207,7 @@ class ClaudeSession implements HarnessSession {
         type: "session.started",
         providerSessionId: message.session_id,
       })
+      void this.#emitInitialContextUsage()
       return
     }
 
@@ -217,6 +223,13 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.type === "assistant") {
+      // Subagent (sidechain) messages run in their own context; only the main
+      // thread's usage describes this session's window.
+      if (message.parent_tool_use_id === null) {
+        this.#primaryModel = message.message.model
+        const usedTokens = contextTokens(message.message.usage)
+        if (usedTokens > 0) this.#pushUsage(usedTokens)
+      }
       for (const block of message.message.content) {
         if (block.type !== "tool_use") continue
         this.#queue.push({
@@ -256,6 +269,21 @@ class ClaudeSession implements HarnessSession {
 
     if (message.type !== "result") return
 
+    // Fallback for CLIs without the context-usage control request: learn the
+    // window from modelUsage once, then re-emit the last reading with it. When
+    // the window is already known this stays silent — modelUsage spans subagent
+    // models whose larger windows would skew the denominator.
+    if (!this.#lastKnownMaxTokens) {
+      const contextWindow = primaryContextWindow(
+        message.modelUsage,
+        this.#primaryModel
+      )
+      if (contextWindow) {
+        this.#lastKnownMaxTokens = contextWindow
+        if (this.#lastUsedTokens > 0) this.#pushUsage(this.#lastUsedTokens)
+      }
+    }
+
     if (message.subtype === "success") {
       this.#queue.push({ type: "turn.completed" })
     } else {
@@ -265,6 +293,37 @@ class ClaudeSession implements HarnessSession {
           message.errors.join("\n") || "Claude could not complete the task",
       })
     }
+  }
+
+  /** Ask the CLI for the materialized context size, so resumed threads show usage before the first result. */
+  async #emitInitialContextUsage(): Promise<void> {
+    try {
+      const usage = await this.#query.getContextUsage()
+      if (this.#closed) return
+      if (usage.maxTokens > 0) this.#lastKnownMaxTokens = usage.maxTokens
+      if (this.#lastUsedTokens > 0) {
+        // A per-message reading raced ahead of this response; keep it and just
+        // attach the window it was missing.
+        this.#pushUsage(this.#lastUsedTokens)
+      } else if (usage.totalTokens > 0) {
+        this.#pushUsage(usage.totalTokens)
+      }
+    } catch {
+      // The control request is best-effort; per-message usage still arrives.
+    }
+  }
+
+  #pushUsage(usedTokens: number): void {
+    this.#lastUsedTokens = usedTokens
+    this.#queue.push({
+      type: "usage.updated",
+      usage: {
+        usedTokens,
+        ...(this.#lastKnownMaxTokens
+          ? { maxTokens: this.#lastKnownMaxTokens }
+          : {}),
+      },
+    })
   }
 
   #denyPending(): void {
@@ -341,6 +400,25 @@ function claudePermissionMode(
   if (mode === "auto") return "auto"
   if (mode === "full-access") return "bypassPermissions"
   return "default"
+}
+
+/** Tokens occupying the context after a model call: the full prompt (cached or not) plus the reply. */
+function contextTokens(usage: unknown): number {
+  if (!isRecord(usage)) return 0
+  return (
+    (positiveTokens(usage.input_tokens) ?? 0) +
+    (positiveTokens(usage.cache_creation_input_tokens) ?? 0) +
+    (positiveTokens(usage.cache_read_input_tokens) ?? 0) +
+    (positiveTokens(usage.output_tokens) ?? 0)
+  )
+}
+
+function primaryContextWindow(
+  modelUsage: Record<string, { contextWindow: number }>,
+  primaryModel: string | undefined
+): number | undefined {
+  if (!primaryModel) return undefined
+  return positiveTokens(modelUsage[primaryModel]?.contextWindow)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

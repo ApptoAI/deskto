@@ -3,6 +3,7 @@ export type {
   ApprovalDecision,
   ApprovalKind,
   ApprovalRequest,
+  ContextUsage,
   ExecutionProfile,
   HarnessAdapterFactory,
   HarnessAvailability,

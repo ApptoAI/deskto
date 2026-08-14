@@ -83,6 +83,14 @@ export const threadStatusSchema = z.enum([
   "failed",
 ])
 
+/** Tokens currently occupying the harness context window. maxTokens is absent when the harness does not report a limit. */
+export const contextUsageSchema = z.object({
+  usedTokens: z.number().int().nonnegative(),
+  maxTokens: z.number().int().positive().optional(),
+})
+
+export type ContextUsage = z.infer<typeof contextUsageSchema>
+
 export const threadSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
@@ -90,6 +98,7 @@ export const threadSchema = z.object({
   harnessId: z.string(),
   status: threadStatusSchema,
   executionProfile: executionProfileSchema,
+  contextUsage: contextUsageSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

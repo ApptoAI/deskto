@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { ExecutionProfile, Thread, ThreadView } from "@openappto/protocol"
+import type {
+  ContextUsage,
+  ExecutionProfile,
+  Thread,
+  ThreadView,
+} from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import {
@@ -70,6 +75,7 @@ export class Threads {
 
   configure(id: string, executionProfile: ExecutionProfile): ThreadView {
     const thread = this.getRow(id)
+    const modelChanged = thread.model_id !== executionProfile.modelId
     if (thread.status === "running" || thread.status === "waiting-approval") {
       throw new RuntimeError(
         "thread-active",
@@ -78,16 +84,28 @@ export class Threads {
     }
     this.database
       .prepare(
-        "UPDATE threads SET model_id = ?, effort = ?, permission_mode = ?, updated_at = ? WHERE id = ?"
+        "UPDATE threads SET model_id = ?, effort = ?, permission_mode = ?, context_used_tokens = CASE WHEN ? THEN NULL ELSE context_used_tokens END, context_max_tokens = CASE WHEN ? THEN NULL ELSE context_max_tokens END, updated_at = ? WHERE id = ?"
       )
       .run(
         executionProfile.modelId,
         executionProfile.effort,
         executionProfile.permissionMode,
+        modelChanged ? 1 : 0,
+        modelChanged ? 1 : 0,
         new Date().toISOString(),
         id
       )
     return this.view(id)
+  }
+
+  setContextUsage(id: string, usage: ContextUsage): void {
+    // Providers report the window intermittently; keep the last known max
+    // instead of erasing it on every max-less reading.
+    this.database
+      .prepare(
+        "UPDATE threads SET context_used_tokens = ?, context_max_tokens = COALESCE(?, context_max_tokens) WHERE id = ?"
+      )
+      .run(usage.usedTokens, usage.maxTokens ?? null, id)
   }
 
   getRow(id: string): ThreadRow {
