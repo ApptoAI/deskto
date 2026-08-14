@@ -15,9 +15,11 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type TextGenerationInput,
 } from "@openappto/harness-sdk"
 
 import { positiveTokens } from "../token-usage.js"
+import { generateTextWithSession } from "../generate-text.js"
 
 import { claudePluginsFor } from "./claude-packs.js"
 
@@ -80,6 +82,17 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return Promise.resolve(new ClaudeSession(input, signal, this.options))
+  }
+
+  generateText(
+    input: TextGenerationInput,
+    signal: AbortSignal
+  ): Promise<string> {
+    return generateTextWithSession(
+      (run, runSignal) => this.start(run, runSignal),
+      input,
+      signal
+    )
   }
 }
 

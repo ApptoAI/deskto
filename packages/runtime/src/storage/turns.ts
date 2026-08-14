@@ -10,6 +10,7 @@ import type {
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import type { ThreadRow } from "./records.js"
+import { newThreadTitle } from "./threads.js"
 
 export type ActiveTurnRecord = {
   turnId: string
@@ -20,6 +21,7 @@ export type ActiveTurnRecord = {
   workspaceId: string
   harnessId: string
   executionProfile: ExecutionProfile
+  generateTitle: boolean
 }
 
 export class Turns {
@@ -28,10 +30,14 @@ export class Turns {
   begin(threadId: string, prompt: string): ActiveTurnRecord {
     const context = this.database
       .prepare(
-        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
+        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
       )
       .get(threadId) as
-      | (ThreadRow & { project_path: string; workspace_id: string })
+      | (ThreadRow & {
+          project_path: string
+          workspace_id: string
+          has_turns: number
+        })
       | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
     if (context.status === "running" || context.status === "waiting-approval") {
@@ -45,8 +51,8 @@ export class Turns {
     const userMessageId = randomUUID()
     const assistantMessageId = randomUUID()
     const now = new Date().toISOString()
-    const title =
-      context.title === "New task" ? titleFromPrompt(prompt) : context.title
+    const generateTitle =
+      context.title === newThreadTitle && context.has_turns === 0
 
     transaction(this.database, () => {
       this.database
@@ -75,9 +81,9 @@ export class Turns {
         .run(assistantMessageId, threadId, turnId, now)
       this.database
         .prepare(
-          "UPDATE threads SET title = ?, status = 'running', updated_at = ? WHERE id = ?"
+          "UPDATE threads SET status = 'running', updated_at = ? WHERE id = ?"
         )
-        .run(title, now, threadId)
+        .run(now, threadId)
     })
 
     return {
@@ -92,6 +98,7 @@ export class Turns {
         effort: context.effort,
         permissionMode: context.permission_mode,
       },
+      generateTitle,
       ...(context.provider_session_id
         ? { providerSessionId: context.provider_session_id }
         : {}),
@@ -288,9 +295,4 @@ export class Turns {
       .prepare("UPDATE threads SET status = ?, updated_at = ? WHERE id = ?")
       .run(threadStatus, now, threadId)
   }
-}
-
-function titleFromPrompt(prompt: string): string {
-  const normalized = prompt.replace(/\s+/g, " ").trim()
-  return normalized.length > 64 ? `${normalized.slice(0, 61)}...` : normalized
 }

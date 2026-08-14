@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest"
 
-import { appSettings } from "./app-settings.js"
+import { appSettings, harnessModelSettings } from "./app-settings.js"
 import { isOverridden, resolveSettings, settingValue } from "./resolve.js"
 
 const newTask = appSettings.newTaskKeybinding
+const threadTitleModel = appSettings.threadTitleModel
 
 describe("resolveSettings", () => {
   it("serves defaults when nothing is stored", () => {
     const snapshot = resolveSettings({})
     expect(snapshot.values[newTask.key]).toBe(newTask.defaultValue)
+    expect(settingValue(snapshot, threadTitleModel)).toEqual({
+      harnessId: null,
+      modelId: null,
+    })
     expect(snapshot.overrides).toEqual({})
+  })
+
+  it("derives Harness model editors from the registry", () => {
+    expect(harnessModelSettings).toEqual([threadTitleModel])
   })
 
   it("applies a valid override and reports it", () => {

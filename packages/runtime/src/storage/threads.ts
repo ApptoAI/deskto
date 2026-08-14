@@ -21,6 +21,8 @@ import {
 } from "./records.js"
 import type { Projects } from "./projects.js"
 
+export const newThreadTitle = "New task"
+
 export class Threads {
   constructor(
     private readonly database: DatabaseSync,
@@ -47,7 +49,7 @@ export class Threads {
     const thread: Thread = {
       id: randomUUID(),
       projectId,
-      title: "New task",
+      title: newThreadTitle,
       harnessId,
       status: "idle",
       executionProfile,
@@ -106,6 +108,16 @@ export class Threads {
         "UPDATE threads SET context_used_tokens = ?, context_max_tokens = COALESCE(?, context_max_tokens) WHERE id = ?"
       )
       .run(usage.usedTokens, usage.maxTokens ?? null, id)
+  }
+
+  /** Replaces generated-title seed only; a later custom title always wins. */
+  replaceTitle(id: string, expected: string, title: string): boolean {
+    const result = this.database
+      .prepare(
+        "UPDATE threads SET title = ?, updated_at = ? WHERE id = ? AND title = ?"
+      )
+      .run(title, new Date().toISOString(), id, expected)
+    return result.changes > 0
   }
 
   getRow(id: string): ThreadRow {
