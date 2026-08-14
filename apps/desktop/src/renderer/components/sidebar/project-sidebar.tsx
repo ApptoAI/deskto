@@ -7,7 +7,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { ProjectSwitcher } from "./project-switcher.js"
-import { TaskList } from "./task-list.js"
+import { TaskList, type InboxActions } from "./task-list.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
 
 export function ProjectSidebar({
@@ -29,6 +29,7 @@ export function ProjectSidebar({
   onNewTask,
   onRetryThreads,
   onOpenSettings,
+  inboxActions,
 }: {
   workspace: Workspace | null
   workspaces: Workspace[]
@@ -48,6 +49,7 @@ export function ProjectSidebar({
   onNewTask: () => void
   onRetryThreads: () => void
   onOpenSettings: () => void
+  inboxActions: InboxActions
 }) {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar xl:w-72">
@@ -114,8 +116,8 @@ export function ProjectSidebar({
             state={workspaceThreads}
             openThreadId={openThreadId}
             onOpenThread={onOpenThread}
-            onSelectProject={onSelectProject}
             onRetry={onRetryThreads}
+            actions={inboxActions}
           />
         ) : (
           <TaskList
@@ -123,6 +125,7 @@ export function ProjectSidebar({
             openThreadId={openThreadId}
             onOpenThread={onOpenThread}
             onRetry={onRetryThreads}
+            actions={inboxActions}
           />
         )}
       </nav>

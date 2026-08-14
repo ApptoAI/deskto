@@ -139,6 +139,15 @@ export const contextUsageSchema = z.object({
 
 export type ContextUsage = z.infer<typeof contextUsageSchema>
 
+/**
+ * The explicit close/keep-open decision on a task. "done" closes it, "active"
+ * keeps it in the inbox and suppresses the automatic close rule. The Runtime
+ * clears the override when a new turn begins, so it never hides new work.
+ */
+export const doneOverrideSchema = z.enum(["done", "active"])
+
+export type DoneOverride = z.infer<typeof doneOverrideSchema>
+
 export const threadSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -147,6 +156,22 @@ export const threadSchema = z.object({
   status: threadStatusSchema,
   executionProfile: executionProfileSchema,
   contextUsage: contextUsageSchema.optional(),
+  /** When the latest turn was requested by the user. */
+  lastUserMessageAt: z.string().nullable(),
+  /** When the latest turn completed. Cancels and failures do not stamp it. */
+  lastTurnCompletedAt: z.string().nullable(),
+  /** When the thread entered its current failed status, or null while not
+      failed. A clean edge on purpose: updatedAt also moves on profile and
+      session writes, so it cannot tell a fresh failure from an old one. */
+  failedAt: z.string().nullable(),
+  /** When the user last opened this task; unread completions compare to it. */
+  lastVisitedAt: z.string().nullable(),
+  pinnedAt: z.string().nullable(),
+  snoozedUntil: z.string().nullable(),
+  /** When the snooze was set; wake rules compare event times to it. */
+  snoozedAt: z.string().nullable(),
+  doneOverride: doneOverrideSchema.nullable(),
+  doneAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
