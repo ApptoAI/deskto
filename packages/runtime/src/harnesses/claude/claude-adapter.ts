@@ -485,10 +485,11 @@ export function claudeActivity(
   }
 
   if (fileChangeTools.has(toolName)) {
-    const filePath =
-      isRecord(input) && typeof input.file_path === "string"
-        ? input.file_path
-        : undefined
+    const filePath = isRecord(input)
+      ? [input.file_path, input.notebook_path].find(
+          (value): value is string => typeof value === "string"
+        )
+      : undefined
     return {
       ...base,
       name: readableToolName(toolName),

@@ -278,6 +278,7 @@ class CodexSession implements HarnessSession {
       } else {
         const status = getString(item, "status")
         const type = getString(item, "type")
+        this.#lastActivityShape.delete(activity.id)
         this.#queue.push({
           type: "activity.completed",
           id: activity.id,
@@ -532,9 +533,10 @@ export function codexActivity(
       id,
       name: "Change files",
       ...detailOf(fileSummary(files)),
-      ...(files.length > 0
-        ? { payload: { kind: "file-change" as const, files } }
-        : {}),
+      payload:
+        files.length > 0
+          ? { kind: "file-change", files }
+          : { kind: "tool", tool: "other" },
     }
   }
   if (type === "plan") {
@@ -542,9 +544,11 @@ export function codexActivity(
     return {
       id,
       name: "Plan",
-      ...(steps.length > 0
-        ? { payload: { kind: "plan" as const, steps } }
-        : detailOf(getString(item, "text"))),
+      ...detailOf(steps.length === 0 ? getString(item, "text") : undefined),
+      payload:
+        steps.length > 0
+          ? { kind: "plan", steps }
+          : { kind: "tool", tool: "other" },
     }
   }
   if (type === "mcpToolCall") {
@@ -596,16 +600,36 @@ function changedFiles(value: unknown): ChangedFile[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((change) => {
     const path = getString(change, "path")
-    return path ? [{ path }] : []
+    if (!path) return []
+    const additions = fileChangeCount(change, "additions")
+    const deletions = fileChangeCount(change, "deletions")
+    return [
+      {
+        path,
+        ...(additions !== undefined ? { additions } : {}),
+        ...(deletions !== undefined ? { deletions } : {}),
+      },
+    ]
   })
+}
+
+function fileChangeCount(
+  value: unknown,
+  key: "additions" | "deletions"
+): number | undefined {
+  if (!isRecord(value)) return undefined
+  const count = value[key]
+  return typeof count === "number" && Number.isInteger(count) && count >= 0
+    ? count
+    : undefined
 }
 
 function fileSummary(files: ChangedFile[]): string | undefined {
   if (files.length === 0) return undefined
-  return files
-    .slice(0, 3)
-    .map((file) => file.path)
-    .join(", ")
+  const shown = files.slice(0, 3).map((file) => file.path)
+  const remaining = files.length - shown.length
+  const summary = shown.join(", ")
+  return remaining > 0 ? `${summary} +${remaining} more` : summary
 }
 
 /**

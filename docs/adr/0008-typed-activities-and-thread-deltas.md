@@ -32,10 +32,11 @@ prose, the open message closes and later prose opens a new one.
 High-frequency changes reach open views as `thread.delta` events carrying the
 changed record and a per-thread sequence number. A client applies a delta only
 when it extends the view it holds by exactly one; anything else falls back to
-`thread.get`. Lifecycle transitions (turn start, approvals, completion) keep
-signaling `thread.changed` and a full reload. The sequence counter lives in
-Runtime memory; a restart re-baselines clients through the reload they do
-anyway.
+`thread.get`. Approval requests and resolutions also travel as deltas because
+they contain the complete pending-approval and Thread status changes. Other
+lifecycle transitions (turn start and completion) keep signaling
+`thread.changed` and a full reload. The sequence counter lives in Runtime
+memory; a restart re-baselines clients through the reload they do anyway.
 
 ## Consequences
 

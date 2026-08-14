@@ -229,7 +229,6 @@ export class TurnCoordinator {
       type: "thread.updated",
       thread: this.store.threads.get(threadId),
     })
-    this.events.changed(threadId)
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
@@ -408,10 +407,10 @@ export class TurnCoordinator {
     // A top-level tool row after prose settles the current segment, so the
     // next prose lands below the row instead of merging into one block.
     // Subagent-internal work must not chop the main narration.
-    if (!activity.parentId) this.#closeSegment(threadId, run)
     const parentId = activity.parentId
       ? run.activityIds.get(activity.parentId)
       : undefined
+    if (!parentId) this.#closeSegment(threadId, run)
     const record = this.store.activities.start(
       threadId,
       run.turnId,

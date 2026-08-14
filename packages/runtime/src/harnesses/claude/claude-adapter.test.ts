@@ -41,6 +41,22 @@ describe("claudeActivity", () => {
       detail: "news",
       payload: { kind: "tool", tool: "web" },
     })
+    expect(
+      claudeActivity(
+        "t4",
+        "NotebookEdit",
+        { notebook_path: "analysis.ipynb" },
+        undefined
+      )
+    ).toEqual({
+      id: "t4",
+      name: "Edit notebook",
+      detail: "analysis.ipynb",
+      payload: {
+        kind: "file-change",
+        files: [{ path: "analysis.ipynb" }],
+      },
+    })
   })
 
   it("turns the Task tool into a subagent and links children to it", () => {
@@ -264,6 +280,63 @@ describe("ClaudeAdapter", () => {
       },
       // No synthetic completion: the runtime settles still-running
       // activities by the turn's outcome.
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("keeps a subagent TodoWrite as an ordinary nested activity", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        {
+          type: "assistant",
+          parent_tool_use_id: "task-1",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "todo-child",
+                name: "TodoWrite",
+                input: { todos: [{ content: "Research", status: "pending" }] },
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        } as unknown as SDKMessage,
+      ])
+    )
+
+    const session = await new ClaudeAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "todo-child",
+          parentId: "task-1",
+          name: "TodoWrite",
+          payload: { kind: "tool", tool: "other" },
+        },
+      },
       { type: "turn.completed" },
     ])
   })

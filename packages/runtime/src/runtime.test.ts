@@ -283,6 +283,11 @@ describe("Runtime", () => {
     expect(harnessFailure("Claude usage limit reached").kind).toBe(
       "usage-limit"
     )
+    expect(harnessFailure("rate_limit_exceeded").kind).toBe("usage-limit")
+    expect(harnessFailure("Rate  Limit\nwas hit").kind).toBe("usage-limit")
+    expect(harnessFailure("Could not parse rate-limit response").kind).toBe(
+      "error"
+    )
     expect(harnessFailure("Provider process exited").kind).toBe("error")
   })
 
@@ -1193,6 +1198,16 @@ describe("Runtime", () => {
       },
     })
     run.emit({ type: "message.delta", text: "Tests pass." })
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "orphan-tool",
+        parentId: "missing-parent",
+        name: "Read file",
+        payload: { kind: "tool", tool: "other" },
+      },
+    })
+    run.emit({ type: "message.delta", text: "Checked the result." })
     run.emit({ type: "turn.completed" })
     run.finish()
 
@@ -1213,11 +1228,19 @@ describe("Runtime", () => {
       })
     )
     const activity = view.activities[0]!
+    const orphan = view.activities.find(
+      (candidate) => candidate.name === "Read file"
+    )!
     const summary = view.messages.find(
       (message) => message.content === "Tests pass."
     )!
     // The narration sorts after the tool row it describes.
     expect(summary.ordinal).toBeGreaterThan(activity.ordinal!)
+    const following = view.messages.find(
+      (message) => message.content === "Checked the result."
+    )!
+    expect(orphan.parentActivityId).toBeUndefined()
+    expect(following.ordinal).toBeGreaterThan(orphan.ordinal!)
     // The tool never reported completion; a finished turn settles it as
     // completed rather than blaming it with a failure mark.
     expect(activity.status).toBe("completed")

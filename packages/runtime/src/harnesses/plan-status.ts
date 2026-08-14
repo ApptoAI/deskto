@@ -4,8 +4,9 @@ import type { PlanStepStatus } from "@openappto/harness-sdk"
 export function normalizePlanStepStatus(
   raw: string | undefined
 ): PlanStepStatus {
-  if (raw === "completed" || raw === "done") return "done"
-  if (raw === "in_progress" || raw === "inProgress" || raw === "active")
+  const value = raw?.toLowerCase().replace(/[\s_-]+/g, "")
+  if (value === "completed" || value === "done") return "done"
+  if (value === "inprogress" || value === "active" || value === "running")
     return "active"
   return "pending"
 }

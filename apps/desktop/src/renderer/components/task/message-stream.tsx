@@ -196,6 +196,13 @@ const ActivityEntry = memo(
     childActivities: Activity[]
   }) {
     if (activity.payload?.kind === "plan") {
+      if (activity.status === "failed") {
+        return (
+          <div className="enter-rise w-full">
+            <ActivityLine activity={activity} />
+          </div>
+        )
+      }
       return (
         <div className="enter-rise w-full">
           <Plan title={activity.name} steps={activity.payload.steps} />
