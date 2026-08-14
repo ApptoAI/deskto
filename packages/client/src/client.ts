@@ -60,26 +60,26 @@ export class RuntimeClient {
     return this.request({ method: "settings.update", params: { entries } })
   }
 
-  listWorkspaces() {
-    return this.request({ method: "workspace.list", params: {} })
+  listProjects() {
+    return this.request({ method: "project.list", params: {} })
   }
 
-  addWorkspace(path: string, name: string) {
-    return this.request({ method: "workspace.add", params: { path, name } })
+  addProject(path: string, name: string) {
+    return this.request({ method: "project.add", params: { path, name } })
   }
 
-  listThreads(workspaceId: string) {
-    return this.request({ method: "thread.list", params: { workspaceId } })
+  listThreads(projectId: string) {
+    return this.request({ method: "thread.list", params: { projectId } })
   }
 
   createThread(
-    workspaceId: string,
+    projectId: string,
     harnessId: string,
     executionProfile?: RequestFor<"thread.create">["params"]["executionProfile"]
   ) {
     return this.request({
       method: "thread.create",
-      params: { workspaceId, harnessId, executionProfile },
+      params: { projectId, harnessId, executionProfile },
     })
   }
 

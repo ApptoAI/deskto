@@ -30,7 +30,7 @@ export type HarnessModelOption = {
 export type HarnessRunInput = {
   threadId: string
   turnId: string
-  workspacePath: string
+  projectPath: string
   prompt: string
   executionProfile: ExecutionProfile
   providerSessionId?: string

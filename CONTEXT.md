@@ -10,11 +10,11 @@ The first release is local and small. It has an Electron client, a Node runtime,
 
 - **Surface**: A user-facing application. Desktop is the only Surface in the MVP. Web and mobile may follow.
 - **Client**: Surface-side code that calls the Runtime through a transport. It does not import Node, SQLite, Electron, or a provider SDK.
-- **Runtime**: The application service that owns workspaces, threads, turns, persistence, and Harness sessions.
+- **Runtime**: The application service that owns projects, threads, turns, persistence, and Harness sessions.
 - **Environment**: A place where a Runtime runs and where work executes. The MVP has one local Environment inside the Electron main process.
 - **Connection**: Client configuration for reaching an Environment. Desktop uses Electron IPC. A future hosted Runtime can use HTTP and WebSocket without changing Client use cases.
-- **Workspace**: A folder the user has opened as a project. Use "project" in UI copy and `Workspace` in code.
-- **Thread**: A task and its conversation inside one Workspace. Use "task" in UI copy and `Thread` in code.
+- **Project**: A folder the user has opened as a project. Use "project" in UI copy and `Project` in code.
+- **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Turn**: One user request and one Harness execution in a Thread.
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
@@ -26,7 +26,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 
 ## Core rules
 
-- A Workspace points to one folder and owns its Threads.
+- A Project points to one folder and owns its Threads.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.

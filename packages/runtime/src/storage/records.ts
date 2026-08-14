@@ -3,10 +3,10 @@ import type {
   Approval,
   Message,
   Thread,
-  Workspace,
+  Project,
 } from "@openappto/protocol"
 
-export type WorkspaceRow = {
+export type ProjectRow = {
   id: string
   name: string
   path: string
@@ -16,7 +16,7 @@ export type WorkspaceRow = {
 
 export type ThreadRow = {
   id: string
-  workspace_id: string
+  project_id: string
   title: string
   harness_id: string
   status: Thread["status"]
@@ -62,7 +62,7 @@ export type ApprovalRow = {
   created_at: string
 }
 
-export function toWorkspace(row: WorkspaceRow): Workspace {
+export function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
     name: row.name,
@@ -84,7 +84,7 @@ export function toThread(row: ThreadRow): Thread {
       : undefined
   return {
     id: row.id,
-    workspaceId: row.workspace_id,
+    projectId: row.project_id,
     title: row.title,
     harnessId: row.harness_id,
     status: row.status,

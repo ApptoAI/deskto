@@ -9,7 +9,7 @@ import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
 import { TaskView } from "../components/task/task-view.js"
-import { pickWorkspaceFolder } from "../lib/desktop.js"
+import { pickProjectFolder } from "../lib/desktop.js"
 import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
@@ -35,10 +35,10 @@ export function Workbench() {
     useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
   )
 
-  const loadWorkspaces = useCallback(() => client.listWorkspaces(), [client])
-  const workspaces = useRuntimeQuery(loadWorkspaces)
+  const loadProjects = useCallback(() => client.listProjects(), [client])
+  const projectsQuery = useRuntimeQuery(loadProjects)
 
-  const [chosenWorkspaceId, setChosenWorkspaceId] = useState<string | null>(
+  const [chosenProjectId, setChosenProjectId] = useState<string | null>(
     null
   )
   const [view, setView] = useState<MainView>({ kind: "new-task" })
@@ -46,17 +46,17 @@ export function Workbench() {
   const [projectError, setProjectError] = useState<string | null>(null)
 
   const projects =
-    workspaces.state.status === "ready" ? workspaces.state.data : []
-  const activeWorkspace =
-    projects.find((workspace) => workspace.id === chosenWorkspaceId) ??
+    projectsQuery.state.status === "ready" ? projectsQuery.state.data : []
+  const activeProject =
+    projects.find((project) => project.id === chosenProjectId) ??
     projects[0] ??
     null
-  const activeWorkspaceId = activeWorkspace?.id ?? null
+  const activeProjectId = activeProject?.id ?? null
 
   const loadThreads = useMemo(
     () =>
-      activeWorkspaceId ? () => client.listThreads(activeWorkspaceId) : null,
-    [client, activeWorkspaceId]
+      activeProjectId ? () => client.listThreads(activeProjectId) : null,
+    [client, activeProjectId]
   )
   const threads = useRuntimeQuery(loadThreads)
   const revalidateThreads = threads.revalidate
@@ -70,8 +70,8 @@ export function Workbench() {
 
   const openThreadId = view.kind === "task" ? view.threadId : null
 
-  function selectWorkspace(workspaceId: string) {
-    setChosenWorkspaceId(workspaceId)
+  function selectProject(projectId: string) {
+    setChosenProjectId(projectId)
     setView({ kind: "new-task" })
   }
 
@@ -83,12 +83,12 @@ export function Workbench() {
     setAddingProject(true)
     setProjectError(null)
     try {
-      const picked = await pickWorkspaceFolder()
+      const picked = await pickProjectFolder()
       if (!picked) return
 
-      const workspace = await client.addWorkspace(picked.path, picked.name)
-      workspaces.revalidate()
-      selectWorkspace(workspace.id)
+      const project = await client.addProject(picked.path, picked.name)
+      projectsQuery.revalidate()
+      selectProject(project.id)
     } catch (error) {
       setProjectError(describeError(error))
     } finally {
@@ -99,9 +99,9 @@ export function Workbench() {
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <ProjectSidebar
-        workspaces={projects}
-        activeWorkspace={activeWorkspace}
-        onSelectWorkspace={selectWorkspace}
+        projects={projects}
+        activeProject={activeProject}
+        onSelectProject={selectProject}
         onAddProject={addProject}
         addingProject={addingProject}
         threads={threads.state}
@@ -133,24 +133,24 @@ export function Workbench() {
 
         {view.kind === "settings" ? (
           <SettingsView harnesses={harnesses} />
-        ) : workspaces.state.status === "loading" ||
-          workspaces.state.status === "idle" ? (
+        ) : projectsQuery.state.status === "loading" ||
+          projectsQuery.state.status === "idle" ? (
           <Screen>
             <StatusPanel title="Loading your projects…" />
           </Screen>
-        ) : workspaces.state.status === "error" ? (
+        ) : projectsQuery.state.status === "error" ? (
           <Screen>
             <StatusPanel
               title="Appto cannot reach the runtime"
-              description={workspaces.state.message}
+              description={projectsQuery.state.message}
               tone="danger"
             >
-              <Button variant="outline" onClick={workspaces.revalidate}>
+              <Button variant="outline" onClick={projectsQuery.revalidate}>
                 Try again
               </Button>
             </StatusPanel>
           </Screen>
-        ) : !activeWorkspace ? (
+        ) : !activeProject ? (
           <Screen>
             <StatusPanel
               title="Open a project folder"
@@ -169,8 +169,8 @@ export function Workbench() {
           />
         ) : (
           <NewTaskView
-            key={activeWorkspace.id}
-            workspace={activeWorkspace}
+            key={activeProject.id}
+            project={activeProject}
             harnesses={harnesses.state}
             onTaskCreated={revalidateThreads}
             onTaskStarted={openThread}

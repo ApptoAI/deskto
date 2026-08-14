@@ -7,7 +7,7 @@ import {
   settingsSnapshotSchema,
   threadSchema,
   threadViewSchema,
-  workspaceSchema,
+  projectSchema,
 } from "./models.js"
 
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
@@ -24,19 +24,19 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     // A null entry clears that override back to its default value.
     params: z.object({ entries: z.record(z.string(), z.unknown()) }),
   }),
-  z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
+  z.object({ method: z.literal("project.list"), params: z.object({}) }),
   z.object({
-    method: z.literal("workspace.add"),
+    method: z.literal("project.add"),
     params: z.object({ path: z.string().min(1), name: z.string().min(1) }),
   }),
   z.object({
     method: z.literal("thread.list"),
-    params: z.object({ workspaceId: z.string() }),
+    params: z.object({ projectId: z.string() }),
   }),
   z.object({
     method: z.literal("thread.create"),
     params: z.object({
-      workspaceId: z.string(),
+      projectId: z.string(),
       harnessId: z.string(),
       executionProfile: executionProfileSchema.optional(),
     }),
@@ -87,8 +87,8 @@ export interface RuntimeResponses {
   "preferences.get": z.infer<typeof preferencesSchema>
   "settings.get": z.infer<typeof settingsSnapshotSchema>
   "settings.update": z.infer<typeof settingsSnapshotSchema>
-  "workspace.list": z.infer<typeof workspaceSchema>[]
-  "workspace.add": z.infer<typeof workspaceSchema>
+  "project.list": z.infer<typeof projectSchema>[]
+  "project.add": z.infer<typeof projectSchema>
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
   "thread.configure": z.infer<typeof threadViewSchema>

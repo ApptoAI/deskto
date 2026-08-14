@@ -26,16 +26,16 @@ describe("Runtime", () => {
     const firstHarness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({ databasePath, harnesses: [firstHarness] })
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
+        method: "project.add",
         params: { path: directory, name: "Example" },
       })
     )
     const thread = unwrap(
       await runtime.request({
         method: "thread.create",
-        params: { workspaceId: workspace.id, harnessId: "claude" },
+        params: { projectId: project.id, harnessId: "claude" },
       })
     )
     const configured = unwrap(
@@ -234,15 +234,15 @@ describe("Runtime", () => {
     // The response already carries the new state; no event echoes it back.
     expect(events).toEqual([])
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
+        method: "project.add",
         params: { path: directory, name: "Example" },
       })
     )
     const blocked = await runtime.request({
       method: "thread.create",
-      params: { workspaceId: workspace.id, harnessId: "claude" },
+      params: { projectId: project.id, harnessId: "claude" },
     })
     expect(blocked.ok).toBe(false)
     if (!blocked.ok) expect(blocked.error.code).toBe("harness-disabled")
@@ -273,9 +273,9 @@ describe("Runtime", () => {
     )
     expect(empty.lastProfile).toBeNull()
 
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
+        method: "project.add",
         params: { path: directory, name: "Example" },
       })
     )
@@ -283,7 +283,7 @@ describe("Runtime", () => {
       await runtime.request({
         method: "thread.create",
         params: {
-          workspaceId: workspace.id,
+          projectId: project.id,
           harnessId: "claude",
           executionProfile: {
             modelId: "test-model",
@@ -411,16 +411,16 @@ describe("Runtime", () => {
       databasePath: join(directory, "runtime.sqlite"),
       harnesses: [harness],
     })
-    const workspace = unwrap(
+    const project = unwrap(
       await runtime.request({
-        method: "workspace.add",
+        method: "project.add",
         params: { path: directory, name: "Example" },
       })
     )
     const thread = unwrap(
       await runtime.request({
         method: "thread.create",
-        params: { workspaceId: workspace.id, harnessId: "slow" },
+        params: { projectId: project.id, harnessId: "slow" },
       })
     )
 

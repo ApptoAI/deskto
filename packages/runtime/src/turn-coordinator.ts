@@ -70,7 +70,7 @@ export class TurnCoordinator {
         {
           threadId,
           turnId: turn.turnId,
-          workspacePath: turn.workspacePath,
+          projectPath: turn.projectPath,
           prompt,
           executionProfile: turn.executionProfile,
           ...(turn.providerSessionId

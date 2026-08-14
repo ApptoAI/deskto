@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron"
 
 import {
   openExternalChannel,
-  pickWorkspaceChannel,
+  pickProjectChannel,
   runtimeEventChannel,
   runtimeRequestChannel,
 } from "../shared/channels.js"
@@ -22,7 +22,7 @@ const api: DesktopApi = {
       return () => ipcRenderer.removeListener(runtimeEventChannel, handler)
     },
   },
-  pickWorkspace: () => ipcRenderer.invoke(pickWorkspaceChannel),
+  pickProject: () => ipcRenderer.invoke(pickProjectChannel),
   openExternal: (url) => ipcRenderer.invoke(openExternalChannel, url),
 }
 

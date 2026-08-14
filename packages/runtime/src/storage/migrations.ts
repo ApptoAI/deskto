@@ -91,6 +91,12 @@ const migrations = [
     ALTER TABLE threads ADD COLUMN context_used_tokens INTEGER;
     ALTER TABLE threads ADD COLUMN context_max_tokens INTEGER;
   `,
+  `
+    ALTER TABLE workspaces RENAME TO projects;
+    ALTER TABLE threads RENAME COLUMN workspace_id TO project_id;
+    DROP INDEX threads_workspace_updated_idx;
+    CREATE INDEX threads_project_updated_idx ON threads(project_id, updated_at DESC);
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

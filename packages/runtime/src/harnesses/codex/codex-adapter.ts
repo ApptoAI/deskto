@@ -101,7 +101,7 @@ class CodexSession implements HarnessSession {
     input: HarnessRunInput,
     signal: AbortSignal
   ): Promise<CodexSession> {
-    const client = new JsonlClient("codex", input.workspacePath)
+    const client = new JsonlClient("codex", input.projectPath)
     const session = new CodexSession(client, input)
     const abort = () => client.close()
     signal.addEventListener("abort", abort, { once: true })
@@ -155,7 +155,7 @@ class CodexSession implements HarnessSession {
       this.input.executionProfile.permissionMode
     )
     const params = {
-      cwd: this.input.workspacePath,
+      cwd: this.input.projectPath,
       ...permissions.thread,
       ...(this.input.executionProfile.modelId
         ? { model: this.input.executionProfile.modelId }
@@ -382,13 +382,13 @@ function codexPermissions(
     thread: {
       approvalPolicy: "on-request",
       approvalsReviewer,
-      sandbox: "workspace-write",
+      sandbox: "project-write",
     },
     turn: {
       approvalPolicy: "on-request",
       approvalsReviewer,
       sandboxPolicy: {
-        type: "workspaceWrite",
+        type: "projectWrite",
         writableRoots: [],
         networkAccess: false,
         excludeTmpdirEnvVar: false,

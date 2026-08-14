@@ -4,16 +4,16 @@ import { dialog, ipcMain, shell } from "electron"
 
 import {
   openExternalChannel,
-  pickWorkspaceChannel,
+  pickProjectChannel,
 } from "../shared/channels.js"
-import type { PickedWorkspace } from "../shared/desktop-api.js"
+import type { PickedProject } from "../shared/desktop-api.js"
 
 const allowedExternalProtocols = new Set(["http:", "https:"])
 
 export function registerDesktopIpc(): void {
   ipcMain.handle(
-    pickWorkspaceChannel,
-    async (): Promise<PickedWorkspace | undefined> => {
+    pickProjectChannel,
+    async (): Promise<PickedProject | undefined> => {
       const result = await dialog.showOpenDialog({
         properties: ["openDirectory", "createDirectory"],
         title: "Open project folder",

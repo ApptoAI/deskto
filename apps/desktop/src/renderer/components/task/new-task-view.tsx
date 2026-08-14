@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import type { ExecutionProfile, Harness, Workspace } from "@openappto/protocol"
+import type { ExecutionProfile, Harness, Project } from "@openappto/protocol"
 
 import {
   defaultExecutionProfile,
@@ -20,12 +20,12 @@ import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-
 import { HarnessMenu } from "../harness-menu.js"
 
 export function NewTaskView({
-  workspace,
+  project,
   harnesses,
   onTaskCreated,
   onTaskStarted,
 }: {
-  workspace: Workspace
+  project: Project
   harnesses: QueryState<Harness[]>
   onTaskCreated: (threadId: string) => void
   onTaskStarted: (threadId: string) => void
@@ -71,7 +71,7 @@ export function NewTaskView({
   async function handleSend(prompt: string) {
     if (!harnessId) return
 
-    const thread = await client.createThread(workspace.id, harnessId, profile)
+    const thread = await client.createThread(project.id, harnessId, profile)
     onTaskCreated(thread.id)
     await client.startTurn(thread.id, prompt)
     onTaskStarted(thread.id)
@@ -86,7 +86,7 @@ export function NewTaskView({
           What should we work on?
         </h1>
         <p className="text-sm text-muted-foreground">
-          The agent reads and changes files in {workspace.name}.
+          The agent reads and changes files in {project.name}.
         </p>
       </div>
 

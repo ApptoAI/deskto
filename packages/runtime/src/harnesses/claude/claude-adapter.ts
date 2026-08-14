@@ -137,7 +137,7 @@ class ClaudeSession implements HarnessSession {
       options: {
         abortController: this.#abortController,
         canUseTool,
-        cwd: input.workspacePath,
+        cwd: input.projectPath,
         includePartialMessages: true,
         permissionMode: claudePermissionMode(
           input.executionProfile.permissionMode

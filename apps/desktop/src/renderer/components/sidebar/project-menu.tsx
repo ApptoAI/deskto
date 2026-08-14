@@ -1,6 +1,6 @@
 import ChevronsUpDownIcon from "lucide-react/dist/esm/icons/chevrons-up-down"
 import FolderPlusIcon from "lucide-react/dist/esm/icons/folder-plus"
-import type { Workspace } from "@openappto/protocol"
+import type { Project } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -14,15 +14,15 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 
 export function ProjectMenu({
-  workspaces,
-  activeWorkspace,
+  projects,
+  activeProject,
   onSelect,
   onAddProject,
   adding,
 }: {
-  workspaces: Workspace[]
-  activeWorkspace: Workspace | null
-  onSelect: (workspaceId: string) => void
+  projects: Project[]
+  activeProject: Project | null
+  onSelect: (projectId: string) => void
   onAddProject: () => void
   adding: boolean
 }) {
@@ -34,7 +34,7 @@ export function ProjectMenu({
         }
       >
         <span className="min-w-0 flex-1 truncate text-left">
-          {activeWorkspace?.name ?? "No project"}
+          {activeProject?.name ?? "No project"}
         </span>
         <ChevronsUpDownIcon
           data-icon="inline-end"
@@ -42,22 +42,22 @@ export function ProjectMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-72">
-        {workspaces.length > 0 ? (
+        {projects.length > 0 ? (
           <>
             <DropdownMenuRadioGroup
-              value={activeWorkspace?.id ?? ""}
+              value={activeProject?.id ?? ""}
               onValueChange={(value) => onSelect(String(value))}
             >
-              {workspaces.map((workspace) => (
+              {projects.map((project) => (
                 <DropdownMenuRadioItem
-                  key={workspace.id}
-                  value={workspace.id}
+                  key={project.id}
+                  value={project.id}
                   closeOnClick
                 >
                   <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-                    <span className="truncate">{workspace.name}</span>
+                    <span className="truncate">{project.name}</span>
                     <span className="truncate text-xs text-muted-foreground">
-                      {workspace.path}
+                      {project.path}
                     </span>
                   </span>
                 </DropdownMenuRadioItem>

@@ -30,7 +30,7 @@ export const harnessSchema = z.object({
 
 export type Harness = z.infer<typeof harnessSchema>
 
-export const workspaceSchema = z.object({
+export const projectSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
@@ -38,7 +38,7 @@ export const workspaceSchema = z.object({
   updatedAt: z.string(),
 })
 
-export type Workspace = z.infer<typeof workspaceSchema>
+export type Project = z.infer<typeof projectSchema>
 
 export const executionProfileSchema = z.object({
   modelId: z.string().min(1).nullable(),
@@ -93,7 +93,7 @@ export type ContextUsage = z.infer<typeof contextUsageSchema>
 
 export const threadSchema = z.object({
   id: z.string(),
-  workspaceId: z.string(),
+  projectId: z.string(),
   title: z.string(),
   harnessId: z.string(),
   status: threadStatusSchema,

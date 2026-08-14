@@ -66,20 +66,20 @@ export class RequestRouter {
         return this.userSettings.snapshot()
       case "settings.update":
         return this.userSettings.update(request.params.entries)
-      case "workspace.list":
-        return this.store.workspaces.list()
-      case "workspace.add": {
+      case "project.list":
+        return this.store.projects.list()
+      case "project.add": {
         const path = await validDirectory(request.params.path)
         const name = request.params.name.trim()
         if (!name)
           throw new RuntimeError(
-            "invalid-workspace",
+            "invalid-project",
             "Project name is required"
           )
-        return this.store.workspaces.add(path, name)
+        return this.store.projects.add(path, name)
       }
       case "thread.list":
-        return this.store.threads.list(request.params.workspaceId)
+        return this.store.threads.list(request.params.projectId)
       case "thread.create": {
         const profile = await this.harnesses.resolveProfile(
           request.params.harnessId,
@@ -87,7 +87,7 @@ export class RequestRouter {
         )
         this.#rememberProfile(request.params.harnessId, profile)
         return this.store.threads.create(
-          request.params.workspaceId,
+          request.params.projectId,
           request.params.harnessId,
           profile
         )
@@ -130,11 +130,11 @@ async function validDirectory(path: string): Promise<string> {
   try {
     resolved = await realpath(path)
   } catch {
-    throw new RuntimeError("invalid-workspace", "Project folder does not exist")
+    throw new RuntimeError("invalid-project", "Project folder does not exist")
   }
 
   if (!(await stat(resolved)).isDirectory()) {
-    throw new RuntimeError("invalid-workspace", "Project path is not a folder")
+    throw new RuntimeError("invalid-project", "Project path is not a folder")
   }
   return resolved
 }

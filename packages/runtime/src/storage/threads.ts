@@ -19,34 +19,34 @@ import {
   type MessageRow,
   type ThreadRow,
 } from "./records.js"
-import type { Workspaces } from "./workspaces.js"
+import type { Projects } from "./projects.js"
 
 export class Threads {
   constructor(
     private readonly database: DatabaseSync,
-    private readonly workspaces: Workspaces
+    private readonly projects: Projects
   ) {}
 
-  list(workspaceId: string): Thread[] {
-    this.workspaces.get(workspaceId)
+  list(projectId: string): Thread[] {
+    this.projects.get(projectId)
     const rows = this.database
       .prepare(
-        "SELECT * FROM threads WHERE workspace_id = ? ORDER BY updated_at DESC"
+        "SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC"
       )
-      .all(workspaceId) as ThreadRow[]
+      .all(projectId) as ThreadRow[]
     return rows.map(toThread)
   }
 
   create(
-    workspaceId: string,
+    projectId: string,
     harnessId: string,
     executionProfile: ExecutionProfile
   ): Thread {
-    this.workspaces.get(workspaceId)
+    this.projects.get(projectId)
     const now = new Date().toISOString()
     const thread: Thread = {
       id: randomUUID(),
-      workspaceId,
+      projectId,
       title: "New task",
       harnessId,
       status: "idle",
@@ -56,11 +56,11 @@ export class Threads {
     }
     this.database
       .prepare(
-        "INSERT INTO threads (id, workspace_id, title, harness_id, status, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO threads (id, project_id, title, harness_id, status, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         thread.id,
-        thread.workspaceId,
+        thread.projectId,
         thread.title,
         thread.harnessId,
         thread.status,

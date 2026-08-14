@@ -1,6 +1,6 @@
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
-import type { Thread, Workspace } from "@openappto/protocol"
+import type { Thread, Project } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -9,9 +9,9 @@ import { ProjectMenu } from "./project-menu.js"
 import { TaskList } from "./task-list.js"
 
 export function ProjectSidebar({
-  workspaces,
-  activeWorkspace,
-  onSelectWorkspace,
+  projects,
+  activeProject,
+  onSelectProject,
   onAddProject,
   addingProject,
   threads,
@@ -21,9 +21,9 @@ export function ProjectSidebar({
   onRetryThreads,
   onOpenSettings,
 }: {
-  workspaces: Workspace[]
-  activeWorkspace: Workspace | null
-  onSelectWorkspace: (workspaceId: string) => void
+  projects: Project[]
+  activeProject: Project | null
+  onSelectProject: (projectId: string) => void
   onAddProject: () => void
   addingProject: boolean
   threads: QueryState<Thread[]>
@@ -39,9 +39,9 @@ export function ProjectSidebar({
 
       <div className="no-drag space-y-1 px-2 pb-2">
         <ProjectMenu
-          workspaces={workspaces}
-          activeWorkspace={activeWorkspace}
-          onSelect={onSelectWorkspace}
+          projects={projects}
+          activeProject={activeProject}
+          onSelect={onSelectProject}
           onAddProject={onAddProject}
           adding={addingProject}
         />
@@ -50,14 +50,14 @@ export function ProjectSidebar({
           size="lg"
           className="w-full justify-start text-muted-foreground"
           onClick={onNewTask}
-          disabled={!activeWorkspace}
+          disabled={!activeProject}
         >
           <SquarePenIcon data-icon="inline-start" />
           New task
         </Button>
       </div>
 
-      {activeWorkspace ? (
+      {activeProject ? (
         <>
           <h2 className="px-4 pt-3 pb-1.5 text-xs font-medium text-muted-foreground">
             Tasks
@@ -75,9 +75,9 @@ export function ProjectSidebar({
           </nav>
           <p
             className="truncate border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
-            title={activeWorkspace.path}
+            title={activeProject.path}
           >
-            {activeWorkspace.path}
+            {activeProject.path}
           </p>
         </>
       ) : (

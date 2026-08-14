@@ -12,7 +12,7 @@ export type ActiveTurnRecord = {
   assistantMessageId: string
   prompt: string
   providerSessionId?: string
-  workspacePath: string
+  projectPath: string
   harnessId: string
   executionProfile: ExecutionProfile
 }
@@ -23,9 +23,9 @@ export class Turns {
   begin(threadId: string, prompt: string): ActiveTurnRecord {
     const context = this.database
       .prepare(
-        "SELECT t.*, w.path AS workspace_path FROM threads t JOIN workspaces w ON w.id = t.workspace_id WHERE t.id = ?"
+        "SELECT t.*, w.path AS project_path FROM threads t JOIN projects w ON w.id = t.project_id WHERE t.id = ?"
       )
-      .get(threadId) as (ThreadRow & { workspace_path: string }) | undefined
+      .get(threadId) as (ThreadRow & { project_path: string }) | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
     if (context.status === "running" || context.status === "waiting-approval") {
       throw new RuntimeError(
@@ -77,7 +77,7 @@ export class Turns {
       turnId,
       assistantMessageId,
       prompt,
-      workspacePath: context.workspace_path,
+      projectPath: context.project_path,
       harnessId: context.harness_id,
       executionProfile: {
         modelId: context.model_id,

@@ -1,29 +1,29 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { Workspace } from "@openappto/protocol"
+import type { Project } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
-import { toWorkspace, type WorkspaceRow } from "./records.js"
+import { toProject, type ProjectRow } from "./records.js"
 
-export class Workspaces {
+export class Projects {
   constructor(private readonly database: DatabaseSync) {}
 
-  list(): Workspace[] {
+  list(): Project[] {
     const rows = this.database
-      .prepare("SELECT * FROM workspaces ORDER BY updated_at DESC")
-      .all() as WorkspaceRow[]
-    return rows.map(toWorkspace)
+      .prepare("SELECT * FROM projects ORDER BY updated_at DESC")
+      .all() as ProjectRow[]
+    return rows.map(toProject)
   }
 
-  add(path: string, name: string): Workspace {
+  add(path: string, name: string): Project {
     const existing = this.database
-      .prepare("SELECT * FROM workspaces WHERE path = ?")
-      .get(path) as WorkspaceRow | undefined
-    if (existing) return toWorkspace(existing)
+      .prepare("SELECT * FROM projects WHERE path = ?")
+      .get(path) as ProjectRow | undefined
+    if (existing) return toProject(existing)
 
     const now = new Date().toISOString()
-    const workspace = {
+    const project = {
       id: randomUUID(),
       name,
       path,
@@ -32,23 +32,23 @@ export class Workspaces {
     }
     this.database
       .prepare(
-        "INSERT INTO workspaces (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
       )
       .run(
-        workspace.id,
-        workspace.name,
-        workspace.path,
-        workspace.createdAt,
-        workspace.updatedAt
+        project.id,
+        project.name,
+        project.path,
+        project.createdAt,
+        project.updatedAt
       )
-    return workspace
+    return project
   }
 
-  get(id: string): Workspace {
+  get(id: string): Project {
     const row = this.database
-      .prepare("SELECT * FROM workspaces WHERE id = ?")
-      .get(id) as WorkspaceRow | undefined
-    if (!row) throw new RuntimeError("workspace-not-found", "Project not found")
-    return toWorkspace(row)
+      .prepare("SELECT * FROM projects WHERE id = ?")
+      .get(id) as ProjectRow | undefined
+    if (!row) throw new RuntimeError("project-not-found", "Project not found")
+    return toProject(row)
   }
 }
