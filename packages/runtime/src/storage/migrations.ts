@@ -131,6 +131,21 @@ const migrations = [
     ALTER TABLE projects_with_workspace RENAME TO projects;
     CREATE INDEX projects_workspace_updated_idx ON projects(workspace_id, updated_at DESC);
   `,
+  `
+    CREATE TABLE packs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE workspace_packs (
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      pack_id TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
+      PRIMARY KEY (workspace_id, pack_id)
+    );
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

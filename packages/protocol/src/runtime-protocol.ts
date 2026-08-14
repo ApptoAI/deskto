@@ -3,6 +3,7 @@ import { z } from "zod"
 import {
   harnessSchema,
   executionProfileSchema,
+  packSchema,
   preferencesSchema,
   selectionSchema,
   settingsSnapshotSchema,
@@ -57,6 +58,27 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({
       workspaceId: z.string().min(1),
       projectId: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({ method: z.literal("pack.list"), params: z.object({}) }),
+  z.object({
+    method: z.literal("pack.create"),
+    params: z.object({ name: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("pack.import"),
+    params: z.object({ path: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("pack.remove"),
+    params: z.object({ packId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("workspace.setPack"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      packId: z.string().min(1),
+      attached: z.boolean(),
     }),
   }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),
@@ -139,6 +161,11 @@ export interface RuntimeResponses {
   "workspace.delete": z.infer<typeof workspaceSchema>[]
   "selection.get": z.infer<typeof selectionSchema>
   "selection.set": z.infer<typeof selectionSchema>
+  "pack.list": z.infer<typeof packSchema>[]
+  "pack.create": z.infer<typeof packSchema>
+  "pack.import": z.infer<typeof packSchema>
+  "pack.remove": z.infer<typeof packSchema>[]
+  "workspace.setPack": z.infer<typeof packSchema>[]
   "project.list": z.infer<typeof projectSchema>[]
   "project.add": z.infer<typeof projectSchema>
   "project.move": z.infer<typeof projectSchema>
@@ -160,6 +187,7 @@ export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("harness.changed") }),
   z.object({ type: z.literal("settings.changed") }),
   z.object({ type: z.literal("workspace.changed") }),
+  z.object({ type: z.literal("pack.changed") }),
 ])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>

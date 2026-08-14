@@ -27,12 +27,23 @@ export type HarnessModelOption = {
   supportedPermissionModes: PermissionMode[]
 }
 
+/**
+ * Provider-neutral additions to a session, built by the Runtime from the
+ * active workspace's Packs. Adapters translate it to native mechanisms and
+ * silently skip what the installed harness version cannot honor.
+ */
+export type SessionCustomization = {
+  /** Absolute paths to directories whose children are SKILL.md skill folders. */
+  skillRoots: string[]
+}
+
 export type HarnessRunInput = {
   threadId: string
   turnId: string
   projectPath: string
   prompt: string
   executionProfile: ExecutionProfile
+  customization: SessionCustomization
   providerSessionId?: string
 }
 

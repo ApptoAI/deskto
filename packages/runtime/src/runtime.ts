@@ -1,3 +1,5 @@
+import { dirname, join } from "node:path"
+
 import type { HarnessAdapterFactory } from "@openappto/harness-sdk"
 import type {
   RequestFor,
@@ -16,6 +18,8 @@ import { UserSettings } from "./user-settings.js"
 
 export type RuntimeOptions = {
   databasePath: string
+  /** Where app-created Packs live. Defaults to a packs folder next to the database. */
+  packsPath?: string
   harnesses: HarnessAdapterFactory[]
   /** How often harness health is re-checked. Pass 0 to turn the loop off. */
   harnessRefreshMs?: number
@@ -57,8 +61,10 @@ export class Runtime implements RuntimeTransport {
       new UserSettings(this.#store.settings, () =>
         this.#emit({ type: "settings.changed" })
       ),
+      options.packsPath ?? join(dirname(options.databasePath), "packs"),
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
+        packChanged: () => this.#emit({ type: "pack.changed" }),
       }
     )
   }

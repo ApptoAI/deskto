@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -440,6 +440,72 @@ describe("Runtime", () => {
       expect(undeletable.error.code).toBe("workspace-not-deletable")
 
     expect(events.filter((type) => type === "workspace.changed").length).toBe(3)
+    await runtime.close()
+  })
+
+  it("delivers workspace pack skills to the harness session", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      packsPath: join(directory, "packs"),
+      harnesses: [harness],
+    })
+
+    const created = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Press tools" },
+      })
+    )
+    expect(created.path).toBe(join(directory, "packs", "press-tools"))
+    expect(created.skills).toEqual([])
+
+    await mkdir(join(created.path, "skills", "summarize"), { recursive: true })
+    await writeFile(
+      join(created.path, "skills", "summarize", "SKILL.md"),
+      '---\nname: summarize\ndescription: "Summarize articles"\n---\n\nDo it.\n'
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: { workspaceId: "personal", packId: created.id, attached: true },
+      })
+    )
+    const listed = unwrap(
+      await runtime.request({ method: "pack.list", params: {} })
+    )
+    expect(listed).toMatchObject([
+      {
+        name: "Press tools",
+        workspaceIds: ["personal"],
+        skills: [{ name: "summarize", description: "Summarize articles" }],
+      },
+    ])
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Summarize this" },
+      })
+    )
+    expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
+      join(created.path, "skills"),
+    ])
     await runtime.close()
   })
 

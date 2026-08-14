@@ -17,6 +17,8 @@ import {
 
 import { positiveTokens } from "../token-usage.js"
 
+import { claudePluginsFor } from "./claude-packs.js"
+
 type ClaudeAdapterOptions = {
   executablePath?: string
 }
@@ -101,6 +103,7 @@ class ClaudeSession implements HarnessSession {
     signal.addEventListener("abort", () => this.#abortController.abort(), {
       once: true,
     })
+    const pluginShims = claudePluginsFor(input.customization.skillRoots)
     const canUseTool: CanUseTool = (toolName, toolInput, options) =>
       new Promise((resolve) => {
         const approvalId = options.toolUseID
@@ -159,6 +162,7 @@ class ClaudeSession implements HarnessSession {
           : {}),
         settingSources: ["user", "project", "local"],
         systemPrompt: { type: "preset", preset: "claude_code" },
+        ...(pluginShims.length > 0 ? { plugins: pluginShims } : {}),
         ...(executablePath
           ? { pathToClaudeCodeExecutable: executablePath }
           : {}),

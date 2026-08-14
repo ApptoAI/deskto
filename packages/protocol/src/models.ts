@@ -56,6 +56,30 @@ export const projectSchema = z.object({
 
 export type Project = z.infer<typeof projectSchema>
 
+export const packSkillSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+})
+
+export type PackSkill = z.infer<typeof packSkillSchema>
+
+/**
+ * A Pack is a directory of skills the user manages in the app. Its layout is
+ * provider-neutral (a manifest plus a skills/ directory of SKILL.md folders);
+ * Harness Adapters translate it into their native mechanisms.
+ */
+export const packSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  path: z.string(),
+  skills: z.array(packSkillSchema),
+  workspaceIds: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type Pack = z.infer<typeof packSchema>
+
 /** Where the user last was, so a restart reopens the same workspace and project. */
 export const selectionSchema = z.object({
   lastWorkspaceId: z.string().nullable(),

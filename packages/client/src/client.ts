@@ -96,6 +96,29 @@ export class RuntimeClient {
     })
   }
 
+  listPacks() {
+    return this.request({ method: "pack.list", params: {} })
+  }
+
+  createPack(name: string) {
+    return this.request({ method: "pack.create", params: { name } })
+  }
+
+  importPack(path: string) {
+    return this.request({ method: "pack.import", params: { path } })
+  }
+
+  removePack(packId: string) {
+    return this.request({ method: "pack.remove", params: { packId } })
+  }
+
+  setWorkspacePack(workspaceId: string, packId: string, attached: boolean) {
+    return this.request({
+      method: "workspace.setPack",
+      params: { workspaceId, packId, attached },
+    })
+  }
+
   listProjects() {
     return this.request({ method: "project.list", params: {} })
   }

@@ -48,6 +48,7 @@ async function openApplication(): Promise<void> {
   const claudeExecutable = packagedClaudeExecutable()
   const runtime = createRuntime({
     databasePath: path.join(app.getPath("userData"), "appto.sqlite"),
+    packsPath: path.join(app.getPath("userData"), "packs"),
     harnesses: [
       new ClaudeAdapter(
         claudeExecutable ? { executablePath: claudeExecutable } : {}

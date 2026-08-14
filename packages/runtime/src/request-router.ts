@@ -14,6 +14,13 @@ import {
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
+import {
+  createPackDirectory,
+  readPackName,
+  readPackSkills,
+  validatePackDirectory,
+} from "./packs/pack-files.js"
+import type { PackRow } from "./storage/packs.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
@@ -29,6 +36,8 @@ function lastProfileKeyFor(workspaceId: string): string {
 export type RouterEvents = {
   /** The workspace or project lists changed; open views should refetch. */
   workspaceChanged: () => void
+  /** The pack list or a workspace's attachments changed. */
+  packChanged: () => void
 }
 
 export class RequestRouter {
@@ -37,6 +46,7 @@ export class RequestRouter {
     private readonly harnesses: HarnessRegistry,
     private readonly turns: TurnCoordinator,
     private readonly userSettings: UserSettings,
+    private readonly packsRoot: string,
     private readonly events: RouterEvents
   ) {}
 
@@ -139,6 +149,36 @@ export class RequestRouter {
         this.store.settings.set(selectionSettingKey, next)
         return next
       }
+      case "pack.list":
+        return this.#packViews()
+      case "pack.create": {
+        const name = requiredName(request.params.name)
+        const path = await createPackDirectory(this.packsRoot, name)
+        const row = this.store.packs.add(name, path)
+        this.events.packChanged()
+        return this.#packView(row)
+      }
+      case "pack.import": {
+        const path = await validatePackDirectory(request.params.path)
+        const row = this.store.packs.add(await readPackName(path), path)
+        this.events.packChanged()
+        return this.#packView(row)
+      }
+      case "pack.remove": {
+        this.store.packs.remove(request.params.packId)
+        this.events.packChanged()
+        return this.#packViews()
+      }
+      case "workspace.setPack": {
+        this.store.workspaces.get(request.params.workspaceId)
+        this.store.packs.setAttached(
+          request.params.workspaceId,
+          request.params.packId,
+          request.params.attached
+        )
+        this.events.packChanged()
+        return this.#packViews()
+      }
       case "project.list":
         return this.store.projects.list()
       case "project.add": {
@@ -217,6 +257,24 @@ export class RequestRouter {
       harnessId,
       executionProfile,
     })
+  }
+
+  async #packView(row: PackRow) {
+    return {
+      id: row.id,
+      name: row.name,
+      path: row.path,
+      skills: await readPackSkills(row.path),
+      workspaceIds: this.store.packs.workspaceIds(row.id),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  #packViews() {
+    return Promise.all(
+      this.store.packs.list().map((row) => this.#packView(row))
+    )
   }
 
   #selection(): Selection {

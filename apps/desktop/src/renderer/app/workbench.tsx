@@ -20,6 +20,7 @@ import { describeError } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
+import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { useThreadChanged } from "../runtime/use-thread-changed.js"
 import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
@@ -51,6 +52,9 @@ export function Workbench() {
   const loadProjects = useCallback(() => client.listProjects(), [client])
   const projectsQuery = useRuntimeQuery(loadProjects)
 
+  const loadPacks = useCallback(() => client.listPacks(), [client])
+  const packsQuery = useRuntimeQuery(loadPacks)
+
   const revalidateWorkspaces = workspacesQuery.revalidate
   const revalidateProjects = projectsQuery.revalidate
   useWorkspaceChanged(
@@ -59,6 +63,8 @@ export function Workbench() {
       revalidateProjects()
     }, [revalidateWorkspaces, revalidateProjects])
   )
+  const revalidatePacks = packsQuery.revalidate
+  usePackChanged(useCallback(() => revalidatePacks(), [revalidatePacks]))
 
   const [chosenWorkspaceId, setChosenWorkspaceId] = useState<string | null>(
     null
@@ -76,6 +82,8 @@ export function Workbench() {
     selectionQuery.state.status === "ready" ? selectionQuery.state.data : null
   const projects =
     projectsQuery.state.status === "ready" ? projectsQuery.state.data : []
+  const packs =
+    packsQuery.state.status === "ready" ? packsQuery.state.data : []
 
   // A restart reopens the last used workspace and its last used project;
   // explicit clicks in this session win over what was remembered.
@@ -188,6 +196,63 @@ export function Workbench() {
         revalidateWorkspaces()
         selectWorkspace(created.id)
       }
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
+  const replacePacks = packsQuery.replace
+
+  async function togglePack(packId: string, attached: boolean) {
+    if (!activeWorkspaceId) return
+    setActionError(null)
+    try {
+      replacePacks(
+        await client.setWorkspacePack(activeWorkspaceId, packId, attached)
+      )
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
+  // A pack created or imported while editing a workspace is meant for it, so
+  // it attaches right away.
+  async function createPack(name: string) {
+    if (!activeWorkspaceId) return
+    setActionError(null)
+    try {
+      const pack = await client.createPack(name)
+      replacePacks(
+        await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+      )
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
+  async function importPack() {
+    if (!activeWorkspaceId) return
+    setActionError(null)
+    try {
+      const picked = await pickProjectFolder()
+      if (!picked) return
+      const pack = await client.importPack(picked.path)
+      replacePacks(
+        await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+      )
+    } catch (error) {
+      setActionError(describeError(error))
+      throw error
+    }
+  }
+
+  async function removePack(packId: string) {
+    setActionError(null)
+    try {
+      replacePacks(await client.removePack(packId))
     } catch (error) {
       setActionError(describeError(error))
       throw error
@@ -311,6 +376,13 @@ export function Workbench() {
         }}
         workspace={workspaceDialog?.mode === "edit" ? activeWorkspace : null}
         canDelete={activeWorkspace?.id !== personalWorkspaceId}
+        packs={packs}
+        packActions={{
+          onToggle: togglePack,
+          onCreate: createPack,
+          onImport: importPack,
+          onRemove: removePack,
+        }}
         onSubmit={submitWorkspace}
         onDelete={deleteActiveWorkspace}
       />
