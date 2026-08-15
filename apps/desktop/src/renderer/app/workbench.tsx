@@ -15,7 +15,6 @@ import { InlineError } from "../components/inline-error.js"
 import { SettingsView } from "../components/settings/settings-view.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
-import { WorkspaceRail } from "../components/sidebar/workspace-rail.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
 import { TaskView } from "../components/task/task-view.js"
@@ -409,13 +408,6 @@ export function Workbench() {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
-      <WorkspaceRail
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        onSelect={selectWorkspace}
-        onCreate={() => setWorkspaceDialog({ mode: "create" })}
-      />
-
       <ProjectSidebar
         workspace={activeWorkspace}
         workspaces={workspaces}
@@ -427,6 +419,8 @@ export function Workbench() {
         onAddProject={addProject}
         onMoveProject={moveProject}
         addingProject={addingProject}
+        onSelectWorkspace={selectWorkspace}
+        onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
         onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
         threads={threads.state}
         workspaceThreads={workspaceThreads.state}
@@ -498,6 +492,7 @@ export function Workbench() {
             key={openThreadId}
             threadId={openThreadId}
             harnesses={harnesses.state}
+            projects={projects}
           />
         ) : (
           <NewTaskView

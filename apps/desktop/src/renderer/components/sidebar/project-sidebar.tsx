@@ -1,13 +1,19 @@
-import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Project, Workspace } from "@openappto/protocol"
+import { appSettings } from "@openappto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
+import { Kbd } from "@workspace/ui/components/kbd"
+import { ScrollArea } from "@workspace/ui/components/scroll-area"
+
+import { useKeybindingLabel } from "../../settings/use-keybinding.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
+import { ApptoLockup } from "../appto-logo.js"
 import { ProjectSwitcher } from "./project-switcher.js"
 import { TaskList, type InboxActions } from "./task-list.js"
+import { WorkspaceSwitcher } from "./workspace-switcher.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
 
 export function ProjectSidebar({
@@ -21,6 +27,8 @@ export function ProjectSidebar({
   onAddProject,
   onMoveProject,
   addingProject,
+  onSelectWorkspace,
+  onCreateWorkspace,
   onEditWorkspace,
   threads,
   workspaceThreads,
@@ -41,6 +49,8 @@ export function ProjectSidebar({
   onAddProject: () => void
   onMoveProject: (projectId: string, workspaceId: string) => void
   addingProject: boolean
+  onSelectWorkspace: (workspaceId: string) => void
+  onCreateWorkspace: () => void
   onEditWorkspace: () => void
   threads: QueryState<Thread[]>
   workspaceThreads: QueryState<Record<string, Thread[]>>
@@ -51,35 +61,44 @@ export function ProjectSidebar({
   onOpenSettings: () => void
   inboxActions: InboxActions
 }) {
-  return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar xl:w-72">
-      <div className="drag-region h-13 shrink-0" />
+  const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
 
-      <div className="no-drag group flex h-9 items-center justify-between pr-2 pl-4">
-        <h1 className="truncate text-sm font-semibold">
-          {workspace?.name ?? "Workspace"}
-        </h1>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label="Edit workspace"
-          onClick={onEditWorkspace}
-          disabled={!workspace}
-        >
-          <PencilIcon />
-        </Button>
+  return (
+    <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-sidebar xl:w-80">
+      {/* Traffic lights sit at the left of this strip, so the logo takes the
+          right. Still a drag region — the svg is not an interactive target. */}
+      <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">
+        <ApptoLockup className="h-[15px] w-auto text-foreground/70" />
       </div>
 
-      <div className="no-drag space-y-0.5 px-2 pt-1 pb-3">
+      <div className="no-drag px-2 pb-3">
+        <WorkspaceSwitcher
+          workspace={workspace}
+          workspaces={workspaces}
+          onSelect={onSelectWorkspace}
+          onCreate={onCreateWorkspace}
+          onEdit={onEditWorkspace}
+        />
+      </div>
+
+      <div className="no-drag space-y-1.5 px-2 pb-2">
         <Button
-          variant="ghost"
-          className="w-full justify-start text-muted-foreground"
+          variant="secondary"
+          size="lg"
+          className="w-full justify-start"
           onClick={onNewTask}
           disabled={!activeProject}
         >
-          <SquarePenIcon data-icon="inline-start" />
+          <SquarePenIcon
+            data-icon="inline-start"
+            className="text-muted-foreground"
+          />
           New task
+          {newTaskShortcut ? (
+            <Kbd data-icon="inline-end" className="ml-auto">
+              {newTaskShortcut}
+            </Kbd>
+          ) : null}
         </Button>
         <ProjectSwitcher
           workspaces={workspaces}
@@ -94,50 +113,48 @@ export function ProjectSidebar({
         />
       </div>
 
-      <nav
-        aria-label="Tasks"
-        className="no-drag min-h-0 flex-1 overflow-y-auto pb-3"
+      {/* No scrollbar in the task list: the rows are the chrome here, and a
+          lane down the edge would cut into them. The fade at either end is
+          the only signal that the list runs past the viewport. */}
+      <ScrollArea
+        hideScrollbars
+        scrollFade
+        render={<nav aria-label="Tasks" />}
+        className="no-drag h-auto min-h-0 flex-1"
       >
-        {projects.length === 0 ? (
-          <div className="space-y-2 px-4 py-2">
-            <p className="text-sm text-muted-foreground">No projects yet.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onAddProject}
-              disabled={addingProject}
-            >
-              {addingProject ? "Opening…" : "Add a project folder"}
-            </Button>
-          </div>
-        ) : allProjects ? (
-          <WorkspaceThreadList
-            projects={projects}
-            state={workspaceThreads}
-            openThreadId={openThreadId}
-            onOpenThread={onOpenThread}
-            onRetry={onRetryThreads}
-            actions={inboxActions}
-          />
-        ) : (
-          <TaskList
-            state={threads}
-            openThreadId={openThreadId}
-            onOpenThread={onOpenThread}
-            onRetry={onRetryThreads}
-            actions={inboxActions}
-          />
-        )}
-      </nav>
-
-      {!allProjects && activeProject ? (
-        <p
-          className="truncate border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
-          title={activeProject.path}
-        >
-          {activeProject.path}
-        </p>
-      ) : null}
+        <div className="pb-3">
+          {projects.length === 0 ? (
+            <div className="space-y-2 px-4 py-2">
+              <p className="text-sm text-muted-foreground">No projects yet.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAddProject}
+                disabled={addingProject}
+              >
+                {addingProject ? "Opening…" : "Add a project folder"}
+              </Button>
+            </div>
+          ) : allProjects ? (
+            <WorkspaceThreadList
+              projects={projects}
+              state={workspaceThreads}
+              openThreadId={openThreadId}
+              onOpenThread={onOpenThread}
+              onRetry={onRetryThreads}
+              actions={inboxActions}
+            />
+          ) : (
+            <TaskList
+              state={threads}
+              openThreadId={openThreadId}
+              onOpenThread={onOpenThread}
+              onRetry={onRetryThreads}
+              actions={inboxActions}
+            />
+          )}
+        </div>
+      </ScrollArea>
 
       <div className="no-drag border-t border-border p-2">
         <Button

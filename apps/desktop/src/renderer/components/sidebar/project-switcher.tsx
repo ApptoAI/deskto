@@ -59,7 +59,11 @@ export function ProjectSwitcher({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" className="min-w-0 flex-1 justify-start" />
+            <Button
+              variant="ghost"
+              className="min-w-0 flex-1 justify-start"
+              title={allProjects ? undefined : activeProject?.path}
+            />
           }
         >
           <ScopeIcon

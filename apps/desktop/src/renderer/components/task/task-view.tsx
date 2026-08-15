@@ -1,20 +1,16 @@
 import { useEffect, useState } from "react"
+import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import { hasUnreadCompletion, threadCameBack } from "@openappto/client"
-import type { ExecutionProfile, Harness } from "@openappto/protocol"
+import type { ExecutionProfile, Harness, Project } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
-import {
-  describeHarnessBlock,
-  findHarness,
-  harnessLabel,
-} from "../../lib/harness.js"
-import { describeThreadStatus } from "../../lib/thread-status.js"
+import { openFolder } from "../../lib/desktop.js"
+import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
 import { describeError } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import { type QueryState } from "../../runtime/use-runtime-query.js"
 import { useThreadView } from "../../runtime/use-thread-view.js"
-import { HarnessLogo } from "../brand-logos.js"
 import { Composer } from "../composer.js"
 import { ContextUsageMeter } from "../context-usage-meter.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
@@ -26,9 +22,11 @@ import { MessageStream } from "./message-stream.js"
 export function TaskView({
   threadId,
   harnesses,
+  projects,
 }: {
   threadId: string
   harnesses: QueryState<Harness[]>
+  projects: Project[]
 }) {
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(threadId)
@@ -67,8 +65,12 @@ export function TaskView({
   }
 
   const { thread, messages, activities, pendingApproval } = state.data
-  const status = describeThreadStatus(thread.status)
   const options = harnesses.status === "ready" ? harnesses.data : []
+  // Resolved from the thread rather than the sidebar selection: in the
+  // all-projects view the open task can belong to a different project.
+  const projectPath = projects.find(
+    (project) => project.id === thread.projectId
+  )?.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
   const active =
     thread.status === "running" || thread.status === "waiting-approval"
@@ -88,16 +90,21 @@ export function TaskView({
 
   return (
     <>
-      <header className="drag-region flex h-10 shrink-0 items-center gap-3 border-b border-border px-6">
-        <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-          {thread.title}
-        </h1>
-        <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          <HarnessLogo harnessId={thread.harnessId} className="size-3.5" />
-          <span>{harnessLabel(options, thread.harnessId)}</span>
-          <span aria-hidden>·</span>
-          <span className={status.textClassName}>{status.label}</span>
-        </p>
+      {/* Bare drag strip: the task title and its status already read from
+          the sidebar row, so the header carries one action and no rule. */}
+      <header className="drag-region flex h-10 shrink-0 items-center justify-end px-3">
+        {projectPath ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="no-drag text-muted-foreground"
+            onClick={() => openFolder(projectPath)}
+            title={projectPath}
+          >
+            <FolderOpenIcon data-icon="inline-start" />
+            Open folder
+          </Button>
+        ) : null}
       </header>
 
       {messages.length === 0 ? (
@@ -151,6 +158,7 @@ export function TaskView({
                   models={models}
                   profile={thread.executionProfile}
                   onChange={handleProfileChange}
+                  harnessId={thread.harnessId}
                   disabled={active}
                 />
               ) : null

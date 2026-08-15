@@ -3,10 +3,38 @@
 @layer base {
   :root {
     color-scheme: dark;
+    --app-scrollbar-width: 6px;
+    --app-scrollbar-thumb: rgb(217 217 217);
+    --app-scrollbar-thumb-hover: rgb(191 191 191);
+  }
+
+  .dark {
+    --app-scrollbar-thumb: rgb(255 255 255 / 8%);
+    --app-scrollbar-thumb-hover: rgb(255 255 255 / 12%);
   }
 
   body {
     overscroll-behavior: none;
+  }
+
+  /* A slim, near-invisible lane: scrollable regions should read as content
+     that keeps going, not as a chrome element competing with the rows. */
+  ::-webkit-scrollbar {
+    width: var(--app-scrollbar-width);
+    height: var(--app-scrollbar-width);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--app-scrollbar-thumb);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--app-scrollbar-thumb-hover);
   }
 }
 
@@ -37,4 +65,47 @@
 
 @utility no-drag {
   -webkit-app-region: no-drag;
+}
+
+/* Shimmering label for in-progress work: a highlight sweeps through the
+   text while the run is alive. Reduced motion falls back to static muted. */
+@utility shimmer-label {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-muted-foreground) 35%,
+    var(--color-foreground) 50%,
+    var(--color-muted-foreground) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 1.4s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    background-image: none;
+    color: var(--color-muted-foreground);
+  }
+}
+
+@keyframes shimmer-text {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* One cell of the pixel-grid loader lighting up. */
+@keyframes pixel-on {
+  0%,
+  60%,
+  100% {
+    opacity: 0.15;
+  }
+  30% {
+    opacity: 1;
+  }
 }

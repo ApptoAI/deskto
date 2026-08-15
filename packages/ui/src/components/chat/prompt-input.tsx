@@ -8,7 +8,7 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
     <form
       data-slot="prompt-input"
       className={cn(
-        "flex w-full flex-col rounded-2xl bg-card pb-2 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-16px_rgb(0_0_0/0.2)] ring-1 ring-foreground/10 transition-shadow duration-200 ease-out focus-within:ring-ring/60 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_12px_32px_-16px_rgb(0_0_0/0.6)]",
+        "flex w-full flex-col rounded-2xl bg-card pb-2 shadow-[0_8px_24px_-20px_rgb(0_0_0/0.4)] ring-1 ring-border transition-shadow duration-200 ease-out focus-within:ring-ring/50",
         className
       )}
       {...props}

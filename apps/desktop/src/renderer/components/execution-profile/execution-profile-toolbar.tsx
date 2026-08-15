@@ -7,28 +7,46 @@ import {
   withModel,
   type HarnessModel,
 } from "../../lib/execution-profile.js"
+import { HarnessLogo } from "../brand-logos.js"
 import { permissionOptions, toPermissionMode } from "./permission-modes.js"
 import { ProfileMenu } from "./profile-menu.js"
+import {
+  DefaultThinkingIcon,
+  effortRank,
+  ThinkingIcon,
+} from "./thinking-icons.js"
 
 export function ExecutionProfileToolbar({
   models,
   profile,
   onChange,
+  harnessId,
   disabled = false,
 }: {
   models: HarnessModel[]
   profile: ExecutionProfile
   onChange: (profile: ExecutionProfile) => void
+  /** Draws the provider logo beside the model; omitted, the row stays plain. */
+  harnessId?: string | null
   disabled?: boolean
 }) {
   const model = findModel(models, profile.modelId) ?? models[0]
   if (!model) return null
 
+  const modelIcon = harnessId ? (
+    <HarnessLogo harnessId={harnessId} className="size-4" />
+  ) : undefined
+
   const thinkingOptions = [
-    { value: DEFAULT_EFFORT, label: effortLabel(DEFAULT_EFFORT) },
+    {
+      value: DEFAULT_EFFORT,
+      label: effortLabel(DEFAULT_EFFORT),
+      icon: <DefaultThinkingIcon />,
+    },
     ...model.supportedEfforts.map((effort) => ({
       value: effort,
       label: effortLabel(effort),
+      icon: <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />,
     })),
   ]
 
@@ -46,6 +64,7 @@ export function ExecutionProfileToolbar({
           value: candidate.id,
           label: candidate.name,
           description: candidate.description,
+          icon: modelIcon,
         }))}
         onSelect={(modelId) => {
           const next = findModel(models, modelId)

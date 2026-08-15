@@ -1,9 +1,11 @@
+import { stat } from "node:fs/promises"
 import path from "node:path"
 
 import { dialog, ipcMain, shell } from "electron"
 
 import {
   openExternalChannel,
+  openFolderChannel,
   pickPackChannel,
   pickProjectChannel,
 } from "../shared/channels.js"
@@ -27,6 +29,24 @@ function handleFolderPick(channel: string, title: string): void {
 export function registerDesktopIpc(): void {
   handleFolderPick(pickProjectChannel, "Open project folder")
   handleFolderPick(pickPackChannel, "Choose a pack folder")
+
+  // Directories only: shell.openPath on a file would hand it to whatever
+  // app claims that type, so a stray path could launch something. A folder
+  // just opens the file manager.
+  ipcMain.handle(
+    openFolderChannel,
+    async (_event, value: unknown): Promise<void> => {
+      if (typeof value !== "string" || !path.isAbsolute(value)) return
+
+      try {
+        const entry = await stat(value)
+        if (!entry.isDirectory()) return
+        await shell.openPath(value)
+      } catch {
+        return
+      }
+    }
+  )
 
   ipcMain.handle(
     openExternalChannel,
