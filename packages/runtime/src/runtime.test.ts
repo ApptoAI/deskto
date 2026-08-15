@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -1377,6 +1384,380 @@ describe("Runtime", () => {
     expect(
       deltas.filter((event) => event.change.type === "activity.upserted")
     ).toHaveLength(7)
+    await runtime.close()
+  })
+
+  it("attributes safe file-change outputs to a Turn and previews them", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const projectPath = join(directory, "project")
+    await mkdir(projectPath)
+    await writeFile(join(projectPath, "report.md"), "# Quarterly report\n")
+    await writeFile(join(projectPath, "figures.csv"), "month,revenue\nJan,42\n")
+    await writeFile(join(projectPath, "dashboard.html"), "<h1>Dashboard</h1>")
+    await writeFile(join(projectPath, "forecast.xlsx"), "xlsx-bytes")
+    await writeFile(join(projectPath, "brief.docx"), "docx-bytes")
+    await writeFile(join(directory, "secret.txt"), "outside")
+    await symlink(join(directory, "secret.txt"), join(projectPath, "link.txt"))
+
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const artifactEvents: string[] = []
+    runtime.subscribe((event) => {
+      if (event.type === "artifact.changed") {
+        artifactEvents.push(event.threadId)
+      }
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: {
+          path: projectPath,
+          name: "Example",
+          workspaceId: "personal",
+        },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the report" },
+      })
+    )
+
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "files",
+        name: "Create report files",
+        payload: {
+          kind: "file-change",
+          files: [
+            { path: "report.md" },
+            { path: join(projectPath, "figures.csv") },
+            { path: "dashboard.html" },
+            { path: "forecast.xlsx" },
+            { path: "brief.docx" },
+            { path: "../secret.txt" },
+            { path: "link.txt" },
+          ],
+        },
+      },
+    })
+    run.emit({ type: "activity.completed", id: "files", outcome: "completed" })
+
+    await waitFor(async () => {
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return outputs.length === 5
+    })
+
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      outputs.map((output) => output.artifact.relativePath).sort()
+    ).toEqual([
+      "brief.docx",
+      "dashboard.html",
+      "figures.csv",
+      "forecast.xlsx",
+      "report.md",
+    ])
+    expect(outputs.every((output) => output.turnId === run.input.turnId)).toBe(
+      true
+    )
+    expect(artifactEvents).toEqual([thread.id])
+
+    const markdown = outputs.find(
+      (output) => output.artifact.relativePath === "report.md"
+    )!
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: { threadId: thread.id, artifactId: markdown.artifact.id },
+        })
+      )
+    ).toEqual({
+      kind: "markdown",
+      artifactId: markdown.artifact.id,
+      content: "# Quarterly report\n",
+    })
+
+    const otherThread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    expect(
+      await runtime.request({
+        method: "artifact.preview",
+        params: {
+          threadId: otherThread.id,
+          artifactId: markdown.artifact.id,
+        },
+      })
+    ).toEqual({
+      ok: false,
+      error: { code: "artifact-not-found", message: "Result not found" },
+    })
+
+    const csv = outputs.find(
+      (output) => output.artifact.relativePath === "figures.csv"
+    )!
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: { threadId: thread.id, artifactId: csv.artifact.id },
+        })
+      )
+    ).toMatchObject({ kind: "csv", content: "month,revenue\nJan,42\n" })
+
+    const html = outputs.find(
+      (output) => output.artifact.relativePath === "dashboard.html"
+    )!
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: { threadId: thread.id, artifactId: html.artifact.id },
+        })
+      )
+    ).toMatchObject({ kind: "html", content: "<h1>Dashboard</h1>" })
+
+    const spreadsheet = outputs.find(
+      (output) => output.artifact.relativePath === "forecast.xlsx"
+    )!
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: {
+            threadId: thread.id,
+            artifactId: spreadsheet.artifact.id,
+          },
+        })
+      )
+    ).toMatchObject({
+      kind: "spreadsheet",
+      dataBase64: Buffer.from("xlsx-bytes").toString("base64"),
+    })
+
+    const document = outputs.find(
+      (output) => output.artifact.relativePath === "brief.docx"
+    )!
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: { threadId: thread.id, artifactId: document.artifact.id },
+        })
+      )
+    ).toMatchObject({
+      kind: "document",
+      dataBase64: Buffer.from("docx-bytes").toString("base64"),
+    })
+
+    await writeFile(join(projectPath, "notes.txt"), "settled with the turn")
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "unfinished-file-activity",
+        name: "Write notes",
+        payload: {
+          kind: "file-change",
+          files: [{ path: "notes.txt" }],
+        },
+      },
+    })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+    await waitFor(async () => {
+      const settledOutputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return settledOutputs.some(
+        (output) => output.artifact.relativePath === "notes.txt"
+      )
+    })
+    await runtime.close()
+  })
+
+  it("keeps one Artifact when later Turns change the same result", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    await writeFile(join(directory, "report.txt"), "first")
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+
+    for (const prompt of ["Draft it", "Revise it"]) {
+      unwrap(
+        await runtime.request({
+          method: "turn.start",
+          params: { threadId: thread.id, prompt },
+        })
+      )
+      const run = harness.runs.at(-1)!
+      await writeFile(join(directory, "report.txt"), prompt)
+      run.emit({
+        type: "activity.started",
+        activity: {
+          id: `file-${prompt}`,
+          name: "Write report",
+          payload: {
+            kind: "file-change",
+            files: [{ path: "report.txt" }],
+          },
+        },
+      })
+      run.emit({
+        type: "activity.completed",
+        id: `file-${prompt}`,
+        outcome: "completed",
+      })
+      run.emit({ type: "turn.completed" })
+      run.finish()
+      await waitFor(async () => {
+        const view = unwrap(
+          await runtime.request({
+            method: "thread.get",
+            params: { threadId: thread.id },
+          })
+        )
+        return view.thread.status === "idle"
+      })
+    }
+
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputs).toHaveLength(1)
+    expect(outputs[0]?.turnId).toBe(harness.runs[1]?.input.turnId)
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: {
+            threadId: thread.id,
+            artifactId: outputs[0]!.artifact.id,
+          },
+        })
+      )
+    ).toMatchObject({ kind: "text", content: "Revise it" })
+    await runtime.close()
+  })
+
+  it("applies the output limit to each completed file-change Activity", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const paths = Array.from(
+      { length: 205 },
+      (_, index) => `result-${index}.txt`
+    )
+    await Promise.all(
+      paths.map((path) => writeFile(join(directory, path), path))
+    )
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Create the files" },
+      })
+    )
+
+    const run = harness.runs[0]!
+    for (const [index, activityPaths] of [
+      paths.slice(0, 201),
+      paths.slice(201),
+    ].entries()) {
+      run.emit({
+        type: "activity.started",
+        activity: {
+          id: `files-${index}`,
+          name: "Create result files",
+          payload: {
+            kind: "file-change",
+            files: activityPaths.map((path) => ({ path })),
+          },
+        },
+      })
+    }
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return outputs.length === 204
+    })
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputs).toHaveLength(204)
     await runtime.close()
   })
 

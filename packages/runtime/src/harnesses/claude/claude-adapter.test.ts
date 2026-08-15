@@ -584,6 +584,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -690,6 +691,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,

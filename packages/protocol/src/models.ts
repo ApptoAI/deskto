@@ -291,6 +291,71 @@ export const activitySchema = z.object({
 
 export type Activity = z.infer<typeof activitySchema>
 
+export const artifactPreviewKindSchema = z.enum([
+  "text",
+  "markdown",
+  "csv",
+  "html",
+  "image",
+  "pdf",
+  "spreadsheet",
+  "document",
+  "unsupported",
+])
+
+export const artifactSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  name: z.string(),
+  relativePath: z.string(),
+  mediaType: z.string(),
+  previewKind: artifactPreviewKindSchema,
+  sizeBytes: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export type Artifact = z.infer<typeof artifactSchema>
+
+/** A durable file attributed to the Turn that produced or changed it. */
+export const turnOutputSchema = z.object({
+  turnId: z.string(),
+  producedAt: z.string(),
+  artifact: artifactSchema,
+})
+
+export type TurnOutput = z.infer<typeof turnOutputSchema>
+
+/** Preview data is fetched on demand and never included in ThreadView. */
+export const artifactPreviewSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.enum(["text", "markdown", "csv", "html"]),
+    artifactId: z.string(),
+    content: z.string(),
+  }),
+  z.object({
+    kind: z.literal("image"),
+    artifactId: z.string(),
+    dataUrl: z.string(),
+  }),
+  z.object({
+    kind: z.literal("pdf"),
+    artifactId: z.string(),
+    dataBase64: z.string(),
+  }),
+  z.object({
+    kind: z.enum(["spreadsheet", "document"]),
+    artifactId: z.string(),
+    dataBase64: z.string(),
+  }),
+  z.object({
+    kind: z.literal("unsupported"),
+    artifactId: z.string(),
+  }),
+])
+
+export type ArtifactPreview = z.infer<typeof artifactPreviewSchema>
+
 export const approvalSchema = z.object({
   id: z.string(),
   threadId: z.string(),

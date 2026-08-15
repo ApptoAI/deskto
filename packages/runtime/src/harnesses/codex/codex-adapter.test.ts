@@ -479,6 +479,7 @@ describe("CodexAdapter activity notifications", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -540,6 +541,7 @@ describe("CodexAdapter activity notifications", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -623,6 +625,7 @@ describe("CodexAdapter activity notifications", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -709,6 +712,7 @@ describe("CodexAdapter activity notifications", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,

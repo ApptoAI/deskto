@@ -305,6 +305,13 @@ export class RequestRouter {
         this.events.threadDeleted(threadId)
         return null
       }
+      case "artifact.list":
+        return this.store.artifacts.listForThread(request.params.threadId)
+      case "artifact.preview":
+        return this.store.artifacts.preview(
+          request.params.threadId,
+          request.params.artifactId
+        )
       case "turn.start":
         return this.turns.start(
           request.params.threadId,

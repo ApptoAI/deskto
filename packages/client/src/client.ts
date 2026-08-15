@@ -214,6 +214,17 @@ export class RuntimeClient {
     return this.request({ method: "thread.delete", params: { threadId } })
   }
 
+  listResults(threadId: string) {
+    return this.request({ method: "artifact.list", params: { threadId } })
+  }
+
+  previewArtifact(threadId: string, artifactId: string) {
+    return this.request({
+      method: "artifact.preview",
+      params: { threadId, artifactId },
+    })
+  }
+
   startTurn(threadId: string, input: TurnInput | string) {
     return this.request({
       method: "turn.start",

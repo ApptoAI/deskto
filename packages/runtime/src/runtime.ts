@@ -67,6 +67,8 @@ export class Runtime implements RuntimeTransport {
             seq: sequences.next(threadId),
             change,
           }),
+        artifactsChanged: (threadId) =>
+          this.#emit({ type: "artifact.changed", threadId }),
       }
     )
     this.#router = new RequestRouter(

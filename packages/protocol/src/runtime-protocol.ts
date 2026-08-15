@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import {
   activitySchema,
+  artifactPreviewSchema,
   approvalSchema,
   harnessSchema,
   executionProfileSchema,
@@ -15,6 +16,7 @@ import {
   threadSchema,
   threadViewSchema,
   turnInputSchema,
+  turnOutputSchema,
   projectSchema,
   workspaceSchema,
 } from "./models.js"
@@ -163,6 +165,14 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("artifact.list"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
+    method: z.literal("artifact.preview"),
+    params: z.object({ threadId: z.string(), artifactId: z.string() }),
+  }),
+  z.object({
     method: z.literal("turn.start"),
     params: z
       .object({
@@ -232,6 +242,8 @@ export interface RuntimeResponses {
   "thread.setPinned": z.infer<typeof threadSchema>
   "thread.markVisited": z.infer<typeof threadSchema>
   "thread.delete": null
+  "artifact.list": z.infer<typeof turnOutputSchema>[]
+  "artifact.preview": z.infer<typeof artifactPreviewSchema>
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
   "approval.resolve": z.infer<typeof threadViewSchema>
@@ -281,6 +293,7 @@ export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("settings.changed") }),
   z.object({ type: z.literal("workspace.changed") }),
   z.object({ type: z.literal("pack.changed") }),
+  z.object({ type: z.literal("artifact.changed"), threadId: z.string() }),
 ])
 
 export type RuntimeEvent = z.infer<typeof runtimeEventSchema>

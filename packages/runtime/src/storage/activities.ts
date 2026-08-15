@@ -87,6 +87,19 @@ export class Activities {
     return this.#find(id)
   }
 
+  find(id: string): Activity | undefined {
+    return this.#find(id)
+  }
+
+  running(turnId: string): Activity[] {
+    const rows = this.database
+      .prepare(
+        "SELECT * FROM activities WHERE turn_id = ? AND status = 'running'"
+      )
+      .all(turnId) as ActivityRow[]
+    return rows.map(toActivity)
+  }
+
   /**
    * Settles whatever is still running when a Turn ends: completed when the
    * Turn finished, failed when it was interrupted. Rows that never received

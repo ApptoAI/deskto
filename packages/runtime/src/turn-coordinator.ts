@@ -11,6 +11,7 @@ import {
   type HarnessSession,
 } from "@openappto/harness-sdk"
 import type {
+  Activity,
   ThreadDeltaChange,
   ThreadView,
   TurnInput,
@@ -20,6 +21,7 @@ import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { resolvePromptReferences } from "./prompt-references.js"
+import type { PreparedArtifactCapture } from "./storage/artifacts.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
 import { ThreadTitleGenerator } from "./thread-title-generator.js"
@@ -30,6 +32,8 @@ export type TurnEvents = {
   changed: (threadId: string) => void
   /** Fine-grained change an open view applies without a reload. */
   delta: (threadId: string, change: ThreadDeltaChange) => void
+  /** A completed file change produced one or more project results. */
+  artifactsChanged: (threadId: string) => void
 }
 
 type StartingRun = ActiveTurnRecord & {
@@ -381,19 +385,29 @@ export class TurnCoordinator {
         this.#requestApproval(threadId, run, event.request)
         this.#changed(threadId)
         break
-      case "turn.completed":
+      case "turn.completed": {
         this.#flush(run)
         run.terminal = true
+        const captures = this.#prepareArtifactCaptures(
+          run.turnId,
+          this.store.activities.running(run.turnId)
+        )
         // A finished turn settles leftover rows as completed; a red failure
         // mark on a good turn would blame work that simply never reported.
-        this.store.activities.settleRunning(run.turnId, "completed")
-        this.store.turns.complete(
-          threadId,
-          run.turnId,
-          this.#terminalMessageId(run)
-        )
+        const artifactsChanged = this.store.transaction(() => {
+          this.store.activities.settleRunning(run.turnId, "completed")
+          const changed = this.#captureArtifacts(captures)
+          this.store.turns.complete(
+            threadId,
+            run.turnId,
+            this.#terminalMessageId(run)
+          )
+          return changed
+        })
+        if (artifactsChanged) this.events.artifactsChanged(threadId)
         this.#changed(threadId)
         break
+      }
       case "turn.failed":
         this.#fail(threadId, run, event.failure)
         break
@@ -501,14 +515,52 @@ export class TurnCoordinator {
   ): void {
     const id = run.activityIds.get(providerId)
     if (!id) return
+    const pending = this.store.activities.find(id)
+    const captures =
+      pending?.status === "running" && outcome === "completed"
+        ? this.#prepareArtifactCaptures(run.turnId, [pending])
+        : []
     // The provider id stays mapped so later children can still name their
     // parent, and the status guard makes repeated completions harmless.
-    const record = this.store.activities.complete(id, outcome)
-    if (record)
+    const { record, artifactsChanged } = this.store.transaction(() => {
+      const record = this.store.activities.complete(id, outcome)
+      return {
+        record,
+        artifactsChanged:
+          record && outcome === "completed"
+            ? this.#captureArtifacts(captures)
+            : false,
+      }
+    })
+    if (record) {
       this.events.delta(threadId, {
         type: "activity.upserted",
         activity: record,
       })
+      if (artifactsChanged) this.events.artifactsChanged(threadId)
+    }
+  }
+
+  #prepareArtifactCaptures(
+    turnId: string,
+    activities: Activity[]
+  ): PreparedArtifactCapture[] {
+    const captures: PreparedArtifactCapture[] = []
+    for (const activity of activities) {
+      if (activity.payload?.kind !== "file-change") continue
+      const paths = activity.payload.files.map((file) => file.path)
+      const capture = this.store.artifacts.prepareCapture(turnId, paths)
+      if (capture) captures.push(capture)
+    }
+    return captures
+  }
+
+  #captureArtifacts(captures: PreparedArtifactCapture[]): boolean {
+    let changed = false
+    for (const capture of captures) {
+      if (this.store.artifacts.capture(capture).length > 0) changed = true
+    }
+    return changed
   }
 
   // Closes the open segment even when it is still empty: leaving it open

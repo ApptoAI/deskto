@@ -195,6 +195,30 @@ const migrations = [
     ALTER TABLE turns ADD COLUMN prompt_references TEXT;
     ALTER TABLE messages ADD COLUMN prompt_references TEXT;
   `,
+  `
+    CREATE TABLE artifacts (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      relative_path TEXT NOT NULL,
+      name TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      preview_kind TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (project_id, relative_path)
+    );
+
+    CREATE TABLE turn_outputs (
+      turn_id TEXT NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+      artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (turn_id, artifact_id)
+    );
+
+    CREATE INDEX turn_outputs_artifact_created_idx
+      ON turn_outputs(artifact_id, created_at DESC);
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {
