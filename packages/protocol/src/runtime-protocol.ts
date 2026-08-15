@@ -8,11 +8,14 @@ import {
   executionProfileSchema,
   messageSchema,
   packSchema,
+  packSkillSchema,
   preferencesSchema,
+  projectEntrySchema,
   selectionSchema,
   settingsSnapshotSchema,
   threadSchema,
   threadViewSchema,
+  turnInputSchema,
   turnOutputSchema,
   projectSchema,
   workspaceSchema,
@@ -86,6 +89,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
       attached: z.boolean(),
     }),
   }),
+  z.object({
+    method: z.literal("workspace.listSkills"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),
   z.object({
     method: z.literal("project.add"),
@@ -100,6 +107,14 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({
       projectId: z.string().min(1),
       workspaceId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.searchEntries"),
+    params: z.object({
+      projectId: z.string().min(1),
+      query: z.string().max(200),
+      limit: z.number().int().min(1).max(80).default(50),
     }),
   }),
   z.object({
@@ -155,10 +170,19 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({
     method: z.literal("turn.start"),
-    params: z.object({
-      threadId: z.string(),
-      prompt: z.string().trim().min(1),
-    }),
+    params: z
+      .object({
+        threadId: z.string(),
+        input: turnInputSchema.optional(),
+        /** Compatibility for callers predating semantic prompt references. */
+        prompt: z.string().trim().min(1).optional(),
+      })
+      .refine(
+        (params) => params.input !== undefined || params.prompt !== undefined,
+        {
+          message: "A turn input is required",
+        }
+      ),
   }),
   z.object({
     method: z.literal("turn.cancel"),
@@ -199,9 +223,11 @@ export interface RuntimeResponses {
   "pack.import": z.infer<typeof packSchema>
   "pack.remove": null
   "workspace.setPack": null
+  "workspace.listSkills": z.infer<typeof packSkillSchema>[]
   "project.list": z.infer<typeof projectSchema>[]
   "project.add": z.infer<typeof projectSchema>
   "project.move": z.infer<typeof projectSchema>
+  "project.searchEntries": z.infer<typeof projectEntrySchema>[]
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
   "thread.configure": z.infer<typeof threadViewSchema>

@@ -14,11 +14,14 @@ import type {
   Activity,
   ThreadDeltaChange,
   ThreadView,
+  TurnInput,
 } from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
+import { resolvePromptReferences } from "./prompt-references.js"
+import type { PreparedArtifactCapture } from "./storage/artifacts.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
 import { ThreadTitleGenerator } from "./thread-title-generator.js"
@@ -79,7 +82,7 @@ export class TurnCoordinator {
     )
   }
 
-  async start(threadId: string, prompt: string): Promise<ThreadView> {
+  async start(threadId: string, input: TurnInput): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
       throw new RuntimeError(
         "turn-active",
@@ -89,7 +92,12 @@ export class TurnCoordinator {
 
     const thread = this.store.threads.getRow(threadId)
     const harness = await this.harnesses.requireAvailable(thread.harness_id)
-    const turn = this.store.turns.begin(threadId, prompt)
+    const references = await resolvePromptReferences(
+      this.store,
+      threadId,
+      input.references
+    )
+    const turn = this.store.turns.begin(threadId, input)
     const starting: StartingRun = {
       ...turn,
       threadId,
@@ -106,11 +114,14 @@ export class TurnCoordinator {
           threadId,
           turnId: turn.turnId,
           projectPath: turn.projectPath,
-          prompt,
+          prompt: input.text,
+          references,
           executionProfile: turn.executionProfile,
           customization: {
             skillRoots: existingSkillRoots(
-              this.store.packs.attachedToWorkspace(turn.workspaceId)
+              this.store.packs
+                .attachedToWorkspace(turn.workspaceId)
+                .map(({ path, name }) => ({ path, name }))
             ),
           },
           ...(turn.providerSessionId
@@ -143,7 +154,7 @@ export class TurnCoordinator {
         this.#titles.start({
           threadId,
           projectPath: turn.projectPath,
-          prompt,
+          prompt: input.text,
           harnessId: turn.harnessId,
           executionProfile: turn.executionProfile,
         })
@@ -342,13 +353,15 @@ export class TurnCoordinator {
       case "turn.completed": {
         this.#flush(run)
         run.terminal = true
+        const captures = this.#prepareArtifactCaptures(
+          run.turnId,
+          this.store.activities.running(run.turnId)
+        )
         // A finished turn settles leftover rows as completed; a red failure
         // mark on a good turn would blame work that simply never reported.
         const artifactsChanged = this.store.transaction(() => {
-          const changed = this.#captureArtifacts(
-            run.turnId,
-            this.store.activities.settleRunning(run.turnId, "completed")
-          )
+          this.store.activities.settleRunning(run.turnId, "completed")
+          const changed = this.#captureArtifacts(captures)
           this.store.turns.complete(
             threadId,
             run.turnId,
@@ -467,6 +480,11 @@ export class TurnCoordinator {
   ): void {
     const id = run.activityIds.get(providerId)
     if (!id) return
+    const pending = this.store.activities.find(id)
+    const captures =
+      pending?.status === "running" && outcome === "completed"
+        ? this.#prepareArtifactCaptures(run.turnId, [pending])
+        : []
     // The provider id stays mapped so later children can still name their
     // parent, and the status guard makes repeated completions harmless.
     const { record, artifactsChanged } = this.store.transaction(() => {
@@ -475,7 +493,7 @@ export class TurnCoordinator {
         record,
         artifactsChanged:
           record && outcome === "completed"
-            ? this.#captureArtifacts(run.turnId, [record])
+            ? this.#captureArtifacts(captures)
             : false,
       }
     })
@@ -488,12 +506,24 @@ export class TurnCoordinator {
     }
   }
 
-  #captureArtifacts(turnId: string, activities: Activity[]): boolean {
-    let changed = false
+  #prepareArtifactCaptures(
+    turnId: string,
+    activities: Activity[]
+  ): PreparedArtifactCapture[] {
+    const captures: PreparedArtifactCapture[] = []
     for (const activity of activities) {
       if (activity.payload?.kind !== "file-change") continue
       const paths = activity.payload.files.map((file) => file.path)
-      if (this.store.artifacts.capture(turnId, paths).length > 0) changed = true
+      const capture = this.store.artifacts.prepareCapture(turnId, paths)
+      if (capture) captures.push(capture)
+    }
+    return captures
+  }
+
+  #captureArtifacts(captures: PreparedArtifactCapture[]): boolean {
+    let changed = false
+    for (const capture of captures) {
+      if (this.store.artifacts.capture(capture).length > 0) changed = true
     }
     return changed
   }

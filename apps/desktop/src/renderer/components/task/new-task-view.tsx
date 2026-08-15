@@ -1,5 +1,10 @@
 import { useCallback, useState } from "react"
-import type { ExecutionProfile, Harness, Project } from "@openappto/protocol"
+import type {
+  ExecutionProfile,
+  Harness,
+  Project,
+  TurnInput,
+} from "@openappto/protocol"
 
 import {
   defaultExecutionProfile,
@@ -35,6 +40,7 @@ export function NewTaskView({
   const [chosenProfile, setChosenProfile] = useState<ExecutionProfile | null>(
     null
   )
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
 
   const loadPreferences = useCallback(
     () => client.getPreferences(project.workspaceId),
@@ -71,12 +77,12 @@ export function NewTaskView({
     setChosenProfile(null)
   }
 
-  async function handleSend(prompt: string) {
+  async function handleSend(input: TurnInput) {
     if (!harnessId) return
 
     const thread = await client.createThread(project.id, harnessId, profile)
     onTaskCreated(thread.id)
-    await client.startTurn(thread.id, prompt)
+    await client.startTurn(thread.id, input)
     onTaskStarted(thread.id)
   }
 
@@ -105,10 +111,15 @@ export function NewTaskView({
 
           <div className="w-full">
             <Composer
+              projectId={project.id}
+              workspaceId={project.workspaceId}
               label="What should the agent do?"
               placeholder="Describe the task"
               onSend={handleSend}
               blockedReason={blockedReason}
+              {...(models.length > 0
+                ? { onOpenModelPicker: () => setModelMenuOpen(true) }
+                : {})}
               autoFocus
               toolbar={
                 options.length > 0 ? (
@@ -123,6 +134,8 @@ export function NewTaskView({
                       profile={profile}
                       onChange={setChosenProfile}
                       harnessId={harnessId}
+                      modelMenuOpen={modelMenuOpen}
+                      onModelMenuOpenChange={setModelMenuOpen}
                     />
                   </>
                 ) : null

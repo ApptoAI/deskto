@@ -7,9 +7,9 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { isAbsolute, join, relative, sep } from "node:path"
 
-import type { SkillRoot } from "@openappto/harness-sdk"
+import type { HarnessPromptReference, SkillRoot } from "@openappto/harness-sdk"
 
 import { slugify } from "../../packs/pack-files.js"
 
@@ -46,7 +46,7 @@ const defaultShimsRoot = join(tmpdir(), "appto-claude-packs")
 const builtShims = new Set<string>()
 
 function ensurePluginShim(root: SkillRoot, shimsRoot: string): string {
-  const name = `${slugify(root.name) || "pack"}-${fingerprint(root.path)}`
+  const name = claudePluginName(root)
   const shim = join(shimsRoot, name)
   if (builtShims.has(shim)) return shim
 
@@ -58,6 +58,35 @@ function ensurePluginShim(root: SkillRoot, shimsRoot: string): string {
   ensureLink(join(shim, "skills"), root.path)
   builtShims.add(shim)
   return shim
+}
+
+/** Returns Claude's provider-qualified name for one selected Pack Skill. */
+export function claudeSkillCommand(
+  reference: Extract<HarnessPromptReference, { kind: "skill" }>,
+  roots: SkillRoot[]
+): string {
+  const root = roots
+    .filter((candidate) => containsPath(candidate.path, reference.path))
+    .sort((left, right) => right.path.length - left.path.length)[0]
+  if (!root) {
+    throw new Error(
+      `Selected Skill '${reference.name}' is outside the active Pack roots`
+    )
+  }
+  return `/${claudePluginName(root)}:${reference.name}`
+}
+
+function containsPath(root: string, path: string): boolean {
+  const fromRoot = relative(root, path)
+  return (
+    fromRoot !== ".." &&
+    !fromRoot.startsWith(`..${sep}`) &&
+    !isAbsolute(fromRoot)
+  )
+}
+
+function claudePluginName(root: SkillRoot): string {
+  return `${slugify(root.name) || "pack"}-${fingerprint(root.path)}`
 }
 
 /**

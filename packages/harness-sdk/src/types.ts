@@ -44,11 +44,22 @@ export type SessionCustomization = {
   skillRoots: SkillRoot[]
 }
 
+/** A reference already validated and resolved by the Runtime. */
+export type HarnessPromptReference =
+  | {
+      kind: "project-entry"
+      name: string
+      path: string
+      entryKind: "file" | "directory"
+    }
+  | { kind: "skill"; name: string; path: string }
+
 export type HarnessRunInput = {
   threadId: string
   turnId: string
   projectPath: string
   prompt: string
+  references: HarnessPromptReference[]
   executionProfile: ExecutionProfile
   customization: SessionCustomization
   providerSessionId?: string

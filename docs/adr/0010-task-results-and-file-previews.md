@@ -1,4 +1,4 @@
-# ADR 0009: Task results and file previews
+# ADR 0010: Task results and file previews
 
 - Status: accepted
 - Date: 2026-08-15

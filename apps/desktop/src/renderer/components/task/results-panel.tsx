@@ -26,6 +26,10 @@ import { useRuntimeEvent } from "../../runtime/use-runtime-event.js"
 import { useRuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { InlineError } from "../inline-error.js"
 import { base64ToArrayBuffer } from "./preview-bytes.js"
+import {
+  visibleColumnLimit,
+  visibleRowLimit,
+} from "./spreadsheet-preview-data.js"
 
 const SpreadsheetPreview = lazy(() =>
   import("./spreadsheet-preview.js").then((module) => ({
@@ -283,8 +287,23 @@ function ArtifactPreviewPane({ preview }: { preview: ArtifactPreview }) {
 
 function PdfPreview({ dataBase64 }: { dataBase64: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  const decoded = useMemo(() => {
+    try {
+      return {
+        ok: true as const,
+        bytes: new Uint8Array(base64ToArrayBuffer(dataBase64)),
+      }
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }, [dataBase64])
+  const bytes = decoded.ok ? decoded.bytes : undefined
+
   useEffect(() => {
-    const bytes = new Uint8Array(base64ToArrayBuffer(dataBase64))
+    if (!bytes) return
     const nextUrl = URL.createObjectURL(
       new Blob([bytes], { type: "application/pdf" })
     )
@@ -294,11 +313,20 @@ function PdfPreview({ dataBase64 }: { dataBase64: string }) {
       if (frame) frame.removeAttribute("src")
       URL.revokeObjectURL(nextUrl)
     }
-  }, [dataBase64])
+  }, [bytes])
+
+  if (!decoded.ok) {
+    return (
+      <div className="p-3">
+        <InlineError message={`Could not read this PDF. ${decoded.message}`} />
+      </div>
+    )
+  }
 
   return (
     <iframe
       ref={frameRef}
+      sandbox="allow-scripts"
       title="PDF result preview"
       className="size-full border-0 bg-white"
     />
@@ -306,11 +334,14 @@ function PdfPreview({ dataBase64 }: { dataBase64: string }) {
 }
 
 function CsvPreview({ content }: { content: string }) {
-  const rows = useMemo(() => parseCsv(content).slice(0, 200), [content])
+  const parsed = useMemo(() => parseCsv(content), [content])
+  const { rows, maxColumns } = parsed
   const width = Math.min(
-    50,
+    visibleColumnLimit,
     rows.reduce((largest, row) => Math.max(largest, row.length), 0)
   )
+  const rowsLimited = rows.length === visibleRowLimit
+  const columnsLimited = maxColumns > visibleColumnLimit
   return (
     <ScrollArea className="flex-1">
       <table className="w-max min-w-full border-collapse text-xs">
@@ -332,20 +363,24 @@ function CsvPreview({ content }: { content: string }) {
           ))}
         </tbody>
       </table>
-      {rows.length === 200 ? (
+      {rowsLimited || columnsLimited ? (
         <p className="p-3 text-xs text-muted-foreground">
-          Preview limited to the first 200 rows.
+          {csvPreviewLimitMessage(rowsLimited, columnsLimited)}
         </p>
       ) : null}
     </ScrollArea>
   )
 }
 
-function parseCsv(content: string): string[][] {
+function parseCsv(content: string): {
+  rows: string[][]
+  maxColumns: number
+} {
   const rows: string[][] = []
   let row: string[] = []
   let value = ""
   let quoted = false
+  let maxColumns = 0
   for (let index = 0; index < content.length; index += 1) {
     const character = content[index]!
     if (character === '"') {
@@ -361,19 +396,34 @@ function parseCsv(content: string): string[][] {
     } else if ((character === "\n" || character === "\r") && !quoted) {
       if (character === "\r" && content[index + 1] === "\n") index += 1
       row.push(value)
-      rows.push(row.slice(0, 50))
+      maxColumns = Math.max(maxColumns, row.length)
+      rows.push(row.slice(0, visibleColumnLimit))
       row = []
       value = ""
-      if (rows.length === 200) return rows
+      if (rows.length === visibleRowLimit) return { rows, maxColumns }
     } else {
       value += character
     }
   }
   if (value !== "" || row.length > 0) {
     row.push(value)
-    rows.push(row.slice(0, 50))
+    maxColumns = Math.max(maxColumns, row.length)
+    rows.push(row.slice(0, visibleColumnLimit))
   }
-  return rows
+  return { rows, maxColumns }
+}
+
+function csvPreviewLimitMessage(
+  rowsLimited: boolean,
+  columnsLimited: boolean
+): string {
+  if (rowsLimited && columnsLimited) {
+    return `Preview limited to the first ${visibleRowLimit} rows and ${visibleColumnLimit} columns.`
+  }
+  if (rowsLimited) {
+    return `Preview limited to the first ${visibleRowLimit} rows.`
+  }
+  return `Preview limited to the first ${visibleColumnLimit} columns.`
 }
 
 function ArtifactIcon({ artifact }: { artifact: Artifact }) {

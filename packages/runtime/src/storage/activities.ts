@@ -87,26 +87,30 @@ export class Activities {
     return this.#find(id)
   }
 
-  /**
-   * Settles whatever is still running when a Turn ends: completed when the
-   * Turn finished, failed when it was interrupted. Rows that never received
-   * an explicit completion should not wear a failure mark on a good turn.
-   */
-  settleRunning(turnId: string, outcome: "completed" | "failed"): Activity[] {
+  find(id: string): Activity | undefined {
+    return this.#find(id)
+  }
+
+  running(turnId: string): Activity[] {
     const rows = this.database
       .prepare(
         "SELECT * FROM activities WHERE turn_id = ? AND status = 'running'"
       )
       .all(turnId) as ActivityRow[]
-    const finishedAt = new Date().toISOString()
+    return rows.map(toActivity)
+  }
+
+  /**
+   * Settles whatever is still running when a Turn ends: completed when the
+   * Turn finished, failed when it was interrupted. Rows that never received
+   * an explicit completion should not wear a failure mark on a good turn.
+   */
+  settleRunning(turnId: string, outcome: "completed" | "failed"): void {
     this.database
       .prepare(
         "UPDATE activities SET status = ?, finished_at = ? WHERE turn_id = ? AND status = 'running'"
       )
-      .run(outcome, finishedAt, turnId)
-    return rows.map((row) =>
-      toActivity({ ...row, status: outcome, finished_at: finishedAt })
-    )
+      .run(outcome, new Date().toISOString(), turnId)
   }
 
   #find(id: string): Activity | undefined {

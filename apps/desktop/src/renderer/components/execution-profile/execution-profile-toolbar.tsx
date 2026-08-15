@@ -22,6 +22,8 @@ export function ExecutionProfileToolbar({
   onChange,
   harnessId,
   disabled = false,
+  modelMenuOpen,
+  onModelMenuOpenChange,
 }: {
   models: HarnessModel[]
   profile: ExecutionProfile
@@ -29,6 +31,8 @@ export function ExecutionProfileToolbar({
   /** Draws the provider logo beside the model; omitted, the row stays plain. */
   harnessId?: string | null
   disabled?: boolean
+  modelMenuOpen?: boolean
+  onModelMenuOpenChange?: (open: boolean) => void
 }) {
   const model = findModel(models, profile.modelId) ?? models[0]
   if (!model) return null
@@ -60,6 +64,8 @@ export function ExecutionProfileToolbar({
         label="Model"
         value={model.id}
         disabled={disabled}
+        open={modelMenuOpen}
+        onOpenChange={onModelMenuOpenChange}
         options={models.map((candidate) => ({
           value: candidate.id,
           label: candidate.name,

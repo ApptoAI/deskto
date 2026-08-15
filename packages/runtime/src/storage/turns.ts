@@ -6,6 +6,7 @@ import type {
   ExecutionProfile,
   HarnessFailure,
   Message,
+  TurnInput,
 } from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
@@ -28,7 +29,10 @@ export type ActiveTurnRecord = {
 export class Turns {
   constructor(private readonly database: DatabaseSync) {}
 
-  begin(threadId: string, prompt: string): ActiveTurnRecord {
+  begin(threadId: string, input: TurnInput): ActiveTurnRecord {
+    const prompt = input.text
+    const promptReferences =
+      input.references.length > 0 ? JSON.stringify(input.references) : null
     const context = this.database
       .prepare(
         "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
@@ -58,12 +62,13 @@ export class Turns {
     transaction(this.database, () => {
       this.database
         .prepare(
-          "INSERT INTO turns (id, thread_id, prompt, status, provider_session_id, model_id, effort, permission_mode, created_at) VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)"
+          "INSERT INTO turns (id, thread_id, prompt, prompt_references, status, provider_session_id, model_id, effort, permission_mode, created_at) VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)"
         )
         .run(
           turnId,
           threadId,
           prompt,
+          promptReferences,
           context.provider_session_id,
           context.model_id,
           context.effort,
@@ -72,9 +77,9 @@ export class Turns {
         )
       this.database
         .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, 'complete', 0, ?)"
+          "INSERT INTO messages (id, thread_id, turn_id, role, content, prompt_references, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, ?, 'complete', 0, ?)"
         )
-        .run(userMessageId, threadId, turnId, prompt, now)
+        .run(userMessageId, threadId, turnId, prompt, promptReferences, now)
       this.database
         .prepare(
           "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"

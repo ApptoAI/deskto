@@ -1,90 +1,16 @@
-import { useEffect, useState } from "react"
-
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
-import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { InlineError } from "../inline-error.js"
-import { base64ToArrayBuffer } from "./preview-bytes.js"
+import { useWorkerResult } from "./use-worker-result.js"
 
 export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
-  const [state, setState] = useState<
-    QueryState<{ html: string; warnings: number }>
-  >({ status: "loading" })
-
-  useEffect(() => {
-    let active = true
-    let worker: Worker | undefined
-    try {
-      const createdWorker = new Worker(
-        new URL("./document-worker.ts", import.meta.url),
-        { type: "module" }
-      )
-      worker = createdWorker
-      const data = base64ToArrayBuffer(dataBase64)
-      createdWorker.onmessage = (event: MessageEvent<DocumentWorkerResult>) => {
-        createdWorker.terminate()
-        if (!active) return
-        const result = event.data
-        if (!result.ok) {
-          setState({ status: "error", message: result.message })
-          return
-        }
-        void import("dompurify").then(
-          ({ default: DOMPurify }) => {
-            if (!active) return
-            setState({
-              status: "ready",
-              data: {
-                html: DOMPurify.sanitize(result.html, {
-                  USE_PROFILES: { html: true },
-                  FORBID_TAGS: ["form", "iframe", "object", "embed", "script"],
-                  FORBID_ATTR: ["href"],
-                }),
-                warnings: result.warnings,
-              },
-            })
-          },
-          (error: unknown) => {
-            if (!active) return
-            setState({
-              status: "error",
-              message: error instanceof Error ? error.message : String(error),
-            })
-          }
-        )
-      }
-      createdWorker.onerror = (event) => {
-        createdWorker.terminate()
-        if (!active) return
-        setState({
-          status: "error",
-          message: event.message || "Document worker failed",
-        })
-      }
-      createdWorker.onmessageerror = () => {
-        createdWorker.terminate()
-        if (!active) return
-        setState({
-          status: "error",
-          message: "Document worker returned an unreadable result",
-        })
-      }
-      createdWorker.postMessage(data, [data])
-    } catch (error) {
-      worker?.terminate()
-      const message = error instanceof Error ? error.message : String(error)
-      queueMicrotask(() => {
-        if (active) setState({ status: "error", message })
-      })
-      return () => {
-        active = false
-      }
-    }
-    return () => {
-      active = false
-      worker?.terminate()
-    }
-  }, [dataBase64])
+  const state = useWorkerResult(
+    createDocumentWorker,
+    dataBase64,
+    sanitizeDocument,
+    "Document worker failed",
+    "Document worker returned an unreadable result"
+  )
 
   if (state.status === "error") {
     return (
@@ -120,6 +46,22 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
   )
 }
 
-type DocumentWorkerResult =
-  | { ok: true; html: string; warnings: number }
-  | { ok: false; message: string }
+type DocumentWorkerSuccess = { ok: true; html: string; warnings: number }
+
+function createDocumentWorker(): Worker {
+  return new Worker(new URL("./document-worker.ts", import.meta.url), {
+    type: "module",
+  })
+}
+
+async function sanitizeDocument(result: DocumentWorkerSuccess) {
+  const { default: DOMPurify } = await import("dompurify")
+  return {
+    html: DOMPurify.sanitize(result.html, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ["form", "iframe", "object", "embed", "script"],
+      FORBID_ATTR: ["href"],
+    }),
+    warnings: result.warnings,
+  }
+}

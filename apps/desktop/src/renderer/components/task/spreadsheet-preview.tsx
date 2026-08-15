@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { cn } from "@workspace/ui/lib/utils"
 
-import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { InlineError } from "../inline-error.js"
-import { base64ToArrayBuffer } from "./preview-bytes.js"
 import {
   visibleColumnLimit,
   visibleRowLimit,
@@ -13,62 +11,17 @@ import {
   type PreviewSheet,
   type WorkbookPreview,
 } from "./spreadsheet-preview-data.js"
+import { useWorkerResult } from "./use-worker-result.js"
 
 export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
-  const [state, setState] = useState<QueryState<WorkbookPreview>>({
-    status: "loading",
-  })
+  const state = useWorkerResult(
+    createSpreadsheetWorker,
+    dataBase64,
+    workbookFromWorker,
+    "Workbook worker failed",
+    "Workbook worker returned an unreadable result"
+  )
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    let worker: Worker | undefined
-    try {
-      const createdWorker = new Worker(
-        new URL("./spreadsheet-worker.ts", import.meta.url),
-        { type: "module" }
-      )
-      worker = createdWorker
-      const data = base64ToArrayBuffer(dataBase64)
-      createdWorker.onmessage = (event: MessageEvent<WorkbookWorkerResult>) => {
-        createdWorker.terminate()
-        if (!active) return
-        if (event.data.ok)
-          setState({ status: "ready", data: event.data.workbook })
-        else setState({ status: "error", message: event.data.message })
-      }
-      createdWorker.onerror = (event) => {
-        createdWorker.terminate()
-        if (!active) return
-        setState({
-          status: "error",
-          message: event.message || "Workbook worker failed",
-        })
-      }
-      createdWorker.onmessageerror = () => {
-        createdWorker.terminate()
-        if (!active) return
-        setState({
-          status: "error",
-          message: "Workbook worker returned an unreadable result",
-        })
-      }
-      createdWorker.postMessage(data, [data])
-    } catch (error) {
-      worker?.terminate()
-      const message = error instanceof Error ? error.message : String(error)
-      queueMicrotask(() => {
-        if (active) setState({ status: "error", message })
-      })
-      return () => {
-        active = false
-      }
-    }
-    return () => {
-      active = false
-      worker?.terminate()
-    }
-  }, [dataBase64])
 
   if (state.status === "error") {
     return (
@@ -122,9 +75,17 @@ export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
   )
 }
 
-type WorkbookWorkerResult =
-  | { ok: true; workbook: WorkbookPreview }
-  | { ok: false; message: string }
+type WorkbookWorkerSuccess = { ok: true; workbook: WorkbookPreview }
+
+function createSpreadsheetWorker(): Worker {
+  return new Worker(new URL("./spreadsheet-worker.ts", import.meta.url), {
+    type: "module",
+  })
+}
+
+function workbookFromWorker(result: WorkbookWorkerSuccess): WorkbookPreview {
+  return result.workbook
+}
 
 function SpreadsheetGrid({ sheet }: { sheet: PreviewSheet }) {
   const rows = sheet.data

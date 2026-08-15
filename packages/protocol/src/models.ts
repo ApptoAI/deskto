@@ -57,7 +57,10 @@ export const projectSchema = z.object({
 export type Project = z.infer<typeof projectSchema>
 
 export const packSkillSchema = z.object({
-  name: z.string(),
+  id: z.string().min(1),
+  packId: z.string().min(1),
+  packName: z.string().min(1),
+  name: z.string().min(1),
   description: z.string(),
 })
 
@@ -79,6 +82,36 @@ export const packSchema = z.object({
 })
 
 export type Pack = z.infer<typeof packSchema>
+
+export const projectEntrySchema = z.object({
+  path: z.string().min(1),
+  kind: z.enum(["file", "directory"]),
+})
+
+export type ProjectEntry = z.infer<typeof projectEntrySchema>
+
+/** A semantic resource selected in the composer and validated by the Runtime. */
+export const promptReferenceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("project-entry"),
+    path: z.string().min(1),
+    entryKind: z.enum(["file", "directory"]),
+  }),
+  z.object({
+    kind: z.literal("skill"),
+    skillId: z.string().min(1),
+    name: z.string().min(1),
+  }),
+])
+
+export type PromptReference = z.infer<typeof promptReferenceSchema>
+
+export const turnInputSchema = z.object({
+  text: z.string().trim().min(1),
+  references: z.array(promptReferenceSchema).default([]),
+})
+
+export type TurnInput = z.infer<typeof turnInputSchema>
 
 /** Where the user last was, so a restart reopens the same workspace and project. */
 export const selectionSchema = z.object({
@@ -192,6 +225,7 @@ export const messageSchema = z.object({
   turnId: z.string().optional(),
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
+  references: z.array(promptReferenceSchema).optional(),
   state: z.enum(["streaming", "complete", "error"]),
   failure: harnessFailureSchema.optional(),
   /** Kept while existing databases migrate to the structured failure. */

@@ -94,8 +94,11 @@ const formats: Record<string, Pick<Artifact, "mediaType" | "previewKind">> = {
 export class Artifacts {
   constructor(private readonly database: DatabaseSync) {}
 
-  /** Records files reported by a completed file-change Activity. */
-  capture(turnId: string, paths: string[]): Artifact[] {
+  /** Resolves files before the caller opens its write transaction. */
+  prepareCapture(
+    turnId: string,
+    paths: string[]
+  ): PreparedArtifactCapture | undefined {
     const turn = this.database
       .prepare(
         `SELECT projects.id AS project_id, projects.path AS project_path
@@ -105,7 +108,7 @@ export class Artifacts {
          WHERE turns.id = ?`
       )
       .get(turnId) as TurnProjectRow | undefined
-    if (!turn) return []
+    if (!turn) return undefined
 
     const seen = new Set<string>()
     const files = paths.slice(0, capturedFilesLimit).flatMap((path) => {
@@ -115,8 +118,15 @@ export class Artifacts {
       return [resolved]
     })
 
+    return { projectId: turn.project_id, turnId, files }
+  }
+
+  /** Records a capture prepared before the surrounding write transaction. */
+  capture(prepared: PreparedArtifactCapture): Artifact[] {
     return transaction(this.database, () =>
-      files.map((file) => this.#captureFile(turn.project_id, turnId, file))
+      prepared.files.map((file) =>
+        this.#captureFile(prepared.projectId, prepared.turnId, file)
+      )
     )
   }
 
@@ -284,6 +294,12 @@ type SafeProjectFile = {
   absolutePath: string
   relativePath: string
   stats: Stats
+}
+
+export type PreparedArtifactCapture = {
+  projectId: string
+  turnId: string
+  files: SafeProjectFile[]
 }
 
 function safeProjectFile(

@@ -192,6 +192,10 @@ const migrations = [
     ALTER TABLE messages ADD COLUMN ordinal INTEGER;
   `,
   `
+    ALTER TABLE turns ADD COLUMN prompt_references TEXT;
+    ALTER TABLE messages ADD COLUMN prompt_references TEXT;
+  `,
+  `
     CREATE TABLE artifacts (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

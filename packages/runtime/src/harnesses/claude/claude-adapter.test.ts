@@ -10,10 +10,157 @@ import {
   ClaudeAdapter,
   claudeActivity,
   claudeAssistantFailure,
+  claudePrompt,
   planStepsFromTodos,
 } from "./claude-adapter.js"
 
 beforeEach(() => queryMock.mockReset())
+
+describe("claudePrompt", () => {
+  it("translates selected skills to Claude plugin commands", () => {
+    expect(
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $review on @src/a.ts",
+        references: [
+          {
+            kind: "skill",
+            name: "review",
+            path: "/packs/review/SKILL.md",
+          },
+          {
+            kind: "project-entry",
+            name: "a.ts",
+            path: "/repo/src/a.ts",
+            entryKind: "file",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [{ name: "Reviews", path: "/packs" }],
+        },
+      })
+    ).toMatch(/^Use \/reviews-[a-f0-9]{8}:review on @src\/a\.ts$/)
+  })
+
+  it("does not translate a selected skill inside a longer token", () => {
+    expect(
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $review-long, then $review, please",
+        references: [
+          {
+            kind: "skill",
+            name: "review",
+            path: "/packs/review/SKILL.md",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [{ name: "Reviews", path: "/packs" }],
+        },
+      })
+    ).toMatch(/^Use \$review-long, then \/reviews-[a-f0-9]{8}:review, please$/)
+  })
+
+  it("qualifies same-named skills with their selected Pack plugin", () => {
+    const promptFor = (packName: string, packPath: string) =>
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $review",
+        references: [
+          {
+            kind: "skill",
+            name: "review",
+            path: `${packPath}/skills/review/SKILL.md`,
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [{ name: packName, path: `${packPath}/skills` }],
+        },
+      })
+
+    const editorial = promptFor("Editorial", "/packs/editorial")
+    const engineering = promptFor("Engineering", "/packs/engineering")
+    expect(editorial).toMatch(/^Use \/editorial-[a-f0-9]{8}:review$/)
+    expect(engineering).toMatch(/^Use \/engineering-[a-f0-9]{8}:review$/)
+    expect(editorial).not.toBe(engineering)
+  })
+
+  it("does not fall back to an unqualified skill command", () => {
+    expect(() =>
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $review",
+        references: [
+          {
+            kind: "skill",
+            name: "review",
+            path: "/detached/review/SKILL.md",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [{ name: "Reviews", path: "/packs" }],
+        },
+      })
+    ).toThrow("outside the active Pack roots")
+  })
+
+  it("uses the most specific Pack root for nested imports", () => {
+    expect(
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $review",
+        references: [
+          {
+            kind: "skill",
+            name: "review",
+            path: "/packs/nested/skills/review/SKILL.md",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [
+            { name: "Outer", path: "/packs" },
+            { name: "Nested", path: "/packs/nested/skills" },
+          ],
+        },
+      })
+    ).toMatch(/^Use \/nested-[a-f0-9]{8}:review$/)
+  })
+})
 
 describe("claudeActivity", () => {
   it("classifies built-in tools into provider-neutral payloads", () => {
@@ -177,6 +324,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -247,6 +395,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -318,6 +467,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -434,6 +584,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,
@@ -540,6 +691,7 @@ describe("ClaudeAdapter", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,

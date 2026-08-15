@@ -25,6 +25,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
 - **Execution Profile**: The model, thinking level, and permission mode used by a Harness. A Thread owns the editable profile; every Turn stores the profile it started with.
 - **Pack**: An app-managed directory of skills that can be created locally or imported and attached to multiple Workspaces. Prompts, MCP configuration, templates, tool requirements, and versioning may follow.
+- **Prompt Reference**: A semantic reference selected while composing a Turn, currently a Project entry or a Skill. The Client keeps visible token text while the Runtime validates the reference and a Harness Adapter translates it to its native input.
 - **Catalog**: A future list of Packs available to a person or organization.
 - **Hub**: A future service that publishes Catalogs and Packs. A Hub does not execute Threads.
 
