@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
+import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
 import { hasUnreadCompletion, threadCameBack } from "@openappto/client"
 import type { ExecutionProfile, Harness, Project } from "@openappto/protocol"
 
@@ -18,6 +19,7 @@ import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ApprovalPanel } from "./approval-panel.js"
 import { MessageStream } from "./message-stream.js"
+import { ResultsPanel } from "./results-panel.js"
 
 export function TaskView({
   threadId,
@@ -32,6 +34,7 @@ export function TaskView({
   const { state, revalidate, replace } = useThreadView(threadId)
   const [folderError, setFolderError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [resultsOpen, setResultsOpen] = useState(false)
 
   // Looking at the task clears its indicators (unread completion, "came
   // back" from Later). The stamp fires only when there is something to
@@ -99,89 +102,107 @@ export function TaskView({
   }
 
   return (
-    <>
-      {/* Bare drag strip: the task title and its status already read from
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Bare drag strip: the task title and its status already read from
           the sidebar row, so the header carries one action and no rule. */}
-      <header className="drag-region flex h-10 shrink-0 items-center justify-end px-3">
-        {projectPath ? (
+        <header className="drag-region flex h-10 shrink-0 items-center justify-end gap-1 px-3">
+          {projectPath ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="no-drag text-muted-foreground"
+              onClick={() => void handleOpenFolder(projectPath)}
+              title={projectPath}
+            >
+              <FolderOpenIcon data-icon="inline-start" />
+              Open folder
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"
             className="no-drag text-muted-foreground"
-            onClick={() => void handleOpenFolder(projectPath)}
-            title={projectPath}
+            aria-pressed={resultsOpen}
+            onClick={() => setResultsOpen((open) => !open)}
           >
-            <FolderOpenIcon data-icon="inline-start" />
-            Open folder
+            <PanelRightIcon data-icon="inline-start" />
+            Results
           </Button>
-        ) : null}
-      </header>
+        </header>
 
-      {messages.length === 0 ? (
-        <StatusPanel
-          title="Nothing sent yet"
-          description="Write the first message to start this task."
-        />
-      ) : (
-        <MessageStream
-          messages={messages}
-          activities={activities}
-          running={active}
-        />
-      )}
-
-      <div className="shrink-0 px-6 pb-6">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-          {folderError ? <InlineError message={folderError} /> : null}
-          {profileError ? <InlineError message={profileError} /> : null}
-
-          {pendingApproval ? (
-            <ApprovalPanel
-              approval={pendingApproval}
-              onResolve={async (decision) => {
-                replace(
-                  await client.resolveApproval(
-                    thread.id,
-                    pendingApproval.id,
-                    decision
-                  )
-                )
-              }}
-            />
-          ) : null}
-
-          <Composer
-            label={`Message for ${thread.title}`}
-            placeholder={
-              active ? "The agent is working…" : "Ask for the next step"
-            }
-            running={active}
-            blockedReason={blockedReason}
-            onSend={async (prompt) => {
-              replace(await client.startTurn(thread.id, prompt))
-            }}
-            onCancel={async () => {
-              replace(await client.cancelTurn(thread.id))
-            }}
-            toolbar={
-              models.length > 0 ? (
-                <ExecutionProfileToolbar
-                  models={models}
-                  profile={thread.executionProfile}
-                  onChange={handleProfileChange}
-                  harnessId={thread.harnessId}
-                  disabled={active}
-                />
-              ) : null
-            }
-            trailing={
-              thread.contextUsage ? (
-                <ContextUsageMeter usage={thread.contextUsage} />
-              ) : null
-            }
+        {messages.length === 0 ? (
+          <StatusPanel
+            title="Nothing sent yet"
+            description="Write the first message to start this task."
           />
+        ) : (
+          <MessageStream
+            messages={messages}
+            activities={activities}
+            running={active}
+          />
+        )}
+
+        <div className="shrink-0 px-6 pb-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+            {folderError ? <InlineError message={folderError} /> : null}
+            {profileError ? <InlineError message={profileError} /> : null}
+
+            {pendingApproval ? (
+              <ApprovalPanel
+                approval={pendingApproval}
+                onResolve={async (decision) => {
+                  replace(
+                    await client.resolveApproval(
+                      thread.id,
+                      pendingApproval.id,
+                      decision
+                    )
+                  )
+                }}
+              />
+            ) : null}
+
+            <Composer
+              label={`Message for ${thread.title}`}
+              placeholder={
+                active ? "The agent is working…" : "Ask for the next step"
+              }
+              running={active}
+              blockedReason={blockedReason}
+              onSend={async (prompt) => {
+                replace(await client.startTurn(thread.id, prompt))
+              }}
+              onCancel={async () => {
+                replace(await client.cancelTurn(thread.id))
+              }}
+              toolbar={
+                models.length > 0 ? (
+                  <ExecutionProfileToolbar
+                    models={models}
+                    profile={thread.executionProfile}
+                    onChange={handleProfileChange}
+                    harnessId={thread.harnessId}
+                    disabled={active}
+                  />
+                ) : null
+              }
+              trailing={
+                thread.contextUsage ? (
+                  <ContextUsageMeter usage={thread.contextUsage} />
+                ) : null
+              }
+            />
+          </div>
         </div>
       </div>
-    </>
+      {resultsOpen ? (
+        <ResultsPanel
+          threadId={threadId}
+          onClose={() => setResultsOpen(false)}
+        />
+      ) : null}
+    </div>
   )
 }

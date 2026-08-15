@@ -18,6 +18,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Turn**: One user request and one Harness execution in a Thread.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
+- **Artifact**: A file inside a Project that a completed file-change Activity reported. The UI calls it a result. An Artifact keeps a stable identity for its project-relative path.
+- **Turn Output**: The attribution between a Turn and an Artifact it created or changed. One Artifact can be an output of several Turns.
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
@@ -36,6 +38,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.
 - Tool activity shown in a Thread is a bounded summary, not a transcript or an audit log.
+- Artifact contents are read on demand through Runtime queries. They do not live in Activities, Thread views, or Runtime events.
 - The Client rebuilds current state from Runtime queries. Runtime events only make an open view current: high-frequency changes arrive as sequenced thread deltas, and any gap falls back to a query.
 - Local use never requires a Hub or an account.
 - Provider-specific types stay inside their Harness Adapter.

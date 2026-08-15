@@ -10,7 +10,11 @@ import {
   type HarnessFailure,
   type HarnessSession,
 } from "@openappto/harness-sdk"
-import type { ThreadDeltaChange, ThreadView } from "@openappto/protocol"
+import type {
+  Activity,
+  ThreadDeltaChange,
+  ThreadView,
+} from "@openappto/protocol"
 
 import { RuntimeError, errorMessage } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
@@ -25,6 +29,8 @@ export type TurnEvents = {
   changed: (threadId: string) => void
   /** Fine-grained change an open view applies without a reload. */
   delta: (threadId: string, change: ThreadDeltaChange) => void
+  /** A completed file change produced one or more project results. */
+  artifactsChanged: (threadId: string) => void
 }
 
 type StartingRun = ActiveTurnRecord & {
@@ -333,19 +339,27 @@ export class TurnCoordinator {
         this.#requestApproval(threadId, run, event.request)
         this.events.changed(threadId)
         break
-      case "turn.completed":
+      case "turn.completed": {
         this.#flush(run)
         run.terminal = true
         // A finished turn settles leftover rows as completed; a red failure
         // mark on a good turn would blame work that simply never reported.
-        this.store.activities.settleRunning(run.turnId, "completed")
-        this.store.turns.complete(
-          threadId,
-          run.turnId,
-          this.#terminalMessageId(run)
-        )
+        const artifactsChanged = this.store.transaction(() => {
+          const changed = this.#captureArtifacts(
+            run.turnId,
+            this.store.activities.settleRunning(run.turnId, "completed")
+          )
+          this.store.turns.complete(
+            threadId,
+            run.turnId,
+            this.#terminalMessageId(run)
+          )
+          return changed
+        })
+        if (artifactsChanged) this.events.artifactsChanged(threadId)
         this.events.changed(threadId)
         break
+      }
       case "turn.failed":
         this.#fail(threadId, run, event.failure)
         break
@@ -455,12 +469,33 @@ export class TurnCoordinator {
     if (!id) return
     // The provider id stays mapped so later children can still name their
     // parent, and the status guard makes repeated completions harmless.
-    const record = this.store.activities.complete(id, outcome)
-    if (record)
+    const { record, artifactsChanged } = this.store.transaction(() => {
+      const record = this.store.activities.complete(id, outcome)
+      return {
+        record,
+        artifactsChanged:
+          record && outcome === "completed"
+            ? this.#captureArtifacts(run.turnId, [record])
+            : false,
+      }
+    })
+    if (record) {
       this.events.delta(threadId, {
         type: "activity.upserted",
         activity: record,
       })
+      if (artifactsChanged) this.events.artifactsChanged(threadId)
+    }
+  }
+
+  #captureArtifacts(turnId: string, activities: Activity[]): boolean {
+    let changed = false
+    for (const activity of activities) {
+      if (activity.payload?.kind !== "file-change") continue
+      const paths = activity.payload.files.map((file) => file.path)
+      if (this.store.artifacts.capture(turnId, paths).length > 0) changed = true
+    }
+    return changed
   }
 
   // Closes the open segment even when it is still empty: leaving it open

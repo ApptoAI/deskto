@@ -273,6 +273,10 @@ export class RequestRouter {
         this.events.threadChanged(thread.id)
         return thread
       }
+      case "artifact.list":
+        return this.store.artifacts.listForThread(request.params.threadId)
+      case "artifact.preview":
+        return this.store.artifacts.preview(request.params.artifactId)
       case "turn.start":
         return this.turns.start(request.params.threadId, request.params.prompt)
       case "turn.cancel":

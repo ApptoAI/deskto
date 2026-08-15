@@ -92,12 +92,21 @@ export class Activities {
    * Turn finished, failed when it was interrupted. Rows that never received
    * an explicit completion should not wear a failure mark on a good turn.
    */
-  settleRunning(turnId: string, outcome: "completed" | "failed"): void {
+  settleRunning(turnId: string, outcome: "completed" | "failed"): Activity[] {
+    const rows = this.database
+      .prepare(
+        "SELECT * FROM activities WHERE turn_id = ? AND status = 'running'"
+      )
+      .all(turnId) as ActivityRow[]
+    const finishedAt = new Date().toISOString()
     this.database
       .prepare(
         "UPDATE activities SET status = ?, finished_at = ? WHERE turn_id = ? AND status = 'running'"
       )
-      .run(outcome, new Date().toISOString(), turnId)
+      .run(outcome, finishedAt, turnId)
+    return rows.map((row) =>
+      toActivity({ ...row, status: outcome, finished_at: finishedAt })
+    )
   }
 
   #find(id: string): Activity | undefined {
