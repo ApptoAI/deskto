@@ -80,6 +80,8 @@ export class Runtime implements RuntimeTransport {
         packChanged: () => this.#emit({ type: "pack.changed" }),
         threadChanged: (threadId) =>
           this.#emit({ type: "thread.changed", threadId }),
+        threadDeleted: (threadId) =>
+          this.#emit({ type: "thread.deleted", threadId }),
       }
     )
   }

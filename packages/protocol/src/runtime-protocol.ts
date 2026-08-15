@@ -267,6 +267,9 @@ export type ThreadDeltaChange = z.infer<typeof threadDeltaChangeSchema>
 
 export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
+  /** The Thread is gone. Distinct from `thread.changed` because reloading a
+      deleted Thread only produces an error; views holding it must close. */
+  z.object({ type: z.literal("thread.deleted"), threadId: z.string() }),
   z.object({
     type: z.literal("thread.delta"),
     threadId: z.string(),

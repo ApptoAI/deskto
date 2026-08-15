@@ -442,6 +442,9 @@ describe("Runtime", () => {
       })
     )
 
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
     // Deleting outranks the activity guards: a task the user gave up on may
     // well be one whose agent will not stop on its own.
     unwrap(
@@ -450,6 +453,11 @@ describe("Runtime", () => {
         params: { threadId: created.id },
       })
     )
+
+    // Removal has its own event: `thread.changed` would send open views back
+    // to `thread.get` for a task that is no longer there.
+    expect(events).toContain("thread.deleted")
+    expect(events).not.toContain("thread.changed")
 
     const remaining = unwrap(
       await runtime.request({

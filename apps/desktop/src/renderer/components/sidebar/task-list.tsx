@@ -39,7 +39,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@workspace/ui/components/dialog"
 import {
   DropdownMenu,
@@ -115,6 +114,9 @@ export function TaskList({
     decodeBoolean
   )
   const [doneVisibleCount, setDoneVisibleCount] = useState(DONE_INITIAL_COUNT)
+  // The confirmation lives with the list, not the row: a row remounts when its
+  // task changes section, and a dialog inside it would vanish mid-decision.
+  const [deleteTarget, setDeleteTarget] = useState<Thread | null>(null)
 
   if (state.status === "idle") return null
 
@@ -174,6 +176,7 @@ export function TaskList({
       actions={actions}
       snoozePresets={snoozePresets}
       projectName={projectNameById?.get(thread.projectId)}
+      onRequestDelete={setDeleteTarget}
     />
   )
 
@@ -254,6 +257,15 @@ export function TaskList({
           }
         />
       ) : null}
+
+      <DeleteTaskDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(threadId) => {
+          setDeleteTarget(null)
+          actions.onDelete(threadId)
+        }}
+      />
     </div>
   )
 }
@@ -348,6 +360,7 @@ function TaskRow({
   actions,
   snoozePresets,
   projectName,
+  onRequestDelete,
 }: {
   thread: Thread
   section: InboxSection
@@ -357,12 +370,14 @@ function TaskRow({
   actions: InboxActions
   snoozePresets: readonly SnoozePreset[]
   projectName?: string | undefined
+  onRequestDelete: (thread: Thread) => void
 }) {
-  // An open menu holds the row in its hover state: the pointer sits in a
-  // portalled popup, so without this the buttons would fade out from under it.
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const held = menuOpen || confirmingDelete
+  // An open popup holds the row in its hover state: the pointer sits in a
+  // portalled menu, so without this the buttons would fade out from under it.
+  // The two menus track separately, or closing one would clear the other's.
+  const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [snoozeMenuOpen, setSnoozeMenuOpen] = useState(false)
+  const popupOpen = contextMenuOpen || snoozeMenuOpen
   const pinned = thread.pinnedAt != null
   const status = describeThreadStatus(thread.status)
   const busy = thread.status !== "idle"
@@ -387,186 +402,186 @@ function TaskRow({
   const dimmed = section === "done" || section === "later"
 
   return (
-    <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
-      <ContextMenu onOpenChange={setMenuOpen}>
-        <ContextMenuTrigger
-          render={<li className="group enter-rise relative" />}
+    <ContextMenu onOpenChange={setContextMenuOpen}>
+      <ContextMenuTrigger render={<li className="group enter-rise relative" />}>
+        <button
+          type="button"
+          id={taskRowButtonId(thread.id)}
+          onClick={() => onOpenThread(thread.id)}
+          aria-current={isOpen ? "true" : undefined}
+          className={cn(
+            "flex w-full items-start gap-2.5 rounded-lg py-2 pr-7 pl-2 text-left text-sm",
+            "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
+            "focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]",
+            dimmed ? "text-muted-foreground/80" : "text-foreground/90",
+            isOpen
+              ? "bg-background text-foreground shadow-xs ring-1 ring-border/70 dark:bg-accent dark:shadow-none dark:ring-0"
+              : "hover:bg-muted/50"
+          )}
         >
-          <button
-            type="button"
-            onClick={() => onOpenThread(thread.id)}
-            aria-current={isOpen ? "true" : undefined}
+          <span
             className={cn(
-              "flex w-full items-start gap-2.5 rounded-lg py-2 pr-7 pl-2 text-left text-sm",
-              "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
-              "focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]",
-              dimmed ? "text-muted-foreground/80" : "text-foreground/90",
-              isOpen
-                ? "bg-background text-foreground shadow-xs ring-1 ring-border/70 dark:bg-accent dark:shadow-none dark:ring-0"
-                : "hover:bg-muted/50"
+              "flex h-5 shrink-0 items-center",
+              dimmed && !isOpen && "opacity-60"
+            )}
+          >
+            <HarnessLogo
+              harnessId={thread.harnessId}
+              className={cn(
+                "size-3.5",
+                harnessAccent[thread.harnessId] ?? "text-muted-foreground"
+              )}
+              fallback={
+                <span
+                  aria-hidden
+                  className="size-3.5 rounded-full border-[1.5px] border-muted-foreground/40"
+                />
+              }
+            />
+          </span>
+          {/* The buttons sit over this column, so the text truncates earlier
+              while they are up rather than running underneath them. */}
+          <span
+            className={cn(
+              "min-w-0 flex-1 transition-[padding] duration-150 ease-(--ease-out-quart) group-focus-within:pr-8 group-hover:pr-8",
+              popupOpen && "pr-8"
             )}
           >
             <span
               className={cn(
-                "flex h-5 shrink-0 items-center",
-                dimmed && !isOpen && "opacity-60"
+                "block truncate leading-5",
+                needsALook && !isOpen && "font-medium text-foreground"
               )}
             >
-              <HarnessLogo
-                harnessId={thread.harnessId}
-                className={cn(
-                  "size-3.5",
-                  harnessAccent[thread.harnessId] ?? "text-muted-foreground"
-                )}
-                fallback={
-                  <span
-                    aria-hidden
-                    className="size-3.5 rounded-full border-[1.5px] border-muted-foreground/40"
-                  />
-                }
-              />
+              {thread.title}
             </span>
-            <span className="min-w-0 flex-1">
-              <span
-                className={cn(
-                  "block truncate leading-5",
-                  needsALook && !isOpen && "font-medium text-foreground"
-                )}
-              >
-                {thread.title}
-              </span>
-              {projectName ? (
-                <span className="mt-0.5 flex items-center gap-1 pr-7 text-xs leading-4 text-muted-foreground/70">
-                  <FolderIcon
-                    aria-hidden
-                    className="size-3 shrink-0 text-muted-foreground/50"
-                  />
-                  <span className="truncate">{projectName}</span>
-                </span>
-              ) : null}
-            </span>
-            <span
-              className={cn(
-                "flex h-5 shrink-0 items-center gap-1.5 transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0",
-                held && "opacity-0"
-              )}
-            >
-              <RowIndicator
-                thread={thread}
-                section={section}
-                needsALook={needsALook}
-              />
-              <span
-                className={cn(
-                  "text-xs tabular-nums",
-                  isWakeLabel
-                    ? "text-violet-500/90 dark:text-violet-400/90"
-                    : "text-muted-foreground/70"
-                )}
-                title={timeTitle}
-              >
-                {timeLabel}
-              </span>
-            </span>
-            {busy ? (
-              <span className="sr-only">{status.label}</span>
-            ) : needsALook ? (
-              <span className="sr-only">
-                {cameBack
-                  ? "Back from Later"
-                  : "Finished since your last visit"}
+            {projectName ? (
+              <span className="mt-0.5 flex items-center gap-1 pr-7 text-xs leading-4 text-muted-foreground/70">
+                <FolderIcon
+                  aria-hidden
+                  className="size-3 shrink-0 text-muted-foreground/50"
+                />
+                <span className="truncate">{projectName}</span>
               </span>
             ) : null}
-          </button>
-          <span className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1">
-            {section === "done" ? (
-              <RowActionButton
-                label={`Restore ${thread.title}`}
-                tooltip="Restore"
-                held={held}
-                onClick={() => actions.onSetDone(thread.id, false)}
-              >
-                <RotateCcwIcon className="size-3.5" />
-              </RowActionButton>
-            ) : (
-              <>
-                {section === "later" ? (
-                  <RowActionButton
-                    label={`Wake ${thread.title} now`}
-                    tooltip="Wake now"
-                    held={held}
-                    onClick={() => actions.onWake(thread.id)}
-                  >
-                    <ClockArrowUpIcon className="size-3.5" />
-                  </RowActionButton>
-                ) : canSnooze(thread) ? (
-                  <SnoozeButton
-                    thread={thread}
-                    held={held}
-                    snoozePresets={snoozePresets}
-                    onSnooze={actions.onSnooze}
-                    onOpenChange={setMenuOpen}
-                  />
-                ) : null}
-                <RowActionButton
-                  label={
-                    pinned ? `Unpin ${thread.title}` : `Pin ${thread.title}`
-                  }
-                  tooltip={pinned ? "Unpin" : "Pin"}
-                  held={held}
-                  onClick={() => actions.onSetPinned(thread.id, !pinned)}
-                >
-                  {pinned ? (
-                    <PinOffIcon className="size-3.5" />
-                  ) : (
-                    <PinIcon className="size-3.5" />
-                  )}
-                </RowActionButton>
-                {canMarkDone(thread) ? (
-                  <RowActionButton
-                    label={`Mark ${thread.title} done`}
-                    tooltip="Mark done"
-                    tone="done"
-                    held={held}
-                    onClick={() => actions.onSetDone(thread.id, true)}
-                  >
-                    <CheckIcon className="size-3.5" />
-                  </RowActionButton>
-                ) : null}
-              </>
-            )}
           </span>
-        </ContextMenuTrigger>
-        <TaskRowMenu
-          thread={thread}
-          section={section}
-          actions={actions}
-          snoozePresets={snoozePresets}
-        />
-      </ContextMenu>
-      <DeleteTaskDialog
-        title={thread.title}
-        onCancel={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          setConfirmingDelete(false)
-          actions.onDelete(thread.id)
-        }}
+          <span
+            className={cn(
+              "flex h-5 shrink-0 items-center gap-1.5 transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0",
+              popupOpen && "opacity-0"
+            )}
+          >
+            <RowIndicator
+              thread={thread}
+              section={section}
+              needsALook={needsALook}
+            />
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                isWakeLabel
+                  ? "text-violet-500/90 dark:text-violet-400/90"
+                  : "text-muted-foreground/70"
+              )}
+              title={timeTitle}
+            >
+              {timeLabel}
+            </span>
+          </span>
+          {busy ? (
+            <span className="sr-only">{status.label}</span>
+          ) : needsALook ? (
+            <span className="sr-only">
+              {cameBack ? "Back from Later" : "Finished since your last visit"}
+            </span>
+          ) : null}
+        </button>
+        {/* Transparent to the pointer so the gaps between the buttons still
+              belong to the row underneath. */}
+        <span className="pointer-events-none absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1">
+          {section === "done" ? (
+            <RowActionButton
+              action="Restore"
+              subject={thread.title}
+              popupOpen={popupOpen}
+              onClick={() => actions.onSetDone(thread.id, false)}
+            >
+              <RotateCcwIcon className="size-3.5" />
+            </RowActionButton>
+          ) : (
+            <>
+              {section === "later" ? (
+                <RowActionButton
+                  action="Wake now"
+                  subject={thread.title}
+                  popupOpen={popupOpen}
+                  onClick={() => actions.onWake(thread.id)}
+                >
+                  <ClockArrowUpIcon className="size-3.5" />
+                </RowActionButton>
+              ) : canSnooze(thread) ? (
+                <SnoozeButton
+                  thread={thread}
+                  popupOpen={popupOpen}
+                  snoozePresets={snoozePresets}
+                  onSnooze={actions.onSnooze}
+                  onOpenChange={setSnoozeMenuOpen}
+                />
+              ) : null}
+              <RowActionButton
+                action={pinned ? "Unpin" : "Pin"}
+                subject={thread.title}
+                popupOpen={popupOpen}
+                onClick={() => actions.onSetPinned(thread.id, !pinned)}
+              >
+                {pinned ? (
+                  <PinOffIcon className="size-3.5" />
+                ) : (
+                  <PinIcon className="size-3.5" />
+                )}
+              </RowActionButton>
+              {canMarkDone(thread) ? (
+                <RowActionButton
+                  action="Mark done"
+                  subject={thread.title}
+                  tone="done"
+                  popupOpen={popupOpen}
+                  onClick={() => actions.onSetDone(thread.id, true)}
+                >
+                  <CheckIcon className="size-3.5" />
+                </RowActionButton>
+              ) : null}
+            </>
+          )}
+        </span>
+      </ContextMenuTrigger>
+      <TaskRowMenu
+        thread={thread}
+        section={section}
+        actions={actions}
+        snoozePresets={snoozePresets}
+        onRequestDelete={() => onRequestDelete(thread)}
       />
-    </Dialog>
+    </ContextMenu>
   )
+}
+
+/** Lets the list hand focus back to the row a dialog was opened from. */
+function taskRowButtonId(threadId: string): string {
+  return `task-row-${threadId}`
 }
 
 /** Opens the snooze presets from the row itself, so parking a task for later
     costs one hover and one click instead of a trip through the menu. */
 function SnoozeButton({
   thread,
-  held,
+  popupOpen,
   snoozePresets,
   onSnooze,
   onOpenChange,
 }: {
   thread: Thread
-  held: boolean
+  popupOpen: boolean
   snoozePresets: readonly SnoozePreset[]
   onSnooze: (threadId: string, until: string) => void
   onOpenChange: (open: boolean) => void
@@ -576,9 +591,9 @@ function SnoozeButton({
       <DropdownMenuTrigger
         render={
           <RowActionButton
-            label={`Snooze ${thread.title} for later`}
-            tooltip="Later"
-            held={held}
+            action="Later"
+            subject={thread.title}
+            popupOpen={popupOpen}
           />
         }
       >
@@ -599,34 +614,52 @@ function SnoozeButton({
 }
 
 /** Deleting is the one row action with nothing behind it, so it asks first
-    and says exactly what goes away. */
+    and says exactly what goes away. One dialog serves the whole list, and
+    closing it hands focus back to the row it was opened from. */
 function DeleteTaskDialog({
-  title,
-  onCancel,
+  target,
+  onClose,
   onConfirm,
 }: {
-  title: string
-  onCancel: () => void
-  onConfirm: () => void
+  target: Thread | null
+  onClose: () => void
+  onConfirm: (threadId: string) => void
 }) {
+  // The target clears the moment the dialog starts closing, so the last one
+  // stays around: it names the task through the fade and tells the focus
+  // handler which row to go back to.
+  const [lastTarget, setLastTarget] = useState<Thread | null>(null)
+  if (target && target !== lastTarget) setLastTarget(target)
+  const shown = target ?? lastTarget
+
   return (
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Delete this task?</DialogTitle>
-        <DialogDescription>
-          “{title}” and its whole conversation go for good. Files in the project
-          folder stay as they are.
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="button" variant="destructive" onClick={onConfirm}>
-          Delete
-        </Button>
-      </DialogFooter>
-    </DialogContent>
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        finalFocus={() =>
+          (shown && document.getElementById(taskRowButtonId(shown.id))) ?? false
+        }
+      >
+        <DialogHeader>
+          <DialogTitle>Delete this task?</DialogTitle>
+          <DialogDescription>
+            “{shown?.title}” and its whole conversation go for good. Files in
+            the project folder stay as they are.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => shown && onConfirm(shown.id)}
+          >
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -634,31 +667,39 @@ function DeleteTaskDialog({
  * One of the controls a row carries: a round target that fades in on hover,
  * over the timestamp it replaces. Marking done greets the pointer in green —
  * it is the affirmative action and the only place the inbox spends that color.
- * `held` keeps the cluster up while a popup this button opened is on screen.
+ *
+ * The accessible name starts with the visible tooltip so voice control can act
+ * on what it reads, and the task follows to tell one row's buttons from the
+ * next. `popupOpen` keeps the cluster up while a menu the row opened is on
+ * screen.
  */
 function RowActionButton({
-  label,
-  tooltip,
+  action,
+  subject,
   tone,
-  held,
+  popupOpen,
   className,
   ...props
 }: ComponentProps<"button"> & {
-  label: string
-  tooltip: string
+  action: string
+  subject: string
   tone?: "done"
-  held?: boolean
+  popupOpen?: boolean
 }) {
   return (
     <button
       type="button"
-      aria-label={label}
-      title={tooltip}
+      aria-label={`${action}: ${subject}`}
+      title={action}
       className={cn(
         "pointer-events-none flex size-6 scale-90 items-center justify-center rounded-full border border-border/70 bg-sidebar text-muted-foreground opacity-0 shadow-xs",
         "transition-[opacity,scale,background-color,border-color,color] duration-150 ease-(--ease-out-quart) outline-none active:scale-95",
-        "group-focus-within:pointer-events-auto group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50",
-        held && "pointer-events-auto scale-100 opacity-100",
+        "group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100",
+        // Keyboard focus anywhere in the row shows the cluster too: the
+        // timestamp fades on focus-within, and nothing should replace it.
+        "group-focus-within:pointer-events-auto group-focus-within:scale-100 group-focus-within:opacity-100",
+        "focus-visible:ring-2 focus-visible:ring-ring/50",
+        popupOpen && "pointer-events-auto scale-100 opacity-100",
         tone === "done"
           ? "hover:border-emerald-500/50 hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400"
           : "hover:border-border hover:bg-muted hover:text-foreground",
@@ -798,11 +839,13 @@ function TaskRowMenu({
   section,
   actions,
   snoozePresets,
+  onRequestDelete,
 }: {
   thread: Thread
   section: InboxSection
   actions: InboxActions
   snoozePresets: readonly SnoozePreset[]
+  onRequestDelete: () => void
 }) {
   const pinned = thread.pinnedAt != null
   return (
@@ -854,8 +897,8 @@ function TaskRowMenu({
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
-      {/* The trigger lives in the menu; the row owns the dialog it opens. */}
-      <DropdownMenuItem variant="destructive" render={<DialogTrigger />}>
+      {/* The item only asks; the list owns the confirmation and the delete. */}
+      <DropdownMenuItem variant="destructive" onClick={onRequestDelete}>
         <Trash2Icon data-icon="inline-start" />
         Delete
       </DropdownMenuItem>

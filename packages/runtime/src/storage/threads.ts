@@ -228,6 +228,7 @@ export class Threads {
       .run(id)
     if (result.changes === 0)
       throw new RuntimeError("thread-not-found", "Task not found")
+    this.sequences.forget(id)
   }
 
   getRow(id: string): ThreadRow {
