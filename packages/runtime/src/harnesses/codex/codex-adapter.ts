@@ -37,6 +37,21 @@ type PendingApproval = {
   request: Extract<HarnessEvent, { type: "approval.requested" }>["request"]
 }
 
+type ActivityScope = {
+  parentId?: string
+  providerThreadId?: string
+}
+
+type DelegationLifecycle = {
+  childThreadIds: string[]
+  defersCompletion: boolean
+  interruptedThreadId?: string
+  terminalStates: Array<{
+    threadId: string
+    outcome: "completed" | "failed"
+  }>
+}
+
 export class CodexAdapter implements HarnessAdapterFactory {
   readonly descriptor = { id: "codex", name: "Codex" }
 
@@ -97,7 +112,12 @@ export class CodexAdapter implements HarnessAdapterFactory {
 class CodexSession implements HarnessSession {
   readonly #queue = new AsyncQueue<HarnessEvent>()
   readonly #approvalQueue: PendingApproval[] = []
+  readonly #activityThreads = new Map<string, string>()
+  readonly #delegatedActivities = new Map<string, string>()
+  readonly #delegationFailures = new Set<string>()
   readonly #lastActivityShape = new Map<string, string>()
+  readonly #startedPlans = new Set<string>()
+  readonly #settledActivities = new Set<string>()
   readonly events = this.#queue
   #activeApproval?: PendingApproval
   #threadId?: string
@@ -233,12 +253,14 @@ class CodexSession implements HarnessSession {
     if (!params) return
 
     if (notification.method === "item/agentMessage/delta") {
+      if (!this.#isCurrentTurn(params)) return
       const delta = getString(params, "delta")
       if (delta) this.#queue.push({ type: "message.delta", text: delta })
       return
     }
 
     if (notification.method === "thread/tokenUsage/updated") {
+      if (!this.#isCurrentThread(params)) return
       const usage = codexContextUsage(params.tokenUsage)
       if (usage) this.#queue.push({ type: "usage.updated", usage })
       return
@@ -249,14 +271,46 @@ class CodexSession implements HarnessSession {
       return
     }
 
+    if (notification.method === "turn/plan/updated") {
+      const scope = this.#activityScope(params)
+      if (!scope) return
+      this.#pushPlan(params, scope)
+      return
+    }
+
     if (
       notification.method === "item/started" ||
       notification.method === "item/updated" ||
       notification.method === "item/completed"
     ) {
+      const scope = this.#activityScope(params)
+      if (!scope) return
       const item = isRecord(params.item) ? params.item : undefined
-      const activity = codexActivity(item)
-      if (!activity) return
+      const delegation = codexDelegationLifecycle(item)
+      if (delegation) {
+        const activityId = getString(item, "id")
+        if (activityId) {
+          for (const threadId of delegation.childThreadIds) {
+            this.#delegatedActivities.set(threadId, activityId)
+          }
+        }
+        for (const terminal of delegation.terminalStates) {
+          this.#settleDelegatedThread(terminal.threadId, terminal.outcome)
+        }
+        if (delegation.interruptedThreadId) {
+          this.#settleDelegatedThread(delegation.interruptedThreadId, "failed")
+          return
+        }
+      }
+      const baseActivity = codexActivity(item)
+      if (!baseActivity) return
+      if (this.#settledActivities.has(baseActivity.id)) return
+      const activity = scope.parentId
+        ? { ...baseActivity, parentId: scope.parentId }
+        : baseActivity
+      if (scope.providerThreadId) {
+        this.#activityThreads.set(activity.id, scope.providerThreadId)
+      }
       if (notification.method === "item/started") {
         this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
         this.#queue.push({ type: "activity.started", activity })
@@ -270,22 +324,33 @@ class CodexSession implements HarnessSession {
         // The terminal item can contain the final plan or file-change shape
         // even when Codex did not send a matching item/updated notification.
         this.#pushActivityUpdate(activity)
-        this.#lastActivityShape.delete(activity.id)
-        this.#queue.push({
-          type: "activity.completed",
-          id: activity.id,
-          // A plan that ends without a status settled fine; for every other
-          // item a missing status means it never ran to completion.
-          outcome:
-            status === "completed" || (status === undefined && type === "plan")
-              ? "completed"
-              : "failed",
-        })
+        // A successful spawn only completes the announcement. The delegated
+        // activity settles from the child turn or a reported agent state.
+        if (
+          delegation?.defersCompletion &&
+          status !== "failed" &&
+          status !== "errored"
+        )
+          return
+        this.#completeActivity(
+          activity.id,
+          codexActivityOutcome(type, status, item)
+        )
       }
       return
     }
 
     if (notification.method === "error" && params.willRetry === false) {
+      const errorThreadId = getString(params, "threadId")
+      if (
+        errorThreadId &&
+        errorThreadId !== this.#threadId &&
+        this.#delegatedActivities.has(errorThreadId)
+      ) {
+        this.#settleDelegatedThread(errorThreadId, "failed")
+        return
+      }
+      if (!this.#isCurrentTurn(params)) return
       const error = isRecord(params.error) ? params.error : undefined
       this.#queue.push({
         type: "turn.failed",
@@ -299,6 +364,20 @@ class CodexSession implements HarnessSession {
     }
 
     if (notification.method !== "turn/completed") return
+    const notificationThreadId = getString(params, "threadId")
+    if (
+      notificationThreadId &&
+      notificationThreadId !== this.#threadId &&
+      this.#delegatedActivities.has(notificationThreadId)
+    ) {
+      const childTurn = isRecord(params.turn) ? params.turn : undefined
+      this.#settleDelegatedThread(
+        notificationThreadId,
+        getString(childTurn, "status") === "completed" ? "completed" : "failed"
+      )
+      return
+    }
+    if (!this.#isCurrentTurn(params)) return
     const turn = isRecord(params.turn) ? params.turn : undefined
     const status = getString(turn, "status")
     if (status === "completed") {
@@ -314,6 +393,105 @@ class CodexSession implements HarnessSession {
       })
     }
     this.#finish()
+  }
+
+  #isCurrentThread(params: Record<string, unknown>): boolean {
+    const threadId = getString(params, "threadId")
+    return (
+      threadId === undefined ||
+      this.#threadId === undefined ||
+      threadId === this.#threadId
+    )
+  }
+
+  #isCurrentTurn(params: Record<string, unknown>): boolean {
+    const turn = isRecord(params.turn) ? params.turn : undefined
+    const turnId = getString(params, "turnId") ?? getString(turn, "id")
+    return (
+      this.#isCurrentThread(params) &&
+      (turnId === undefined ||
+        this.#turnId === undefined ||
+        turnId === this.#turnId)
+    )
+  }
+
+  #activityScope(params: Record<string, unknown>): ActivityScope | undefined {
+    if (this.#isCurrentTurn(params)) return {}
+    const threadId = getString(params, "threadId")
+    if (!threadId) return undefined
+    const parentId = this.#delegatedActivities.get(threadId)
+    return parentId ? { parentId, providerThreadId: threadId } : undefined
+  }
+
+  #settleDelegatedThread(
+    threadId: string,
+    outcome: "completed" | "failed",
+    visited: Set<string> = new Set()
+  ): void {
+    if (visited.has(threadId)) return
+    visited.add(threadId)
+    const activityId = this.#delegatedActivities.get(threadId)
+    if (!activityId) return
+    for (const [childActivityId, ownerThreadId] of this.#activityThreads) {
+      if (ownerThreadId !== threadId) continue
+      const descendantThreads = [...this.#delegatedActivities.entries()]
+        .filter(([, parentActivityId]) => parentActivityId === childActivityId)
+        .map(([descendantThreadId]) => descendantThreadId)
+      for (const descendantThreadId of descendantThreads) {
+        this.#settleDelegatedThread(descendantThreadId, outcome, visited)
+      }
+      this.#completeActivity(childActivityId, outcome)
+    }
+    if (outcome === "failed") this.#delegationFailures.add(activityId)
+    this.#delegatedActivities.delete(threadId)
+    const hasRunningSibling = [...this.#delegatedActivities.values()].includes(
+      activityId
+    )
+    if (hasRunningSibling) return
+    const finalOutcome = this.#delegationFailures.delete(activityId)
+      ? "failed"
+      : outcome
+    this.#completeActivity(activityId, finalOutcome)
+  }
+
+  #completeActivity(activityId: string, outcome: "completed" | "failed"): void {
+    if (this.#settledActivities.has(activityId)) return
+    this.#settledActivities.add(activityId)
+    this.#activityThreads.delete(activityId)
+    this.#delegationFailures.delete(activityId)
+    this.#lastActivityShape.delete(activityId)
+    for (const [candidateThreadId, candidateActivityId] of this
+      .#delegatedActivities) {
+      if (candidateActivityId === activityId) {
+        this.#delegatedActivities.delete(candidateThreadId)
+      }
+    }
+    this.#queue.push({ type: "activity.completed", id: activityId, outcome })
+  }
+
+  /** The current app-server sends plans outside the item lifecycle. */
+  #pushPlan(params: Record<string, unknown>, scope: ActivityScope): void {
+    const steps = codexPlanSteps(params)
+    if (steps.length === 0) return
+    const id = scope.providerThreadId
+      ? `${codexPlanActivityId}:${scope.providerThreadId}`
+      : codexPlanActivityId
+    const activity: ActivityStart = {
+      id,
+      name: "Plan",
+      ...(scope.parentId ? { parentId: scope.parentId } : {}),
+      payload: { kind: "plan", steps },
+    }
+    if (scope.providerThreadId) {
+      this.#activityThreads.set(activity.id, scope.providerThreadId)
+    }
+    if (this.#startedPlans.has(activity.id)) {
+      this.#pushActivityUpdate(activity)
+      return
+    }
+    this.#startedPlans.add(activity.id)
+    this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
+    this.#queue.push({ type: "activity.started", activity })
   }
 
   #pushActivityUpdate(activity: ActivityStart): void {
@@ -551,14 +729,44 @@ export function codexActivity(
   }
   if (type === "plan") {
     const steps = item ? codexPlanSteps(item) : []
+    if (steps.length === 0) return undefined
     return {
       id,
       name: "Plan",
-      ...detailOf(steps.length === 0 ? getString(item, "text") : undefined),
-      payload:
-        steps.length > 0
-          ? { kind: "plan", steps }
-          : { kind: "tool", tool: "other" },
+      payload: { kind: "plan", steps },
+    }
+  }
+  if (type === "subAgentActivity") {
+    const agentPath = getString(item, "agentPath")
+    const kind = getString(item, "kind")
+    return kind === "started"
+      ? {
+          id,
+          name: subagentName(agentPath),
+          payload: { kind: "subagent" },
+        }
+      : {
+          id,
+          name: kind === "interrupted" ? "Stop subagent" : "Contact subagent",
+          ...detailOf(agentPath),
+          payload: { kind: "tool", tool: "other" },
+        }
+  }
+  if (type === "collabAgentToolCall") {
+    const tool = getString(item, "tool")
+    const prompt = compactDetail(item?.prompt)
+    if (tool === "spawnAgent") {
+      return {
+        id,
+        name: prompt ? firstLine(prompt, 80) : "Subagent",
+        payload: { kind: "subagent" },
+      }
+    }
+    return {
+      id,
+      name: collabToolName(tool),
+      ...detailOf(prompt),
+      payload: { kind: "tool", tool: "other" },
     }
   }
   if (type === "mcpToolCall") {
@@ -590,6 +798,95 @@ export function codexActivity(
 }
 
 const ignoredItemTypes = new Set(["agentMessage", "userMessage", "reasoning"])
+
+const codexPlanActivityId = "codex-plan"
+
+function codexActivityOutcome(
+  type: string | undefined,
+  status: string | undefined,
+  item: Record<string, unknown> | undefined
+): "completed" | "failed" {
+  if (status !== undefined)
+    return status === "completed" ? "completed" : "failed"
+  if (type === "plan") return "completed"
+  if (type === "subAgentActivity") {
+    return getString(item, "kind") === "interrupted" ? "failed" : "completed"
+  }
+  return "failed"
+}
+
+function codexDelegationLifecycle(
+  item: Record<string, unknown> | undefined
+): DelegationLifecycle | undefined {
+  const type = getString(item, "type")
+  if (type === "subAgentActivity") {
+    const threadId = getString(item, "agentThreadId")
+    const kind = getString(item, "kind")
+    return {
+      childThreadIds: kind === "started" && threadId ? [threadId] : [],
+      defersCompletion: kind === "started",
+      ...(kind === "interrupted" && threadId
+        ? { interruptedThreadId: threadId }
+        : {}),
+      terminalStates: [],
+    }
+  }
+  if (type !== "collabAgentToolCall") return undefined
+
+  const childThreadIds =
+    getString(item, "tool") === "spawnAgent"
+      ? stringArray(item?.receiverThreadIds)
+      : []
+  const states = isRecord(item?.agentsStates) ? item.agentsStates : {}
+  const terminalStates = Object.entries(states).flatMap(
+    ([threadId, rawState]): DelegationLifecycle["terminalStates"] => {
+      const state = isRecord(rawState)
+        ? getString(rawState, "status")
+        : undefined
+      if (state === "completed" || state === "shutdown") {
+        return [{ threadId, outcome: "completed" }]
+      }
+      if (
+        state === "interrupted" ||
+        state === "errored" ||
+        state === "notFound"
+      ) {
+        return [{ threadId, outcome: "failed" }]
+      }
+      return []
+    }
+  )
+  return {
+    childThreadIds,
+    defersCompletion: getString(item, "tool") === "spawnAgent",
+    terminalStates,
+  }
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : []
+}
+
+function subagentName(agentPath: string | undefined): string {
+  const leaf = agentPath?.split("/").filter(Boolean).at(-1)
+  return leaf ? wordsFromIdentifier(leaf) : "Subagent"
+}
+
+function collabToolName(tool: string | undefined): string {
+  const names: Record<string, string> = {
+    sendInput: "Contact subagent",
+    resumeAgent: "Resume subagent",
+    wait: "Wait for subagents",
+    closeAgent: "Close subagent",
+  }
+  return names[tool ?? ""] ?? "Use subagent"
+}
+
+function firstLine(value: string, maxLength: number): string {
+  return value.split(/\r?\n/, 1)[0]!.slice(0, maxLength)
+}
 
 function detailOf(detail: string | undefined): { detail?: string } {
   return detail ? { detail } : {}
@@ -668,6 +965,10 @@ export function codexPlanSteps(item: Record<string, unknown>): PlanStep[] {
 function wordsFromCamelCase(value: string): string {
   const words = value.replace(/([a-z])([A-Z])/g, "$1 $2")
   return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function wordsFromIdentifier(value: string): string {
+  return wordsFromCamelCase(value.replaceAll(/[-_]+/g, " "))
 }
 
 function approvalKind(method: string): "command" | "file-change" | undefined {

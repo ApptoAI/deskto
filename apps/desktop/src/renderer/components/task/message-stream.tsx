@@ -25,6 +25,11 @@ import { openExternal } from "../../lib/desktop.js"
 import { TurnFailureNotice } from "./turn-failure-notice.js"
 import { WorkingIndicator } from "./working-indicator.js"
 
+type ActivityNode = {
+  activity: Activity
+  children: ActivityNode[]
+}
+
 type TurnEntry =
   | { kind: "message"; key: string; order: number; message: Message }
   | {
@@ -32,7 +37,7 @@ type TurnEntry =
       key: string
       order: number
       activity: Activity
-      children: Activity[]
+      children: ActivityNode[]
     }
 
 /** What the stream actually draws: messages and standalone boxes stay solo,
@@ -40,7 +45,12 @@ type TurnEntry =
 type RenderBlock =
   | { kind: "message"; key: string; message: Message }
   | { kind: "plan"; key: string; activity: Activity }
-  | { kind: "subagent"; key: string; activity: Activity; children: Activity[] }
+  | {
+      kind: "subagent"
+      key: string
+      activity: Activity
+      children: ActivityNode[]
+    }
   | { kind: "tools"; key: string; items: Activity[] }
 
 export function MessageStream({
@@ -103,8 +113,13 @@ function interleaveTurns(
   activities: Activity[]
 ): TurnEntry[] {
   const childrenByParent = new Map<string, Activity[]>()
+  const activityIds = new Set(activities.map((activity) => activity.id))
   for (const activity of activities) {
-    if (!activity.parentActivityId) continue
+    if (
+      !activity.parentActivityId ||
+      !activityIds.has(activity.parentActivityId)
+    )
+      continue
     const siblings = childrenByParent.get(activity.parentActivityId) ?? []
     siblings.push(activity)
     childrenByParent.set(activity.parentActivityId, siblings)
@@ -116,15 +131,29 @@ function interleaveTurns(
     order: message.ordinal ?? (message.role === "user" ? -1 : legacyTail),
     message,
   }))
-  for (const [index, activity] of activities.entries()) {
-    if (activity.parentActivityId) continue
+  const renderedActivityIds = new Set<string>()
+  const addActivityEntry = (activity: Activity, index: number) => {
+    renderedActivityIds.add(activity.id)
     entries.push({
       kind: "activity",
       key: activity.id,
       order: activity.ordinal ?? legacyMiddle + index,
       activity,
-      children: childrenByParent.get(activity.id) ?? [],
+      children: activityChildren(
+        activity.id,
+        childrenByParent,
+        new Set(),
+        renderedActivityIds
+      ),
     })
+  }
+  for (const [index, activity] of activities.entries()) {
+    if (activity.parentActivityId && activityIds.has(activity.parentActivityId))
+      continue
+    if (!renderedActivityIds.has(activity.id)) addActivityEntry(activity, index)
+  }
+  for (const [index, activity] of activities.entries()) {
+    if (!renderedActivityIds.has(activity.id)) addActivityEntry(activity, index)
   }
 
   const turnOrder = new Map<string, number>()
@@ -137,6 +166,31 @@ function interleaveTurns(
     const rightTurn = turnOrder.get(turnKey(right)) ?? Number.MAX_SAFE_INTEGER
     if (leftTurn !== rightTurn) return leftTurn - rightTurn
     return left.order - right.order
+  })
+}
+
+function activityChildren(
+  parentId: string,
+  childrenByParent: Map<string, Activity[]>,
+  ancestors: Set<string>,
+  renderedActivityIds: Set<string>
+): ActivityNode[] {
+  const nextAncestors = new Set(ancestors).add(parentId)
+  return (childrenByParent.get(parentId) ?? []).flatMap((activity) => {
+    if (nextAncestors.has(activity.id) || renderedActivityIds.has(activity.id))
+      return []
+    renderedActivityIds.add(activity.id)
+    return [
+      {
+        activity,
+        children: activityChildren(
+          activity.id,
+          childrenByParent,
+          nextAncestors,
+          renderedActivityIds
+        ),
+      },
+    ]
   })
 }
 
@@ -330,7 +384,7 @@ function SubagentBlock({
   childActivities,
 }: {
   activity: Activity
-  childActivities: Activity[]
+  childActivities: ActivityNode[]
 }) {
   const running = activity.status === "running"
   const [manual, setManual] = useState<boolean | null>(null)
@@ -371,21 +425,36 @@ function SubagentBlock({
           <div className="flex min-w-0 flex-col gap-px">
             {childActivities.length > 0 ? (
               childActivities.map((child) => (
-                <ActivityLine
-                  key={child.id}
-                  activity={child}
-                  icon={activityIcon(child)}
-                />
+                <NestedActivity key={child.activity.id} node={child} />
               ))
             ) : (
               <p className="py-1 text-[11px] text-muted-foreground">
-                No activity yet.
+                {running
+                  ? "Working in a separate context."
+                  : activity.status === "completed"
+                    ? "Finished in a separate context."
+                    : activity.status === "failed"
+                      ? "Failed before finishing."
+                      : "Stopped before finishing."}
               </p>
             )}
           </div>
         </div>
       </Collapse>
     </div>
+  )
+}
+
+function NestedActivity({ node }: { node: ActivityNode }) {
+  if (node.activity.payload?.kind === "plan") {
+    return <PlanBlock activity={node.activity} />
+  }
+  return node.activity.payload?.kind === "subagent" ? (
+    <div className="py-1">
+      <SubagentBlock activity={node.activity} childActivities={node.children} />
+    </div>
+  ) : (
+    <ActivityLine activity={node.activity} icon={activityIcon(node.activity)} />
   )
 }
 
