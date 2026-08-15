@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react"
+import { memo, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
@@ -17,8 +17,17 @@ import {
   Message as MessageRow,
   MessageBody,
 } from "@workspace/ui/components/chat/message"
-import { MessageList } from "@workspace/ui/components/chat/message-list"
+import {
+  MessageList,
+  type MessageListHandle,
+} from "@workspace/ui/components/chat/message-list"
 import { Plan } from "@workspace/ui/components/chat/plan"
+import {
+  TimelineMinimap,
+  minimapAnchor,
+  type TimelineMinimapItem,
+} from "@workspace/ui/components/chat/timeline-minimap"
+import { minimapPreviewText } from "@workspace/ui/lib/timeline-minimap"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
@@ -73,34 +82,79 @@ export function MessageStream({
     () => toBlocks(interleaveTurns(messages, activities)),
     [messages, activities]
   )
+  const listRef = useRef<MessageListHandle>(null)
+  const [viewport, setViewport] = useState<HTMLElement | null>(null)
+  const minimapItems = useMemo(() => toMinimapItems(messages), [messages])
 
   return (
-    <MessageList className="px-6" aria-label="Task conversation">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 py-8">
-        {blocks.map((block) => {
-          switch (block.kind) {
-            case "message":
-              return <MessageEntry key={block.key} message={block.message} />
-            case "plan":
-              return <PlanBlock key={block.key} activity={block.activity} />
-            case "subagent":
-              return (
-                <SubagentBlock
-                  key={block.key}
-                  activity={block.activity}
-                  childActivities={block.children}
-                />
-              )
-            case "tools":
-              return <ToolCluster key={block.key} items={block.items} />
-          }
-        })}
-        {running && !streamingTail ? (
-          <WorkingIndicator since={sinceTail} />
-        ) : null}
-      </div>
-    </MessageList>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <MessageList
+        ref={listRef}
+        onViewportChange={setViewport}
+        className="px-6"
+        aria-label="Task conversation"
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 py-8">
+          {blocks.map((block) => {
+            switch (block.kind) {
+              case "message":
+                return <MessageEntry key={block.key} message={block.message} />
+              case "plan":
+                return <PlanBlock key={block.key} activity={block.activity} />
+              case "subagent":
+                return (
+                  <SubagentBlock
+                    key={block.key}
+                    activity={block.activity}
+                    childActivities={block.children}
+                  />
+                )
+              case "tools":
+                return <ToolCluster key={block.key} items={block.items} />
+            }
+          })}
+          {running && !streamingTail ? (
+            <WorkingIndicator since={sinceTail} />
+          ) : null}
+        </div>
+      </MessageList>
+      <TimelineMinimap
+        items={minimapItems}
+        viewport={viewport}
+        onSelect={(anchor) => listRef.current?.scrollToElement(anchor)}
+      />
+    </div>
   )
+}
+
+/**
+ * One minimap stop per prompt, previewed by the reply it drew. Both sides of
+ * a turn carry the same `turnId`, so the reply is a lookup rather than a walk
+ * forward through the stream.
+ */
+function toMinimapItems(messages: Message[]): TimelineMinimapItem[] {
+  const repliesByTurn = new Map<string, string>()
+  for (const message of messages) {
+    if (message.role !== "assistant" || !message.content) continue
+    repliesByTurn.set(turnIdOf(message), message.content)
+  }
+
+  const items: TimelineMinimapItem[] = []
+  for (const message of messages) {
+    if (message.role !== "user") continue
+    const label = minimapPreviewText(message.content)
+    if (!label) continue
+    items.push({
+      id: message.id,
+      label,
+      preview: minimapPreviewText(repliesByTurn.get(turnIdOf(message))),
+    })
+  }
+  return items
+}
+
+function turnIdOf(message: Message): string {
+  return message.turnId ?? message.id
 }
 
 /**
@@ -249,7 +303,11 @@ const MessageEntry = memo(function MessageEntry({
 }) {
   if (message.role === "user") {
     return (
-      <MessageRow role="user" className="enter-rise">
+      <MessageRow
+        role="user"
+        className="enter-rise"
+        {...minimapAnchor(message.id)}
+      >
         <MessageBody role="user">{message.content}</MessageBody>
       </MessageRow>
     )
