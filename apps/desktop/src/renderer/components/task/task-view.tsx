@@ -32,6 +32,7 @@ export function TaskView({
   const { state, revalidate, replace } = useThreadView(threadId)
   const [folderError, setFolderError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
 
   // Looking at the task clears its indicators (unread completion, "came
   // back" from Later). The stamp fires only when there is something to
@@ -69,9 +70,16 @@ export function TaskView({
   const options = harnesses.status === "ready" ? harnesses.data : []
   // Resolved from the thread rather than the sidebar selection: in the
   // all-projects view the open task can belong to a different project.
-  const projectPath = projects.find(
-    (project) => project.id === thread.projectId
-  )?.path
+  const project = projects.find((project) => project.id === thread.projectId)
+  if (!project) {
+    return (
+      <StatusPanel
+        title="This task's project is unavailable"
+        description="Reload the project list and try opening the task again."
+      />
+    )
+  }
+  const projectPath = project.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
   const active =
     thread.status === "running" || thread.status === "waiting-approval"
@@ -151,15 +159,20 @@ export function TaskView({
           ) : null}
 
           <Composer
+            projectId={thread.projectId}
+            workspaceId={project.workspaceId}
             label={`Message for ${thread.title}`}
             placeholder={
               active ? "The agent is working…" : "Ask for the next step"
             }
             running={active}
             blockedReason={blockedReason}
-            onSend={async (prompt) => {
-              replace(await client.startTurn(thread.id, prompt))
+            onSend={async (input) => {
+              replace(await client.startTurn(thread.id, input))
             }}
+            {...(models.length > 0 && !active
+              ? { onOpenModelPicker: () => setModelMenuOpen(true) }
+              : {})}
             onCancel={async () => {
               replace(await client.cancelTurn(thread.id))
             }}
@@ -171,6 +184,8 @@ export function TaskView({
                   onChange={handleProfileChange}
                   harnessId={thread.harnessId}
                   disabled={active}
+                  modelMenuOpen={modelMenuOpen}
+                  onModelMenuOpenChange={setModelMenuOpen}
                 />
               ) : null
             }

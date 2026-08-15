@@ -25,7 +25,7 @@ import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
 
-import { claudePluginsFor } from "./claude-packs.js"
+import { claudePluginsFor, claudeSkillCommand } from "./claude-packs.js"
 
 type ClaudeAdapterOptions = {
   executablePath?: string
@@ -164,7 +164,7 @@ class ClaudeSession implements HarnessSession {
       })
 
     this.#query = query({
-      prompt: input.prompt,
+      prompt: claudePrompt(input),
       options: {
         abortController: this.#abortController,
         canUseTool,
@@ -495,6 +495,48 @@ class ClaudeSession implements HarnessSession {
     this.#query.close()
     this.#queue.close()
   }
+}
+
+/** Claude skills are exposed as plugin slash commands; keep that syntax local. */
+export function claudePrompt(input: HarnessRunInput): string {
+  let prompt = input.prompt
+  for (const reference of input.references) {
+    if (reference.kind !== "skill") continue
+    prompt = replaceStandaloneToken(
+      prompt,
+      `$${reference.name}`,
+      claudeSkillCommand(reference, input.customization.skillRoots)
+    )
+  }
+  return prompt
+}
+
+function replaceStandaloneToken(
+  text: string,
+  token: string,
+  replacement: string
+): string {
+  let result = ""
+  let offset = 0
+  while (offset < text.length) {
+    const index = text.indexOf(token, offset)
+    if (index < 0) return result + text.slice(offset)
+    const before = index === 0 ? "" : (text[index - 1] ?? "")
+    const afterIndex = index + token.length
+    const after = afterIndex === text.length ? "" : (text[afterIndex] ?? "")
+    if (isTokenBoundary(before) && isTokenBoundary(after)) {
+      result += text.slice(offset, index) + replacement
+      offset = afterIndex
+    } else {
+      result += text.slice(offset, index + 1)
+      offset = index + 1
+    }
+  }
+  return result
+}
+
+function isTokenBoundary(character: string): boolean {
+  return !character || !/[\p{L}\p{N}_./\\@$-]/u.test(character)
 }
 
 const planActivityId = "claude-plan"

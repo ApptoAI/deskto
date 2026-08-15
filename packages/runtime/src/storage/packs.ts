@@ -100,11 +100,11 @@ export class Packs {
   }
 
   /** Packs attached to this workspace, for session customization. */
-  attachedToWorkspace(workspaceId: string): { path: string; name: string }[] {
+  attachedToWorkspace(workspaceId: string): PackRow[] {
     return this.database
       .prepare(
-        "SELECT p.path, p.name FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"
+        "SELECT p.* FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"
       )
-      .all(workspaceId) as { path: string; name: string }[]
+      .all(workspaceId) as PackRow[]
   }
 }

@@ -191,6 +191,10 @@ const migrations = [
     ALTER TABLE activities ADD COLUMN ordinal INTEGER;
     ALTER TABLE messages ADD COLUMN ordinal INTEGER;
   `,
+  `
+    ALTER TABLE turns ADD COLUMN prompt_references TEXT;
+    ALTER TABLE messages ADD COLUMN prompt_references TEXT;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

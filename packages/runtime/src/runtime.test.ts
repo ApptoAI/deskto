@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -953,6 +953,12 @@ describe("Runtime", () => {
       join(created.path, "skills", "summarize", "SKILL.md"),
       '---\nname: summarize\ndescription: "Summarize articles"\n---\n\nDo it.\n'
     )
+    await mkdir(join(created.path, "skills", "fallback"), { recursive: true })
+    await writeFile(
+      join(created.path, "skills", "fallback", "SKILL.md"),
+      '---\nname: ""\ndescription: "Use the directory name"\n---\n'
+    )
+    await writeFile(join(directory, "brief.md"), "Quarterly brief")
 
     unwrap(
       await runtime.request({
@@ -967,9 +973,31 @@ describe("Runtime", () => {
       {
         name: "Press tools",
         workspaceIds: ["personal"],
-        skills: [{ name: "summarize", description: "Summarize articles" }],
+        skills: [
+          {
+            id: `${created.id}/fallback`,
+            packId: created.id,
+            packName: "Press tools",
+            name: "fallback",
+            description: "Use the directory name",
+          },
+          {
+            id: `${created.id}/summarize`,
+            packId: created.id,
+            packName: "Press tools",
+            name: "summarize",
+            description: "Summarize articles",
+          },
+        ],
       },
     ])
+    const availableSkills = unwrap(
+      await runtime.request({
+        method: "workspace.listSkills",
+        params: { workspaceId: "personal" },
+      })
+    )
+    expect(availableSkills).toEqual(listed[0]?.skills)
 
     const project = unwrap(
       await runtime.request({
@@ -983,14 +1011,66 @@ describe("Runtime", () => {
         params: { projectId: project.id, harnessId: "claude" },
       })
     )
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "project.searchEntries",
+          params: { projectId: project.id, query: "brief", limit: 50 },
+        })
+      )
+    ).toContainEqual({ path: "brief.md", kind: "file" })
     unwrap(
       await runtime.request({
         method: "turn.start",
-        params: { threadId: thread.id, prompt: "Summarize this" },
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Summarize @brief.md with $summarize",
+            references: [
+              {
+                kind: "project-entry",
+                path: "brief.md",
+                entryKind: "file",
+              },
+              {
+                kind: "skill",
+                skillId: `${created.id}/summarize`,
+                name: "summarize",
+              },
+            ],
+          },
+        },
       })
     )
     expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
       { path: join(created.path, "skills"), name: "Press tools" },
+    ])
+    expect(harness.runs[0]?.input.references).toEqual([
+      {
+        kind: "project-entry",
+        name: "brief.md",
+        path: await realpath(join(directory, "brief.md")),
+        entryKind: "file",
+      },
+      {
+        kind: "skill",
+        name: "summarize",
+        path: join(created.path, "skills", "summarize", "SKILL.md"),
+      },
+    ])
+    const view = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(view.messages[0]?.references).toEqual([
+      { kind: "project-entry", path: "brief.md", entryKind: "file" },
+      {
+        kind: "skill",
+        skillId: `${created.id}/summarize`,
+        name: "summarize",
+      },
     ])
     await runtime.close()
   })

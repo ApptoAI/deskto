@@ -24,6 +24,7 @@ export async function generateTextWithSession(
       turnId: randomUUID(),
       projectPath: input.projectPath,
       prompt: input.prompt,
+      references: [],
       executionProfile: input.executionProfile,
       customization: { skillRoots: [] },
     },

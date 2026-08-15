@@ -12,6 +12,8 @@ import { basename, join } from "node:path"
 import type { SkillRoot } from "@openappto/harness-sdk"
 import type { PackSkill } from "@openappto/protocol"
 
+import type { PackRow } from "../storage/records.js"
+
 import { RuntimeError } from "../errors.js"
 
 /**
@@ -105,8 +107,19 @@ export async function readPackName(packPath: string): Promise<string> {
   return basename(packPath)
 }
 
-export async function readPackSkills(packPath: string): Promise<PackSkill[]> {
-  const root = skillsDirectory(packPath)
+export type ResolvedPackSkill = {
+  skill: PackSkill
+  path: string
+}
+
+export function packSkillId(packId: string, directoryName: string): string {
+  return `${packId}/${encodeURIComponent(directoryName)}`
+}
+
+export async function readResolvedPackSkills(
+  pack: Pick<PackRow, "id" | "name" | "path">
+): Promise<ResolvedPackSkill[]> {
+  const root = skillsDirectory(pack.path)
   let entries
   try {
     entries = await readdir(root, { withFileTypes: true })
@@ -118,16 +131,23 @@ export async function readPackSkills(packPath: string): Promise<PackSkill[]> {
     await Promise.all(
       entries
         .filter((entry) => entry.isDirectory())
-        .map((entry) => readSkill(join(root, entry.name), entry.name))
+        .map((entry) => readSkill(join(root, entry.name), entry.name, pack))
     )
-  ).filter((skill): skill is PackSkill => skill !== null)
-  return skills.sort((a, b) => a.name.localeCompare(b.name))
+  ).filter((skill): skill is ResolvedPackSkill => skill !== null)
+  return skills.sort((a, b) => a.skill.name.localeCompare(b.skill.name))
+}
+
+export async function readPackSkills(
+  pack: Pick<PackRow, "id" | "name" | "path">
+): Promise<PackSkill[]> {
+  return (await readResolvedPackSkills(pack)).map((entry) => entry.skill)
 }
 
 async function readSkill(
   directory: string,
-  fallbackName: string
-): Promise<PackSkill | null> {
+  fallbackName: string,
+  pack: Pick<PackRow, "id" | "name">
+): Promise<ResolvedPackSkill | null> {
   let content: string
   try {
     content = await readFile(join(directory, "SKILL.md"), "utf8")
@@ -136,15 +156,21 @@ async function readSkill(
   }
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1] ?? ""
   return {
-    name: frontmatterValue(frontmatter, "name") ?? fallbackName,
-    description: frontmatterValue(frontmatter, "description") ?? "",
+    path: join(directory, "SKILL.md"),
+    skill: {
+      id: packSkillId(pack.id, fallbackName),
+      packId: pack.id,
+      packName: pack.name,
+      name: frontmatterValue(frontmatter, "name") ?? fallbackName,
+      description: frontmatterValue(frontmatter, "description") ?? "",
+    },
   }
 }
 
 function frontmatterValue(frontmatter: string, key: string): string | null {
   const match = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(frontmatter)
   if (!match) return null
-  return match[1]!.trim().replace(/^["']|["']$/g, "")
+  return match[1]!.trim().replace(/^["']|["']$/g, "") || null
 }
 
 export function slugify(name: string): string {

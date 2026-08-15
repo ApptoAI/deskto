@@ -1,5 +1,6 @@
 import {
   activityPayloadSchema,
+  promptReferenceSchema,
   type Activity,
   type Approval,
   type Message,
@@ -58,6 +59,7 @@ export type MessageRow = {
   turn_id: string | null
   role: Message["role"]
   content: string
+  prompt_references: string | null
   state: Message["state"]
   error: string | null
   failure_kind: "usage-limit" | "error" | null
@@ -182,11 +184,26 @@ export function toMessage(row: MessageRow): Message {
     ...(row.turn_id ? { turnId: row.turn_id } : {}),
     role: row.role,
     content: row.content,
+    ...(parsedPromptReferences(row.prompt_references) ?? {}),
     state: row.state,
     ...(failure ? { failure } : {}),
     ...(row.error ? { error: row.error } : {}),
     ...(row.ordinal !== null ? { ordinal: row.ordinal } : {}),
     createdAt: row.created_at,
+  }
+}
+
+function parsedPromptReferences(
+  raw: string | null
+): Pick<Message, "references"> | undefined {
+  if (!raw) return undefined
+  try {
+    const result = promptReferenceSchema.array().safeParse(JSON.parse(raw))
+    return result.success && result.data.length > 0
+      ? { references: result.data }
+      : undefined
+  } catch {
+    return undefined
   }
 }
 
