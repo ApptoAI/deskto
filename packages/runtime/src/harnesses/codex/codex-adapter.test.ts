@@ -129,6 +129,17 @@ describe("codexActivity", () => {
       name: "Wait for subagents",
       payload: { kind: "tool", tool: "other" },
     })
+    expect(
+      codexActivity({
+        type: "collabAgentToolCall",
+        id: "unknown-1",
+        tool: "",
+      })
+    ).toEqual({
+      id: "unknown-1",
+      name: "Use subagent",
+      payload: { kind: "tool", tool: "other" },
+    })
   })
 
   it.each([
@@ -479,6 +490,175 @@ describe("CodexAdapter activity notifications", () => {
       {
         type: "activity.completed",
         id: "spawn-failed",
+        outcome: "failed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("fails a delegated activity when Codex interrupts its thread", async () => {
+    const session = await new CodexAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const notify = clientState.notification!
+    const spawn = {
+      id: "fleet-1",
+      type: "collabAgentToolCall",
+      tool: "spawnAgent",
+      receiverThreadIds: ["child-thread"],
+      status: "completed",
+    }
+    notify({
+      method: "item/started",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    notify({
+      method: "item/completed",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    const interruption = {
+      id: "interrupt-1",
+      type: "subAgentActivity",
+      kind: "interrupted",
+      agentThreadId: "child-thread",
+    }
+    notify({
+      method: "item/started",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: interruption,
+      },
+    })
+    notify({
+      method: "item/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: interruption,
+      },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+    expect(events).toEqual([
+      { type: "session.started", providerSessionId: "thread-1" },
+      {
+        type: "activity.started",
+        activity: {
+          id: "fleet-1",
+          name: "Subagent",
+          payload: { kind: "subagent" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "fleet-1",
+        outcome: "failed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("uses type fallbacks only when an item status is absent", async () => {
+    const session = await new CodexAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const notify = clientState.notification!
+    const planWithoutStatus = {
+      id: "plan-without-status",
+      type: "plan",
+      steps: ["Research"],
+    }
+    const declinedPlan = {
+      id: "declined-plan",
+      type: "plan",
+      status: "declined",
+      steps: ["Write"],
+    }
+    for (const item of [planWithoutStatus, declinedPlan]) {
+      notify({
+        method: "item/started",
+        params: { threadId: "thread-1", turnId: "turn-1", item },
+      })
+      notify({
+        method: "item/completed",
+        params: { threadId: "thread-1", turnId: "turn-1", item },
+      })
+    }
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+    expect(events).toEqual([
+      { type: "session.started", providerSessionId: "thread-1" },
+      {
+        type: "activity.started",
+        activity: {
+          id: "plan-without-status",
+          name: "Plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Research", status: "pending" }],
+          },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "plan-without-status",
+        outcome: "completed",
+      },
+      {
+        type: "activity.started",
+        activity: {
+          id: "declined-plan",
+          name: "Plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Write", status: "pending" }],
+          },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "declined-plan",
         outcome: "failed",
       },
       { type: "turn.completed" },

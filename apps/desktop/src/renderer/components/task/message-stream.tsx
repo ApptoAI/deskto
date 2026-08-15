@@ -131,16 +131,29 @@ function interleaveTurns(
     order: message.ordinal ?? (message.role === "user" ? -1 : legacyTail),
     message,
   }))
-  for (const [index, activity] of activities.entries()) {
-    if (activity.parentActivityId && activityIds.has(activity.parentActivityId))
-      continue
+  const renderedActivityIds = new Set<string>()
+  const addActivityEntry = (activity: Activity, index: number) => {
+    renderedActivityIds.add(activity.id)
     entries.push({
       kind: "activity",
       key: activity.id,
       order: activity.ordinal ?? legacyMiddle + index,
       activity,
-      children: activityChildren(activity.id, childrenByParent, new Set()),
+      children: activityChildren(
+        activity.id,
+        childrenByParent,
+        new Set(),
+        renderedActivityIds
+      ),
     })
+  }
+  for (const [index, activity] of activities.entries()) {
+    if (activity.parentActivityId && activityIds.has(activity.parentActivityId))
+      continue
+    if (!renderedActivityIds.has(activity.id)) addActivityEntry(activity, index)
+  }
+  for (const [index, activity] of activities.entries()) {
+    if (!renderedActivityIds.has(activity.id)) addActivityEntry(activity, index)
   }
 
   const turnOrder = new Map<string, number>()
@@ -159,14 +172,26 @@ function interleaveTurns(
 function activityChildren(
   parentId: string,
   childrenByParent: Map<string, Activity[]>,
-  ancestors: Set<string>
+  ancestors: Set<string>,
+  renderedActivityIds: Set<string>
 ): ActivityNode[] {
-  if (ancestors.has(parentId)) return []
   const nextAncestors = new Set(ancestors).add(parentId)
-  return (childrenByParent.get(parentId) ?? []).map((activity) => ({
-    activity,
-    children: activityChildren(activity.id, childrenByParent, nextAncestors),
-  }))
+  return (childrenByParent.get(parentId) ?? []).flatMap((activity) => {
+    if (nextAncestors.has(activity.id) || renderedActivityIds.has(activity.id))
+      return []
+    renderedActivityIds.add(activity.id)
+    return [
+      {
+        activity,
+        children: activityChildren(
+          activity.id,
+          childrenByParent,
+          nextAncestors,
+          renderedActivityIds
+        ),
+      },
+    ]
+  })
 }
 
 const legacyMiddle = 1_000_000
@@ -408,7 +433,9 @@ function SubagentBlock({
                   ? "Working in a separate context."
                   : activity.status === "completed"
                     ? "Finished in a separate context."
-                    : "Stopped before finishing."}
+                    : activity.status === "failed"
+                      ? "Failed before finishing."
+                      : "Stopped before finishing."}
               </p>
             )}
           </div>

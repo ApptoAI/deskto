@@ -425,8 +425,11 @@ class CodexSession implements HarnessSession {
 
   #settleDelegatedThread(
     threadId: string,
-    outcome: "completed" | "failed"
+    outcome: "completed" | "failed",
+    visited: Set<string> = new Set()
   ): void {
+    if (visited.has(threadId)) return
+    visited.add(threadId)
     const activityId = this.#delegatedActivities.get(threadId)
     if (!activityId) return
     for (const [childActivityId, ownerThreadId] of this.#activityThreads) {
@@ -435,7 +438,7 @@ class CodexSession implements HarnessSession {
         .filter(([, parentActivityId]) => parentActivityId === childActivityId)
         .map(([descendantThreadId]) => descendantThreadId)
       for (const descendantThreadId of descendantThreads) {
-        this.#settleDelegatedThread(descendantThreadId, outcome)
+        this.#settleDelegatedThread(descendantThreadId, outcome, visited)
       }
       this.#completeActivity(childActivityId, outcome)
     }
@@ -803,8 +806,8 @@ function codexActivityOutcome(
   status: string | undefined,
   item: Record<string, unknown> | undefined
 ): "completed" | "failed" {
-  if (status === "completed") return "completed"
-  if (status === "failed" || status === "errored") return "failed"
+  if (status !== undefined)
+    return status === "completed" ? "completed" : "failed"
   if (type === "plan") return "completed"
   if (type === "subAgentActivity") {
     return getString(item, "kind") === "interrupted" ? "failed" : "completed"
@@ -878,7 +881,7 @@ function collabToolName(tool: string | undefined): string {
     wait: "Wait for subagents",
     closeAgent: "Close subagent",
   }
-  return (tool && names[tool]) ?? "Use subagent"
+  return names[tool ?? ""] ?? "Use subagent"
 }
 
 function firstLine(value: string, maxLength: number): string {
