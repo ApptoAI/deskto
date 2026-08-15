@@ -62,6 +62,7 @@ const streamFlushIntervalMs = 50
 
 export class TurnCoordinator {
   readonly #runs = new Map<string, StartingRun | ActiveRun>()
+  readonly #discarding = new Set<string>()
   readonly #titles: ThreadTitleGenerator
 
   constructor(
@@ -74,8 +75,18 @@ export class TurnCoordinator {
       store,
       harnesses,
       settings,
-      events.changed
+      (threadId) => this.#changed(threadId)
     )
+  }
+
+  /**
+   * Announces a lifecycle transition, unless the Thread is being discarded:
+   * telling clients to reload a Thread that is about to be deleted only sends
+   * them to `thread.get` for a row that will not be there.
+   */
+  #changed(threadId: string): void {
+    if (this.#discarding.has(threadId)) return
+    this.events.changed(threadId)
   }
 
   async start(threadId: string, input: TurnInput): Promise<ThreadView> {
@@ -102,7 +113,7 @@ export class TurnCoordinator {
       cancelled: false,
     }
     this.#runs.set(threadId, starting)
-    this.events.changed(threadId)
+    this.#changed(threadId)
 
     try {
       const session = await harness.start(
@@ -164,7 +175,7 @@ export class TurnCoordinator {
           turn.assistantMessageId,
           harnessFailure(errorMessage(error))
         )
-        this.events.changed(threadId)
+        this.#changed(threadId)
       }
       if (this.#runs.get(threadId) === starting) this.#runs.delete(threadId)
     }
@@ -182,7 +193,7 @@ export class TurnCoordinator {
       run.controller.abort()
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
       this.#runs.delete(threadId)
-      this.events.changed(threadId)
+      this.#changed(threadId)
       return this.store.threads.view(threadId)
     }
 
@@ -201,7 +212,7 @@ export class TurnCoordinator {
         harnessFailure(message)
       )
       this.#runs.delete(threadId)
-      this.events.changed(threadId)
+      this.#changed(threadId)
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -212,10 +223,28 @@ export class TurnCoordinator {
         run.turnId,
         this.#terminalMessageId(run)
       )
-      this.events.changed(threadId)
+      this.#changed(threadId)
     }
     this.#runs.delete(threadId)
     return this.store.threads.view(threadId)
+  }
+
+  /**
+   * Stops every provider call a Thread has in flight, because the Thread is
+   * about to be deleted. Unlike `cancel`, an idle thread is fine and a harness
+   * that refuses to stop does not fail the caller: the rows it would write to
+   * are going away either way.
+   */
+  async discard(threadId: string): Promise<void> {
+    this.#titles.cancel(threadId)
+    if (!this.#runs.has(threadId)) return
+    this.#discarding.add(threadId)
+    try {
+      await this.cancel(threadId).catch(() => undefined)
+    } finally {
+      this.#discarding.delete(threadId)
+      this.#runs.delete(threadId)
+    }
   }
 
   async resolveApproval(
@@ -245,6 +274,12 @@ export class TurnCoordinator {
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
+      if (run.cancelled || this.#runs.get(threadId) !== run) {
+        throw new RuntimeError(
+          "turn-not-active",
+          "This task has no active turn"
+        )
+      }
       const message = `Could not answer the harness: ${errorMessage(error)}`
       this.#fail(threadId, run, harnessFailure(message))
       await run.session.cancel().catch(() => undefined)
@@ -344,7 +379,7 @@ export class TurnCoordinator {
       case "approval.requested":
         this.#flush(run)
         this.#requestApproval(threadId, run, event.request)
-        this.events.changed(threadId)
+        this.#changed(threadId)
         break
       case "turn.completed":
         this.#flush(run)
@@ -357,7 +392,7 @@ export class TurnCoordinator {
           run.turnId,
           this.#terminalMessageId(run)
         )
-        this.events.changed(threadId)
+        this.#changed(threadId)
         break
       case "turn.failed":
         this.#fail(threadId, run, event.failure)
@@ -384,7 +419,7 @@ export class TurnCoordinator {
       this.#terminalMessageId(run),
       failure
     )
-    this.events.changed(threadId)
+    this.#changed(threadId)
   }
 
   #appendDelta(run: ActiveRun, text: string): void {

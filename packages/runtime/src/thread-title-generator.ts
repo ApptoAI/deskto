@@ -13,7 +13,8 @@ import type { UserSettings } from "./user-settings.js"
 const generationTimeoutMs = 60_000
 
 export class ThreadTitleGenerator {
-  readonly #controllers = new Set<AbortController>()
+  // Keyed by thread so a deleted task can stop the provider call it started.
+  readonly #controllers = new Map<string, Set<AbortController>>()
   readonly #jobs = new Set<Promise<void>>()
 
   constructor(
@@ -25,7 +26,9 @@ export class ThreadTitleGenerator {
 
   start(input: ThreadTitleGenerationInput): void {
     const controller = new AbortController()
-    this.#controllers.add(controller)
+    const running = this.#controllers.get(input.threadId) ?? new Set()
+    running.add(controller)
+    this.#controllers.set(input.threadId, running)
     const timeout = setTimeout(() => controller.abort(), generationTimeoutMs)
     timeout.unref?.()
     const job = this.#generate(input, controller.signal)
@@ -34,15 +37,25 @@ export class ThreadTitleGenerator {
       })
       .finally(() => {
         clearTimeout(timeout)
-        this.#controllers.delete(controller)
+        running.delete(controller)
+        if (running.size === 0) this.#controllers.delete(input.threadId)
         this.#jobs.delete(job)
       })
     this.#jobs.add(job)
   }
 
+  /** Stops the title work for one Thread. The provider call is a separate
+      spawn from the Turn's session, so deleting a task has to end it here. */
+  cancel(threadId: string): void {
+    const running = this.#controllers.get(threadId)
+    if (!running) return
+    running.forEach((controller) => controller.abort())
+  }
+
   async dispose(): Promise<void> {
-    const controllers = [...this.#controllers]
-    controllers.forEach((controller) => controller.abort())
+    for (const running of this.#controllers.values()) {
+      running.forEach((controller) => controller.abort())
+    }
     await Promise.allSettled(this.#jobs)
   }
 

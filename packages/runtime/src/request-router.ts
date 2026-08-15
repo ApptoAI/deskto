@@ -39,6 +39,8 @@ export type RouterEvents = {
   packChanged: () => void
   /** A thread's organization fields changed outside a turn. */
   threadChanged: (threadId: string) => void
+  /** A thread was deleted; views holding it have nothing to reload. */
+  threadDeleted: (threadId: string) => void
 }
 
 export class RequestRouter {
@@ -292,6 +294,16 @@ export class RequestRouter {
         const thread = this.store.threads.markVisited(request.params.threadId)
         this.events.threadChanged(thread.id)
         return thread
+      }
+      case "thread.delete": {
+        const threadId = request.params.threadId
+        // Fail on a missing id before anything else runs.
+        this.store.threads.get(threadId)
+        // A live turn would keep writing into rows that are about to vanish.
+        await this.turns.discard(threadId)
+        this.store.threads.delete(threadId)
+        this.events.threadDeleted(threadId)
+        return null
       }
       case "turn.start":
         return this.turns.start(

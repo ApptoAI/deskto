@@ -17,4 +17,9 @@ export class ThreadSequences {
     this.#byThread.set(threadId, next)
     return next
   }
+
+  /** Drops a deleted Thread's cursor; nothing will ever ask for it again. */
+  forget(threadId: string): void {
+    this.#byThread.delete(threadId)
+  }
 }
