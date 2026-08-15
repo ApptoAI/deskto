@@ -1,5 +1,16 @@
 export { RuntimeClient, RuntimeClientError } from "./client.js"
 export {
+  detectComposerTrigger,
+  filterSkills,
+  formatProjectReference,
+  formatSkillReference,
+  reconcilePromptReferences,
+  replaceComposerTrigger,
+  type ComposerCandidate,
+  type ComposerTrigger,
+  type ComposerTriggerKind,
+} from "./composer.js"
+export {
   applyThreadDelta,
   type ApplyThreadDeltaResult,
   type ThreadDeltaEvent,

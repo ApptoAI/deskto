@@ -25,6 +25,8 @@ export function ProfileMenu({
   onSelect,
   disabled = false,
   contentClassName,
+  open,
+  onOpenChange,
 }: {
   label: string
   value: string
@@ -32,11 +34,13 @@ export function ProfileMenu({
   onSelect: (value: string) => void
   disabled?: boolean
   contentClassName?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const selected = options.find((option) => option.value === value)
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
         render={
           <Button

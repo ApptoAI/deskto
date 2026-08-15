@@ -5,6 +5,7 @@ import type {
   RuntimeResponses,
   RuntimeTransport,
 } from "@openappto/protocol"
+import type { TurnInput } from "@openappto/protocol"
 
 export class RuntimeClientError extends Error {
   constructor(
@@ -119,6 +120,13 @@ export class RuntimeClient {
     })
   }
 
+  listWorkspaceSkills(workspaceId: string) {
+    return this.request({
+      method: "workspace.listSkills",
+      params: { workspaceId },
+    })
+  }
+
   listProjects() {
     return this.request({ method: "project.list", params: {} })
   }
@@ -134,6 +142,13 @@ export class RuntimeClient {
     return this.request({
       method: "project.move",
       params: { projectId, workspaceId },
+    })
+  }
+
+  searchProjectEntries(projectId: string, query: string, limit = 50) {
+    return this.request({
+      method: "project.searchEntries",
+      params: { projectId, query, limit },
     })
   }
 
@@ -167,11 +182,17 @@ export class RuntimeClient {
   }
 
   setThreadDone(threadId: string, done: boolean) {
-    return this.request({ method: "thread.setDone", params: { threadId, done } })
+    return this.request({
+      method: "thread.setDone",
+      params: { threadId, done },
+    })
   }
 
   snoozeThread(threadId: string, until: string) {
-    return this.request({ method: "thread.snooze", params: { threadId, until } })
+    return this.request({
+      method: "thread.snooze",
+      params: { threadId, until },
+    })
   }
 
   wakeThread(threadId: string) {
@@ -189,8 +210,14 @@ export class RuntimeClient {
     return this.request({ method: "thread.markVisited", params: { threadId } })
   }
 
-  startTurn(threadId: string, prompt: string) {
-    return this.request({ method: "turn.start", params: { threadId, prompt } })
+  startTurn(threadId: string, input: TurnInput | string) {
+    return this.request({
+      method: "turn.start",
+      params:
+        typeof input === "string"
+          ? { threadId, prompt: input }
+          : { threadId, input },
+    })
   }
 
   cancelTurn(threadId: string) {

@@ -19,6 +19,7 @@ import {
   resolvedDirectory,
   validatePackDirectory,
 } from "./packs/pack-files.js"
+import { ProjectEntries } from "./project-entries.js"
 import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
@@ -41,6 +42,8 @@ export type RouterEvents = {
 }
 
 export class RequestRouter {
+  readonly #projectEntries = new ProjectEntries()
+
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
@@ -184,6 +187,15 @@ export class RequestRouter {
         this.events.packChanged()
         return null
       }
+      case "workspace.listSkills": {
+        this.store.workspaces.get(request.params.workspaceId)
+        const packs = this.store.packs.attachedToWorkspace(
+          request.params.workspaceId
+        )
+        return (
+          await Promise.all(packs.map((pack) => readPackSkills(pack)))
+        ).flat()
+      }
       case "project.list":
         return this.store.projects.list()
       case "project.add": {
@@ -203,6 +215,14 @@ export class RequestRouter {
         )
         this.events.workspaceChanged()
         return project
+      }
+      case "project.searchEntries": {
+        const project = this.store.projects.get(request.params.projectId)
+        return this.#projectEntries.search(
+          project.path,
+          request.params.query,
+          request.params.limit
+        )
       }
       case "thread.list":
         return this.store.threads.list(request.params.projectId)
@@ -274,7 +294,13 @@ export class RequestRouter {
         return thread
       }
       case "turn.start":
-        return this.turns.start(request.params.threadId, request.params.prompt)
+        return this.turns.start(
+          request.params.threadId,
+          request.params.input ?? {
+            text: request.params.prompt!,
+            references: [],
+          }
+        )
       case "turn.cancel":
         return this.turns.cancel(request.params.threadId)
       case "approval.resolve":
@@ -301,7 +327,7 @@ export class RequestRouter {
   async #packView(row: PackRow, workspaceIds?: string[]) {
     return {
       ...toPackRecord(row),
-      skills: await readPackSkills(row.path),
+      skills: await readPackSkills(row),
       workspaceIds: workspaceIds ?? this.store.packs.workspaceIdsFor(row.id),
     }
   }

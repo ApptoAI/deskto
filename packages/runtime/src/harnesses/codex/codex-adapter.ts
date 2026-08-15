@@ -199,9 +199,10 @@ class CodexSession implements HarnessSession {
       providerSessionId: response.thread.id,
     })
 
+    const input = codexTurnInput(this.input)
     const turn = await this.client.request<CodexTurnResponse>("turn/start", {
       threadId: response.thread.id,
-      input: [{ type: "text", text: this.input.prompt, text_elements: [] }],
+      input,
       ...permissions.turn,
       ...(this.input.executionProfile.modelId
         ? { model: this.input.executionProfile.modelId }
@@ -395,6 +396,19 @@ class CodexSession implements HarnessSession {
     this.#activeApproval = undefined
     this.#approvalQueue.length = 0
   }
+}
+
+export function codexTurnInput(
+  input: Pick<HarnessRunInput, "prompt" | "references">
+): Record<string, unknown>[] {
+  return [
+    { type: "text", text: input.prompt, text_elements: [] },
+    ...input.references.map((reference) =>
+      reference.kind === "skill"
+        ? { type: "skill", name: reference.name, path: reference.path }
+        : { type: "mention", name: reference.name, path: reference.path }
+    ),
+  ]
 }
 
 async function initialize(client: JsonlClient): Promise<void> {

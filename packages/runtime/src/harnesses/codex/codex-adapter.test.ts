@@ -49,10 +49,46 @@ import {
   codexActivity,
   codexLimitResetAt,
   codexPlanSteps,
+  codexTurnInput,
 } from "./codex-adapter.js"
 
 beforeEach(() => {
   clientState.notification = undefined
+})
+
+describe("codexTurnInput", () => {
+  it("projects semantic references to native app-server input items", () => {
+    expect(
+      codexTurnInput({
+        prompt: "Review @src/a.ts with $review",
+        references: [
+          {
+            kind: "project-entry",
+            name: "a.ts",
+            path: "/repo/src/a.ts",
+            entryKind: "file",
+          },
+          {
+            kind: "skill",
+            name: "review",
+            path: "/packs/review/SKILL.md",
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        type: "text",
+        text: "Review @src/a.ts with $review",
+        text_elements: [],
+      },
+      { type: "mention", name: "a.ts", path: "/repo/src/a.ts" },
+      {
+        type: "skill",
+        name: "review",
+        path: "/packs/review/SKILL.md",
+      },
+    ])
+  })
 })
 
 describe("codexActivity", () => {
@@ -212,6 +248,7 @@ describe("CodexAdapter activity notifications", () => {
         turnId: "turn-1",
         projectPath: "/tmp/project",
         prompt: "Continue",
+        references: [],
         executionProfile: {
           modelId: null,
           effort: null,

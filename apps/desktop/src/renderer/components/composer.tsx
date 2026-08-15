@@ -1,6 +1,30 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react"
+import {
+  useEffect,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import ArrowUpIcon from "lucide-react/dist/esm/icons/arrow-up"
+import BoxIcon from "lucide-react/dist/esm/icons/box"
+import BotIcon from "lucide-react/dist/esm/icons/bot"
+import FileIcon from "lucide-react/dist/esm/icons/file"
+import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import SquareIcon from "lucide-react/dist/esm/icons/square"
+import {
+  detectComposerTrigger,
+  filterSkills,
+  formatProjectReference,
+  formatSkillReference,
+  reconcilePromptReferences,
+  replaceComposerTrigger,
+  type ComposerCandidate,
+  type ComposerTrigger,
+} from "@openappto/client"
+import type { PackSkill, PromptReference, TurnInput } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -8,48 +32,209 @@ import {
   PromptInputTextarea,
   PromptInputToolbar,
 } from "@workspace/ui/components/chat/prompt-input"
+import {
+  PromptSuggestions,
+  type PromptSuggestionOption,
+} from "@workspace/ui/components/chat/prompt-suggestions"
 
 import { describeError } from "../runtime/describe-error.js"
+import { useRuntimeClient } from "../runtime/runtime-client-context.js"
+import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { InlineError } from "./inline-error.js"
 
+const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
+  {
+    id: "command:model",
+    kind: "app-command",
+    command: "model",
+    label: "/model",
+    description: "Choose the model for this task",
+  },
+]
+
+type SkillCache = {
+  workspaceId: string
+  skills: PackSkill[]
+}
+
+type SuggestionResult = {
+  key: string
+  candidates: ComposerCandidate[]
+  failed: boolean
+}
+
 export function Composer({
+  projectId,
+  workspaceId,
   label,
   placeholder,
   onSend,
   onCancel,
+  onOpenModelPicker,
   running = false,
   blockedReason,
   toolbar,
   trailing,
   autoFocus = false,
 }: {
+  projectId: string
+  workspaceId: string
   label: string
   placeholder: string
-  onSend: (prompt: string) => Promise<void>
+  onSend: (input: TurnInput) => Promise<void>
   onCancel?: () => Promise<void>
+  onOpenModelPicker?: () => void
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
   trailing?: ReactNode
   autoFocus?: boolean
 }) {
+  const client = useRuntimeClient()
   const [prompt, setPrompt] = useState("")
+  const [references, setReferences] = useState<PromptReference[]>([])
+  const [trigger, setTrigger] = useState<ComposerTrigger | null>(null)
+  const [suggestionResult, setSuggestionResult] = useState<SuggestionResult>({
+    key: "",
+    candidates: [],
+    failed: false,
+  })
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const [skillCache, setSkillCache] = useState<SkillCache | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const requestSequence = useRef(0)
   const hintId = useId()
+  const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
   const blocked = blockedReason !== undefined
   const canSend = prompt.trim().length > 0 && !sending && !running && !blocked
+  const triggerKey = trigger
+    ? `${trigger.kind}:${trigger.rangeStart}:${trigger.query}`
+    : null
+  const menuOpen = trigger !== null && dismissedKey !== triggerKey && !blocked
+  const cachedSkills =
+    trigger?.kind === "skill" && skillCache?.workspaceId === workspaceId
+      ? skillCache.skills
+      : null
+  const candidates =
+    trigger?.kind === "command"
+      ? (onOpenModelPicker ? appCommands : []).filter(
+          (candidate) =>
+            candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
+            candidate.description
+              .toLocaleLowerCase()
+              .includes(trigger.query.toLocaleLowerCase())
+        )
+      : trigger?.kind === "project-entry" && !trigger.query.trim()
+        ? []
+        : cachedSkills
+          ? toSkillCandidates(filterSkills(cachedSkills, trigger?.query ?? ""))
+          : suggestionResult.key === triggerKey
+            ? suggestionResult.candidates
+            : []
+  const suggestionsLoading =
+    trigger !== null &&
+    trigger.kind !== "command" &&
+    !(trigger.kind === "project-entry" && !trigger.query.trim()) &&
+    cachedSkills === null &&
+    suggestionResult.key !== triggerKey
+  const suggestionsError =
+    suggestionResult.key === triggerKey && suggestionResult.failed
+  const activeId = candidates.some(
+    (candidate) => candidate.id === highlightedId
+  )
+    ? highlightedId
+    : (candidates[0]?.id ?? null)
+
+  usePackChanged(
+    useCallback(() => {
+      setSkillCache(null)
+    }, [])
+  )
+
+  useEffect(() => {
+    const sequence = ++requestSequence.current
+    if (!trigger || blocked || trigger.kind === "command") return
+
+    if (trigger.kind === "skill") {
+      if (skillCache?.workspaceId === workspaceId) return
+      void client.listWorkspaceSkills(workspaceId).then(
+        (skills) => {
+          if (requestSequence.current !== sequence) return
+          setSkillCache({ workspaceId, skills })
+          setSuggestionResult({
+            key: triggerKey!,
+            candidates: toSkillCandidates(filterSkills(skills, trigger.query)),
+            failed: false,
+          })
+        },
+        () => {
+          if (requestSequence.current !== sequence) return
+          setSuggestionResult({
+            key: triggerKey!,
+            candidates: [],
+            failed: true,
+          })
+        }
+      )
+      return
+    }
+
+    if (!trigger.query.trim()) return
+    const timer = window.setTimeout(() => {
+      void client.searchProjectEntries(projectId, trigger.query).then(
+        (entries) => {
+          if (requestSequence.current !== sequence) return
+          setSuggestionResult({
+            key: triggerKey!,
+            candidates: entries.map((entry) => ({
+              id: `project-entry:${entry.kind}:${encodeURIComponent(entry.path)}`,
+              kind: "project-entry" as const,
+              entry,
+            })),
+            failed: false,
+          })
+        },
+        () => {
+          if (requestSequence.current !== sequence) return
+          setSuggestionResult({
+            key: triggerKey!,
+            candidates: [],
+            failed: true,
+          })
+        }
+      )
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [blocked, client, projectId, skillCache, trigger, triggerKey, workspaceId])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSend) return
 
+    const text = prompt.trim()
+    const currentReferences = reconcilePromptReferences(text, references)
+    if (/^\/model(?:\s|$)/.test(text)) {
+      if (onOpenModelPicker) {
+        setPrompt("")
+        setReferences([])
+        setTrigger(null)
+        onOpenModelPicker()
+      } else {
+        setError("No model options are available for this task.")
+      }
+      return
+    }
     setSending(true)
     setError(null)
     try {
-      await onSend(prompt.trim())
+      await onSend({ text, references: currentReferences })
       setPrompt("")
+      setReferences([])
+      setTrigger(null)
     } catch (sendError) {
       setError(describeError(sendError))
     } finally {
@@ -68,6 +253,90 @@ export function Composer({
     }
   }
 
+  function updatePrompt(nextPrompt: string, cursor: number) {
+    setPrompt(nextPrompt)
+    setReferences((current) => reconcilePromptReferences(nextPrompt, current))
+    setTrigger(detectComposerTrigger(nextPrompt, cursor))
+    setHighlightedId(null)
+    setDismissedKey(null)
+  }
+
+  function selectCandidate(candidate: ComposerCandidate) {
+    const textarea = textareaRef.current
+    const currentTrigger = detectComposerTrigger(
+      prompt,
+      textarea?.selectionStart ?? prompt.length
+    )
+    if (!currentTrigger) return
+
+    if (candidate.kind === "app-command") {
+      const next = replaceComposerTrigger(prompt, currentTrigger, "")
+      updatePrompt(next.text, next.cursor)
+      setTrigger(null)
+      onOpenModelPicker?.()
+      return
+    }
+
+    const replacement =
+      candidate.kind === "project-entry"
+        ? `${formatProjectReference(candidate.entry.path)} `
+        : `${formatSkillReference(candidate.skill.name)} `
+    const next = replaceComposerTrigger(prompt, currentTrigger, replacement)
+    const reference: PromptReference =
+      candidate.kind === "project-entry"
+        ? {
+            kind: "project-entry",
+            path: candidate.entry.path,
+            entryKind: candidate.entry.kind,
+          }
+        : {
+            kind: "skill",
+            skillId: candidate.skill.id,
+            name: candidate.skill.name,
+          }
+    setPrompt(next.text)
+    setReferences((current) => addReference(current, reference))
+    setTrigger(null)
+    setDismissedKey(null)
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(next.cursor, next.cursor)
+    })
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!menuOpen) return
+    if (event.key === "Escape") {
+      event.preventDefault()
+      setDismissedKey(triggerKey)
+      return
+    }
+    if (candidates.length === 0) return
+    const activeIndex = Math.max(
+      0,
+      candidates.findIndex((candidate) => candidate.id === activeId)
+    )
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const direction = event.key === "ArrowDown" ? 1 : -1
+      const index =
+        (activeIndex + direction + candidates.length) % candidates.length
+      setHighlightedId(candidates[index]!.id)
+      return
+    }
+    if (
+      (event.key === "Enter" || event.key === "Tab") &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault()
+      const candidate = candidates.find((item) => item.id === activeId)
+      if (candidate) selectCandidate(candidate)
+    }
+  }
+
+  const suggestionOptions = candidates.map(toSuggestionOption)
+  const activeOptionId = activeId ? `${suggestionsId}-${activeId}` : undefined
+
   return (
     <div className="flex flex-col gap-2">
       {error ? <InlineError message={error} /> : null}
@@ -75,48 +344,163 @@ export function Composer({
         <p className="px-1 text-sm text-muted-foreground">{blockedReason}</p>
       ) : null}
 
-      <PromptInput onSubmit={handleSubmit}>
-        <PromptInputTextarea
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          placeholder={placeholder}
-          aria-label={label}
-          aria-describedby={hintId}
-          disabled={blocked}
-          autoFocus={autoFocus}
-          rows={2}
-        />
-        <PromptInputToolbar>
-          {toolbar}
-          <div className="ml-auto flex items-center gap-2">
-            {trailing}
-            {running && onCancel ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                onClick={handleCancel}
-                aria-label="Stop this task"
-              >
-                <SquareIcon className="size-3 fill-current" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!canSend}
-                aria-label="Send"
-              >
-                <ArrowUpIcon />
-              </Button>
-            )}
+      <div className="relative">
+        {menuOpen ? (
+          <div className="absolute right-0 bottom-full left-0 z-30 mb-2">
+            <PromptSuggestions
+              id={suggestionsId}
+              options={suggestionOptions}
+              activeId={activeId}
+              loading={suggestionsLoading}
+              emptyText={suggestionEmptyText(trigger, suggestionsError)}
+              onActiveChange={setHighlightedId}
+              onSelect={(id) => {
+                const candidate = candidates.find((item) => item.id === id)
+                if (candidate) selectCandidate(candidate)
+              }}
+            />
           </div>
-        </PromptInputToolbar>
-      </PromptInput>
+        ) : null}
+
+        <PromptInput onSubmit={handleSubmit}>
+          <PromptInputTextarea
+            ref={textareaRef}
+            value={prompt}
+            onChange={(event) =>
+              updatePrompt(event.target.value, event.target.selectionStart)
+            }
+            onSelect={(event) =>
+              setTrigger(
+                detectComposerTrigger(
+                  event.currentTarget.value,
+                  event.currentTarget.selectionStart
+                )
+              )
+            }
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            aria-label={label}
+            aria-describedby={hintId}
+            aria-controls={menuOpen ? suggestionsId : undefined}
+            aria-expanded={menuOpen}
+            aria-activedescendant={menuOpen ? activeOptionId : undefined}
+            aria-autocomplete="list"
+            disabled={blocked}
+            autoFocus={autoFocus}
+            rows={2}
+          />
+          <PromptInputToolbar>
+            {toolbar}
+            <div className="ml-auto flex items-center gap-2">
+              {trailing}
+              {running && onCancel ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={handleCancel}
+                  aria-label="Stop this task"
+                >
+                  <SquareIcon className="size-3 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!canSend}
+                  aria-label="Send"
+                >
+                  <ArrowUpIcon />
+                </Button>
+              )}
+            </div>
+          </PromptInputToolbar>
+        </PromptInput>
+      </div>
 
       <p id={hintId} className="sr-only">
-        Press Enter to send. Shift and Enter start a new line.
+        Press Enter to send. Shift and Enter start a new line. Type at, slash,
+        or dollar for suggestions.
       </p>
     </div>
   )
+}
+
+function toSkillCandidates(skills: PackSkill[]): ComposerCandidate[] {
+  return skills.map((skill) => ({
+    id: `skill:${skill.id}`,
+    kind: "skill",
+    skill,
+  }))
+}
+
+function toSuggestionOption(
+  candidate: ComposerCandidate
+): PromptSuggestionOption {
+  if (candidate.kind === "app-command") {
+    return {
+      id: candidate.id,
+      label: candidate.label,
+      description: candidate.description,
+      meta: "OpenAPTO",
+      icon: <BotIcon className="size-4" />,
+    }
+  }
+  if (candidate.kind === "skill") {
+    return {
+      id: candidate.id,
+      label: `$${candidate.skill.name}`,
+      description: candidate.skill.description || "Use this skill",
+      meta: candidate.skill.packName,
+      icon: <BoxIcon className="size-4" />,
+    }
+  }
+  const separator = candidate.entry.path.lastIndexOf("/")
+  return {
+    id: candidate.id,
+    label:
+      separator < 0
+        ? candidate.entry.path
+        : candidate.entry.path.slice(separator + 1),
+    description:
+      separator < 0 ? undefined : candidate.entry.path.slice(0, separator),
+    meta: candidate.entry.kind === "directory" ? "Folder" : "File",
+    icon:
+      candidate.entry.kind === "directory" ? (
+        <FolderIcon className="size-4" />
+      ) : (
+        <FileIcon className="size-4" />
+      ),
+  }
+}
+
+function addReference(
+  references: PromptReference[],
+  reference: PromptReference
+): PromptReference[] {
+  const key = referenceKey(reference)
+  return [
+    ...references.filter((candidate) => referenceKey(candidate) !== key),
+    reference,
+  ]
+}
+
+function referenceKey(reference: PromptReference): string {
+  return reference.kind === "skill"
+    ? `skill-token:${reference.name}`
+    : `project-entry:${reference.path}`
+}
+
+function suggestionEmptyText(
+  trigger: ComposerTrigger,
+  failed: boolean
+): string {
+  if (failed) return "Suggestions could not be loaded."
+  if (trigger.kind === "project-entry") {
+    return trigger.query.trim()
+      ? "No matching files or folders."
+      : "Type to search project files."
+  }
+  if (trigger.kind === "skill") return "No matching skills in this workspace."
+  return "No matching command."
 }
