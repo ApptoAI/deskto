@@ -114,6 +114,8 @@ export function Composer({
   const triggerKey = trigger
     ? `${trigger.kind}:${trigger.rangeStart}:${trigger.query}`
     : null
+  const triggerKind = trigger?.kind ?? null
+  const triggerQuery = trigger?.query ?? ""
   const menuOpen = trigger !== null && dismissedKey !== triggerKey && !blocked
   const cachedSkills =
     trigger?.kind === "skill" && skillCache?.workspaceId === workspaceId
@@ -157,9 +159,9 @@ export function Composer({
 
   useEffect(() => {
     const sequence = ++requestSequence.current
-    if (!trigger || blocked || trigger.kind === "command") return
+    if (!triggerKind || blocked || triggerKind === "command") return
 
-    if (trigger.kind === "skill") {
+    if (triggerKind === "skill") {
       if (skillCache?.workspaceId === workspaceId) return
       void client.listWorkspaceSkills(workspaceId).then(
         (skills) => {
@@ -167,7 +169,7 @@ export function Composer({
           setSkillCache({ workspaceId, skills })
           setSuggestionResult({
             key: triggerKey!,
-            candidates: toSkillCandidates(filterSkills(skills, trigger.query)),
+            candidates: toSkillCandidates(filterSkills(skills, triggerQuery)),
             failed: false,
           })
         },
@@ -183,9 +185,9 @@ export function Composer({
       return
     }
 
-    if (!trigger.query.trim()) return
+    if (!triggerQuery.trim()) return
     const timer = window.setTimeout(() => {
-      void client.searchProjectEntries(projectId, trigger.query).then(
+      void client.searchProjectEntries(projectId, triggerQuery).then(
         (entries) => {
           if (requestSequence.current !== sequence) return
           setSuggestionResult({
@@ -209,7 +211,16 @@ export function Composer({
       )
     }, 120)
     return () => window.clearTimeout(timer)
-  }, [blocked, client, projectId, skillCache, trigger, triggerKey, workspaceId])
+  }, [
+    blocked,
+    client,
+    projectId,
+    skillCache,
+    triggerKey,
+    triggerKind,
+    triggerQuery,
+    workspaceId,
+  ])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -218,6 +229,7 @@ export function Composer({
     const text = prompt.trim()
     const currentReferences = reconcilePromptReferences(text, references)
     if (/^\/model(?:\s|$)/.test(text)) {
+      setError(null)
       if (onOpenModelPicker) {
         setPrompt("")
         setReferences([])
@@ -382,7 +394,6 @@ export function Composer({
             aria-label={label}
             aria-describedby={hintId}
             aria-controls={menuOpen ? suggestionsId : undefined}
-            aria-expanded={menuOpen}
             aria-activedescendant={menuOpen ? activeOptionId : undefined}
             aria-autocomplete="list"
             disabled={blocked}

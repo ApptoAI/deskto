@@ -35,6 +35,9 @@ describe("ProjectEntries", () => {
         "target/file.md",
         ...(testSymlink ? ["linked"] : []),
       ])
+      if (testSymlink) {
+        await symlink("target", join(root, "untracked-linked"), "dir")
+      }
 
       const entries = new ProjectEntries()
       await expect(entries.search(root, "żółć", 10)).resolves.toContainEqual({
@@ -54,6 +57,12 @@ describe("ProjectEntries", () => {
           entries.search(root, "linked", 10)
         ).resolves.toContainEqual({
           path: "linked",
+          kind: "directory",
+        })
+        await expect(
+          entries.search(root, "untracked-linked", 10)
+        ).resolves.toContainEqual({
+          path: "untracked-linked",
           kind: "directory",
         })
       }

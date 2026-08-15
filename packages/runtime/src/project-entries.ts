@@ -23,7 +23,7 @@ const ignoredDirectories = new Set([
 ])
 
 type CachedIndex = { createdAt: number; entries: ProjectEntry[] }
-type GitIndexedEntry = { entry: ProjectEntry; symlink: boolean }
+type GitIndexedEntry = { entry: ProjectEntry; resolveKind: boolean }
 
 /** Short-lived Project path index used by the @ composer lane. */
 export class ProjectEntries {
@@ -105,7 +105,7 @@ async function buildIndex(root: string): Promise<ProjectEntry[]> {
         .filter((entry): entry is GitIndexedEntry => entry !== null),
     ].slice(0, maxIndexedEntries)
     const entries = await Promise.all(
-      indexed.map((entry) => resolveSymlinkKind(root, entry))
+      indexed.map((entry) => resolveEntryKind(root, entry))
     )
     return entriesWithParents(entries)
   } catch {
@@ -123,21 +123,21 @@ function parseTrackedGitEntry(record: string): GitIndexedEntry | null {
           path,
           kind: staged[1] === "160000" ? "directory" : "file",
         },
-        symlink: staged[1] === "120000",
+        resolveKind: staged[1] === "120000",
       }
     : null
 }
 
 function parseUntrackedGitEntry(record: string): GitIndexedEntry | null {
   const path = normalizePath(record)
-  return path ? { entry: { path, kind: "file" }, symlink: false } : null
+  return path ? { entry: { path, kind: "file" }, resolveKind: true } : null
 }
 
-async function resolveSymlinkKind(
+async function resolveEntryKind(
   root: string,
   indexed: GitIndexedEntry
 ): Promise<ProjectEntry> {
-  if (!indexed.symlink) return indexed.entry
+  if (!indexed.resolveKind) return indexed.entry
   try {
     const metadata = await stat(resolve(root, indexed.entry.path))
     return {

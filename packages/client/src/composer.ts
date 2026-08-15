@@ -86,8 +86,8 @@ export function replaceComposerTrigger(
 
 export function formatProjectReference(path: string): string {
   const normalized = path.replaceAll("\\", "/")
-  return /[\s@"\\]/.test(normalized)
-    ? `@"${normalized.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
+  return /[\s@"]/.test(normalized)
+    ? `@"${normalized.replaceAll('"', '\\"')}"`
     : `@${normalized}`
 }
 

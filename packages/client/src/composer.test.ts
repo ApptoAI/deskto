@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   detectComposerTrigger,
+  filterSkills,
   formatProjectReference,
   reconcilePromptReferences,
   replaceComposerTrigger,
@@ -58,6 +59,26 @@ describe("composer grammar", () => {
 
   it("quotes project paths with spaces", () => {
     expect(formatProjectReference("docs/My File.md")).toBe('@"docs/My File.md"')
+  })
+
+  it("ranks skill matches by tier and then by name", () => {
+    const skills = [
+      { name: "a-b", description: "", id: "p/a-b" },
+      { name: "notes", description: "About AB usage", id: "p/notes" },
+      { name: "grab", description: "", id: "p/grab" },
+      { name: "abalone", description: "", id: "p/abalone" },
+      { name: "ab", description: "", id: "p/ab" },
+      { name: "abacus", description: "", id: "p/abacus" },
+    ].map((skill) => ({ ...skill, packId: "p", packName: "Pack" }))
+
+    expect(filterSkills(skills, "ab").map((skill) => skill.name)).toEqual([
+      "ab",
+      "abacus",
+      "abalone",
+      "grab",
+      "notes",
+      "a-b",
+    ])
   })
 
   it("drops semantic references whose tokens were deleted", () => {
