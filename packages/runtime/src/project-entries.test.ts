@@ -6,11 +6,24 @@ import { promisify } from "node:util"
 
 import { describe, expect, it } from "vitest"
 
-import { ProjectEntries } from "./project-entries.js"
+import { entriesWithParents, ProjectEntries } from "./project-entries.js"
 
 const execFileAsync = promisify(execFile)
 
 describe("ProjectEntries", () => {
+  it("caps parent expansion without dropping indexed entries", () => {
+    const indexed = [
+      { path: "one/two/three/a.md", kind: "file" as const },
+      { path: "four/five/six/b.md", kind: "file" as const },
+    ]
+
+    expect(entriesWithParents(indexed, 4)).toEqual([
+      ...indexed,
+      { path: "one", kind: "directory" },
+      { path: "one/two", kind: "directory" },
+    ])
+  })
+
   it("preserves Git paths that require quoting in line-delimited output", async () => {
     const root = await mkdtemp(join(tmpdir(), "openappto-entries-"))
     try {

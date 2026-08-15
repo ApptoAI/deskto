@@ -107,7 +107,7 @@ async function buildIndex(root: string): Promise<ProjectEntry[]> {
     const entries = await Promise.all(
       indexed.map((entry) => resolveEntryKind(root, entry))
     )
-    return entriesWithParents(entries)
+    return entriesWithParents(entries, maxIndexedEntries)
   } catch {
     return walkProject(root)
   }
@@ -149,13 +149,20 @@ async function resolveEntryKind(
   }
 }
 
-function entriesWithParents(indexed: ProjectEntry[]): ProjectEntry[] {
+export function entriesWithParents(
+  indexed: ProjectEntry[],
+  limit: number
+): ProjectEntry[] {
+  const selected = indexed.slice(0, limit)
   const entries = new Map<string, ProjectEntry>()
-  for (const entry of indexed) {
-    entries.set(entry.path, entry)
+  for (const entry of selected) entries.set(entry.path, entry)
+
+  for (const entry of selected) {
     const parts = entry.path.split("/")
     for (let index = 1; index < parts.length; index += 1) {
       const parent = parts.slice(0, index).join("/")
+      if (entries.has(parent)) continue
+      if (entries.size >= limit) return [...entries.values()]
       entries.set(parent, { path: parent, kind: "directory" })
     }
   }
