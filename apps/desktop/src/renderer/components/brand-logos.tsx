@@ -39,6 +39,14 @@ const logoByHarnessId: Record<string, ComponentType<ComponentProps<"svg">>> = {
   codex: OpenAILogo,
 }
 
+/** Provider tints, matched to each brand; unknown harnesses stay neutral.
+    Lives beside the logo map so adding a harness is one file, and so the
+    rest of the UI never has to name a provider. */
+export const harnessAccentByHarnessId: Record<string, string> = {
+  claude: "text-[#D97757]",
+  codex: "text-foreground",
+}
+
 /** Renders the provider logo for a harness, or the fallback (nothing by
     default) for unknown harnesses. */
 export function HarnessLogo({

@@ -51,7 +51,7 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 
-import { HarnessLogo } from "../brand-logos.js"
+import { HarnessLogo, harnessAccentByHarnessId } from "../brand-logos.js"
 import { formatAge, formatExactTime } from "../../lib/format-time.js"
 import { describeThreadStatus } from "../../lib/thread-status.js"
 import { useLocalStorage } from "../../lib/use-local-storage.js"
@@ -359,12 +359,6 @@ function Shelf({
   )
 }
 
-/** Provider tints, matched to each brand; unknown harnesses stay neutral. */
-const harnessAccent: Record<string, string> = {
-  claude: "text-[#D97757]",
-  codex: "text-foreground",
-}
-
 function TaskRow({
   thread,
   section,
@@ -423,6 +417,10 @@ function TaskRow({
           id={taskRowButtonId(thread.id)}
           onClick={() => onOpenThread(thread.id)}
           aria-current={isOpen ? "true" : undefined}
+          // The row is the context menu trigger, and Base UI's trigger only
+          // wires pointer handlers. Keyboard users reach the menu with
+          // Shift+F10 or the Menu key, so say out loud that one exists.
+          aria-haspopup="menu"
           className={cn(
             "flex w-full items-start gap-2.5 rounded-lg py-2 pr-7 pl-2 text-left text-sm",
             "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
@@ -443,7 +441,8 @@ function TaskRow({
               harnessId={thread.harnessId}
               className={cn(
                 "size-3.5",
-                harnessAccent[thread.harnessId] ?? "text-muted-foreground"
+                harnessAccentByHarnessId[thread.harnessId] ??
+                  "text-muted-foreground"
               )}
               fallback={
                 <span
@@ -773,12 +772,12 @@ function RowIndicator({
     <span
       key={kind}
       aria-hidden
-      className="flex size-3.5 items-center justify-center transition-[opacity,scale] duration-200 ease-(--ease-out-quart) starting:scale-50 starting:opacity-0"
+      className="flex size-3.5 items-center justify-center transition-[opacity,scale] duration-200 ease-(--ease-out-quart) motion-reduce:transition-none starting:scale-50 starting:opacity-0"
     >
       {kind === "running" ? (
         <PieGlyph className="text-blue-500 dark:text-blue-400" />
       ) : kind === "waiting-approval" ? (
-        <PieGlyph className="animate-pulse text-amber-500 dark:text-amber-400" />
+        <PieGlyph className="text-amber-500 motion-safe:animate-pulse dark:text-amber-400" />
       ) : kind === "failed" ? (
         <MarkGlyph variant="x" className="text-destructive" />
       ) : kind === "snoozed" ? (

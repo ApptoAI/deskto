@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react"
+import { memo, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
@@ -17,8 +17,17 @@ import {
   Message as MessageRow,
   MessageBody,
 } from "@workspace/ui/components/chat/message"
-import { MessageList } from "@workspace/ui/components/chat/message-list"
+import {
+  MessageList,
+  type MessageListHandle,
+} from "@workspace/ui/components/chat/message-list"
 import { Plan } from "@workspace/ui/components/chat/plan"
+import {
+  TimelineMinimap,
+  minimapAnchor,
+  type TimelineMinimapItem,
+} from "@workspace/ui/components/chat/timeline-minimap"
+import { minimapPreviewText } from "@workspace/ui/lib/timeline-minimap"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
@@ -73,34 +82,83 @@ export function MessageStream({
     () => toBlocks(interleaveTurns(messages, activities)),
     [messages, activities]
   )
+  const listRef = useRef<MessageListHandle>(null)
+  const [viewport, setViewport] = useState<HTMLElement | null>(null)
+  const minimapItems = useMemo(() => toMinimapItems(messages), [messages])
 
   return (
-    <MessageList className="px-6" aria-label="Task conversation">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 py-8">
-        {blocks.map((block) => {
-          switch (block.kind) {
-            case "message":
-              return <MessageEntry key={block.key} message={block.message} />
-            case "plan":
-              return <PlanBlock key={block.key} activity={block.activity} />
-            case "subagent":
-              return (
-                <SubagentBlock
-                  key={block.key}
-                  activity={block.activity}
-                  childActivities={block.children}
-                />
-              )
-            case "tools":
-              return <ToolCluster key={block.key} items={block.items} />
-          }
-        })}
-        {running && !streamingTail ? (
-          <WorkingIndicator since={sinceTail} />
-        ) : null}
-      </div>
-    </MessageList>
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <MessageList
+        ref={listRef}
+        onViewportChange={setViewport}
+        className="px-6"
+        aria-label="Task conversation"
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 py-8">
+          {blocks.map((block) => {
+            switch (block.kind) {
+              case "message":
+                return <MessageEntry key={block.key} message={block.message} />
+              case "plan":
+                return <PlanBlock key={block.key} activity={block.activity} />
+              case "subagent":
+                return (
+                  <SubagentBlock
+                    key={block.key}
+                    activity={block.activity}
+                    childActivities={block.children}
+                  />
+                )
+              case "tools":
+                return <ToolCluster key={block.key} items={block.items} />
+            }
+          })}
+          {running && !streamingTail ? (
+            <WorkingIndicator since={sinceTail} />
+          ) : null}
+        </div>
+      </MessageList>
+      <TimelineMinimap
+        items={minimapItems}
+        viewport={viewport}
+        onSelect={(anchor) => listRef.current?.scrollToElement(anchor)}
+      />
+    </div>
   )
+}
+
+/**
+ * One minimap stop per prompt, previewed by the reply it drew.
+ *
+ * The reply is read positionally, taking every assistant segment between this
+ * prompt and the next one, rather than by `turnId`. A turn's prose arrives in
+ * segments split around tool activity, so no single segment is the reply, and
+ * `turnId` is absent on rows written before it existed.
+ */
+function toMinimapItems(messages: Message[]): TimelineMinimapItem[] {
+  const items: TimelineMinimapItem[] = []
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== "user") continue
+    items.push({
+      id: message.id,
+      // A prompt that survives no markdown at all still gets a stop: dropping
+      // it would leave the rail quietly short of the conversation.
+      label: minimapPreviewText(message.content) ?? "Message",
+      preview: minimapPreviewText(replyToPromptAt(messages, index)),
+    })
+  }
+  return items
+}
+
+function replyToPromptAt(messages: Message[], promptIndex: number): string {
+  const segments: string[] = []
+  for (const message of messages.slice(promptIndex + 1)) {
+    if (message.role === "user") break
+    if (message.role === "assistant" && message.content) {
+      segments.push(message.content)
+    }
+  }
+  return segments.join(" ")
 }
 
 /**
@@ -249,7 +307,11 @@ const MessageEntry = memo(function MessageEntry({
 }) {
   if (message.role === "user") {
     return (
-      <MessageRow role="user" className="enter-rise">
+      <MessageRow
+        role="user"
+        className="enter-rise"
+        {...minimapAnchor(message.id)}
+      >
         <MessageBody role="user">{message.content}</MessageBody>
       </MessageRow>
     )
@@ -462,10 +524,12 @@ function SubagentBadge({ status }: { status: Activity["status"] }) {
   if (status === "running") {
     return (
       <span className="relative flex size-5 shrink-0 items-center justify-center">
+        {/* Reduced motion keeps the ring and its gap, just still: the shape
+            already reads as pending next to the settled check and cross. */}
         <svg
           viewBox="0 0 20 20"
           aria-hidden
-          className="absolute inset-0 animate-spin [animation-duration:1.1s]"
+          className="absolute inset-0 [animation-duration:1.1s] motion-safe:animate-spin"
         >
           <circle
             cx="10"
@@ -495,7 +559,10 @@ function SubagentBadge({ status }: { status: Activity["status"] }) {
       key={status}
       aria-hidden
       className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-full text-white transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:scale-50 starting:opacity-0",
+        // The fade survives reduced motion the way `enter-rise` keeps its
+        // own, but the scale-in does not: only the distance travelled is
+        // what a motion-sensitive reader needs dropped.
+        "flex size-5 shrink-0 items-center justify-center rounded-full text-white transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:opacity-0 motion-safe:starting:scale-50",
         status === "completed"
           ? "bg-emerald-500 dark:bg-emerald-600"
           : "bg-destructive"
@@ -582,7 +649,9 @@ function ActivityLine({
           aria-hidden
           className={cn(
             "size-3.5",
-            running && "animate-spin [animation-duration:0.7s]",
+            // Held still under reduced motion rather than swapped out: the
+            // broken circle still separates a running row from a finished one.
+            running && "[animation-duration:0.7s] motion-safe:animate-spin",
             failed && "text-destructive",
             expandable &&
               "transition-opacity duration-100 group-hover/row:opacity-0",
