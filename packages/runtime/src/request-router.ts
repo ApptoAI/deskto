@@ -293,6 +293,16 @@ export class RequestRouter {
         this.events.threadChanged(thread.id)
         return thread
       }
+      case "thread.delete": {
+        const threadId = request.params.threadId
+        // Fail on a missing id before anything else runs.
+        this.store.threads.get(threadId)
+        // A live turn would keep writing into rows that are about to vanish.
+        await this.turns.discard(threadId)
+        this.store.threads.delete(threadId)
+        this.events.threadChanged(threadId)
+        return null
+      }
       case "turn.start":
         return this.turns.start(
           request.params.threadId,

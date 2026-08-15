@@ -159,6 +159,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("thread.delete"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
     method: z.literal("turn.start"),
     params: z
       .object({
@@ -227,6 +231,7 @@ export interface RuntimeResponses {
   "thread.wake": z.infer<typeof threadSchema>
   "thread.setPinned": z.infer<typeof threadSchema>
   "thread.markVisited": z.infer<typeof threadSchema>
+  "thread.delete": null
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
   "approval.resolve": z.infer<typeof threadViewSchema>

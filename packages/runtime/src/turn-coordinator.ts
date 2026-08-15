@@ -218,6 +218,17 @@ export class TurnCoordinator {
     return this.store.threads.view(threadId)
   }
 
+  /**
+   * Stops a turn whose thread is about to be deleted. Unlike `cancel`, an idle
+   * thread is fine and a harness that refuses to stop does not fail the
+   * caller: the rows it would write to are going away either way.
+   */
+  async discard(threadId: string): Promise<void> {
+    if (!this.#runs.has(threadId)) return
+    await this.cancel(threadId).catch(() => undefined)
+    this.#runs.delete(threadId)
+  }
+
   async resolveApproval(
     threadId: string,
     approvalId: string,

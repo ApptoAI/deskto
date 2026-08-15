@@ -414,6 +414,67 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("deletes a Thread with its turn, and stops the harness working on it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const created = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: created.id, prompt: "Summarize the folder" },
+      })
+    )
+
+    // Deleting outranks the activity guards: a task the user gave up on may
+    // well be one whose agent will not stop on its own.
+    unwrap(
+      await runtime.request({
+        method: "thread.delete",
+        params: { threadId: created.id },
+      })
+    )
+
+    const remaining = unwrap(
+      await runtime.request({
+        method: "thread.list",
+        params: { projectId: project.id },
+      })
+    )
+    expect(remaining).toHaveLength(0)
+
+    const missing = await runtime.request({
+      method: "thread.get",
+      params: { threadId: created.id },
+    })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.error.code).toBe("thread-not-found")
+
+    const again = await runtime.request({
+      method: "thread.delete",
+      params: { threadId: created.id },
+    })
+    expect(again.ok).toBe(false)
+    if (!again.ok) expect(again.error.code).toBe("thread-not-found")
+    await runtime.close()
+  })
+
   it("persists a resumable session and forwards an approval to its active harness", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)

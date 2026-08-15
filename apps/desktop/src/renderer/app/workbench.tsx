@@ -337,6 +337,17 @@ export function Workbench() {
       onWake: (threadId) => run(() => client.wakeThread(threadId)),
       onSetPinned: (threadId, pinned) =>
         run(() => client.setThreadPinned(threadId, pinned)),
+      onDelete: (threadId) =>
+        run(async () => {
+          await client.deleteThread(threadId)
+          // The deleted task cannot stay on screen; the pane falls back to
+          // the composer the same way it does after a workspace deletion.
+          setView((current) =>
+            current.kind === "task" && current.threadId === threadId
+              ? { kind: "new-task" }
+              : current
+          )
+        }),
     }
   }, [client])
 
