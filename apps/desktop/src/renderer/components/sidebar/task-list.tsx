@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ComponentProps, ReactNode } from "react"
 import CheckIcon from "lucide-react/dist/esm/icons/check"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
@@ -70,6 +70,7 @@ export type InboxActions = {
 // Recent history is the common lookup; the deep tail stays behind Show more.
 const DONE_INITIAL_COUNT = 10
 const DONE_PAGE_COUNT = 25
+const taskListFocusTargetId = "task-list-focus-target"
 
 const decodeBoolean = (value: unknown) => value === true
 
@@ -118,25 +119,34 @@ export function TaskList({
   // task changes section, and a dialog inside it would vanish mid-decision.
   const [deleteTarget, setDeleteTarget] = useState<Thread | null>(null)
 
-  if (state.status === "idle") return null
+  if (state.status === "idle") {
+    return <div id={taskListFocusTargetId} tabIndex={-1} />
+  }
 
   if (state.status === "loading") {
     return (
-      <ul className="space-y-1 px-2 pt-1" aria-label="Loading tasks">
-        {[0, 1, 2].map((row) => (
-          <li key={row} className="h-8 animate-pulse rounded-lg bg-muted/40" />
-        ))}
-      </ul>
+      <div id={taskListFocusTargetId} tabIndex={-1}>
+        <ul className="space-y-1 px-2 pt-1" aria-label="Loading tasks">
+          {[0, 1, 2].map((row) => (
+            <li
+              key={row}
+              className="h-8 animate-pulse rounded-lg bg-muted/40"
+            />
+          ))}
+        </ul>
+      </div>
     )
   }
 
   if (state.status === "error") {
     return (
-      <div className="space-y-2 px-3 py-2">
-        <p className="text-sm text-destructive">{state.message}</p>
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
+      <div id={taskListFocusTargetId} tabIndex={-1}>
+        <div className="space-y-2 px-3 py-2">
+          <p className="text-sm text-destructive">{state.message}</p>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
       </div>
     )
   }
@@ -149,7 +159,11 @@ export function TaskList({
     partition.done.length
   if (total === 0) {
     return (
-      <p className="px-4 py-1.5 text-sm text-muted-foreground">No tasks yet.</p>
+      <div id={taskListFocusTargetId} tabIndex={-1}>
+        <p className="px-4 py-1.5 text-sm text-muted-foreground">
+          No tasks yet.
+        </p>
+      </div>
     )
   }
 
@@ -186,7 +200,7 @@ export function TaskList({
     expanded ? undefined : rows.find((thread) => thread.id === openThreadId)
 
   return (
-    <div className="px-2">
+    <div id={taskListFocusTargetId} tabIndex={-1} className="px-2">
       {partition.pinned.length > 0 ? (
         <section>
           <div className="flex items-center px-2 pt-4 pb-1.5 text-xs font-medium text-muted-foreground/80">
@@ -629,15 +643,25 @@ function DeleteTaskDialog({
   // stays around: it names the task through the fade and tells the focus
   // handler which row to go back to.
   const [lastTarget, setLastTarget] = useState<Thread | null>(null)
+  const deleteRequested = useRef(false)
+  useEffect(() => {
+    if (target) deleteRequested.current = false
+  }, [target])
   if (target && target !== lastTarget) setLastTarget(target)
   const shown = target ?? lastTarget
 
   return (
     <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        finalFocus={() =>
-          (shown && document.getElementById(taskRowButtonId(shown.id))) ?? false
-        }
+        finalFocus={() => {
+          const list = document.getElementById(taskListFocusTargetId)
+          if (deleteRequested.current) return list ?? false
+          return (
+            (shown && document.getElementById(taskRowButtonId(shown.id))) ??
+            list ??
+            false
+          )
+        }}
       >
         <DialogHeader>
           <DialogTitle>Delete this task?</DialogTitle>
@@ -653,7 +677,11 @@ function DeleteTaskDialog({
           <Button
             type="button"
             variant="destructive"
-            onClick={() => shown && onConfirm(shown.id)}
+            onClick={() => {
+              if (!shown) return
+              deleteRequested.current = true
+              onConfirm(shown.id)
+            }}
           >
             Delete
           </Button>

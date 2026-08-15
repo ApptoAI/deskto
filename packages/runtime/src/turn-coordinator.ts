@@ -274,6 +274,12 @@ export class TurnCoordinator {
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
+      if (run.cancelled || this.#runs.get(threadId) !== run) {
+        throw new RuntimeError(
+          "turn-not-active",
+          "This task has no active turn"
+        )
+      }
       const message = `Could not answer the harness: ${errorMessage(error)}`
       this.#fail(threadId, run, harnessFailure(message))
       await run.session.cancel().catch(() => undefined)
