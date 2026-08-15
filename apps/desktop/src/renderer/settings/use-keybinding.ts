@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import {
+  formatKeybinding,
   matchesKeybinding,
   parseKeybinding,
   type SettingDefinition,
@@ -32,4 +33,18 @@ export function useKeybinding(
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [binding, onTrigger])
+}
+
+/**
+ * The same binding written the way this platform writes shortcuts (⌘N, Ctrl+N),
+ * for buttons that want to teach their shortcut. Empty when the binding is
+ * cleared, so callers can skip the hint.
+ */
+export function useKeybindingLabel(
+  definition: SettingDefinition<string>
+): string {
+  const binding = useSettingValue(definition)
+  return parseKeybinding(binding)
+    ? formatKeybinding(binding, keyboardPlatform())
+    : ""
 }

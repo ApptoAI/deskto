@@ -84,40 +84,51 @@ export function NewTaskView({
     <>
       <header className="drag-region h-10 shrink-0" />
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <h1 className="font-heading text-2xl font-medium">
-          What should we work on?
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          The agent reads and changes files in {project.name}.
-        </p>
-      </div>
+      {/* The whole start screen sits as one centered column: wordmark, the
+          question, and the composer right under them. Pinning the input to
+          the bottom made the empty view read as a half-loaded task. The
+          negative top margin offsets the drag strip above, so the column
+          lands on the optical centre of the window rather than 40px below. */}
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-8">
+        <div className="enter-rise -mt-10 flex w-full max-w-3xl flex-col items-center gap-4">
+          <div
+            aria-hidden
+            className="font-heading text-6xl leading-none font-semibold tracking-tight text-foreground/8 select-none sm:text-7xl"
+          >
+            appto
+          </div>
 
-      <div className="shrink-0 px-6 pb-6">
-        <div className="mx-auto w-full max-w-3xl">
-          <Composer
-            label="What should the agent do?"
-            placeholder="Describe the task"
-            onSend={handleSend}
-            blockedReason={blockedReason}
-            autoFocus
-            toolbar={
-              options.length > 0 ? (
-                <>
-                  <HarnessMenu
-                    harnesses={options}
-                    selectedId={harnessId}
-                    onSelect={selectHarness}
-                  />
-                  <ExecutionProfileToolbar
-                    models={models}
-                    profile={profile}
-                    onChange={setChosenProfile}
-                  />
-                </>
-              ) : null
-            }
-          />
+          <p className="text-center text-lg font-medium text-foreground/90">
+            What should we do next in{" "}
+            <span className="text-foreground">{project.name}</span>?
+          </p>
+
+          <div className="w-full">
+            <Composer
+              label="What should the agent do?"
+              placeholder="Describe the task"
+              onSend={handleSend}
+              blockedReason={blockedReason}
+              autoFocus
+              toolbar={
+                options.length > 0 ? (
+                  <>
+                    <HarnessMenu
+                      harnesses={options}
+                      selectedId={harnessId}
+                      onSelect={selectHarness}
+                    />
+                    <ExecutionProfileToolbar
+                      models={models}
+                      profile={profile}
+                      onChange={setChosenProfile}
+                      harnessId={harnessId}
+                    />
+                  </>
+                ) : null
+              }
+            />
+          </div>
         </div>
       </div>
     </>

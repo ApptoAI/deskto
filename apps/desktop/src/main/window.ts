@@ -1,13 +1,23 @@
 import path from "node:path"
 
-import { BrowserWindow } from "electron"
+import { BrowserWindow, screen } from "electron"
+
+/** Opens large on a roomy display without overflowing a small one: most of
+    the work area, capped so it never becomes an unwieldy full-screen sheet. */
+function defaultWindowSize(): { width: number; height: number } {
+  const workArea = screen.getPrimaryDisplay().workAreaSize
+  return {
+    width: Math.min(1760, Math.round(workArea.width * 0.9)),
+    height: Math.min(1100, Math.round(workArea.height * 0.92)),
+  }
+}
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    ...defaultWindowSize(),
     minWidth: 900,
     minHeight: 620,
+    center: true,
     show: false,
     titleBarStyle: "hiddenInset",
     backgroundColor: "#0a0a0a",

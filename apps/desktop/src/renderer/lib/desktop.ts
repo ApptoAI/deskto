@@ -3,6 +3,10 @@ export function openExternal(url: string): void {
   void window.appto.openExternal(url)
 }
 
+export function openFolder(path: string): Promise<void> {
+  return window.appto.openFolder(path)
+}
+
 export function pickProjectFolder() {
   return window.appto.pickProject()
 }

@@ -114,7 +114,7 @@ export function Composer({
         </PromptInputToolbar>
       </PromptInput>
 
-      <p id={hintId} className="px-1 text-xs text-muted-foreground">
+      <p id={hintId} className="sr-only">
         Press Enter to send. Shift and Enter start a new line.
       </p>
     </div>

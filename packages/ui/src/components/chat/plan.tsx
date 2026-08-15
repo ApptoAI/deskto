@@ -1,13 +1,14 @@
 import * as React from "react"
-import { CheckIcon, CircleIcon, LoaderCircleIcon } from "lucide-react"
 
 import { cn } from "@workspace/ui/lib/utils"
 
 type PlanStepStatus = "pending" | "active" | "done"
 
 /**
- * Restrained checklist for an agent's working plan. Purely presentational:
- * callers pass plain steps, this component knows nothing about the protocol.
+ * The agent's working plan as a task card: circle status glyphs per step —
+ * dashed ring for pending, spinning arc for active, filled check for done.
+ * Purely presentational: callers pass plain steps, this component knows
+ * nothing about the protocol.
  */
 function Plan({
   title,
@@ -24,30 +25,24 @@ function Plan({
     <div
       data-slot="plan"
       className={cn(
-        "rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-xs",
+        "rounded-xl bg-card px-3.5 py-3 text-xs shadow-xs ring-1 ring-border/60",
         className
       )}
       {...props}
     >
-      <p className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="font-medium">{title}</span>
-        <span className="text-muted-foreground">
+      <p className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-medium">{title}</span>
+        <span className="text-muted-foreground tabular-nums">
           {done}/{steps.length}
         </span>
       </p>
-      <ol className="flex flex-col gap-1">
+      <ol className="flex flex-col gap-1.5">
         {steps.map((step, index) => (
           <PlanStepRow key={index} text={step.text} status={step.status} />
         ))}
       </ol>
     </div>
   )
-}
-
-const stepIcons: Record<PlanStepStatus, typeof CheckIcon> = {
-  pending: CircleIcon,
-  active: LoaderCircleIcon,
-  done: CheckIcon,
 }
 
 function PlanStepRow({
@@ -57,28 +52,83 @@ function PlanStepRow({
   text: string
   status: PlanStepStatus
 }) {
-  const Icon = stepIcons[status]
-
   return (
     <li
       data-status={status}
       className={cn(
-        "flex min-w-0 items-center gap-2",
+        "flex min-w-0 items-center gap-2.5",
         status === "pending" && "text-muted-foreground",
         status === "done" && "text-muted-foreground line-through"
       )}
     >
-      <Icon
-        aria-hidden
-        className={cn(
-          "size-3.5 shrink-0",
-          status === "active" &&
-            "animate-spin text-foreground [animation-duration:0.9s]",
-          status !== "active" && "text-muted-foreground"
-        )}
-      />
+      <StepGlyph status={status} />
       <span className="min-w-0 truncate">{text}</span>
     </li>
+  )
+}
+
+function StepGlyph({ status }: { status: PlanStepStatus }) {
+  if (status === "done") {
+    return (
+      <span
+        aria-hidden
+        className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-2.5"
+        >
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </span>
+    )
+  }
+  if (status === "active") {
+    return (
+      <svg
+        viewBox="0 0 16 16"
+        aria-hidden
+        className="size-4 shrink-0 animate-spin [animation-duration:1.1s] motion-reduce:animate-none"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6.5"
+          fill="none"
+          strokeWidth="1.8"
+          className="stroke-border"
+        />
+        <circle
+          cx="8"
+          cy="8"
+          r="6.5"
+          fill="none"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeDasharray="11.4 29.4"
+          className="stroke-foreground"
+        />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="size-4 shrink-0">
+      <circle
+        cx="8"
+        cy="8"
+        r="6.5"
+        fill="none"
+        strokeWidth="1.5"
+        strokeDasharray="2.8 2.5"
+        strokeLinecap="round"
+        className="stroke-muted-foreground/60"
+      />
+    </svg>
   )
 }
 

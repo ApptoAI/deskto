@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron"
 
 import {
   openExternalChannel,
+  openFolderChannel,
   pickPackChannel,
   pickProjectChannel,
   runtimeEventChannel,
@@ -26,6 +27,7 @@ const api: DesktopApi = {
   pickProject: () => ipcRenderer.invoke(pickProjectChannel),
   pickPack: () => ipcRenderer.invoke(pickPackChannel),
   openExternal: (url) => ipcRenderer.invoke(openExternalChannel, url),
+  openFolder: (path) => ipcRenderer.invoke(openFolderChannel, path),
 }
 
 contextBridge.exposeInMainWorld("appto", api)
