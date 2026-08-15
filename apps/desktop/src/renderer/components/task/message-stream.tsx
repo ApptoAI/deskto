@@ -128,33 +128,37 @@ export function MessageStream({
 }
 
 /**
- * One minimap stop per prompt, previewed by the reply it drew. Both sides of
- * a turn carry the same `turnId`, so the reply is a lookup rather than a walk
- * forward through the stream.
+ * One minimap stop per prompt, previewed by the reply it drew.
+ *
+ * The reply is read positionally, taking every assistant segment between this
+ * prompt and the next one, rather than by `turnId`. A turn's prose arrives in
+ * segments split around tool activity, so no single segment is the reply, and
+ * `turnId` is absent on rows written before it existed.
  */
 function toMinimapItems(messages: Message[]): TimelineMinimapItem[] {
-  const repliesByTurn = new Map<string, string>()
-  for (const message of messages) {
-    if (message.role !== "assistant" || !message.content) continue
-    repliesByTurn.set(turnIdOf(message), message.content)
-  }
-
   const items: TimelineMinimapItem[] = []
-  for (const message of messages) {
+  for (const [index, message] of messages.entries()) {
     if (message.role !== "user") continue
-    const label = minimapPreviewText(message.content)
-    if (!label) continue
     items.push({
       id: message.id,
-      label,
-      preview: minimapPreviewText(repliesByTurn.get(turnIdOf(message))),
+      // A prompt that survives no markdown at all still gets a stop: dropping
+      // it would leave the rail quietly short of the conversation.
+      label: minimapPreviewText(message.content) ?? "Message",
+      preview: minimapPreviewText(replyToPromptAt(messages, index)),
     })
   }
   return items
 }
 
-function turnIdOf(message: Message): string {
-  return message.turnId ?? message.id
+function replyToPromptAt(messages: Message[], promptIndex: number): string {
+  const segments: string[] = []
+  for (const message of messages.slice(promptIndex + 1)) {
+    if (message.role === "user") break
+    if (message.role === "assistant" && message.content) {
+      segments.push(message.content)
+    }
+  }
+  return segments.join(" ")
 }
 
 /**
@@ -520,10 +524,12 @@ function SubagentBadge({ status }: { status: Activity["status"] }) {
   if (status === "running") {
     return (
       <span className="relative flex size-5 shrink-0 items-center justify-center">
+        {/* Reduced motion keeps the ring and its gap, just still: the shape
+            already reads as pending next to the settled check and cross. */}
         <svg
           viewBox="0 0 20 20"
           aria-hidden
-          className="absolute inset-0 animate-spin [animation-duration:1.1s]"
+          className="absolute inset-0 [animation-duration:1.1s] motion-safe:animate-spin"
         >
           <circle
             cx="10"
@@ -553,7 +559,10 @@ function SubagentBadge({ status }: { status: Activity["status"] }) {
       key={status}
       aria-hidden
       className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-full text-white transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:scale-50 starting:opacity-0",
+        // The fade survives reduced motion the way `enter-rise` keeps its
+        // own, but the scale-in does not: only the distance travelled is
+        // what a motion-sensitive reader needs dropped.
+        "flex size-5 shrink-0 items-center justify-center rounded-full text-white transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:opacity-0 motion-safe:starting:scale-50",
         status === "completed"
           ? "bg-emerald-500 dark:bg-emerald-600"
           : "bg-destructive"
@@ -640,7 +649,9 @@ function ActivityLine({
           aria-hidden
           className={cn(
             "size-3.5",
-            running && "animate-spin [animation-duration:0.7s]",
+            // Held still under reduced motion rather than swapped out: the
+            // broken circle still separates a running row from a finished one.
+            running && "[animation-duration:0.7s] motion-safe:animate-spin",
             failed && "text-destructive",
             expandable &&
               "transition-opacity duration-100 group-hover/row:opacity-0",

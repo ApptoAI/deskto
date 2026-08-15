@@ -28,10 +28,15 @@ function ScrollArea({
       )}
       {...props}
     >
+      {/* Base UI turns the viewport into a real tab stop the moment its
+          content overflows, so suppressing the outline without putting
+          anything back strands a keyboard user with no sign of where focus
+          landed. The ring is inset because the Root clips overflow, which
+          would swallow a ring drawn outside the viewport's edge. */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
         className={cn(
-          "h-full max-h-[inherit] overflow-auto overscroll-contain rounded-[inherit] outline-none",
+          "h-full max-h-[inherit] overflow-auto overscroll-contain rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
           scrollFade &&
             "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] [--fade-size:1.5rem]",
           hideScrollbars &&

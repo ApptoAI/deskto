@@ -6,7 +6,6 @@ import {
   minimapHeightStyle,
   minimapHitStripWidth,
   minimapIndexFromPointer,
-  minimapInteractiveWidth,
   minimapMinItems,
   minimapPreviewTranslate,
   minimapTopPercent,
@@ -24,22 +23,20 @@ interface TimelineMinimapItem {
 
 /**
  * Marks a row as a minimap stop. Spread onto the element the rail should
- * scroll to and watch, keeping the attribute name in one place.
+ * scroll to and watch, keeping the attribute name in one place. The row is
+ * made programmatically focusable so a jump can land focus on it without
+ * adding a tab stop per message.
  */
-function minimapAnchor(id: string): { "data-minimap-anchor": string } {
-  return { [anchorAttribute]: id }
+function minimapAnchor(id: string): {
+  "data-minimap-anchor": string
+  tabIndex: number
+} {
+  return { [anchorAttribute]: id, tabIndex: -1 }
 }
 
 function anchorSelector(id: string): string {
   const escaped = typeof CSS !== "undefined" ? CSS.escape(id) : id
   return `[${anchorAttribute}="${escaped}"]`
-}
-
-function targetsPreview(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element &&
-    target.closest("[data-minimap-preview]") !== null
-  )
 }
 
 /**
@@ -153,37 +150,33 @@ function TimelineMinimap({
         "pointer-events-none absolute inset-y-0 left-0 z-30 hidden w-18 [@media(pointer:fine)]:block",
         gutter.persistent
           ? "opacity-100"
-          : "opacity-0 transition-opacity duration-150 focus-within:opacity-100 hover:opacity-100"
+          : "opacity-0 transition-opacity duration-150 focus-within:opacity-100 hover:opacity-100 motion-reduce:transition-none"
       )}
     >
       <div className="relative h-full w-full select-none">
         <button
           type="button"
           aria-label={
-            activeItem
-              ? `Jump to message: ${activeItem.label}`
+            activeItem && index !== null
+              ? `Jump to message ${index + 1} of ${items.length}: ${activeItem.label}`
               : "Jump to a message"
           }
           className={cn(
             "absolute top-1/2 left-3 -translate-y-1/2 cursor-pointer bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-            // Capped to the gutter, so with no room to spare the rail goes
-            // inert rather than stealing clicks from the message column.
+            // Never wider than the gutter, so the rail cannot reach over the
+            // message column; with no room to spare it goes inert instead.
             gutter.strip > 0 ? "pointer-events-auto" : "pointer-events-none"
           )}
           style={{
             height: minimapHeightStyle(items.length),
-            width: minimapInteractiveWidth(gutter.strip, activeItem !== null),
+            width: gutter.strip,
           }}
           onMouseMove={(event) =>
             setActiveIndex(resolveIndexFromPointer(event))
           }
           onMouseLeave={() => setActiveIndex(null)}
-          onMouseDown={(event) => {
-            // Keeps the press from clearing a selection made in the card.
-            if (!targetsPreview(event.target)) event.preventDefault()
-          }}
+          onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
-            if (targetsPreview(event.target)) return
             const next = resolveIndexFromPointer(event)
             jumpTo(next === null ? null : (items[next] ?? null))
             event.currentTarget.blur()
@@ -243,10 +236,12 @@ function TimelineMinimap({
             )
           })}
           {activeItem && index !== null ? (
+            // Inert on purpose. The card overhangs the message column, so
+            // anything it caught would be a click or a drag-select the reader
+            // aimed at the text underneath.
             <span
-              data-minimap-preview
-              className="pointer-events-auto absolute left-8 w-80 cursor-text select-text"
-              onMouseMove={(event) => event.stopPropagation()}
+              aria-hidden
+              className="pointer-events-none absolute left-8 w-80"
               style={{
                 top: `${minimapTopPercent(index, items.length)}%`,
                 transform: `translateY(${minimapPreviewTranslate(index, items.length)})`,

@@ -5,7 +5,6 @@ import {
   minimapHeightStyle,
   minimapHitStripWidth,
   minimapIndexFromPointer,
-  minimapInteractiveWidth,
   minimapPreviewText,
   minimapPreviewTranslate,
   minimapTopPercent,
@@ -13,11 +12,12 @@ import {
 
 describe("minimapHeightStyle", () => {
   it("grows by the tick spacing and caps at the viewport height", () => {
-    expect(minimapHeightStyle(5)).toBe("min(32px, calc(100vh - 18rem))")
+    expect(minimapHeightStyle(20)).toBe("min(152px, calc(100vh - 18rem))")
   })
 
-  it("stays positive for a single stop", () => {
-    expect(minimapHeightStyle(1)).toBe("min(1px, calc(100vh - 18rem))")
+  it("holds a floor so a short conversation stays hittable", () => {
+    expect(minimapHeightStyle(2)).toBe("min(48px, calc(100vh - 18rem))")
+    expect(minimapHeightStyle(5)).toBe("min(48px, calc(100vh - 18rem))")
   })
 })
 
@@ -97,13 +97,6 @@ describe("minimapHitStripWidth", () => {
   it("goes inert in a viewport too narrow to hold the rail", () => {
     expect(minimapHitStripWidth(24)).toBe(0)
     expect(minimapHitStripWidth(0)).toBe(0)
-  })
-})
-
-describe("minimapInteractiveWidth", () => {
-  it("covers the preview once it is open and the gutter otherwise", () => {
-    expect(minimapInteractiveWidth(40, true)).toBe("22rem")
-    expect(minimapInteractiveWidth(40, false)).toBe(40)
   })
 })
 

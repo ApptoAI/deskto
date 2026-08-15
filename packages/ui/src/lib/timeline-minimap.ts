@@ -11,6 +11,13 @@
 /** Vertical distance between two ticks before the rail hits its height cap. */
 export const minimapItemSpacing = 8
 
+/**
+ * Floor on the rail's height. At its natural spacing a two-stop rail would be
+ * 8px tall, which is a hover target nobody can hit; short conversations get a
+ * rail that is reachable instead of one that is proportional.
+ */
+export const minimapMinHeight = 48
+
 /** Under two stops the rail has no shape worth drawing. */
 export const minimapMinItems = 2
 
@@ -33,12 +40,11 @@ export const minimapHitStripLeft = 12
 /** Widest the collapsed hover target ever gets, gutter permitting. */
 export const minimapHitStripMaxWidth = 40
 
-/** With the preview open the target covers the card too, so the pointer can
-    travel to it and select its text. */
-export const minimapExpandedHitStripWidth = "22rem"
-
 export function minimapHeightStyle(itemCount: number): string {
-  const natural = Math.max(1, (itemCount - 1) * minimapItemSpacing)
+  const natural = Math.max(
+    minimapMinHeight,
+    (itemCount - 1) * minimapItemSpacing
+  )
   return `min(${natural}px, ${minimapMaxHeight})`
 }
 
@@ -88,13 +94,6 @@ export function minimapHasPersistentGutter(viewportWidth: number): boolean {
 export function minimapHitStripWidth(viewportWidth: number): number {
   const usable = Math.floor(minimapGutter(viewportWidth)) - minimapHitStripLeft
   return Math.max(0, Math.min(minimapHitStripMaxWidth, usable))
-}
-
-export function minimapInteractiveWidth(
-  collapsedWidth: number,
-  expanded: boolean
-): number | string {
-  return expanded ? minimapExpandedHitStripWidth : collapsedWidth
 }
 
 /**
