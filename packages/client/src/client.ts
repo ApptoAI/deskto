@@ -210,6 +210,10 @@ export class RuntimeClient {
     return this.request({ method: "thread.markVisited", params: { threadId } })
   }
 
+  deleteThread(threadId: string) {
+    return this.request({ method: "thread.delete", params: { threadId } })
+  }
+
   listResults(threadId: string) {
     return this.request({ method: "artifact.list", params: { threadId } })
   }

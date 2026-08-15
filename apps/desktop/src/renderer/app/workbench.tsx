@@ -30,6 +30,7 @@ import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
 import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { useThreadChanged } from "../runtime/use-thread-changed.js"
+import { useThreadDeleted } from "../runtime/use-thread-deleted.js"
 import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
 
@@ -212,6 +213,23 @@ export function Workbench() {
 
   useThreadChanged(revalidateAfterThreadChanges)
 
+  // A deleted task has nothing left to reload, so the pane closes on the event
+  // rather than after the request resolves — otherwise the open view refetches
+  // the missing thread first and flashes an error.
+  useThreadDeleted(
+    useCallback(
+      (threadId: string) => {
+        setView((current) =>
+          current.kind === "task" && current.threadId === threadId
+            ? { kind: "new-task" }
+            : current
+        )
+        revalidateAfterThreadChanges()
+      },
+      [revalidateAfterThreadChanges]
+    )
+  )
+
   useKeybinding(
     appSettings.newTaskKeybinding,
     useCallback(() => setView({ kind: "new-task" }), [])
@@ -337,6 +355,7 @@ export function Workbench() {
       onWake: (threadId) => run(() => client.wakeThread(threadId)),
       onSetPinned: (threadId, pinned) =>
         run(() => client.setThreadPinned(threadId, pinned)),
+      onDelete: (threadId) => run(() => client.deleteThread(threadId)),
     }
   }, [client])
 

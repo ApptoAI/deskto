@@ -161,6 +161,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("thread.delete"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
     method: z.literal("artifact.list"),
     params: z.object({ threadId: z.string() }),
   }),
@@ -237,6 +241,7 @@ export interface RuntimeResponses {
   "thread.wake": z.infer<typeof threadSchema>
   "thread.setPinned": z.infer<typeof threadSchema>
   "thread.markVisited": z.infer<typeof threadSchema>
+  "thread.delete": null
   "artifact.list": z.infer<typeof turnOutputSchema>[]
   "artifact.preview": z.infer<typeof artifactPreviewSchema>
   "turn.start": z.infer<typeof threadViewSchema>
@@ -274,6 +279,9 @@ export type ThreadDeltaChange = z.infer<typeof threadDeltaChangeSchema>
 
 export const runtimeEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("thread.changed"), threadId: z.string() }),
+  /** The Thread is gone. Distinct from `thread.changed` because reloading a
+      deleted Thread only produces an error; views holding it must close. */
+  z.object({ type: z.literal("thread.deleted"), threadId: z.string() }),
   z.object({
     type: z.literal("thread.delta"),
     threadId: z.string(),

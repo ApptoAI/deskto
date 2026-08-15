@@ -34,6 +34,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A Project points to one folder, belongs to one Workspace, and owns its Threads.
 - Deleting a Workspace moves its Projects to the Personal Workspace. Nothing on disk is touched.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
+- Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.

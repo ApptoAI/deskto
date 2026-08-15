@@ -421,6 +421,148 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("deletes a Thread with its turn, and stops the harness working on it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const created = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: created.id, prompt: "Summarize the folder" },
+      })
+    )
+
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+
+    // Deleting outranks the activity guards: a task the user gave up on may
+    // well be one whose agent will not stop on its own.
+    unwrap(
+      await runtime.request({
+        method: "thread.delete",
+        params: { threadId: created.id },
+      })
+    )
+    expect(harness.runs[0]!.cancelled).toBe(true)
+
+    // Removal has its own event: `thread.changed` would send open views back
+    // to `thread.get` for a task that is no longer there.
+    expect(events).toContain("thread.deleted")
+    expect(events).not.toContain("thread.changed")
+
+    const remaining = unwrap(
+      await runtime.request({
+        method: "thread.list",
+        params: { projectId: project.id },
+      })
+    )
+    expect(remaining).toHaveLength(0)
+
+    const missing = await runtime.request({
+      method: "thread.get",
+      params: { threadId: created.id },
+    })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.error.code).toBe("thread-not-found")
+
+    const again = await runtime.request({
+      method: "thread.delete",
+      params: { threadId: created.id },
+    })
+    expect(again.ok).toBe(false)
+    if (!again.ok) expect(again.error.code).toBe("thread-not-found")
+    await runtime.close()
+  })
+
+  it("ignores a pending approval response that fails after deletion", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const approvalHarness = delayedApprovalHarness()
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [approvalHarness.factory],
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the report" },
+      })
+    )
+    approvalHarness.harness.runs[0]!.emit({
+      type: "approval.requested",
+      request: { id: "approval-1", kind: "file-change", title: "Save report" },
+    })
+
+    let approvalId: string | undefined
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      approvalId = view.pendingApproval?.id
+      return approvalId !== undefined
+    })
+
+    const events: string[] = []
+    runtime.subscribe((event) => events.push(event.type))
+    const resolution = runtime.request({
+      method: "approval.resolve",
+      params: {
+        threadId: thread.id,
+        approvalId: approvalId!,
+        decision: "approve",
+      },
+    })
+    await approvalHarness.responding
+
+    unwrap(
+      await runtime.request({
+        method: "thread.delete",
+        params: { threadId: thread.id },
+      })
+    )
+    approvalHarness.rejectResponse(new Error("Approval channel closed"))
+
+    const response = await resolution
+    expect(response.ok).toBe(false)
+    if (!response.ok) expect(response.error.code).toBe("turn-not-active")
+    expect(events).toContain("thread.deleted")
+    expect(events).not.toContain("thread.changed")
+    await runtime.close()
+  })
+
   it("persists a resumable session and forwards an approval to its active harness", async () => {
     const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
     directories.push(directory)
@@ -1829,6 +1971,41 @@ function unwrap<T>(
 ): T {
   if (!response.ok) throw new Error(JSON.stringify(response.error))
   return response.data
+}
+
+function delayedApprovalHarness() {
+  const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+  let markResponding: (() => void) | undefined
+  let rejectResponse: ((error: Error) => void) | undefined
+  const responding = new Promise<void>((resolve) => {
+    markResponding = resolve
+  })
+  const factory: HarnessAdapterFactory = {
+    descriptor: harness.descriptor,
+    checkAvailability: () => harness.checkAvailability(),
+    listModels: () => harness.listModels(),
+    start: async (input, signal) => {
+      const session = await harness.start(input, signal)
+      return {
+        ...session,
+        respondToApproval: () => {
+          markResponding?.()
+          return new Promise<void>((_resolve, reject) => {
+            rejectResponse = reject
+          })
+        },
+      }
+    },
+  }
+  return {
+    factory,
+    harness,
+    responding,
+    rejectResponse(error: Error) {
+      if (!rejectResponse) throw new Error("No approval response is pending")
+      rejectResponse(error)
+    },
+  }
 }
 
 async function waitFor(predicate: () => Promise<boolean>): Promise<void> {
