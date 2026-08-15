@@ -220,6 +220,17 @@ export class Threads {
     )
   }
 
+  /** Removes the task for good. Turns, messages, activities and approvals go
+      with it through the foreign-key cascade; the project folder is untouched. */
+  delete(id: string): void {
+    const result = this.database
+      .prepare("DELETE FROM threads WHERE id = ?")
+      .run(id)
+    if (result.changes === 0)
+      throw new RuntimeError("thread-not-found", "Task not found")
+    this.sequences.forget(id)
+  }
+
   getRow(id: string): ThreadRow {
     const row = this.database
       .prepare("SELECT * FROM threads WHERE id = ?")

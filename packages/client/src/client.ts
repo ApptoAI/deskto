@@ -210,6 +210,10 @@ export class RuntimeClient {
     return this.request({ method: "thread.markVisited", params: { threadId } })
   }
 
+  deleteThread(threadId: string) {
+    return this.request({ method: "thread.delete", params: { threadId } })
+  }
+
   startTurn(threadId: string, input: TurnInput | string) {
     return this.request({
       method: "turn.start",
