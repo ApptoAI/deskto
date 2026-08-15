@@ -166,7 +166,7 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({
     method: z.literal("artifact.preview"),
-    params: z.object({ artifactId: z.string() }),
+    params: z.object({ threadId: z.string(), artifactId: z.string() }),
   }),
   z.object({
     method: z.literal("turn.start"),

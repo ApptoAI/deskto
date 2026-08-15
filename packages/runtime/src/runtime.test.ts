@@ -1351,13 +1351,32 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: markdown.artifact.id },
+          params: { threadId: thread.id, artifactId: markdown.artifact.id },
         })
       )
     ).toEqual({
       kind: "markdown",
       artifactId: markdown.artifact.id,
       content: "# Quarterly report\n",
+    })
+
+    const otherThread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    expect(
+      await runtime.request({
+        method: "artifact.preview",
+        params: {
+          threadId: otherThread.id,
+          artifactId: markdown.artifact.id,
+        },
+      })
+    ).toEqual({
+      ok: false,
+      error: { code: "artifact-not-found", message: "Result not found" },
     })
 
     const csv = outputs.find(
@@ -1367,7 +1386,7 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: csv.artifact.id },
+          params: { threadId: thread.id, artifactId: csv.artifact.id },
         })
       )
     ).toMatchObject({ kind: "csv", content: "month,revenue\nJan,42\n" })
@@ -1379,7 +1398,7 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: html.artifact.id },
+          params: { threadId: thread.id, artifactId: html.artifact.id },
         })
       )
     ).toMatchObject({ kind: "html", content: "<h1>Dashboard</h1>" })
@@ -1391,7 +1410,10 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: spreadsheet.artifact.id },
+          params: {
+            threadId: thread.id,
+            artifactId: spreadsheet.artifact.id,
+          },
         })
       )
     ).toMatchObject({
@@ -1406,7 +1428,7 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: document.artifact.id },
+          params: { threadId: thread.id, artifactId: document.artifact.id },
         })
       )
     ).toMatchObject({
@@ -1514,7 +1536,10 @@ describe("Runtime", () => {
       unwrap(
         await runtime.request({
           method: "artifact.preview",
-          params: { artifactId: outputs[0]!.artifact.id },
+          params: {
+            threadId: thread.id,
+            artifactId: outputs[0]!.artifact.id,
+          },
         })
       )
     ).toMatchObject({ kind: "text", content: "Revise it" })

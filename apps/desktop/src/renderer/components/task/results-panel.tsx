@@ -81,10 +81,10 @@ export function ResultsPanel({
           // A changed version replaces this loader and refreshes the preview
           // after artifact.changed has invalidated the result list.
           void artifactVersion
-          return client.previewArtifact(effectiveSelectedId)
+          return client.previewArtifact(threadId, effectiveSelectedId)
         }
       : null
-  }, [client, effectiveSelectedId, selectedUpdatedAt])
+  }, [client, effectiveSelectedId, selectedUpdatedAt, threadId])
   const preview = useRuntimeQuery(loadPreview)
   const revalidateResults = results.revalidate
   useRuntimeEvent(

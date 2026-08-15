@@ -13,7 +13,14 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
   workerFailureMessage: string,
   unreadableResultMessage: string
 ): QueryState<Result> {
-  const [state, setState] = useState<QueryState<Result>>({ status: "loading" })
+  const [snapshot, setSnapshot] = useState<{
+    dataBase64: string
+    state: QueryState<Result>
+  }>(() => ({ dataBase64, state: { status: "loading" } }))
+
+  if (snapshot.dataBase64 !== dataBase64) {
+    setSnapshot({ dataBase64, state: { status: "loading" } })
+  }
 
   useEffect(() => {
     let active = true
@@ -29,18 +36,30 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
         if (!active) return
         const result = event.data
         if (!result.ok) {
-          setState({ status: "error", message: result.message })
+          setSnapshot({
+            dataBase64,
+            state: { status: "error", message: result.message },
+          })
           return
         }
         void (async () => transform(result as Message))().then(
           (result) => {
-            if (active) setState({ status: "ready", data: result })
+            if (active) {
+              setSnapshot({
+                dataBase64,
+                state: { status: "ready", data: result },
+              })
+            }
           },
           (error: unknown) => {
             if (!active) return
-            setState({
-              status: "error",
-              message: error instanceof Error ? error.message : String(error),
+            setSnapshot({
+              dataBase64,
+              state: {
+                status: "error",
+                message:
+                  error instanceof Error ? error.message : String(error),
+              },
             })
           }
         )
@@ -48,22 +67,33 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
       createdWorker.onerror = (event) => {
         createdWorker.terminate()
         if (!active) return
-        setState({
-          status: "error",
-          message: event.message || workerFailureMessage,
+        setSnapshot({
+          dataBase64,
+          state: {
+            status: "error",
+            message: event.message || workerFailureMessage,
+          },
         })
       }
       createdWorker.onmessageerror = () => {
         createdWorker.terminate()
         if (!active) return
-        setState({ status: "error", message: unreadableResultMessage })
+        setSnapshot({
+          dataBase64,
+          state: { status: "error", message: unreadableResultMessage },
+        })
       }
       createdWorker.postMessage(data, [data])
     } catch (error) {
       worker?.terminate()
       const message = error instanceof Error ? error.message : String(error)
       queueMicrotask(() => {
-        if (active) setState({ status: "error", message })
+        if (active) {
+          setSnapshot({
+            dataBase64,
+            state: { status: "error", message },
+          })
+        }
       })
       return () => {
         active = false
@@ -81,5 +111,7 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
     workerFailureMessage,
   ])
 
-  return state
+  return snapshot.dataBase64 === dataBase64
+    ? snapshot.state
+    : { status: "loading" }
 }

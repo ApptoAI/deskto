@@ -214,8 +214,11 @@ export class RuntimeClient {
     return this.request({ method: "artifact.list", params: { threadId } })
   }
 
-  previewArtifact(artifactId: string) {
-    return this.request({ method: "artifact.preview", params: { artifactId } })
+  previewArtifact(threadId: string, artifactId: string) {
+    return this.request({
+      method: "artifact.preview",
+      params: { threadId, artifactId },
+    })
   }
 
   startTurn(threadId: string, input: TurnInput | string) {

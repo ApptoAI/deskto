@@ -165,15 +165,24 @@ export class Artifacts {
     })
   }
 
-  preview(artifactId: string): ArtifactPreview {
+  preview(threadId: string, artifactId: string): ArtifactPreview {
     const row = this.database
       .prepare(
         `SELECT artifacts.*, projects.path AS project_path
          FROM artifacts
          JOIN projects ON projects.id = artifacts.project_id
-         WHERE artifacts.id = ?`
+         WHERE artifacts.id = ?
+           AND EXISTS (
+             SELECT 1
+             FROM turn_outputs
+             JOIN turns ON turns.id = turn_outputs.turn_id
+             WHERE turn_outputs.artifact_id = artifacts.id
+               AND turns.thread_id = ?
+           )`
       )
-      .get(artifactId) as (ArtifactRow & { project_path: string }) | undefined
+      .get(artifactId, threadId) as
+      | (ArtifactRow & { project_path: string })
+      | undefined
     if (!row) throw new RuntimeError("artifact-not-found", "Result not found")
 
     const file = safeProjectFile(row.project_path, row.relative_path)
