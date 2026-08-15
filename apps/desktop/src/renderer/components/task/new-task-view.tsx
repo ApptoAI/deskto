@@ -91,12 +91,12 @@ export function NewTaskView({
           lands on the optical centre of the window rather than 40px below. */}
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-8">
         <div className="enter-rise -mt-10 flex w-full max-w-3xl flex-col items-center gap-4">
-          <h1
+          <div
             aria-hidden
             className="font-heading text-6xl leading-none font-semibold tracking-tight text-foreground/8 select-none sm:text-7xl"
           >
             appto
-          </h1>
+          </div>
 
           <p className="text-center text-lg font-medium text-foreground/90">
             What should we do next in{" "}

@@ -81,7 +81,7 @@ export function WorkspaceSwitcher({
             variant="ghost"
             size="lg"
             className="w-full justify-start gap-2"
-            aria-label="Switch workspace"
+            aria-label={`Switch workspace, current: ${workspace?.name ?? "none"}`}
           />
         }
       >

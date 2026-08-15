@@ -30,6 +30,7 @@ export function TaskView({
 }) {
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(threadId)
+  const [folderError, setFolderError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
 
   // Looking at the task clears its indicators (unread completion, "came
@@ -88,6 +89,15 @@ export function TaskView({
     }
   }
 
+  async function handleOpenFolder(path: string) {
+    setFolderError(null)
+    try {
+      await openFolder(path)
+    } catch (error) {
+      setFolderError(describeError(error))
+    }
+  }
+
   return (
     <>
       {/* Bare drag strip: the task title and its status already read from
@@ -98,7 +108,7 @@ export function TaskView({
             variant="ghost"
             size="sm"
             className="no-drag text-muted-foreground"
-            onClick={() => openFolder(projectPath)}
+            onClick={() => void handleOpenFolder(projectPath)}
             title={projectPath}
           >
             <FolderOpenIcon data-icon="inline-start" />
@@ -122,6 +132,7 @@ export function TaskView({
 
       <div className="shrink-0 px-6 pb-6">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+          {folderError ? <InlineError message={folderError} /> : null}
           {profileError ? <InlineError message={profileError} /> : null}
 
           {pendingApproval ? (

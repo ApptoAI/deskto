@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 /**
  * Loading state for long-running agent work: a 3×3 pixel grid with a
@@ -17,15 +17,17 @@ const CELL_DELAYS = Array.from({ length: 9 }, (_, index) => {
 
 /** Elapsed time since `since` (fallback: mount), formatted like 4.2s / 1m 12s. */
 function useElapsed(since?: string): string {
-  const [start] = useState(() => {
+  const [mountedAt] = useState(() => Date.now())
+  const start = useMemo(() => {
     const parsed = since ? Date.parse(since) : Number.NaN
-    return Number.isNaN(parsed) ? Date.now() : parsed
-  })
+    return Number.isNaN(parsed) ? mountedAt : parsed
+  }, [mountedAt, since])
   const [now, setNow] = useState(() => Date.now())
+  const coarse = now - start >= 60_000
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 100)
+    const id = window.setInterval(() => setNow(Date.now()), coarse ? 1000 : 100)
     return () => window.clearInterval(id)
-  }, [])
+  }, [coarse])
   const total = Math.max(0, now - start) / 1000
   if (total < 60) return `${total.toFixed(1)}s`
   return `${Math.floor(total / 60)}m ${Math.floor(total % 60)}s`

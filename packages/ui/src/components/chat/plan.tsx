@@ -93,7 +93,7 @@ function StepGlyph({ status }: { status: PlanStepStatus }) {
       <svg
         viewBox="0 0 16 16"
         aria-hidden
-        className="size-4 shrink-0 animate-spin [animation-duration:1.1s]"
+        className="size-4 shrink-0 animate-spin [animation-duration:1.1s] motion-reduce:animate-none"
       >
         <circle
           cx="8"

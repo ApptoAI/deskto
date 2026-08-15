@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react"
+import type { ReactNode } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import CircleCheckIcon from "lucide-react/dist/esm/icons/circle-check"
@@ -260,6 +261,29 @@ function PlanBlock({ activity }: { activity: Activity }) {
   )
 }
 
+function Collapse({
+  open,
+  className,
+  children,
+}: {
+  open: boolean
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        "grid transition-[grid-template-rows,opacity] duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
+        open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+      )}
+    >
+      <div className={cn("min-h-0 overflow-hidden", className)} inert={!open}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 /**
  * A consecutive run of plain tool calls, drawn as one tight column. Long
  * runs get a collapsible "N tool calls" header so finished work folds away.
@@ -286,25 +310,15 @@ function ToolCluster({ items }: { items: Activity[] }) {
           <span className="tabular-nums">{items.length} tool calls</span>
         </button>
       ) : null}
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="-mx-1.5 min-h-0 overflow-hidden px-1.5">
-          <ul className="flex flex-col gap-px" inert={!open}>
-            {items.map((activity) => (
-              <li key={activity.id} className="min-w-0">
-                <ActivityLine
-                  activity={activity}
-                  icon={activityIcon(activity)}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      <Collapse open={open} className="-mx-1.5 px-1.5">
+        <ul className="flex flex-col gap-px">
+          {items.map((activity) => (
+            <li key={activity.id} className="min-w-0">
+              <ActivityLine activity={activity} icon={activityIcon(activity)} />
+            </li>
+          ))}
+        </ul>
+      </Collapse>
     </div>
   )
 }
@@ -351,33 +365,26 @@ function SubagentBlock({
           )}
         />
       </button>
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="grid grid-cols-[16px_1fr] gap-x-2.5 px-3 pb-2.5">
-            <span aria-hidden className="mx-auto h-full w-px bg-border" />
-            <div className="flex min-w-0 flex-col gap-px" inert={!open}>
-              {childActivities.length > 0 ? (
-                childActivities.map((child) => (
-                  <ActivityLine
-                    key={child.id}
-                    activity={child}
-                    icon={activityIcon(child)}
-                  />
-                ))
-              ) : (
-                <p className="py-1 text-[11px] text-muted-foreground">
-                  No activity yet.
-                </p>
-              )}
-            </div>
+      <Collapse open={open}>
+        <div className="grid grid-cols-[16px_1fr] gap-x-2.5 px-3 pb-2.5">
+          <span aria-hidden className="mx-auto h-full w-px bg-border" />
+          <div className="flex min-w-0 flex-col gap-px">
+            {childActivities.length > 0 ? (
+              childActivities.map((child) => (
+                <ActivityLine
+                  key={child.id}
+                  activity={child}
+                  icon={activityIcon(child)}
+                />
+              ))
+            ) : (
+              <p className="py-1 text-[11px] text-muted-foreground">
+                No activity yet.
+              </p>
+            )}
           </div>
         </div>
-      </div>
+      </Collapse>
     </div>
   )
 }
@@ -564,23 +571,16 @@ function ActivityLine({
       >
         {row}
       </button>
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows,opacity] duration-300 ease-(--ease-out-quart) motion-reduce:transition-none",
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <p
-            className={cn(
-              "mt-0.5 mb-1 ml-[7px] border-l border-border py-0.5 pl-3.5 text-[11px] leading-relaxed break-all whitespace-pre-wrap text-muted-foreground",
-              mono && "font-mono"
-            )}
-          >
-            {activity.detail}
-          </p>
-        </div>
-      </div>
+      <Collapse open={open}>
+        <p
+          className={cn(
+            "mt-0.5 mb-1 ml-[7px] border-l border-border py-0.5 pl-3.5 text-[11px] leading-relaxed break-all whitespace-pre-wrap text-muted-foreground",
+            mono && "font-mono"
+          )}
+        >
+          {activity.detail}
+        </p>
+      </Collapse>
     </div>
   )
 }

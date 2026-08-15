@@ -503,9 +503,9 @@ function RowActionButton({
       title={tooltip}
       onClick={onClick}
       className={cn(
-        "flex size-6 scale-90 items-center justify-center rounded-full border border-border/70 bg-sidebar text-muted-foreground opacity-0 shadow-xs",
+        "pointer-events-none flex size-6 scale-90 items-center justify-center rounded-full border border-border/70 bg-sidebar text-muted-foreground opacity-0 shadow-xs",
         "transition-[opacity,scale,background-color,border-color,color] duration-150 ease-(--ease-out-quart) outline-none active:scale-95",
-        "group-hover:scale-100 group-hover:opacity-100 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50",
+        "group-focus-within:pointer-events-auto group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50",
         tone === "done"
           ? "hover:border-emerald-500/50 hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400"
           : "hover:border-border hover:bg-muted hover:text-foreground"

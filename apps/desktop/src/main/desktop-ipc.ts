@@ -36,14 +36,23 @@ export function registerDesktopIpc(): void {
   ipcMain.handle(
     openFolderChannel,
     async (_event, value: unknown): Promise<void> => {
-      if (typeof value !== "string" || !path.isAbsolute(value)) return
+      if (typeof value !== "string" || !path.isAbsolute(value)) {
+        throw new Error("The project folder path is invalid.")
+      }
 
+      let entry
       try {
-        const entry = await stat(value)
-        if (!entry.isDirectory()) return
-        await shell.openPath(value)
+        entry = await stat(value)
       } catch {
-        return
+        throw new Error("The project folder is not available.")
+      }
+      if (!entry.isDirectory()) {
+        throw new Error("The project path is not a folder.")
+      }
+
+      const error = await shell.openPath(value)
+      if (error) {
+        throw new Error(error)
       }
     }
   )
