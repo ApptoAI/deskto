@@ -59,24 +59,27 @@ describe("claudeActivity", () => {
     })
   })
 
-  it("turns the Task tool into a subagent and links children to it", () => {
-    expect(
-      claudeActivity(
-        "task-1",
-        "Task",
-        { description: "Research the repo", subagent_type: "Explore" },
-        undefined
-      )
-    ).toEqual({
-      id: "task-1",
-      name: "Research the repo",
-      detail: "Explore",
-      payload: { kind: "subagent", agentType: "Explore" },
-    })
-    expect(
-      claudeActivity("t4", "Bash", { command: "rg sources" }, "task-1")
-    ).toMatchObject({ id: "t4", parentId: "task-1" })
-  })
+  it.each(["Agent", "Task"])(
+    "turns the %s tool into a subagent and links children to it",
+    (toolName) => {
+      expect(
+        claudeActivity(
+          "task-1",
+          toolName,
+          { description: "Research the repo", subagent_type: "Explore" },
+          undefined
+        )
+      ).toEqual({
+        id: "task-1",
+        name: "Research the repo",
+        detail: "Explore",
+        payload: { kind: "subagent", agentType: "Explore" },
+      })
+      expect(
+        claudeActivity("t4", "Bash", { command: "rg sources" }, "task-1")
+      ).toMatchObject({ id: "t4", parentId: "task-1" })
+    }
+  )
 
   it("splits MCP tool ids into a tool name and server", () => {
     expect(
@@ -336,6 +339,233 @@ describe("ClaudeAdapter", () => {
           name: "TodoWrite",
           payload: { kind: "tool", tool: "other" },
         },
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("tracks a background Agent until its task notification", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        {
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "agent-1",
+                name: "Agent",
+                input: {
+                  description: "Research the repo",
+                  subagent_type: "Explore",
+                },
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          description: "Research the repo",
+          subagent_type: "Explore",
+        } as unknown as SDKMessage,
+        {
+          type: "user",
+          parent_tool_use_id: null,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "agent-1",
+                content: "Agent launched in the background",
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "assistant",
+          parent_tool_use_id: "agent-1",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "child-tool",
+                name: "Bash",
+                input: { command: "rg sources" },
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "user",
+          parent_tool_use_id: "agent-1",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "child-tool",
+                content: "Done",
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "system",
+          subtype: "task_notification",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          status: "completed",
+          summary: "Research complete",
+        } as unknown as SDKMessage,
+        {
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        } as unknown as SDKMessage,
+      ])
+    )
+
+    const session = await new ClaudeAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "agent-1",
+          name: "Research the repo",
+          detail: "Explore",
+          payload: { kind: "subagent", agentType: "Explore" },
+        },
+      },
+      {
+        type: "activity.started",
+        activity: {
+          id: "child-tool",
+          parentId: "agent-1",
+          name: "Run command",
+          detail: "rg sources",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "child-tool",
+        outcome: "completed",
+      },
+      {
+        type: "activity.completed",
+        id: "agent-1",
+        outcome: "completed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("uses task notifications as the terminal edge for background tools", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        {
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "bash-1",
+                name: "Bash",
+                input: { command: "pnpm test" },
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-1",
+          tool_use_id: "bash-1",
+          description: "Run tests",
+          task_type: "shell",
+        } as unknown as SDKMessage,
+        {
+          type: "user",
+          parent_tool_use_id: null,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "bash-1",
+                content: "Command running in the background",
+              },
+            ],
+          },
+        } as unknown as SDKMessage,
+        {
+          type: "system",
+          subtype: "task_notification",
+          task_id: "task-1",
+          tool_use_id: "bash-1",
+          status: "failed",
+          summary: "Tests failed",
+        } as unknown as SDKMessage,
+        {
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        } as unknown as SDKMessage,
+      ])
+    )
+
+    const session = await new ClaudeAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "bash-1",
+          name: "Run command",
+          detail: "pnpm test",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "bash-1",
+        outcome: "failed",
       },
       { type: "turn.completed" },
     ])

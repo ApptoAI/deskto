@@ -100,10 +100,33 @@ describe("codexActivity", () => {
     })
     expect(
       codexActivity({ id: "empty-plan", type: "plan", text: "Planning" })
+    ).toBeUndefined()
+  })
+
+  it("classifies current app-server subagent items", () => {
+    expect(
+      codexActivity({
+        type: "subAgentActivity",
+        id: "spawn-1",
+        kind: "started",
+        agentThreadId: "agent-thread-1",
+        agentPath: "/root/research_repo",
+      })
     ).toEqual({
-      id: "empty-plan",
-      name: "Plan",
-      detail: "Planning",
+      id: "spawn-1",
+      name: "Research repo",
+      payload: { kind: "subagent" },
+    })
+    expect(
+      codexActivity({
+        type: "collabAgentToolCall",
+        id: "wait-1",
+        tool: "wait",
+        status: "inProgress",
+      })
+    ).toEqual({
+      id: "wait-1",
+      name: "Wait for subagents",
       payload: { kind: "tool", tool: "other" },
     })
   })
@@ -205,7 +228,7 @@ describe("codexPlanSteps", () => {
 })
 
 describe("CodexAdapter activity notifications", () => {
-  it("suppresses identical updates and completes a statusless plan", async () => {
+  it("nests child work and scopes child failures to the subagent", async () => {
     const session = await new CodexAdapter().start(
       {
         threadId: "thread-1",
@@ -223,40 +246,107 @@ describe("CodexAdapter activity notifications", () => {
     )
     const notify = clientState.notification!
     notify({
-      method: "item/started",
+      method: "turn/plan/updated",
       params: {
-        item: {
-          id: "plan-1",
-          type: "plan",
-          steps: [{ text: "Research", status: "pending" }],
-        },
+        threadId: "thread-1",
+        turnId: "turn-1",
+        plan: [{ step: "Research", status: "inProgress" }],
       },
     })
-    const updated = {
-      method: "item/updated",
+    notify({
+      method: "turn/plan/updated",
       params: {
-        item: {
-          id: "plan-1",
-          type: "plan",
-          steps: [{ text: "Research", status: "in_progress" }],
-        },
+        threadId: "thread-1",
+        turnId: "turn-1",
+        plan: [{ step: "Research", status: "inProgress" }],
       },
+    })
+    notify({
+      method: "turn/plan/updated",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        plan: [{ step: "Research", status: "completed" }],
+      },
+    })
+    const subagentItem = {
+      id: "spawn-1",
+      type: "subAgentActivity",
+      kind: "started",
+      agentThreadId: "child-thread",
+      agentPath: "/root/research_repo",
     }
-    notify(updated)
-    notify(updated)
+    notify({
+      method: "item/started",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: subagentItem,
+      },
+    })
     notify({
       method: "item/completed",
       params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: subagentItem,
+      },
+    })
+    notify({
+      method: "turn/plan/updated",
+      params: {
+        threadId: "child-thread",
+        turnId: "child-turn",
+        plan: [{ step: "Inspect source", status: "inProgress" }],
+      },
+    })
+    notify({
+      method: "item/started",
+      params: {
+        threadId: "child-thread",
+        turnId: "child-turn",
         item: {
-          id: "plan-1",
-          type: "plan",
-          steps: [{ text: "Research", status: "completed" }],
+          id: "child-command",
+          type: "commandExecution",
+          command: "rg source",
+        },
+      },
+    })
+    notify({
+      method: "error",
+      params: {
+        threadId: "child-thread",
+        turnId: "child-turn",
+        willRetry: false,
+        error: { message: "Child failed" },
+      },
+    })
+    notify({
+      method: "item/completed",
+      params: {
+        threadId: "child-thread",
+        turnId: "child-turn",
+        item: {
+          id: "child-command",
+          type: "commandExecution",
+          command: "rg source",
+          status: "completed",
         },
       },
     })
     notify({
       method: "turn/completed",
-      params: { turn: { status: "completed" } },
+      params: {
+        threadId: "child-thread",
+        turn: { id: "child-turn", status: "completed" },
+      },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
     })
 
     const events: HarnessEvent[] = []
@@ -266,18 +356,7 @@ describe("CodexAdapter activity notifications", () => {
       {
         type: "activity.started",
         activity: {
-          id: "plan-1",
-          name: "Plan",
-          payload: {
-            kind: "plan",
-            steps: [{ text: "Research", status: "pending" }],
-          },
-        },
-      },
-      {
-        type: "activity.updated",
-        update: {
-          id: "plan-1",
+          id: "codex-plan",
           name: "Plan",
           payload: {
             kind: "plan",
@@ -288,7 +367,7 @@ describe("CodexAdapter activity notifications", () => {
       {
         type: "activity.updated",
         update: {
-          id: "plan-1",
+          id: "codex-plan",
           name: "Plan",
           payload: {
             kind: "plan",
@@ -297,9 +376,223 @@ describe("CodexAdapter activity notifications", () => {
         },
       },
       {
+        type: "activity.started",
+        activity: {
+          id: "spawn-1",
+          name: "Research repo",
+          payload: { kind: "subagent" },
+        },
+      },
+      {
+        type: "activity.started",
+        activity: {
+          id: "codex-plan:child-thread",
+          parentId: "spawn-1",
+          name: "Plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Inspect source", status: "active" }],
+          },
+        },
+      },
+      {
+        type: "activity.started",
+        activity: {
+          id: "child-command",
+          parentId: "spawn-1",
+          name: "Run command",
+          detail: "rg source",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
         type: "activity.completed",
-        id: "plan-1",
+        id: "codex-plan:child-thread",
+        outcome: "failed",
+      },
+      {
+        type: "activity.completed",
+        id: "child-command",
+        outcome: "failed",
+      },
+      {
+        type: "activity.completed",
+        id: "spawn-1",
+        outcome: "failed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("fails a spawn that never created a delegated thread", async () => {
+    const session = await new CodexAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const notify = clientState.notification!
+    const spawn = {
+      id: "spawn-failed",
+      type: "collabAgentToolCall",
+      tool: "spawnAgent",
+      receiverThreadIds: [],
+      status: "failed",
+    }
+    notify({
+      method: "item/started",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    notify({
+      method: "item/completed",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+    expect(events).toEqual([
+      { type: "session.started", providerSessionId: "thread-1" },
+      {
+        type: "activity.started",
+        activity: {
+          id: "spawn-failed",
+          name: "Subagent",
+          payload: { kind: "subagent" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "spawn-failed",
+        outcome: "failed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("keeps a fleet running until every delegated thread settles", async () => {
+    const session = await new CodexAdapter().start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const notify = clientState.notification!
+    const spawn = {
+      id: "fleet-1",
+      type: "collabAgentToolCall",
+      tool: "spawnAgent",
+      prompt: "Compare changes",
+      receiverThreadIds: ["child-a", "child-b"],
+      status: "completed",
+    }
+    notify({
+      method: "item/started",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    notify({
+      method: "item/completed",
+      params: { threadId: "thread-1", turnId: "turn-1", item: spawn },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "child-a",
+        turn: { id: "turn-a", status: "failed" },
+      },
+    })
+    const childCommand = {
+      id: "child-b-command",
+      type: "commandExecution",
+      command: "git diff --check",
+      status: "completed",
+    }
+    notify({
+      method: "item/started",
+      params: {
+        threadId: "child-b",
+        turnId: "turn-b",
+        item: childCommand,
+      },
+    })
+    notify({
+      method: "item/completed",
+      params: {
+        threadId: "child-b",
+        turnId: "turn-b",
+        item: childCommand,
+      },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "child-b",
+        turn: { id: "turn-b", status: "completed" },
+      },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+    expect(events).toEqual([
+      { type: "session.started", providerSessionId: "thread-1" },
+      {
+        type: "activity.started",
+        activity: {
+          id: "fleet-1",
+          name: "Compare changes",
+          payload: { kind: "subagent" },
+        },
+      },
+      {
+        type: "activity.started",
+        activity: {
+          id: "child-b-command",
+          parentId: "fleet-1",
+          name: "Run command",
+          detail: "git diff --check",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "child-b-command",
         outcome: "completed",
+      },
+      {
+        type: "activity.completed",
+        id: "fleet-1",
+        outcome: "failed",
       },
       { type: "turn.completed" },
     ])

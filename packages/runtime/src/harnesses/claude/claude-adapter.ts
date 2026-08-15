@@ -104,6 +104,9 @@ class ClaudeSession implements HarnessSession {
   readonly #queue = new AsyncQueue<HarnessEvent>()
   readonly #approvalQueue: PendingApproval[] = []
   readonly #abortController = new AbortController()
+  readonly #backgroundActivities = new Set<string>()
+  readonly #settledActivities = new Set<string>()
+  readonly #taskActivities = new Map<string, string>()
   readonly #query: Query
   readonly events = this.#queue
   #activeApproval?: PendingApproval
@@ -268,6 +271,28 @@ class ClaudeSession implements HarnessSession {
       return
     }
 
+    if (message.type === "system" && message.subtype === "task_started") {
+      if (message.tool_use_id && !message.skip_transcript) {
+        this.#taskActivities.set(message.task_id, message.tool_use_id)
+        this.#backgroundActivities.add(message.tool_use_id)
+      }
+      return
+    }
+
+    if (message.type === "system" && message.subtype === "task_notification") {
+      const activityId =
+        message.tool_use_id ?? this.#taskActivities.get(message.task_id)
+      this.#taskActivities.delete(message.task_id)
+      if (activityId) {
+        this.#backgroundActivities.delete(activityId)
+        this.#completeActivity(
+          activityId,
+          message.status === "completed" ? "completed" : "failed"
+        )
+      }
+      return
+    }
+
     if (message.type === "stream_event") {
       // Sidechain (subagent) streams narrate their own work; mixing them into
       // the main message would garble the prose character by character.
@@ -299,6 +324,13 @@ class ClaudeSession implements HarnessSession {
           this.#pushPlan(block.input)
           continue
         }
+        if (
+          !parentId &&
+          isClaudeSubagentTool(block.name) &&
+          subagentRunsInBackground(block.name, block.input)
+        ) {
+          this.#backgroundActivities.add(block.id)
+        }
         this.#queue.push({
           type: "activity.started",
           activity: claudeActivity(block.id, block.name, block.input, parentId),
@@ -310,21 +342,19 @@ class ClaudeSession implements HarnessSession {
     if (message.type === "user" && Array.isArray(message.message.content)) {
       for (const block of message.message.content) {
         if (block.type !== "tool_result") continue
-        this.#queue.push({
-          type: "activity.completed",
-          id: block.tool_use_id,
-          outcome: block.is_error ? "failed" : "completed",
-        })
+        // Background tools return an immediate launch result. The matching
+        // task_notification reports their actual outcome.
+        if (this.#backgroundActivities.has(block.tool_use_id)) continue
+        this.#completeActivity(
+          block.tool_use_id,
+          block.is_error ? "failed" : "completed"
+        )
       }
       return
     }
 
     if (message.type === "system" && message.subtype === "permission_denied") {
-      this.#queue.push({
-        type: "activity.completed",
-        id: message.tool_use_id,
-        outcome: "failed",
-      })
+      this.#completeActivity(message.tool_use_id, "failed")
       return
     }
 
@@ -387,6 +417,13 @@ class ClaudeSession implements HarnessSession {
           : {}),
       },
     })
+  }
+
+  #completeActivity(id: string, outcome: "completed" | "failed"): void {
+    if (this.#settledActivities.has(id)) return
+    this.#settledActivities.add(id)
+    this.#backgroundActivities.delete(id)
+    this.#queue.push({ type: "activity.completed", id, outcome })
   }
 
   #emitUsageLimit(failure: HarnessFailure): void {
@@ -472,7 +509,7 @@ export function claudeActivity(
   const base = { id, ...(parentId ? { parentId } : {}) }
   const detail = readableInput(input)
 
-  if (toolName === "Task") {
+  if (isClaudeSubagentTool(toolName)) {
     const description = isRecord(input) ? input.description : undefined
     const agentType = isRecord(input) ? input.subagent_type : undefined
     return {
@@ -518,6 +555,16 @@ export function claudeActivity(
     ...(detail ? { detail } : {}),
     payload: { kind: "tool", tool: toolCategory(toolName) },
   }
+}
+
+function isClaudeSubagentTool(toolName: string): boolean {
+  return toolName === "Agent" || toolName === "Task"
+}
+
+function subagentRunsInBackground(toolName: string, input: unknown): boolean {
+  if (!isRecord(input)) return toolName === "Agent"
+  if (toolName === "Agent") return input.run_in_background !== false
+  return input.run_in_background === true
 }
 
 function toolCategory(
