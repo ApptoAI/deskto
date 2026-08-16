@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 
 import {
   harnessFailure,
@@ -1398,12 +1399,18 @@ describe("Runtime", () => {
     await writeFile(join(projectPath, "dashboard.html"), "<h1>Dashboard</h1>")
     await writeFile(join(projectPath, "forecast.xlsx"), "xlsx-bytes")
     await writeFile(join(projectPath, "brief.docx"), "docx-bytes")
+    await mkdir(join(projectPath, "tmp", "pdfs"), { recursive: true })
+    await writeFile(
+      join(projectPath, "tmp", "pdfs", "build-report.py"),
+      "print('working file')\n"
+    )
     await writeFile(join(directory, "secret.txt"), "outside")
     await symlink(join(directory, "secret.txt"), join(projectPath, "link.txt"))
 
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const databasePath = join(directory, "runtime.sqlite")
     const runtime = createRuntime({
-      databasePath: join(directory, "runtime.sqlite"),
+      databasePath,
       harnesses: [harness],
     })
     const artifactEvents: string[] = []
@@ -1449,6 +1456,7 @@ describe("Runtime", () => {
             { path: "dashboard.html" },
             { path: "forecast.xlsx" },
             { path: "brief.docx" },
+            { path: "tmp/pdfs/build-report.py" },
             { path: "../secret.txt" },
             { path: "link.txt" },
           ],
@@ -1486,6 +1494,66 @@ describe("Runtime", () => {
       true
     )
     expect(artifactEvents).toEqual([thread.id])
+
+    // Simulate a row captured by a version before working directories were
+    // filtered. Listing must hide it without deleting the row or project file.
+    const legacyDatabase = new DatabaseSync(databasePath)
+    const legacyTimestamp = "2026-08-16T12:00:00.000Z"
+    legacyDatabase
+      .prepare(
+        `INSERT INTO artifacts
+           (id, project_id, relative_path, name, media_type, preview_kind,
+            size_bytes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        "legacy-working-artifact",
+        project.id,
+        "tmp/pdfs/build-report.py",
+        "build-report.py",
+        "text/x-python",
+        "text",
+        22,
+        legacyTimestamp,
+        legacyTimestamp
+      )
+    legacyDatabase
+      .prepare(
+        "INSERT INTO turn_outputs (turn_id, artifact_id, created_at) VALUES (?, ?, ?)"
+      )
+      .run(run.input.turnId, "legacy-working-artifact", legacyTimestamp)
+    legacyDatabase.close()
+
+    const outputsWithLegacyRow = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputsWithLegacyRow).toEqual(outputs)
+    const verificationDatabase = new DatabaseSync(databasePath)
+    try {
+      expect(
+        verificationDatabase
+          .prepare("SELECT id FROM artifacts WHERE id = ?")
+          .get("legacy-working-artifact")
+      ).toBeTruthy()
+      expect(
+        verificationDatabase
+          .prepare(
+            "SELECT turn_id FROM turn_outputs WHERE turn_id = ? AND artifact_id = ?"
+          )
+          .get(run.input.turnId, "legacy-working-artifact")
+      ).toBeTruthy()
+    } finally {
+      verificationDatabase.close()
+    }
+    expect(
+      await readFile(
+        join(projectPath, "tmp", "pdfs", "build-report.py"),
+        "utf8"
+      )
+    ).toBe("print('working file')\n")
 
     const markdown = outputs.find(
       (output) => output.artifact.relativePath === "report.md"
@@ -1824,7 +1892,7 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
-  it("applies the output limit to each completed file-change Activity", async () => {
+  it("applies the output limit after filtering each file-change Activity", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const paths = Array.from(
@@ -1834,6 +1902,8 @@ describe("Runtime", () => {
     await Promise.all(
       paths.map((path) => writeFile(join(directory, path), path))
     )
+    await mkdir(join(directory, "tmp"))
+    await writeFile(join(directory, "tmp", "working.txt"), "working")
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
       databasePath: join(directory, "runtime.sqlite"),
@@ -1860,7 +1930,12 @@ describe("Runtime", () => {
 
     const run = harness.runs[0]!
     for (const [index, activityPaths] of [
-      paths.slice(0, 201),
+      [
+        ...Array.from({ length: 200 }, () => "tmp/working.txt"),
+        paths[0]!,
+        paths[0]!,
+        ...paths.slice(1, 201),
+      ],
       paths.slice(201),
     ].entries()) {
       run.emit({
