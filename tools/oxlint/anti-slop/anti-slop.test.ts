@@ -16,6 +16,8 @@ typescript.run("no-shape-in-symbol-names", noForbiddenTermInSymbolNamesRule, {
 		"const reshape = 1; const reshaped = reshape;",
 		"const element = { shape: 1 }; element.shape;",
 		'import { shape as renderMode } from "chart-library";',
+		'import Shape from "chart-library";',
+		'import * as Shape from "chart-library";',
 		{
 			filename: "component.tsx",
 			code: "const View = () => <Widget shape='circle' />;",

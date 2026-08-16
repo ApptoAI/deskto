@@ -42,6 +42,8 @@ function isRepositoryDeclaration(node: ESTree.Node & { name: string }): boolean 
 function isExternalName(node: ESTree.Node & { name: string }): boolean {
   const parent = node.parent;
   return (
+    parent.type === "ImportDefaultSpecifier" ||
+    parent.type === "ImportNamespaceSpecifier" ||
     (parent.type === "ImportSpecifier" && parent.imported === node) ||
     (parent.type === "Property" && !parent.computed && parent.key === node)
   );
