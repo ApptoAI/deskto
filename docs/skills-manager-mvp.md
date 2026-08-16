@@ -57,13 +57,20 @@ manifest or contents.
 - Before uninstalling, require the registered managed path to be a direct
   child of the managed Pack root and inspect the entry with `lstat`. Never
   follow a symlink and then send its target to trash.
-- Reject path traversal, absolute archive entries, escaping symlinks, and
-  unsupported special files.
+- Reject path traversal, absolute archive entries, observed symlinks, and
+  unsupported special files. For folder installation, verify file and
+  directory identity and require matching source and staged digests.
 - Bound archive file count, expanded size, and per-file size.
 - Extract into staging and move only after full validation.
 - Do not execute scripts, hooks, binaries, or other Pack content during
   discovery, preview, installation, or editing.
 - Render Markdown without raw HTML.
+
+Folder installation assumes that another process is not adversarially
+rewriting the selected source during the copy. Identity and digest checks catch
+ordinary changes, but portable Node filesystem APIs cannot pin recursive
+directory enumeration to one immutable tree on every supported platform. ZIP
+installation is the bounded alternative for untrusted input.
 
 ## Acceptance checks
 

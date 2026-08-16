@@ -53,6 +53,15 @@ managed Pack root. Installation never executes Pack content. Workspace
 attachment remains many-to-many and applies to every Project in that
 Workspace.
 
+Folder installation assumes the user-selected source is not being changed by
+another process during the operation. Deskto rejects symlinks and special
+files that it observes, compares opened files with their in-root paths, checks
+directory identity before and after listing, and compares source and staged
+digests. These checks detect ordinary concurrent changes but cannot make a
+hostile, writable source tree immutable without platform-specific filesystem
+handles. Such adversarial same-user mutation is outside the MVP threat model;
+an archive is the bounded input when source immutability matters.
+
 Harness Adapters return a configuration result for each app-supplied root.
 The result is `configured`, `unsupported`, or `failed` and names the
 Adapter-owned delivery method. The method stays an opaque string outside the
