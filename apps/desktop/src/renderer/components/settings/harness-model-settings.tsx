@@ -19,6 +19,7 @@ import {
   type ProfileOption,
 } from "../execution-profile/profile-menu.js"
 import { InlineError } from "../inline-error.js"
+import { StatusPanel } from "../status-panel.js"
 
 const taskModelSelection = {
   harnessId: null,
@@ -31,13 +32,20 @@ export function HarnessModelSettings({
   harnesses: RuntimeQuery<Harness[]>
 }) {
   return (
-    <section aria-label="Generated text settings" className="space-y-3 pt-10">
-      <div>
-        <h2 className="text-sm font-medium">Generated text</h2>
-        <p className="text-xs text-muted-foreground">
-          Choose models for short text Deskto creates automatically.
-        </p>
-      </div>
+    <section aria-label="Generated text settings" className="space-y-3">
+      {/* Without the agent list these menus quietly shrink to "Same as task",
+          and the Agents page is the only other place that says why. */}
+      {harnesses.state.status === "error" ? (
+        <StatusPanel
+          title="Deskto cannot read the list of agents"
+          description={harnesses.state.message}
+          tone="danger"
+        >
+          <Button variant="outline" onClick={harnesses.revalidate}>
+            Try again
+          </Button>
+        </StatusPanel>
+      ) : null}
 
       <div className="divide-y divide-border rounded-lg border border-border">
         {harnessModelSettings.map((definition) => (

@@ -57,6 +57,7 @@ import { formatAge, formatExactTime } from "../../lib/format-time.js"
 import { describeThreadStatus } from "../../lib/thread-status.js"
 import { useLocalStorage } from "../../lib/use-local-storage.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
+import { sidebarRowIdle, sidebarRowSelected } from "./sidebar-frame.js"
 
 /** Organization commands a row can issue; the workbench wires them to the
     runtime client. */
@@ -425,9 +426,7 @@ function TaskRow({
             "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
             "focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",
-            isOpen
-              ? "bg-background text-foreground shadow-xs ring-1 ring-border/70 dark:bg-accent dark:shadow-none dark:ring-0"
-              : "hover:bg-muted/50"
+            isOpen ? sidebarRowSelected : sidebarRowIdle
           )}
         >
           <span

@@ -32,14 +32,7 @@ export function ShortcutSettings() {
   }
 
   return (
-    <section aria-label="Keyboard shortcuts" className="space-y-3 pt-10">
-      <div>
-        <h2 className="text-sm font-medium">Keyboard shortcuts</h2>
-        <p className="text-xs text-muted-foreground">
-          Click a shortcut, then press the new key combination.
-        </p>
-      </div>
-
+    <section aria-label="Keyboard shortcuts" className="space-y-3">
       {actionError ? <InlineError message={actionError} /> : null}
 
       {loadError ? (
