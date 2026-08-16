@@ -2,32 +2,32 @@
 import type { ResultRef } from "../../shared/desktop-api.js"
 
 export function openExternal(url: string): void {
-  void window.appto.openExternal(url)
+  void window.deskto.openExternal(url)
 }
 
 export function openFolder(path: string): Promise<void> {
-  return window.appto.openFolder(path)
+  return window.deskto.openFolder(path)
 }
 
 export function openResultFile(result: ResultRef): Promise<void> {
-  return window.appto.openFile(result)
+  return window.deskto.openFile(result)
 }
 
 export function revealResultFile(result: ResultRef): Promise<void> {
-  return window.appto.revealFile(result)
+  return window.deskto.revealFile(result)
 }
 
 export function saveResultCopy(
   result: ResultRef,
   suggestedName: string
 ): Promise<boolean> {
-  return window.appto.saveFileCopy(result, suggestedName)
+  return window.deskto.saveFileCopy(result, suggestedName)
 }
 
 export function pickProjectFolder() {
-  return window.appto.pickProject()
+  return window.deskto.pickProject()
 }
 
 export function pickPackFolder() {
-  return window.appto.pickPack()
+  return window.deskto.pickPack()
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import { personalWorkspaceId, type Workspace } from "@openappto/protocol"
+import { personalWorkspaceId, type Workspace } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"

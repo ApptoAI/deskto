@@ -4,7 +4,7 @@ import path from "node:path"
 import { dialog, ipcMain, shell } from "electron"
 import { z } from "zod"
 
-import type { Runtime } from "@openappto/runtime"
+import type { Runtime } from "@deskto/runtime"
 
 import {
   openExternalChannel,
@@ -93,7 +93,7 @@ export function registerDesktopIpc(runtime: Runtime): void {
   ipcMain.handle(openFileChannel, async (_event, value): Promise<void> => {
     const result = await resolveResult(resultRefSchema.parse(value))
     if (!result.openable) {
-      throw new Error("This file type cannot be opened from Appto.")
+      throw new Error("This file type cannot be opened from Deskto.")
     }
 
     const error = await shell.openPath(result.absolutePath)

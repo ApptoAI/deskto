@@ -1,5 +1,5 @@
 import GaugeIcon from "lucide-react/dist/esm/icons/gauge"
-import type { HarnessFailure } from "@openappto/protocol"
+import type { HarnessFailure } from "@deskto/protocol"
 
 function formatReset(resetAt: string): string | undefined {
   const date = new Date(resetAt)

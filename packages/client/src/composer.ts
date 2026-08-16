@@ -2,7 +2,7 @@ import type {
   PackSkill,
   PromptReference,
   ProjectEntry,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 export type ComposerTriggerKind = "project-entry" | "skill" | "command"
 

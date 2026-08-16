@@ -1,4 +1,4 @@
-import type { ExecutionProfile, Harness } from "@openappto/protocol"
+import type { ExecutionProfile, Harness } from "@deskto/protocol"
 
 export type HarnessModel = Harness["models"][number]
 

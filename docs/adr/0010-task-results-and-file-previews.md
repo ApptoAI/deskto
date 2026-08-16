@@ -6,7 +6,7 @@
 ## Context
 
 A file-change Activity tells the user that an agent touched a path, but the
-path is only a summary chip in the conversation. The user must leave Appto,
+path is only a summary chip in the conversation. The user must leave Deskto,
 find the file in the project folder, and choose another application before
 they can judge the work. This is especially costly for people who think in
 documents, images, reports, and tables rather than source changes.

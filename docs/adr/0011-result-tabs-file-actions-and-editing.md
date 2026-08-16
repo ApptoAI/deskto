@@ -14,7 +14,7 @@ printed in the conversation as inert chips, so the shortest route from "the
 agent changed customers.csv" to seeing that file was to open a separate
 panel and find the row again.
 
-A viewer with no actions makes Appto a place to look at work rather than a
+A viewer with no actions makes Deskto a place to look at work rather than a
 place to do it. That is the wrong shape for people who think in reports and
 tables and who already own Excel, Word, and Preview.
 

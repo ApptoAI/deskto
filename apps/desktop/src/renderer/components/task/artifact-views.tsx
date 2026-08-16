@@ -6,7 +6,7 @@ import FileTextIcon from "lucide-react/dist/esm/icons/file-text"
 import FileTypeIcon from "lucide-react/dist/esm/icons/file-type"
 import PanelsTopLeftIcon from "lucide-react/dist/esm/icons/panels-top-left"
 import TableIcon from "lucide-react/dist/esm/icons/table"
-import type { ArtifactPreview } from "@openappto/protocol"
+import type { ArtifactPreview } from "@deskto/protocol"
 
 import type { ArtifactEditorProps } from "./artifact-editor.js"
 

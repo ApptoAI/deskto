@@ -21,16 +21,11 @@ the lettering would not resolve.
 Background is `#0a0a0a` to match the window's `backgroundColor`. Swapping to
 `icon-light.svg` inverts it to a black mark on white.
 
-## Provenance
+## Artwork source
 
-The sygnet geometry comes from `appto-sygnet.svg` in the appto-ai repo and is
-duplicated in `src/renderer/components/appto-logo.tsx`. The wordmark in that
-component is a vector trace of `appto_black.png`, which the brand ships only as
-a raster; the trace is within 0.3% of the original by pixel coverage.
-
-Note that the mark in `appto_black.png` is scaled about 4% narrower than
-`appto-sygnet.svg`. The lockup here uses the sygnet's own aspect, on the
-assumption that the squeeze in the png was accidental.
+The geometric D monogram is duplicated in
+`src/renderer/components/deskto-logo.tsx`. The renderer adds the Deskto
+wordmark with the system sans-serif font so it follows the rest of the UI.
 
 ## Regenerating
 

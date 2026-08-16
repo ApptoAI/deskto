@@ -4,7 +4,7 @@ import type {
   RuntimeMethod,
   RuntimeResponse,
   RuntimeTransport,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import type { DesktopApi } from "../../shared/desktop-api.js"
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
-import { hasUnreadCompletion, threadCameBack } from "@openappto/client"
-import type { ExecutionProfile, Harness, Project } from "@openappto/protocol"
+import { hasUnreadCompletion, threadCameBack } from "@deskto/client"
+import type { ExecutionProfile, Harness, Project } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 

@@ -1,5 +1,5 @@
-import type { HarnessEvent } from "@openappto/harness-sdk"
-import type { JsonObject, JsonValue } from "@openappto/protocol"
+import type { HarnessEvent } from "@deskto/harness-sdk"
+import type { JsonObject, JsonValue } from "@deskto/protocol"
 import type { ZodType } from "zod"
 import { beforeEach, describe, expect, it } from "vitest"
 

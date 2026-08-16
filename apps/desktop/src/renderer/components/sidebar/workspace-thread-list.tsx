@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import type { Project, Thread } from "@openappto/protocol"
+import type { Project, Thread } from "@deskto/protocol"
 
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { TaskList, type InboxActions } from "./task-list.js"

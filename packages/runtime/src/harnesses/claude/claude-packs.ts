@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os"
 import { isAbsolute, join, relative, sep } from "node:path"
 
-import type { HarnessPromptReference, SkillRoot } from "@openappto/harness-sdk"
+import type { HarnessPromptReference, SkillRoot } from "@deskto/harness-sdk"
 
 import { slugify } from "../../packs/pack-files.js"
 
@@ -40,7 +40,7 @@ export function claudePluginsFor(
   return plugins
 }
 
-const defaultShimsRoot = join(tmpdir(), "appto-claude-packs")
+const defaultShimsRoot = join(tmpdir(), "deskto-claude-packs")
 
 /** Shim content derives only from the root, so one build per process suffices. */
 const builtShims = new Set<string>()
@@ -53,7 +53,7 @@ function ensurePluginShim(root: SkillRoot, shimsRoot: string): string {
   mkdirSync(join(shim, ".claude-plugin"), { recursive: true })
   writeFileSync(
     join(shim, ".claude-plugin", "plugin.json"),
-    `${JSON.stringify({ name, description: `Appto pack ${root.name}` })}\n`
+    `${JSON.stringify({ name, description: `Deskto pack ${root.name}` })}\n`
   )
   ensureLink(join(shim, "skills"), root.path)
   builtShims.add(shim)

@@ -3,7 +3,7 @@ import {
   jsonValueSchema,
   type JsonObject,
   type JsonValue,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 import { z } from "zod"
 
 export type { JsonObject, JsonValue }

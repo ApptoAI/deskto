@@ -1,4 +1,4 @@
-# @openappto/settings
+# @deskto/settings
 
 The registry of every user-configurable setting in the product. Each setting is defined once — a stable key, a zod schema, a default value, and the kind of editor a settings screen renders for it — and every other layer works from that definition. The package is pure TypeScript with zod as its only dependency, so the Runtime, the Client, and any Surface can all import it.
 

@@ -7,7 +7,7 @@ import {
   type Thread,
   type Project,
   type Workspace,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 export type WorkspaceRow = {
   id: string

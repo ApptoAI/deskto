@@ -4,7 +4,7 @@ import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type { Artifact, TurnOutput } from "@openappto/protocol"
+import type { Artifact, TurnOutput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

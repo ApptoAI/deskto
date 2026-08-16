@@ -7,7 +7,7 @@ import type {
   HarnessFailure,
   Message,
   TurnInput,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"

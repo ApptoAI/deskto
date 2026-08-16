@@ -1,8 +1,8 @@
 import { realpath, stat } from "node:fs/promises"
 import { basename, isAbsolute, relative, resolve, sep } from "node:path"
 
-import type { HarnessPromptReference } from "@openappto/harness-sdk"
-import type { PromptReference } from "@openappto/protocol"
+import type { HarnessPromptReference } from "@deskto/harness-sdk"
+import type { PromptReference } from "@deskto/protocol"
 
 import { RuntimeError } from "./errors.js"
 import { readResolvedPackSkills } from "./packs/pack-files.js"

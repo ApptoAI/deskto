@@ -37,4 +37,4 @@ const api: DesktopApi = {
     ipcRenderer.invoke(saveFileCopyChannel, result, suggestedName),
 }
 
-contextBridge.exposeInMainWorld("appto", api)
+contextBridge.exposeInMainWorld("deskto", api)

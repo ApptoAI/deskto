@@ -4,7 +4,7 @@ import type {
   HarnessRunInput,
   HarnessSession,
   TextGenerationInput,
-} from "@openappto/harness-sdk"
+} from "@deskto/harness-sdk"
 
 /**
  * Reuses a Harness session without exposing that disposable provider session

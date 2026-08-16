@@ -19,13 +19,13 @@ import {
   type HarnessSession,
   type PlanStep,
   type TextGenerationInput,
-} from "@openappto/harness-sdk"
+} from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
   jsonValueSchema,
   type JsonObject,
   type JsonValue,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 import { z } from "zod"
 
 import { normalizePlanStepStatus } from "../plan-status.js"

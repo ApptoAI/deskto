@@ -1,4 +1,4 @@
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 
 import type { QueryState } from "../runtime/use-runtime-query.js"
 
@@ -62,10 +62,10 @@ export function describeHarnessBlock(
     return "Checking which agents are installed…"
   }
   if (harnesses.status === "error") {
-    return `Appto cannot read the list of agents. ${harnesses.message}`
+    return `Deskto cannot read the list of agents. ${harnesses.message}`
   }
   if (!harnessId) {
-    return "No agent is available. Appto works with Claude Code and Codex installed on this computer."
+    return "No agent is available. Deskto works with Claude Code and Codex installed on this computer."
   }
 
   const harness = findHarness(harnesses.data, harnessId)

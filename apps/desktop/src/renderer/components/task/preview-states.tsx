@@ -17,14 +17,14 @@ export function PreviewFailure({ message }: { message: string }) {
 }
 
 /**
- * Shown for formats Appto does not render. The wording stays about the file
+ * Shown for formats Deskto does not render. The wording stays about the file
  * rather than the viewer: the user still has the real application.
  */
 export function PreviewUnavailable({ reason }: { reason?: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-1 p-8 text-center">
       <p className="text-sm text-muted-foreground">
-        {reason ?? "Appto cannot show this file type."}
+        {reason ?? "Deskto cannot show this file type."}
       </p>
       <p className="text-xs text-muted-foreground">
         Open it in its own application or save a copy.

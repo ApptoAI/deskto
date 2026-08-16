@@ -5,9 +5,9 @@ import type {
   RuntimeMethod,
   RuntimeResponses,
   RuntimeTransport,
-} from "@openappto/protocol"
-import { turnInputSchema } from "@openappto/protocol"
-import type { TurnInput } from "@openappto/protocol"
+} from "@deskto/protocol"
+import { turnInputSchema } from "@deskto/protocol"
+import type { TurnInput } from "@deskto/protocol"
 
 export class RuntimeClientError extends Error {
   constructor(

@@ -1,7 +1,7 @@
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
-import type { Thread, Project, Workspace } from "@openappto/protocol"
-import { appSettings } from "@openappto/settings"
+import type { Thread, Project, Workspace } from "@deskto/protocol"
+import { appSettings } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -10,7 +10,7 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 import { useKeybindingLabel } from "../../settings/use-keybinding.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
-import { ApptoLockup } from "../appto-logo.js"
+import { DesktoLockup } from "../deskto-logo.js"
 import { ProjectSwitcher } from "./project-switcher.js"
 import { TaskList, type InboxActions } from "./task-list.js"
 import { WorkspaceSwitcher } from "./workspace-switcher.js"
@@ -68,7 +68,7 @@ export function ProjectSidebar({
       {/* Traffic lights sit at the left of this strip, so the logo takes the
           right. Still a drag region — the svg is not an interactive target. */}
       <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">
-        <ApptoLockup className="h-[15px] w-auto text-foreground/70" />
+        <DesktoLockup className="h-[15px] w-auto text-foreground/70" />
       </div>
 
       <div className="no-drag px-2 pb-3">

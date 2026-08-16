@@ -28,7 +28,7 @@ import {
   type ArtifactLocation,
   type ArtifactPreview,
   type TurnOutput,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
@@ -562,7 +562,7 @@ function readSafeProjectFile(file: SafeProjectFile, limit: number): Buffer {
  * rename onto another file.
  */
 function writeSafeProjectFile(file: SafeProjectFile, data: Buffer): Stats {
-  const temporaryPath = `${file.absolutePath}.appto-${randomUUID().slice(0, 8)}`
+  const temporaryPath = `${file.absolutePath}.deskto-${randomUUID().slice(0, 8)}`
   let descriptor: number | undefined
   try {
     const target = statSync(file.absolutePath)

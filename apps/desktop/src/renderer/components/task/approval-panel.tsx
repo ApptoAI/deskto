@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Approval } from "@openappto/protocol"
+import type { Approval } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 

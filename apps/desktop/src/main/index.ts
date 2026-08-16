@@ -4,7 +4,7 @@ import path from "node:path"
 import { app, BrowserWindow, dialog } from "electron"
 import { z } from "zod"
 
-import { ClaudeAdapter, CodexAdapter, createRuntime } from "@openappto/runtime"
+import { ClaudeAdapter, CodexAdapter, createRuntime } from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
@@ -59,7 +59,7 @@ async function openApplication(): Promise<void> {
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
   const runtime = createRuntime({
-    databasePath: path.join(app.getPath("userData"), "appto.sqlite"),
+    databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
     packsPath: path.join(app.getPath("userData"), "packs"),
     harnesses: [claudeAdapter, new CodexAdapter()],
     probeGate: cliPathConfigured,
@@ -80,7 +80,7 @@ async function openApplication(): Promise<void> {
 }
 
 function showFatalStartupError(detail: string): void {
-  dialog.showErrorBox("Appto failed to start", detail)
+  dialog.showErrorBox("Deskto failed to start", detail)
   app.quit()
 }
 

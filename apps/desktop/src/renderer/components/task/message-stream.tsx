@@ -10,7 +10,7 @@ import LoaderCircleIcon from "lucide-react/dist/esm/icons/loader-circle"
 import SearchIcon from "lucide-react/dist/esm/icons/search"
 import TerminalIcon from "lucide-react/dist/esm/icons/terminal"
 import WrenchIcon from "lucide-react/dist/esm/icons/wrench"
-import type { Activity, Message } from "@openappto/protocol"
+import type { Activity, Message } from "@deskto/protocol"
 
 import { Markdown } from "@workspace/ui/components/chat/markdown"
 import {

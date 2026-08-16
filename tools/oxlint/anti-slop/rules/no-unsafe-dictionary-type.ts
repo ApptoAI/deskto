@@ -5,6 +5,7 @@ import {
 	classifyUnsafeDictionaryValue,
 	createTypeEnvironment,
 	type TypeEnvironment,
+	type UnsafeDictionary,
 } from "../shared/dictionary-types.ts";
 
 import type { ESTree } from "@oxlint/plugins";
@@ -72,13 +73,16 @@ function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironme
 	return name !== null && environment.aliases.has(name) && !isInsideTypeAliasDeclaration(node);
 }
 
-function shouldReportType(node: ESTree.TSType, environment: TypeEnvironment): boolean {
+function shouldReportType(
+	node: ESTree.TSType,
+	environment: TypeEnvironment,
+	classify: (type: ESTree.TSType) => UnsafeDictionary | null,
+): boolean {
 	if (isPlainAliasConsumerUse(node, environment)) return false;
-	if (classifyUnsafeDictionary(node, environment) === null) return false;
+	if (classify(node) === null) return false;
 	let current: ESTree.Node | null = node.parent;
 	while (current !== null && current.type !== "Program") {
-		if (isTypeNode(current) && classifyUnsafeDictionary(current, environment) !== null)
-			return false;
+		if (isTypeNode(current) && classify(current) !== null) return false;
 		current = current.parent;
 	}
 	return true;
@@ -99,12 +103,20 @@ export const noUnsafeDictionaryTypeRule = defineRule({
 	},
 	createOnce(context) {
 		let environment: TypeEnvironment | null = null;
+		let classifications = new WeakMap<ESTree.TSType, UnsafeDictionary | null>();
 		const report = (node: ESTree.Node, value: string) => {
 			context.report({ node, messageId: "unsafeDictionary", data: { value } });
 		};
+		const classify = (node: ESTree.TSType): UnsafeDictionary | null => {
+			const cached = classifications.get(node);
+			if (cached !== undefined) return cached;
+			const result = environment === null ? null : classifyUnsafeDictionary(node, environment);
+			classifications.set(node, result);
+			return result;
+		};
 		const reportIfUnsafe = (node: ESTree.TSType) => {
-			if (environment === null || !shouldReportType(node, environment)) return;
-			const unsafe = classifyUnsafeDictionary(node, environment);
+			if (environment === null || !shouldReportType(node, environment, classify)) return;
+			const unsafe = classify(node);
 			if (unsafe === null) return;
 			report(node, unsafe.unsafeValue);
 		};
@@ -112,6 +124,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
 		return {
 			Program(node) {
 				environment = createTypeEnvironment(node);
+				classifications = new WeakMap();
 			},
 			TSTypeReference: reportIfUnsafe,
 			TSTypeLiteral: reportIfUnsafe,

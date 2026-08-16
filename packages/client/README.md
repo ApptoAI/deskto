@@ -1,10 +1,10 @@
-# @openappto/client
+# @deskto/client
 
-A typed client for the Appto Runtime. Any Surface (the desktop app today, web or mobile later) constructs one `RuntimeClient` around a transport and calls task-oriented methods instead of building protocol requests by hand.
+A typed client for the Deskto Runtime. Any Surface (the desktop app today, web or mobile later) constructs one `RuntimeClient` around a transport and calls task-oriented methods instead of building protocol requests by hand.
 
 ## Why it exists
 
-The Client sits on the user-facing side of the Client/Runtime boundary. It knows nothing about Node, SQLite, Electron, or provider SDKs. It only knows the `RuntimeTransport` interface from `@openappto/protocol`, so the same code works whether the Runtime lives in the Electron main process or, someday, behind HTTP and WebSocket.
+The Client sits on the user-facing side of the Client/Runtime boundary. It knows nothing about Node, SQLite, Electron, or provider SDKs. It only knows the `RuntimeTransport` interface from `@deskto/protocol`, so the same code works whether the Runtime lives in the Electron main process or, someday, behind HTTP and WebSocket.
 
 ## What it does
 
@@ -27,7 +27,7 @@ Each call unwraps the protocol's `{ ok, data | error }` envelope. On failure it 
 ## Usage
 
 ```ts
-import { RuntimeClient } from "@openappto/client"
+import { RuntimeClient } from "@deskto/client"
 
 const client = new RuntimeClient(transport)
 

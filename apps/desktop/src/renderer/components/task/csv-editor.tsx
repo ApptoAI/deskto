@@ -48,7 +48,7 @@ export function CsvEditor({
   ) {
     return (
       <PreviewUnavailable
-        reason={`This table is too large to edit in Appto (over ${csvEditRowLimit} rows or ${csvEditColumnLimit} columns).`}
+        reason={`This table is too large to edit in Deskto (over ${csvEditRowLimit} rows or ${csvEditColumnLimit} columns).`}
       />
     )
   }

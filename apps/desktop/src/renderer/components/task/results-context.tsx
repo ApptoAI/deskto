@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react"
-import type { Artifact, TurnOutput } from "@openappto/protocol"
+import type { Artifact, TurnOutput } from "@deskto/protocol"
 
 /**
  * Lets the conversation open a result without knowing how the side panel

@@ -8,7 +8,7 @@ import {
   type RuntimeResponse,
   type RuntimeResponses,
   type Selection,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
