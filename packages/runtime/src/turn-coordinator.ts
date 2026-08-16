@@ -142,11 +142,16 @@ export class TurnCoordinator {
         runInput.providerSessionId = turn.providerSessionId
       }
       const session = await harness.start(runInput, starting.controller.signal)
-      this.store.skillProvisioning.record(
-        turn.turnId,
-        turn.harnessId,
-        session.skillProvisioning ?? []
-      )
+      try {
+        this.store.skillProvisioning.record(
+          turn.turnId,
+          turn.harnessId,
+          session.skillProvisioning ?? []
+        )
+      } catch {
+        // Provisioning reports are diagnostics. A storage failure must not
+        // abandon a Harness session that already started successfully.
+      }
       if (starting.cancelled || this.#runs.get(threadId) !== starting) {
         await session.cancel().catch(() => undefined)
         return this.store.threads.view(threadId)

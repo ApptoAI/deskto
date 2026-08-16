@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto"
-import { readFile, stat } from "node:fs/promises"
+import { realpath } from "node:fs/promises"
 
 import type { SkillDiagnostic } from "@deskto/protocol"
 import { parseDocument } from "yaml"
 import { z } from "zod"
+
+import { openRegularFileWithinRoot } from "../safe-file-open.js"
 
 export const maxSkillFileBytes = 1024 * 1024
 
@@ -28,35 +30,32 @@ export type ParsedSkillFile = {
   diagnostics: SkillDiagnostic[]
 }
 
-export async function parseSkillFile(path: string): Promise<ParsedSkillFile> {
-  let metadata
+export async function parseSkillFile(
+  path: string,
+  root: string
+): Promise<ParsedSkillFile> {
+  let opened
   try {
-    metadata = await stat(path)
+    opened = await openRegularFileWithinRoot(path, await realpath(root))
   } catch (error) {
     return unreadableResult(path, missingFileSchema.safeParse(error).success)
-  }
-  if (!metadata.isFile()) {
-    return resultWithDiagnostic({
-      code: "skill-file-unreadable",
-      severity: "error",
-      message: "SKILL.md is not a regular file",
-      path,
-    })
-  }
-  if (metadata.size > maxSkillFileBytes) {
-    return resultWithDiagnostic({
-      code: "skill-file-too-large",
-      severity: "error",
-      message: "SKILL.md is larger than 1 MiB",
-      path,
-    })
   }
 
   let bytes: Buffer
   try {
-    bytes = await readFile(path)
+    if (opened.metadata.size > maxSkillFileBytes) {
+      return resultWithDiagnostic({
+        code: "skill-file-too-large",
+        severity: "error",
+        message: "SKILL.md is larger than 1 MiB",
+        path,
+      })
+    }
+    bytes = await opened.handle.readFile()
   } catch (error) {
     return unreadableResult(path, missingFileSchema.safeParse(error).success)
+  } finally {
+    await opened.handle.close().catch(() => undefined)
   }
   const content = bytes.toString("utf8").replace(/^\uFEFF/, "")
   const instructionDigest = createHash("sha256").update(bytes).digest("hex")

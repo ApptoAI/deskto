@@ -282,7 +282,7 @@ async function inspectZipArchive(
   const entries: Omit<InspectedZipEntry, "outputPath">[] = []
   const archivePaths = new Set<string>()
   await walkZipEntries(archivePath, async (entry) => {
-    if (entries.length > limits.maxEntries)
+    if (entries.length >= limits.maxEntries)
       throw invalidZip(
         `Pack ZIP contains more than ${limits.maxEntries} entries`
       )

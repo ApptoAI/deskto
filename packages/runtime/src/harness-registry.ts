@@ -94,7 +94,7 @@ export class HarnessRegistry {
   async discoverSkillRoots(
     projectPath: string | null
   ): Promise<Array<{ harnessId: string; root: NativeSkillRoot }>> {
-    const discovered = await Promise.all(
+    const discovered = await Promise.allSettled(
       [...this.#entries.values()].map(async ({ factory }) => {
         if (!factory.discoverSkillRoots) return []
         const roots = await factory.discoverSkillRoots({ projectPath })
@@ -104,7 +104,9 @@ export class HarnessRegistry {
         }))
       })
     )
-    return discovered.flat()
+    return discovered
+      .filter((result) => result.status === "fulfilled")
+      .flatMap((result) => result.value)
   }
 
   /** Health snapshot of every harness, re-checking the ones gone stale. */

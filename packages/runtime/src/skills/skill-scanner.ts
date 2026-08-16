@@ -104,7 +104,10 @@ async function scanSkillDirectory(
   isSymbolicLink: boolean
 ): Promise<ScannedSkill | null> {
   const directoryPath = join(source.path, directoryName)
-  const directory = await directoryTarget(directoryPath, isSymbolicLink)
+  const directory = await directoryTarget(
+    directoryPath,
+    isSymbolicLink ? join(resolvedSourcePath, directoryName) : null
+  )
   if (!directory) return null
   const skillFilePath = join(directoryPath, "SKILL.md")
   if (!pathIsWithin(resolvedSourcePath, directory)) {
@@ -135,7 +138,7 @@ async function scanSkillDirectory(
       content: null,
     }
   }
-  const parsed = await parseSkillFile(skillFilePath)
+  const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
   const [hasScripts, hasReferences, hasAssets, contentDigest] =
     await Promise.all([
       isDirectory(join(directoryPath, "scripts")),
@@ -218,13 +221,13 @@ async function inspectSource(
 
 async function directoryTarget(
   path: string,
-  keepBrokenSymbolicLink: boolean
+  brokenSymbolicLinkPath: string | null
 ): Promise<string | null> {
   try {
     if (!(await stat(path)).isDirectory()) return null
     return await realpath(path)
   } catch {
-    return keepBrokenSymbolicLink ? path : null
+    return brokenSymbolicLinkPath
   }
 }
 

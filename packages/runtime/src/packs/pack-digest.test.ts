@@ -54,6 +54,14 @@ describe("digestPackDirectory", () => {
       })
     ).rejects.toMatchObject({ code: "invalid-pack" })
   })
+
+  it("maps an unreadable root to an invalid Pack error", async () => {
+    const root = await temporaryDirectory()
+
+    await expect(
+      digestPackDirectory(join(root, "missing"))
+    ).rejects.toMatchObject({ code: "invalid-pack" })
+  })
 })
 
 async function temporaryDirectory(): Promise<string> {

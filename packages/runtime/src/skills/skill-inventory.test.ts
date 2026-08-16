@@ -260,6 +260,35 @@ describe("skill inventory", () => {
     expect(inventory.occurrences).toHaveLength(1)
     await runtime.close()
   })
+
+  it("keeps roots from healthy Harnesses when another discovery fails", async () => {
+    const root = await temporaryDirectory()
+    const userSkills = join(root, "user-skills")
+    await mkdir(userSkills)
+    await writeSkill(userSkills, "review", "review", "Review changes")
+    const failed = inventoryHarness("failed", [])
+    failed.discoverSkillRoots = () =>
+      Promise.reject(new Error("Discovery unavailable"))
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      harnesses: [
+        failed,
+        inventoryHarness("healthy", [
+          { path: userSkills, scope: "user", label: "Personal skills" },
+        ]),
+      ],
+    })
+
+    const inventory = unwrap(
+      await runtime.request({ method: "skill.listOnComputer", params: {} })
+    )
+
+    expect(inventory.sources).toMatchObject([
+      { harnessIds: ["healthy"], path: userSkills },
+    ])
+    expect(inventory.occurrences.map(({ name }) => name)).toEqual(["review"])
+    await runtime.close()
+  })
 })
 
 function inventoryHarness(

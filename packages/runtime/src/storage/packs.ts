@@ -15,6 +15,11 @@ export type PackMetadata = {
   receipt?: PackReceipt | null
 }
 
+export type AddedPack = {
+  record: PackRow
+  inserted: boolean
+}
+
 /** Stores Pack ownership and Workspace attachment; content stays on disk. */
 export class Packs {
   #managedRoot: string | null = null
@@ -81,12 +86,21 @@ export class Packs {
 
   /** Registering a path twice returns the existing pack. */
   add(name: string, path: string, metadata?: PackMetadata): PackRow {
+    return this.addWithStatus(name, path, metadata).record
+  }
+
+  /** Reports whether this call inserted the row, for rollback ownership. */
+  addWithStatus(
+    name: string,
+    path: string,
+    metadata?: PackMetadata
+  ): AddedPack {
     // SAFETY: packs.path is unique and SELECT * matches PackRow; an unmatched
     // path produces undefined.
     const existing = this.database
       .prepare("SELECT * FROM packs WHERE path = ?")
       .get(path) as PackRow | undefined
-    if (existing) return existing
+    if (existing) return { record: existing, inserted: false }
 
     const now = new Date().toISOString()
     const kind =
@@ -101,9 +115,9 @@ export class Packs {
       created_at: now,
       updated_at: now,
     }
-    this.database
+    const inserted = this.database
       .prepare(
-        "INSERT INTO packs (id, name, path, kind, content_digest, receipt_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO packs (id, name, path, kind, content_digest, receipt_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO NOTHING"
       )
       .run(
         row.id,
@@ -115,7 +129,16 @@ export class Packs {
         row.created_at,
         row.updated_at
       )
-    return row
+    if (inserted.changes > 0) return { record: row, inserted: true }
+
+    const concurrent = this.findByPath(path)
+    if (!concurrent) {
+      throw new RuntimeError(
+        "invalid-pack-path",
+        "The Pack path could not be registered"
+      )
+    }
+    return { record: concurrent, inserted: false }
   }
 
   /** Deletes the record and lets the foreign key cascade remove attachments. */
@@ -124,7 +147,7 @@ export class Packs {
     this.database.prepare("DELETE FROM packs WHERE id = ?").run(id)
   }
 
-  updateContentDigest(id: string, contentDigest: string): void {
+  updateContentDigest(id: string, contentDigest: string | null): void {
     this.get(id)
     this.database
       .prepare(

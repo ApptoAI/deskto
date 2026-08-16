@@ -112,8 +112,17 @@ export class ManagedSkills {
   }
 
   async #refreshDigest(pack: PackRow): Promise<void> {
-    const digest = await digestPackDirectory(pack.path)
-    this.packs.updateContentDigest(pack.id, digest.contentDigest)
+    try {
+      const digest = await digestPackDirectory(pack.path)
+      this.packs.updateContentDigest(pack.id, digest.contentDigest)
+    } catch {
+      try {
+        this.packs.updateContentDigest(pack.id, null)
+      } catch {
+        // The skill write is already committed. Digest bookkeeping must not
+        // turn it into a reported failure or encourage a duplicate retry.
+      }
+    }
   }
 }
 

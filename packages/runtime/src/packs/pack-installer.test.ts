@@ -226,7 +226,7 @@ describe("installPackZip", () => {
       label: "entry count",
       limits: {
         maxDepth: 32,
-        maxEntries: 3,
+        maxEntries: 1,
         maxFileBytes: 100,
         maxTotalBytes: 100,
       },

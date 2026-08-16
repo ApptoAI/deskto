@@ -36,7 +36,12 @@ export async function digestPackDirectory(
   root: string,
   limits: PackContentLimits = defaultPackContentLimits
 ): Promise<PackDigest> {
-  const resolvedRoot = await realpath(root)
+  let resolvedRoot: string
+  try {
+    resolvedRoot = await realpath(root)
+  } catch {
+    throw invalidPack(`Pack directory cannot be read: ${root}`)
+  }
   const hash = createHash("sha256")
   const state = { entries: 0, fileCount: 0, totalBytes: 0 }
   await hashDirectory(resolvedRoot, resolvedRoot, "", 0, hash, state, limits)

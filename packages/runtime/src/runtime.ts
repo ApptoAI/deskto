@@ -50,11 +50,21 @@ export class Runtime implements RuntimeTransport {
       options.packsPath ?? join(dirname(options.databasePath), "packs")
     )
     this.#store = new Store(openDatabase(options.databasePath), sequences)
-    const packManager = new PackManager(
-      this.#store.packs,
-      packsRoot,
-      options.fileActions
-    )
+    let packManager: PackManager
+    try {
+      packManager = new PackManager(
+        this.#store.packs,
+        packsRoot,
+        options.fileActions
+      )
+    } catch (error) {
+      try {
+        this.#store.close()
+      } catch {
+        // Preserve the Pack root preparation error.
+      }
+      throw error
+    }
     this.#store.recoverInterrupted()
     const userSettings = new UserSettings(this.#store.settings, () =>
       this.#emit({ type: "settings.changed" })

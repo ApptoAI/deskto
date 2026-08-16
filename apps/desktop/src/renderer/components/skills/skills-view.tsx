@@ -215,6 +215,7 @@ export function SkillsView({
       </div>
 
       <SkillDetailsDialog
+        key={selected?.id ?? "none"}
         open={selected !== null}
         state={details.state}
         source={selectedSource}

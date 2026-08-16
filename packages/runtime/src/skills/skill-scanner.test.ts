@@ -90,6 +90,48 @@ describe("scanSkillSource", () => {
     }
   )
 
+  it.runIf(process.platform !== "win32")(
+    "does not read an external SKILL.md symlink",
+    async () => {
+      const root = await temporaryDirectory()
+      const outside = await temporaryDirectory()
+      const skill = join(root, "linked-file")
+      const target = join(outside, "secret.md")
+      await mkdir(skill)
+      await writeFile(target, "private content")
+      await symlink(target, join(skill, "SKILL.md"))
+
+      const scanned = await scanSkillSource(source(root), {
+        missingIsDiagnostic: false,
+      })
+
+      expect(scanned.skills[0]?.content).toBeNull()
+      expect(scanned.skills[0]?.occurrence.diagnostics[0]?.code).toBe(
+        "skill-file-unreadable"
+      )
+    }
+  )
+
+  it.runIf(process.platform !== "win32")(
+    "reports a broken skill symlink inside a resolved source",
+    async () => {
+      const root = await temporaryDirectory()
+      await symlink(join(root, "missing"), join(root, "broken"), "dir")
+
+      const scanned = await scanSkillSource(source(root), {
+        missingIsDiagnostic: false,
+      })
+
+      expect(scanned.skills[0]?.occurrence).toMatchObject({
+        directoryName: "broken",
+        diagnostics: [
+          expect.objectContaining({ code: "skill-file-missing" }),
+          expect.anything(),
+        ],
+      })
+    }
+  )
+
   it("changes the content digest when a resource changes", async () => {
     const root = await temporaryDirectory()
     await writeSkill(root, "review", "review", "Review changes")

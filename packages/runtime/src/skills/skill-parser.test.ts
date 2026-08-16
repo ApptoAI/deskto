@@ -1,6 +1,6 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -22,7 +22,7 @@ describe("parseSkillFile", () => {
       '\uFEFF---\r\nname: "release:notes"\r\ndescription: >\r\n  Writes release notes\r\n  from a diff.\r\n---\r\n\r\nDo the work.\r\n'
     )
 
-    const parsed = await parseSkillFile(path)
+    const parsed = await parseSkillFile(path, dirname(path))
 
     expect(parsed).toMatchObject({
       name: "release:notes",
@@ -38,7 +38,7 @@ describe("parseSkillFile", () => {
       "---\nname: [broken\ndescription: nope\n---\nInstructions"
     )
 
-    const parsed = await parseSkillFile(path)
+    const parsed = await parseSkillFile(path, dirname(path))
 
     expect(parsed.content).toContain("Instructions")
     expect(parsed.name).toBeNull()
@@ -50,7 +50,7 @@ describe("parseSkillFile", () => {
       '---\nname: 42\ndescription: ""\n---\nInstructions'
     )
 
-    const parsed = await parseSkillFile(path)
+    const parsed = await parseSkillFile(path, dirname(path))
 
     expect(parsed.name).toBeNull()
     expect(parsed.description).toBeNull()
@@ -59,10 +59,13 @@ describe("parseSkillFile", () => {
 
   it("distinguishes a missing file from missing frontmatter", async () => {
     const directory = await temporaryDirectory()
-    const missing = await parseSkillFile(join(directory, "missing.md"))
+    const missing = await parseSkillFile(
+      join(directory, "missing.md"),
+      directory
+    )
     const plainPath = join(directory, "plain.md")
     await writeFile(plainPath, "Instructions only")
-    const plain = await parseSkillFile(plainPath)
+    const plain = await parseSkillFile(plainPath, directory)
 
     expect(missing.diagnostics[0]?.code).toBe("skill-file-missing")
     expect(plain.diagnostics[0]?.code).toBe("frontmatter-missing")
@@ -73,11 +76,28 @@ describe("parseSkillFile", () => {
     const path = join(directory, "SKILL.md")
     await writeFile(path, Buffer.alloc(maxSkillFileBytes + 1, "x"))
 
-    const parsed = await parseSkillFile(path)
+    const parsed = await parseSkillFile(path, directory)
 
     expect(parsed.content).toBeNull()
     expect(parsed.diagnostics[0]?.code).toBe("skill-file-too-large")
   })
+
+  it.runIf(process.platform !== "win32")(
+    "does not read a SKILL.md symlink outside its source",
+    async () => {
+      const root = await temporaryDirectory()
+      const outside = await temporaryDirectory()
+      const target = join(outside, "secret.md")
+      const path = join(root, "SKILL.md")
+      await writeFile(target, "private content")
+      await symlink(target, path)
+
+      const parsed = await parseSkillFile(path, root)
+
+      expect(parsed.content).toBeNull()
+      expect(parsed.diagnostics[0]?.code).toBe("skill-file-unreadable")
+    }
+  )
 })
 
 async function skillFile(content: string): Promise<string> {

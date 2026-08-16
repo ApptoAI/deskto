@@ -89,15 +89,16 @@ describe("PackManager", () => {
     const context = await testContext()
     const source = join(context.root, "source")
     await writePack(source)
-    const add = context.packs.add.bind(context.packs)
+    const add = context.packs.addWithStatus.bind(context.packs)
     let observedRegisteredStaging = false
-    vi.spyOn(context.packs, "add").mockImplementation(
+    vi.spyOn(context.packs, "addWithStatus").mockImplementation(
       (name, path, metadata) => {
         expect(existsSync(path)).toBe(false)
-        const record = add(name, path, metadata)
+        const added = add(name, path, metadata)
+        const record = added.record
         expect(context.packs.get(record.id).receipt_json).not.toBeNull()
         observedRegisteredStaging = true
-        return record
+        return added
       }
     )
 
@@ -111,15 +112,15 @@ describe("PackManager", () => {
     const context = await testContext()
     const source = join(context.root, "source")
     await writePack(source)
-    const add = context.packs.add.bind(context.packs)
+    const add = context.packs.addWithStatus.bind(context.packs)
     let blockedDestination = ""
-    vi.spyOn(context.packs, "add").mockImplementation(
+    vi.spyOn(context.packs, "addWithStatus").mockImplementation(
       (name, path, metadata) => {
-        const record = add(name, path, metadata)
+        const added = add(name, path, metadata)
         blockedDestination = path
         mkdirSync(path)
         writeFileSync(join(path, "unrelated.txt"), "keep")
-        return record
+        return added
       }
     )
 
@@ -134,6 +135,29 @@ describe("PackManager", () => {
         name.startsWith(".install-")
       )
     ).toEqual([])
+  })
+
+  it("does not roll back a Pack record inserted by another install", async () => {
+    const context = await testContext()
+    const source = join(context.root, "source")
+    await writePack(source)
+    const add = context.packs.addWithStatus.bind(context.packs)
+    let existingId = ""
+    vi.spyOn(context.packs, "addWithStatus").mockImplementationOnce(
+      (name, path, metadata) => {
+        const concurrent = add(name, path, metadata)
+        existingId = concurrent.record.id
+        context.packs.setAttached("personal", existingId, true)
+        return { record: concurrent.record, inserted: false }
+      }
+    )
+
+    await expect(context.manager.installFolder(source)).rejects.toMatchObject({
+      code: "invalid-pack-path",
+    })
+
+    expect(context.packs.get(existingId).id).toBe(existingId)
+    expect(context.packs.workspaceIdsFor(existingId)).toEqual(["personal"])
   })
 
   it("trashes a managed Pack before deleting its record and attachments", async () => {
@@ -242,6 +266,32 @@ describe("PackManager", () => {
         })
       ).rejects.toMatchObject({ code: "invalid-pack-path" })
       expect(await readdir(outside)).toEqual([])
+    }
+  )
+
+  it.runIf(process.platform !== "win32")(
+    "keeps a committed skill when digest refresh fails",
+    async () => {
+      const context = await testContext()
+      const pack = await context.manager.create("My Skills")
+      const outside = join(context.root, "outside")
+      await writeFile(outside, "outside")
+      await symlink(outside, join(pack.path, "linked-file"))
+
+      const created = await context.manager.createSkill(pack.id, {
+        name: "Weekly brief",
+        description: "Draft a weekly update",
+        instructions: "Summarize the work from this week.",
+      })
+
+      const directoryName = decodeURIComponent(created.id.split("/")[1]!)
+      expect(
+        await readFile(
+          join(pack.path, "skills", directoryName, "SKILL.md"),
+          "utf8"
+        )
+      ).toContain("Summarize the work from this week.")
+      expect(context.packs.get(pack.id).content_digest).toBeNull()
     }
   )
 })

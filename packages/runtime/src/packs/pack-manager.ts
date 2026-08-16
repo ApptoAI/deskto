@@ -139,21 +139,24 @@ export class PackManager {
       totalBytes: staged.totalBytes,
     }
     let record: PackRow | undefined
+    let recordIsOwned = false
     try {
-      if (this.packs.findByPath(staged.path))
-        throw new RuntimeError(
-          "invalid-pack-path",
-          "The managed Pack destination is already registered"
-        )
-      record = this.packs.add(staged.name, staged.path, {
+      const added = this.packs.addWithStatus(staged.name, staged.path, {
         kind: "managed",
         contentDigest: staged.contentDigest,
         receipt,
       })
+      record = added.record
+      recordIsOwned = added.inserted
+      if (!recordIsOwned)
+        throw new RuntimeError(
+          "invalid-pack-path",
+          "The managed Pack destination is already registered"
+        )
       await staged.commit()
       return record
     } catch (error) {
-      if (record)
+      if (record && recordIsOwned)
         try {
           this.packs.deleteRecord(record.id)
         } catch {

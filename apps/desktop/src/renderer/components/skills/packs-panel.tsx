@@ -306,17 +306,20 @@ export function PacksPanel({
               value={skillName}
               onChange={(event) => setSkillName(event.target.value)}
               placeholder="Skill name"
+              aria-label="Skill name"
               autoFocus
             />
             <Input
               value={skillDescription}
               onChange={(event) => setSkillDescription(event.target.value)}
               placeholder="When should an agent use it?"
+              aria-label="Skill description"
             />
             <Textarea
               value={skillInstructions}
               onChange={(event) => setSkillInstructions(event.target.value)}
               placeholder="Write the instructions for the agent"
+              aria-label="Skill instructions"
               className="min-h-36"
             />
           </div>
