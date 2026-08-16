@@ -9,7 +9,9 @@ const sharedDirectives = [
   "img-src 'self' data: blob:",
   "frame-src 'self' blob:",
   "font-src 'self' data:",
-  "object-src 'none'",
+  // Chromium's built-in PDF viewer only attaches to an embedded object, and
+  // a result preview hands it a blob of a file already read from the Project.
+  "object-src blob:",
   "base-uri 'none'",
 ]
 

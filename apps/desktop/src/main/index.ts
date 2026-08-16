@@ -48,7 +48,6 @@ async function openApplication(): Promise<void> {
   const cliPathConfigured = configureCliPath()
 
   installContentSecurityPolicy()
-  registerDesktopIpc()
 
   const claudeExecutable = packagedClaudeExecutable()
   const claudeAdapter = claudeExecutable
@@ -68,6 +67,9 @@ async function openApplication(): Promise<void> {
   // Assigned before the window opens so a failure below still closes the
   // runtime through the before-quit path.
   closeRuntime = () => runtime.close()
+  // File actions resolve results through the runtime, so they register once
+  // it exists rather than at startup.
+  registerDesktopIpc(runtime)
 
   const window = createMainWindow()
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)

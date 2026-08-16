@@ -1,6 +1,6 @@
 # ADR 0010: Task results and file previews
 
-- Status: accepted
+- Status: accepted; the object-embedding sentence below is superseded by ADR 0011
 - Date: 2026-08-15
 
 ## Context

@@ -308,6 +308,8 @@ export const artifactPreviewKindSchema = z.enum([
   "unsupported",
 ])
 
+export type ArtifactPreviewKind = z.infer<typeof artifactPreviewKindSchema>
+
 export const artifactSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -315,6 +317,8 @@ export const artifactSchema = z.object({
   relativePath: z.string(),
   mediaType: z.string(),
   previewKind: artifactPreviewKindSchema,
+  /** Whether this format may be handed to the operating system to open. */
+  openable: z.boolean(),
   sizeBytes: z.number().int().nonnegative(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -360,6 +364,44 @@ export const artifactPreviewSchema = z.discriminatedUnion("kind", [
 ])
 
 export type ArtifactPreview = z.infer<typeof artifactPreviewSchema>
+
+/**
+ * Preview kinds the Surface may write back. Binary office formats stay out:
+ * rewriting a workbook or a document from a simplified table would drop
+ * formulas, styles, and every sheet the editor did not load.
+ */
+const editableArtifactPreviewKinds = new Set<ArtifactPreviewKind>([
+  "text",
+  "markdown",
+  "csv",
+])
+
+export function isEditableArtifactPreviewKind(
+  kind: ArtifactPreviewKind
+): boolean {
+  return editableArtifactPreviewKinds.has(kind)
+}
+
+export function isEditableArtifact(artifact: Artifact): boolean {
+  return isEditableArtifactPreviewKind(artifact.previewKind)
+}
+
+/**
+ * The on-disk location of an Artifact. Only the process hosting the Runtime
+ * asks for this — a Surface acts on file actions by artifact id, so a renderer
+ * never holds an absolute path it could hand to the shell.
+ */
+export const artifactLocationSchema = z.object({
+  artifactId: z.string(),
+  absolutePath: z.string(),
+  /** File identity captured by the Runtime's containment check. */
+  device: z.string(),
+  inode: z.string(),
+  /** False when the format is not safe to hand to the operating system. */
+  openable: z.boolean(),
+})
+
+export type ArtifactLocation = z.infer<typeof artifactLocationSchema>
 
 export const approvalSchema = z.object({
   id: z.string(),

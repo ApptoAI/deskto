@@ -227,6 +227,18 @@ export class RuntimeClient {
     })
   }
 
+  writeArtifact(
+    threadId: string,
+    artifactId: string,
+    content: string,
+    baseUpdatedAt: string
+  ) {
+    return this.request({
+      method: "artifact.write",
+      params: { threadId, artifactId, content, baseUpdatedAt },
+    })
+  }
+
   startTurn(threadId: string, input: TurnInput | string) {
     const parsedInput = turnInputSchema.safeParse(input)
     return this.request({
