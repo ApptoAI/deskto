@@ -61,7 +61,8 @@ const textPreviewLimit = 1_000_000
 const binaryPreviewLimit = 10_000_000
 const officePreviewLimit = 20_000_000
 const capturedFilesLimit = 200
-const workingDirectoryNames: ReadonlySet<string> = new Set([
+/** ADR 0012; a Project sweep skips the same folders. */
+export const workingDirectoryNames: ReadonlySet<string> = new Set([
   ".cache",
   ".temp",
   ".tmp",

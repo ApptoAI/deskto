@@ -449,6 +449,203 @@ describe("ClaudeAdapter", () => {
     ])
   })
 
+  it("registers the TaskCreated hook the task plan needs to bind ids", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    for await (const _event of session.events) void _event
+
+    const hook =
+      queryMock.mock.calls[0]?.[0].options?.hooks?.TaskCreated?.[0]?.hooks?.[0]
+    expect(hook).toBeTypeOf("function")
+    // The CLI runs this for every created task; it must never stall the turn.
+    await expect(
+      hook?.(
+        {
+          hook_event_name: "TaskCreated",
+          task_id: "5",
+          task_subject: "Read the code",
+          session_id: "session-1",
+          transcript_path: "/tmp/transcript",
+          cwd: "/tmp/project",
+          permission_mode: "default",
+        },
+        "call-1",
+        { signal: new AbortController().signal }
+      )
+    ).resolves.toEqual({ continue: true })
+  })
+
+  it("builds and clears the task-tool plan without tool rows", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "call-1",
+                name: "TaskCreate",
+                input: { subject: "Read the code", description: "Look" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "call-1",
+                content: "Task #task-1 created successfully: Read the code",
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "call-2",
+                name: "TaskUpdate",
+                input: { taskId: "task-1", status: "in_progress" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "call-2",
+                content: JSON.stringify({ success: true, taskId: "task-1" }),
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "call-3",
+                name: "TaskUpdate",
+                input: { taskId: "task-1", status: "deleted" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "call-3",
+                content: JSON.stringify({ success: true, taskId: "task-1" }),
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "claude-plan",
+          name: "Plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Read the code", status: "pending" }],
+          },
+        },
+      },
+      {
+        type: "activity.updated",
+        update: {
+          id: "claude-plan",
+          payload: {
+            kind: "plan",
+            steps: [{ text: "Read the code", status: "active" }],
+          },
+        },
+      },
+      {
+        type: "activity.updated",
+        update: {
+          id: "claude-plan",
+          payload: { kind: "plan", steps: [] },
+        },
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
   it("keeps a subagent TodoWrite as an ordinary nested activity", async () => {
     queryMock.mockReturnValue(
       fakeQuery([

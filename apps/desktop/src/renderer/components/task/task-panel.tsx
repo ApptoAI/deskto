@@ -7,12 +7,13 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react"
+import BotIcon from "lucide-react/dist/esm/icons/bot"
 import DownloadIcon from "lucide-react/dist/esm/icons/download"
 import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type { Artifact, TurnOutput } from "@deskto/protocol"
+import type { Activity, Artifact, TurnOutput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -37,59 +38,83 @@ import {
   type QueryState,
 } from "../../runtime/use-runtime-query.js"
 import { InlineError } from "../inline-error.js"
+import { ActivityPanel } from "./activity-panel.js"
+import { summarizeActivities } from "./activity-tree.js"
 import {
   ArtifactEditorSlot,
   ArtifactIcon,
   ArtifactPreviewBody,
   isEditableArtifactKind,
 } from "./artifact-views.js"
+import {
+  activityTabId,
+  closeResultTab,
+  openActivityTab,
+  openResultTab,
+  usePanelTabs,
+} from "./panel-tabs.js"
 import { PreviewFailure, PreviewLoading } from "./preview-states.js"
 import { ResultPreviewBoundary } from "./result-preview-boundary.js"
-import { closeResultTab, openResultTab, useResultTabs } from "./result-tabs.js"
 import {
-  clampResultsPanelWidth,
-  defaultResultsPanelWidth,
-  maximumResultsPanelWidth,
-  maximumResultsPanelWidthForContainer,
+  clampTaskPanelWidth,
+  defaultTaskPanelWidth,
+  maximumTaskPanelWidth,
+  maximumTaskPanelWidthForContainer,
   minimumConversationWidth,
-  minimumResultsPanelWidth,
-} from "./results-panel-size.js"
+  minimumTaskPanelWidth,
+} from "./task-panel-size.js"
 
-const resultsPanelWidthSchema = z
+const taskPanelWidthSchema = z
   .number()
   .int()
-  .min(minimumResultsPanelWidth)
-  .max(maximumResultsPanelWidth)
+  .min(minimumTaskPanelWidth)
+  .max(maximumTaskPanelWidth)
 
 /**
- * The results of one task, opened as tabs beside the conversation. Every tab
- * is a real file in the Project folder: the panel previews it, edits the
- * formats that can be written back safely, and otherwise hands it to the
+ * One task's work beside its conversation. Activity leads and never closes:
+ * the plan an agent is working to and the agents it spawned are always worth
+ * a place, even before the task has produced a file. Every other tab is a
+ * real file in the Project folder, which the panel previews, edits for the
+ * formats that can be written back safely, and otherwise hands to the
  * application that owns it.
  */
-export function ResultsPanel({
+export function TaskPanel({
   threadId,
+  activities,
   results,
   onClose,
 }: {
   threadId: string
+  activities: Activity[]
   results: QueryState<TurnOutput[]>
   onClose: () => void
 }) {
   const outputs = results.status === "ready" ? results.data : undefined
-  const tabs = useResultTabs(threadId)
+  const tabs = usePanelTabs(threadId)
   const byId = useMemo(
     () => new Map(outputs?.map((output) => [output.artifact.id, output])),
     [outputs]
   )
-  const active = tabs.activeId ? byId.get(tabs.activeId) : undefined
+  const onActivity = tabs.activeId === activityTabId
+  const active = onActivity ? undefined : byId.get(tabs.activeId)
+  const activitySummary = useMemo(
+    () => summarizeActivities(activities),
+    [activities]
+  )
+  const runningAgents = activitySummary.working
+  const openNewestResult = useCallback(() => {
+    const newest = outputs?.[0]?.artifact.id
+    if (newest) openResultTab(threadId, newest)
+  }, [outputs, threadId])
   const [panelWidth, setPanelWidth] = useLocalStorage(
+    // The key still says results: the width a user dragged is theirs, and a
+    // rename is no reason to hand it back.
     "deskto.results-panel-width:v1",
-    defaultResultsPanelWidth,
-    resultsPanelWidthSchema
+    defaultTaskPanelWidth,
+    taskPanelWidthSchema
   )
   const [containerWidth, setContainerWidth] = useState(
-    maximumResultsPanelWidth + minimumConversationWidth
+    maximumTaskPanelWidth + minimumConversationWidth
   )
   const asideRef = useRef<HTMLElement>(null)
   const separatorRef = useRef<HTMLDivElement>(null)
@@ -111,18 +136,18 @@ export function ResultsPanel({
   }, [])
 
   const effectiveMaximumWidth =
-    maximumResultsPanelWidthForContainer(containerWidth)
-  const effectivePanelWidth = clampResultsPanelWidth(panelWidth, containerWidth)
+    maximumTaskPanelWidthForContainer(containerWidth)
+  const effectivePanelWidth = clampTaskPanelWidth(panelWidth, containerWidth)
 
   const resizeTo = useCallback((width: number) => {
     const aside = asideRef.current
     const containerWidth =
       aside?.parentElement?.clientWidth ?? window.innerWidth
-    const next = clampResultsPanelWidth(width, containerWidth)
+    const next = clampTaskPanelWidth(width, containerWidth)
     if (aside) aside.style.width = `${next}px`
     separatorRef.current?.setAttribute(
       "aria-valuemax",
-      String(maximumResultsPanelWidthForContainer(containerWidth))
+      String(maximumTaskPanelWidthForContainer(containerWidth))
     )
     separatorRef.current?.setAttribute("aria-valuenow", String(next))
     return next
@@ -134,7 +159,7 @@ export function ResultsPanel({
       if (!aside) return
       event.preventDefault()
       event.currentTarget.setPointerCapture(event.pointerId)
-      const width = aside.getBoundingClientRect().width
+      const width = Math.round(aside.getBoundingClientRect().width)
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -175,8 +200,8 @@ export function ResultsPanel({
       const step = event.shiftKey ? 64 : 16
       if (event.key === "ArrowLeft") next = width + step
       if (event.key === "ArrowRight") next = width - step
-      if (event.key === "Home") next = minimumResultsPanelWidth
-      if (event.key === "End") next = maximumResultsPanelWidth
+      if (event.key === "Home") next = minimumTaskPanelWidth
+      if (event.key === "End") next = maximumTaskPanelWidth
       if (next === undefined) return
       event.preventDefault()
       setPanelWidth(resizeTo(next))
@@ -189,7 +214,7 @@ export function ResultsPanel({
       ref={asideRef}
       style={{
         width: effectivePanelWidth,
-        minWidth: minimumResultsPanelWidth,
+        minWidth: minimumTaskPanelWidth,
         maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
       }}
       className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
@@ -197,14 +222,14 @@ export function ResultsPanel({
       <div
         ref={separatorRef}
         role="separator"
-        aria-label="Resize results panel"
+        aria-label="Resize task panel"
         aria-orientation="vertical"
-        aria-valuemin={minimumResultsPanelWidth}
+        aria-valuemin={minimumTaskPanelWidth}
         aria-valuemax={effectiveMaximumWidth}
         aria-valuenow={effectivePanelWidth}
         tabIndex={0}
-        title="Drag to resize results"
-        onDoubleClick={() => setPanelWidth(resizeTo(defaultResultsPanelWidth))}
+        title="Drag to resize the panel"
+        onDoubleClick={() => setPanelWidth(resizeTo(defaultTaskPanelWidth))}
         onPointerDown={handleResizeStart}
         onPointerMove={handleResizeMove}
         onPointerUp={handleResizeEnd}
@@ -216,6 +241,11 @@ export function ResultsPanel({
       </div>
       <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-border pr-2 pl-1">
         <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
+          <ActivityTab
+            active={onActivity}
+            runningAgents={runningAgents}
+            onSelect={() => openActivityTab(threadId)}
+          />
           {tabs.open.map((id) => {
             const output = byId.get(id)
             return output ? (
@@ -238,14 +268,19 @@ export function ResultsPanel({
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            aria-label="Close results"
+            aria-label="Close the panel"
           >
             <XIcon />
           </Button>
         </div>
       </div>
 
-      {results.status === "error" ? (
+      {onActivity ? (
+        <ActivityPanel
+          summary={activitySummary}
+          onOpenResults={openNewestResult}
+        />
+      ) : results.status === "error" ? (
         <div className="p-3">
           <InlineError message={results.message} />
         </div>
@@ -264,6 +299,52 @@ export function ResultsPanel({
         />
       )}
     </aside>
+  )
+}
+
+/**
+ * The fixture at the head of the strip. It carries no close button — there is
+ * nothing to put back once a task's work is dismissed — and badges the agents
+ * still running so the panel says so while a file is in front of it.
+ */
+function ActivityTab({
+  active,
+  runningAgents,
+  onSelect,
+}: {
+  active: boolean
+  runningAgents: number
+  onSelect: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center self-center rounded-md px-2 transition-colors",
+        active ? "bg-muted" : "hover:bg-muted/50"
+      )}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        title="This task's plan and agents"
+        className="flex h-7 items-center gap-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <BotIcon
+          aria-hidden
+          className="size-3.5 shrink-0 text-muted-foreground"
+        />
+        <span className={active ? "text-foreground" : "text-muted-foreground"}>
+          Activity
+        </span>
+        {runningAgents > 0 ? (
+          <span
+            role="img"
+            className="size-1.5 rounded-full bg-foreground/60 [animation-duration:1.4s] motion-safe:animate-pulse"
+            aria-label={`${runningAgents} agents running`}
+          />
+        ) : null}
+      </button>
+    </div>
   )
 }
 

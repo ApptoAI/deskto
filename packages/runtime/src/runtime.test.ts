@@ -1850,6 +1850,305 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("captures a file a command produced without naming it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const projectPath = join(directory, "project")
+    await mkdir(projectPath)
+    await writeFile(join(projectPath, "brief.md"), "# Brief\n")
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Build the report" },
+      })
+    )
+
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "script",
+        name: "Run command",
+        detail: "python3 tmp/make-report.py",
+        payload: { kind: "tool", tool: "command" },
+      },
+    })
+    await mkdir(join(projectPath, "tmp"))
+    await writeFile(join(projectPath, "tmp", "make-report.py"), "print('x')\n")
+    await mkdir(join(projectPath, ".cache"))
+    await writeFile(join(projectPath, ".cache", "step.json"), "{}")
+    await writeFile(join(projectPath, ".summary.txt"), "Ready\n")
+    await writeFile(join(projectPath, "report.csv"), "month,revenue\nJan,42\n")
+    run.emit({ type: "activity.completed", id: "script", outcome: "completed" })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return outputs.length === 2
+    })
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputs.map((output) => output.artifact.relativePath)).toEqual([
+      ".summary.txt",
+      "report.csv",
+    ])
+    expect(outputs[0]?.turnId).toBe(run.input.turnId)
+    await runtime.close()
+  })
+
+  it.each(["failed", "cancelled"] as const)(
+    "captures unfinished command output when a Turn is %s",
+    async (ending) => {
+      const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+      directories.push(directory)
+      const projectPath = join(directory, "project")
+      await mkdir(projectPath)
+      const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+      const runtime = createRuntime({
+        databasePath: join(directory, "runtime.sqlite"),
+        harnesses: [harness],
+      })
+      const project = unwrap(
+        await runtime.request({
+          method: "project.add",
+          params: {
+            path: projectPath,
+            name: "Example",
+            workspaceId: "personal",
+          },
+        })
+      )
+      const thread = unwrap(
+        await runtime.request({
+          method: "thread.create",
+          params: { projectId: project.id, harnessId: "claude" },
+        })
+      )
+      unwrap(
+        await runtime.request({
+          method: "turn.start",
+          params: { threadId: thread.id, prompt: "Build the report" },
+        })
+      )
+
+      const run = harness.runs[0]!
+      run.emit({
+        type: "activity.started",
+        activity: {
+          id: "script",
+          name: "Run command",
+          payload: { kind: "tool", tool: "command" },
+        },
+      })
+      await writeFile(
+        join(projectPath, "report.csv"),
+        "month,revenue\nJan,42\n"
+      )
+
+      if (ending === "failed") {
+        run.emit({
+          type: "turn.failed",
+          failure: { kind: "error", message: "Provider stopped" },
+        })
+        run.finish()
+      } else {
+        unwrap(
+          await runtime.request({
+            method: "turn.cancel",
+            params: { threadId: thread.id },
+          })
+        )
+      }
+
+      await waitFor(async () => {
+        const outputs = unwrap(
+          await runtime.request({
+            method: "artifact.list",
+            params: { threadId: thread.id },
+          })
+        )
+        return outputs.length === 1
+      })
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      expect(outputs[0]?.artifact.relativePath).toBe("report.csv")
+      expect(outputs[0]?.turnId).toBe(run.input.turnId)
+      await runtime.close()
+    }
+  )
+
+  it("waits for provider shutdown before the final output sweep", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const projectPath = join(directory, "project")
+    await mkdir(projectPath)
+    const scripted = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => {
+        const session = await scripted.start(input, signal)
+        return {
+          ...session,
+          cancel: async () => {
+            await writeFile(join(projectPath, "late-report.csv"), "total\n42\n")
+            await session.cancel()
+          },
+        }
+      },
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Build the report" },
+      })
+    )
+
+    const run = scripted.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "script",
+        name: "Run command",
+        payload: { kind: "tool", tool: "command" },
+      },
+    })
+    run.emit({
+      type: "turn.failed",
+      failure: { kind: "error", message: "Provider stopped" },
+    })
+    run.finish()
+
+    await waitFor(async () => {
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return outputs.length === 1
+    })
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputs[0]?.artifact.relativePath).toBe("late-report.csv")
+    await runtime.close()
+  })
+
+  it("does not sweep a Turn whose Activities all named their files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const projectPath = join(directory, "project")
+    await mkdir(projectPath)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Look something up" },
+      })
+    )
+
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "search",
+        name: "Search",
+        payload: { kind: "tool", tool: "search" },
+      },
+    })
+    await writeFile(join(projectPath, "unrelated.txt"), "saved by an editor")
+    run.emit({ type: "activity.completed", id: "search", outcome: "completed" })
+    run.emit({ type: "turn.completed" })
+    run.finish()
+
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+    ).toEqual([])
+    await runtime.close()
+  })
+
   it("locates a result and writes back only editable formats", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)

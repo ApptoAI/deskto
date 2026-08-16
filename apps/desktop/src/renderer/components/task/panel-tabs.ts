@@ -1,27 +1,36 @@
 import { useEffect, useSyncExternalStore } from "react"
 
 /**
- * Which results a task has open in the side panel, and which one is in front.
- * The state lives outside React so closing the panel, switching to another
- * task, and coming back keeps the same tabs: a result the user opened is a
- * place they were working, not a transient selection.
+ * The surface a task's side panel is on, and which results it has open. The
+ * state lives outside React so closing the panel, switching to another task,
+ * and coming back keeps the same tabs: a result the user opened is a place
+ * they were working, not a transient selection.
  *
  * It is deliberately not persisted. Tabs describe the current sitting, and a
  * restored tab pointing at a file an agent has since deleted reads as a bug.
  */
-export type ResultTabs = {
+
+/**
+ * Activity is a fixture, not a tab the user opened: it is always first, never
+ * closes, and is where the panel falls back when the last result closes. A
+ * task always has work to show, even before it has produced a file.
+ */
+export const activityTabId = "activity"
+
+export type PanelTabs = {
+  /** Open results, in the order they were opened. Activity is not among them. */
   open: string[]
-  activeId: string | null
+  activeId: string
   /**
-   * Whether the panel has already chosen a result for this task. Closing the
-   * last tab has to stick: without this the opener would treat the empty
-   * panel as a fresh one and put the newest result straight back.
+   * Whether the panel has already chosen a surface for this task. Landing on
+   * Activity has to stick: without this the opener would treat it as an
+   * unclaimed panel and put the newest result in front of it.
    */
   opened: boolean
 }
 
-const noTabs: ResultTabs = { open: [], activeId: null, opened: false }
-const byThread = new Map<string, ResultTabs>()
+const noTabs: PanelTabs = { open: [], activeId: activityTabId, opened: false }
+const byThread = new Map<string, PanelTabs>()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void): () => void {
@@ -29,17 +38,23 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function update(threadId: string, next: ResultTabs): void {
+function update(threadId: string, next: PanelTabs): void {
   byThread.set(threadId, next)
   for (const listener of listeners) listener()
 }
 
-function tabsFor(threadId: string): ResultTabs {
+function tabsFor(threadId: string): PanelTabs {
   return byThread.get(threadId) ?? noTabs
 }
 
-export function useResultTabs(threadId: string): ResultTabs {
+export function usePanelTabs(threadId: string): PanelTabs {
   return useSyncExternalStore(subscribe, () => tabsFor(threadId))
+}
+
+export function openActivityTab(threadId: string): void {
+  const tabs = tabsFor(threadId)
+  if (tabs.activeId === activityTabId && tabs.opened) return
+  update(threadId, { ...tabs, activeId: activityTabId, opened: true })
 }
 
 export function openResultTab(threadId: string, artifactId: string): void {
@@ -66,7 +81,7 @@ export function closeResultTab(threadId: string, artifactId: string): void {
     // first tab, so a run of closes walks the strip instead of jumping.
     activeId:
       tabs.activeId === artifactId
-        ? (open[index] ?? open[index - 1] ?? null)
+        ? (open[index] ?? open[index - 1] ?? activityTabId)
         : tabs.activeId,
   })
 }
@@ -87,23 +102,23 @@ export function retainResultTabs(
     ...tabs,
     open,
     activeId:
-      tabs.activeId && available.has(tabs.activeId)
+      tabs.activeId === activityTabId || available.has(tabs.activeId)
         ? tabs.activeId
-        : (open[0] ?? null),
+        : (open[0] ?? activityTabId),
   })
 }
 
 /**
  * Opens the newest result the first time a task's panel has nothing in front,
- * so the Results button lands on a file rather than on an empty panel. It
- * fires once per task: after that an empty panel is the user's own doing.
+ * so the Results button lands on a file rather than on the task's activity. It
+ * fires once per task: after that the panel is wherever the user left it.
  */
 export function useOpenNewestResult(
   threadId: string,
   newestId: string | undefined,
   enabled: boolean
 ): void {
-  const tabs = useResultTabs(threadId)
+  const tabs = usePanelTabs(threadId)
   const settled = tabs.opened
   useEffect(() => {
     if (!enabled || settled || !newestId) return
