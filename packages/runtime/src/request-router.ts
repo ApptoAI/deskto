@@ -12,7 +12,12 @@ import {
 
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
-import { readPackSkills, resolvedDirectory } from "./packs/pack-files.js"
+import {
+  readPackContents,
+  readPackSkills,
+  resolvedDirectory,
+} from "./packs/pack-files.js"
+import { canEditManagedSkills } from "./packs/pack-capabilities.js"
 import type { PackManager } from "./packs/pack-manager.js"
 import { ProjectEntries } from "./project-entries.js"
 import { SkillInventory } from "./skills/skill-inventory.js"
@@ -399,9 +404,12 @@ export class RequestRouter {
   }
 
   async #packView(row: PackRow, workspaceIds?: string[]) {
+    const contents = await readPackContents(row)
     return {
       ...toPackRecord(row),
-      skills: await readPackSkills(row),
+      canEditSkills: canEditManagedSkills(row),
+      skills: contents.resolvedSkills.map(({ skill }) => skill),
+      occurrences: contents.occurrences,
       workspaceIds: workspaceIds ?? this.store.packs.workspaceIdsFor(row.id),
     }
   }

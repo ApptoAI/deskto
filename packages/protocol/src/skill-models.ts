@@ -6,6 +6,8 @@ export const skillDiagnosticCodeSchema = z.enum([
   "skill-file-missing",
   "skill-file-unreadable",
   "skill-file-too-large",
+  "skill-path-outside-source",
+  "skill-content-unreadable",
   "frontmatter-missing",
   "frontmatter-invalid",
   "name-missing",
@@ -30,7 +32,7 @@ export const skillProvisioningReportSchema = z.object({
   rootPath: z.string().min(1),
   contentDigest: z.string().nullable(),
   status: z.enum(["configured", "unsupported", "failed"]),
-  method: z.enum(["extra-root", "plugin-shim"]),
+  method: z.string().min(1),
   message: z.string().min(1).optional(),
   attemptedAt: z.iso.datetime(),
 })
@@ -48,6 +50,7 @@ export const skillSourceSchema = z.object({
   harnessIds: z.array(z.string().min(1)),
   packId: z.string().min(1).optional(),
   packKind: z.enum(["managed", "linked"]).optional(),
+  editable: z.boolean(),
   provisioning: z.array(skillProvisioningReportSchema),
   diagnostics: z.array(skillDiagnosticSchema),
 })
@@ -67,6 +70,10 @@ export const skillOccurrenceSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{64}$/)
     .nullable(),
+  contentDigest: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .nullable(),
   hasScripts: z.boolean(),
   hasReferences: z.boolean(),
   hasAssets: z.boolean(),
@@ -83,6 +90,14 @@ export const skillInventorySchema = z.object({
 })
 
 export type SkillInventory = z.infer<typeof skillInventorySchema>
+
+export const managedSkillDraftSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1),
+  instructions: z.string().trim().min(1),
+})
+
+export type ManagedSkillDraft = z.infer<typeof managedSkillDraftSchema>
 
 export const skillDetailsSchema = z.object({
   occurrence: skillOccurrenceSchema,

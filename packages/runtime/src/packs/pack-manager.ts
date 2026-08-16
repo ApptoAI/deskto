@@ -1,23 +1,26 @@
 import { mkdirSync, realpathSync } from "node:fs"
 import { lstat } from "node:fs/promises"
-import { isAbsolute, relative, resolve } from "node:path"
 import { z } from "zod"
 
-import type { PackReceipt, PackSkill } from "@deskto/protocol"
+import type {
+  ManagedSkillDraft,
+  PackReceipt,
+  PackSkill,
+} from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
+import { pathIsWithin } from "../path-boundaries.js"
 import type { PackRow } from "../storage/records.js"
 import type { Packs } from "../storage/packs.js"
 import { readPackName, validatePackDirectory } from "./pack-files.js"
-import { ManagedSkills, type ManagedSkillDraft } from "./managed-skills.js"
+import { ManagedSkills } from "./managed-skills.js"
 import {
-  createManagedPack,
-  discardManagedPack,
-  installPackFolder,
-  installPackZip,
   isManagedDirectChild,
   sourceLabel,
-  type MaterializedPack,
+  stageManagedPack,
+  stagePackFolder,
+  stagePackZip,
+  type StagedManagedPack,
 } from "./pack-installer.js"
 
 export type PackFileActions = {
@@ -45,24 +48,21 @@ export class PackManager {
     const normalizedName = name.trim()
     if (!normalizedName)
       throw new RuntimeError("invalid-name", "A name is required")
-    const materialized = await createManagedPack(
-      normalizedName,
-      this.#managedRoot
-    )
-    return this.#registerManaged(materialized, { kind: "created" })
+    const staged = await stageManagedPack(normalizedName, this.#managedRoot)
+    return this.#registerManaged(staged, { kind: "created" })
   }
 
   async installFolder(sourcePath: string): Promise<PackRow> {
-    const materialized = await installPackFolder(sourcePath, this.#managedRoot)
-    return this.#registerManaged(materialized, {
+    const staged = await stagePackFolder(sourcePath, this.#managedRoot)
+    return this.#registerManaged(staged, {
       kind: "folder",
       name: sourceLabel(sourcePath),
     })
   }
 
   async installZip(archivePath: string): Promise<PackRow> {
-    const materialized = await installPackZip(archivePath, this.#managedRoot)
-    return this.#registerManaged(materialized, {
+    const staged = await stagePackZip(archivePath, this.#managedRoot)
+    return this.#registerManaged(staged, {
       kind: "zip",
       name: sourceLabel(archivePath),
     })
@@ -84,7 +84,7 @@ export class PackManager {
     const path = await validatePackDirectory(sourcePath)
     const existing = this.packs.findByPath(path)
     if (existing) return existing
-    if (isWithin(this.#managedRoot, path))
+    if (pathIsWithin(this.#managedRoot, path))
       throw new RuntimeError(
         "invalid-pack-operation",
         "A folder inside the managed Pack directory cannot be linked"
@@ -127,7 +127,7 @@ export class PackManager {
   }
 
   async #registerManaged(
-    materialized: MaterializedPack,
+    staged: StagedManagedPack,
     source: PackReceipt["source"]
   ): Promise<PackRow> {
     const installedAt = new Date().toISOString()
@@ -135,31 +135,35 @@ export class PackManager {
       schemaVersion: 1,
       installedAt,
       source,
-      contentDigest: materialized.contentDigest,
-      fileCount: materialized.fileCount,
-      totalBytes: materialized.totalBytes,
+      contentDigest: staged.contentDigest,
+      fileCount: staged.fileCount,
+      totalBytes: staged.totalBytes,
     }
+    let record: PackRow | undefined
     try {
-      return this.packs.add(materialized.name, materialized.path, {
+      if (this.packs.findByPath(staged.path))
+        throw new RuntimeError(
+          "invalid-pack-path",
+          "The managed Pack destination is already registered"
+        )
+      record = this.packs.add(staged.name, staged.path, {
         kind: "managed",
-        contentDigest: materialized.contentDigest,
+        contentDigest: staged.contentDigest,
         receipt,
       })
+      await staged.commit()
+      return record
     } catch (error) {
-      await discardManagedPack(materialized.path, this.#managedRoot).catch(
-        () => undefined
-      )
+      if (record)
+        try {
+          this.packs.deleteRecord(record.id)
+        } catch {
+          // Preserve the install error when best-effort rollback also fails.
+        }
+      await staged.discard().catch(() => undefined)
       throw error
     }
   }
-}
-
-function isWithin(root: string, candidate: string): boolean {
-  const pathFromRoot = relative(resolve(root), resolve(candidate))
-  return (
-    pathFromRoot === "" ||
-    (!pathFromRoot.startsWith("..") && !isAbsolute(pathFromRoot))
-  )
 }
 
 async function pathExists(path: string): Promise<boolean> {

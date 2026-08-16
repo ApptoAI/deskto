@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { skillOccurrenceSchema } from "./skill-models.js"
+
 export const jsonValueSchema = z.json()
 export type JsonValue = z.infer<typeof jsonValueSchema>
 export const jsonObjectSchema = z.record(z.string(), jsonValueSchema)
@@ -89,6 +91,8 @@ export const packReceiptSchema = z.object({
 
 export type PackReceipt = z.infer<typeof packReceiptSchema>
 
+export const mySkillsPackName = "My Skills"
+
 /**
  * A Pack is a directory of skills the user manages in the app. Its layout is
  * provider-neutral (a manifest plus a skills/ directory of SKILL.md folders);
@@ -104,7 +108,9 @@ export const packSchema = z.object({
     .regex(/^sha256:[a-f0-9]{64}$/)
     .nullable(),
   receipt: packReceiptSchema.nullable(),
+  canEditSkills: z.boolean(),
   skills: z.array(packSkillSchema),
+  occurrences: z.array(skillOccurrenceSchema),
   workspaceIds: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),

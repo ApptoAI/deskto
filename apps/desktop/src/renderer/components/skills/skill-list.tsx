@@ -10,6 +10,8 @@ import type {
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { knownHarnessLabel } from "../../lib/harness.js"
+
 export function skillNameCounts(
   occurrences: SkillOccurrence[]
 ): ReadonlyMap<string, number> {
@@ -144,7 +146,7 @@ function SkillRow({
           <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>{source?.label ?? "Unknown source"}</span>
             {source && source.harnessIds.length > 0 ? (
-              <span>{source.harnessIds.map(harnessLabel).join(", ")}</span>
+              <span>{source.harnessIds.map(knownHarnessLabel).join(", ")}</span>
             ) : null}
             {source?.kind === "pack" && source.provisioning.length === 0 ? (
               <span>Not provided in this project yet</span>
@@ -193,17 +195,11 @@ function SkillStatus({
   )
 }
 
-function harnessLabel(id: string): string {
-  if (id === "codex") return "Codex"
-  if (id === "claude") return "Claude Code"
-  return id
-}
-
 function provisioningLabel(
   harnessId: string,
   status: "configured" | "unsupported" | "failed"
 ): string {
-  const harness = harnessLabel(harnessId)
+  const harness = knownHarnessLabel(harnessId)
   if (status === "configured") return `Provided to ${harness}`
   if (status === "unsupported") return `${harness} version not supported`
   return `Could not provide to ${harness}`

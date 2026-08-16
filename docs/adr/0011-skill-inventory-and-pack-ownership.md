@@ -33,8 +33,8 @@ root for a Turn. Usage means the Harness reported that it invoked the skill.
 The first release records discovery and configuration. It does not infer
 usage from a successful configuration request.
 
-Harness Adapters declare their native skill locations and precedence rules.
-The Runtime owns filesystem traversal, validation, content digests, and the
+Harness Adapters declare their native skill locations. The Runtime owns
+filesystem traversal, validation, content digests, and the
 provider-neutral inventory. Native project and user skills stay read-only in
 Deskto. Their content is read from disk on demand and is not persisted in
 SQLite.
@@ -54,9 +54,11 @@ attachment remains many-to-many and applies to every Project in that
 Workspace.
 
 Harness Adapters return a configuration result for each app-supplied root.
-The result is `configured`, `unsupported`, or `failed` and names the delivery
-method. A failed or unsupported Pack does not stop the Turn. Deskto stores the
-result and shows it instead of hiding it.
+The result is `configured`, `unsupported`, or `failed` and names the
+Adapter-owned delivery method. The method stays an opaque string outside the
+Adapter, so a new Harness does not require a protocol or database migration. A
+failed or unsupported Pack does not stop the Turn. Deskto stores the result and
+shows it instead of hiding it.
 
 This decision replaces the silent degradation requirement in ADR 0006.
 

@@ -23,7 +23,11 @@ import {
   projectSchema,
   workspaceSchema,
 } from "./models.js"
-import { skillDetailsSchema, skillInventorySchema } from "./skill-models.js"
+import {
+  managedSkillDraftSchema,
+  skillDetailsSchema,
+  skillInventorySchema,
+} from "./skill-models.js"
 
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("harness.list"), params: z.object({}) }),
@@ -124,21 +128,13 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({
     method: z.literal("skill.createManaged"),
-    params: z.object({
-      packId: z.string().min(1),
-      name: z.string().trim().min(1),
-      description: z.string().trim().min(1),
-      instructions: z.string().trim().min(1),
-    }),
+    params: managedSkillDraftSchema.extend({ packId: z.string().min(1) }),
   }),
   z.object({
     method: z.literal("skill.updateManaged"),
-    params: z.object({
+    params: managedSkillDraftSchema.extend({
       packId: z.string().min(1),
       directoryName: z.string().min(1),
-      name: z.string().trim().min(1),
-      description: z.string().trim().min(1),
-      instructions: z.string().trim().min(1),
     }),
   }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),

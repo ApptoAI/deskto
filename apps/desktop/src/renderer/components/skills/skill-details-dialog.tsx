@@ -1,5 +1,9 @@
 import { useState } from "react"
-import type { SkillDetails, SkillSource } from "@deskto/protocol"
+import type {
+  ManagedSkillDraft,
+  SkillDetails,
+  SkillSource,
+} from "@deskto/protocol"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 
 import { Button } from "@workspace/ui/components/button"
@@ -17,6 +21,7 @@ import {
 
 import { InlineError } from "../inline-error.js"
 import { openFolder } from "../../lib/desktop.js"
+import { knownHarnessLabel } from "../../lib/harness.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 
 export function SkillDetailsDialog({
@@ -35,7 +40,7 @@ export function SkillDetailsDialog({
   onUpdateManaged?: (
     packId: string,
     directoryName: string,
-    draft: { name: string; description: string; instructions: string }
+    draft: ManagedSkillDraft
   ) => Promise<void>
 }) {
   const details = state.status === "ready" ? state.data : null
@@ -190,12 +195,7 @@ export function SkillDetailsDialog({
                         className="rounded-lg border border-border p-3"
                       >
                         <p className="font-medium">
-                          {report.harnessId === "claude"
-                            ? "Claude Code"
-                            : report.harnessId === "codex"
-                              ? "Codex"
-                              : report.harnessId}
-                          : {report.status}
+                          {knownHarnessLabel(report.harnessId)}: {report.status}
                         </p>
                         {report.message ? (
                           <p className="mt-1 text-muted-foreground">
@@ -255,7 +255,7 @@ export function SkillDetailsDialog({
             Close
           </Button>
           {occurrence ? (
-            source?.packKind === "managed" && onUpdateManaged ? (
+            source?.editable && onUpdateManaged ? (
               <Button
                 type="button"
                 variant="outline"

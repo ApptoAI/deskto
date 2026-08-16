@@ -233,7 +233,7 @@ const migrations = [
       root_path TEXT NOT NULL,
       content_digest TEXT,
       status TEXT NOT NULL CHECK (status IN ('configured', 'unsupported', 'failed')),
-      method TEXT NOT NULL CHECK (method IN ('extra-root', 'plugin-shim')),
+      method TEXT NOT NULL,
       message TEXT,
       attempted_at TEXT NOT NULL,
       PRIMARY KEY (turn_id, root_id)

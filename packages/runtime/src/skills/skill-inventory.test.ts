@@ -217,6 +217,34 @@ describe("skill inventory", () => {
       join(root, ".agents", "skills"),
     ])
   })
+
+  it("merges Harness exposure for the same physical skill source", async () => {
+    const root = await temporaryDirectory()
+    const userSkills = join(root, "shared-skills")
+    await mkdir(userSkills)
+    await writeSkill(userSkills, "review", "review", "Review changes")
+    const declaredRoot: NativeSkillRoot = {
+      path: userSkills,
+      scope: "user",
+      label: "Personal skills",
+    }
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      harnesses: [
+        inventoryHarness("first", [declaredRoot]),
+        inventoryHarness("second", [declaredRoot]),
+      ],
+    })
+
+    const inventory = unwrap(
+      await runtime.request({ method: "skill.listOnComputer", params: {} })
+    )
+
+    expect(inventory.sources).toHaveLength(1)
+    expect(inventory.sources[0]?.harnessIds).toEqual(["first", "second"])
+    expect(inventory.occurrences).toHaveLength(1)
+    await runtime.close()
+  })
 })
 
 function inventoryHarness(

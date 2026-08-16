@@ -3,7 +3,7 @@ import { readFile, realpath, stat } from "node:fs/promises"
 import { basename, join } from "node:path"
 
 import type { SkillRoot } from "@deskto/harness-sdk"
-import type { PackSkill } from "@deskto/protocol"
+import type { PackSkill, SkillOccurrence } from "@deskto/protocol"
 import { z } from "zod"
 
 import type { PackRow } from "../storage/records.js"
@@ -98,6 +98,11 @@ export type ResolvedPackSkill = {
   path: string
 }
 
+export type PackContents = {
+  occurrences: SkillOccurrence[]
+  resolvedSkills: ResolvedPackSkill[]
+}
+
 export function packSkillId(packId: string, directoryName: string): string {
   return `${packId}/${encodeURIComponent(directoryName)}`
 }
@@ -105,6 +110,12 @@ export function packSkillId(packId: string, directoryName: string): string {
 export async function readResolvedPackSkills(
   pack: Pick<PackRow, "id" | "name" | "path">
 ): Promise<ResolvedPackSkill[]> {
+  return (await readPackContents(pack)).resolvedSkills
+}
+
+export async function readPackContents(
+  pack: Pick<PackRow, "id" | "name" | "path">
+): Promise<PackContents> {
   const root = skillsDirectory(pack.path)
   const scanned = await scanSkillSource(
     {
@@ -115,11 +126,12 @@ export async function readResolvedPackSkills(
       path: root,
       harnessIds: [],
       packId: pack.id,
+      editable: false,
       provisioning: [],
     },
     { missingIsDiagnostic: true }
   )
-  return scanned.skills
+  const resolvedSkills = scanned.skills
     .filter(({ content }) => content !== null)
     .map(({ occurrence }) => ({
       path: occurrence.skillFilePath,
@@ -131,6 +143,10 @@ export async function readResolvedPackSkills(
         description: occurrence.description ?? "",
       },
     }))
+  return {
+    occurrences: scanned.skills.map(({ occurrence }) => occurrence),
+    resolvedSkills,
+  }
 }
 
 export async function readPackSkills(

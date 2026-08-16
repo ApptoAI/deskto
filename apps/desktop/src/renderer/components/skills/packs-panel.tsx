@@ -1,6 +1,12 @@
 import { useState } from "react"
-import type { Pack, Workspace } from "@deskto/protocol"
+import {
+  mySkillsPackName,
+  type ManagedSkillDraft,
+  type Pack,
+  type Workspace,
+} from "@deskto/protocol"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
+import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import FileArchiveIcon from "lucide-react/dist/esm/icons/file-archive"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
 
@@ -18,6 +24,7 @@ import { Switch } from "@workspace/ui/components/switch"
 import { Textarea } from "@workspace/ui/components/textarea"
 
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
+import { openFolder } from "../../lib/desktop.js"
 
 export type PackActions = {
   onToggle: (packId: string, attached: boolean) => Promise<void>
@@ -27,11 +34,7 @@ export type PackActions = {
   onLink: () => Promise<void>
   onUnlink: (packId: string) => Promise<void>
   onUninstall: (packId: string) => Promise<void>
-  onCreateSkill: (draft: {
-    name: string
-    description: string
-    instructions: string
-  }) => Promise<void>
+  onCreateSkill: (draft: ManagedSkillDraft) => Promise<void>
 }
 
 export function PacksPanel({
@@ -171,22 +174,45 @@ export function PacksPanel({
           {packs.state.data.map((pack) => {
             const attached = pack.workspaceIds.includes(workspace.id)
             const rowBusy = busy === pack.id
+            const invalidCount = pack.occurrences.filter((occurrence) =>
+              occurrence.diagnostics.some(
+                (diagnostic) => diagnostic.severity === "error"
+              )
+            ).length
             return (
               <li key={pack.id} className="flex items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{pack.name}</p>
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {pack.skills.length === 0
+                    {pack.occurrences.length === 0
                       ? "No skills found"
-                      : pack.skills.map((skill) => skill.name).join(", ")}
+                      : pack.occurrences
+                          .map(
+                            (occurrence) =>
+                              occurrence.name ?? occurrence.directoryName
+                          )
+                          .join(", ")}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {pack.kind === "managed"
                       ? "Installed by Deskto. "
                       : "Linked folder. "}
                     Applies to every project in this workspace.
+                    {invalidCount > 0
+                      ? ` ${invalidCount} ${invalidCount === 1 ? "skill needs" : "skills need"} attention.`
+                      : ""}
                   </p>
                 </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => void openFolder(pack.path)}
+                >
+                  <FolderOpenIcon data-icon="inline-start" />
+                  Open folder
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -271,8 +297,8 @@ export function PacksPanel({
           <DialogHeader>
             <DialogTitle>Create a skill</DialogTitle>
             <DialogDescription>
-              Deskto will save it in a managed Pack named My Skills and use that
-              Pack in this workspace.
+              Deskto will save it in the managed {mySkillsPackName} Pack and use
+              that Pack in this workspace.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

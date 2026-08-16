@@ -9,7 +9,12 @@ import {
 import type { RuntimeClient } from "@deskto/client"
 import { appSettings } from "@deskto/settings"
 
-import { personalWorkspaceId, type Selection } from "@deskto/protocol"
+import {
+  personalWorkspaceId,
+  mySkillsPackName,
+  type ManagedSkillDraft,
+  type Selection,
+} from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 import { z } from "zod"
 
@@ -501,19 +506,15 @@ export function Workbench() {
       reportErrors(async () => {
         await client.uninstallPack(packId)
       }),
-    onCreateSkill: (draft: {
-      name: string
-      description: string
-      instructions: string
-    }) =>
+    onCreateSkill: (draft: ManagedSkillDraft) =>
       reportErrors(async () => {
         if (!activeWorkspaceId) return
         const currentPacks =
           packsQuery.state.status === "ready" ? packsQuery.state.data : []
         const mySkills =
           currentPacks.find(
-            (pack) => pack.kind === "managed" && pack.name === "My Skills"
-          ) ?? (await client.createPack("My Skills"))
+            (pack) => pack.canEditSkills && pack.name === mySkillsPackName
+          ) ?? (await client.createPack(mySkillsPackName))
         await client.setWorkspacePack(activeWorkspaceId, mySkills.id, true)
         await client.createManagedSkill(mySkills.id, draft)
       }),

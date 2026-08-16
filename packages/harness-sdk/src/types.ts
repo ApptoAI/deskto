@@ -41,7 +41,8 @@ export type SkillRoot = {
 
 export type SkillProvisioningStatus = "configured" | "unsupported" | "failed"
 
-export type SkillProvisioningMethod = "extra-root" | "plugin-shim"
+/** Adapter-owned identifier for the native mechanism it used. */
+export type SkillProvisioningMethod = string
 
 /** What one Adapter did with one app-supplied skill root for this session. */
 export type SkillProvisioningResult = {

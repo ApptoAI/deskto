@@ -1,3 +1,6 @@
+import { realpath } from "node:fs/promises"
+import { resolve } from "node:path"
+
 import type {
   SkillDetails,
   SkillInventory as SkillInventoryRecord,
@@ -7,6 +10,7 @@ import type {
 import { RuntimeError } from "../errors.js"
 import type { HarnessRegistry } from "../harness-registry.js"
 import { skillsDirectory } from "../packs/pack-files.js"
+import { canEditManagedSkills } from "../packs/pack-capabilities.js"
 import type { Store } from "../storage/store.js"
 
 import { skillSourceId } from "./skill-identifiers.js"
@@ -68,7 +72,7 @@ export class SkillInventory {
         const path = skillsDirectory(pack.path)
         return {
           source: {
-            id: skillSourceId(["pack", pack.id, path]),
+            id: pack.id,
             kind: "pack",
             scope: "workspace",
             label: pack.name,
@@ -76,6 +80,7 @@ export class SkillInventory {
             harnessIds: this.harnesses.harnessIds(),
             packId: pack.id,
             packKind: pack.kind,
+            editable: canEditManagedSkills(pack),
             provisioning: latestProvisioning.get(pack.id) ?? [],
           },
           missingIsDiagnostic: true,
@@ -93,20 +98,28 @@ export class SkillInventory {
     include: "all" | "computer"
   ): Promise<SourceToScan[]> {
     const declarations = await this.harnesses.discoverSkillRoots(projectPath)
-    return declarations
-      .filter(({ root }) => include === "all" || root.scope !== "project")
-      .map(({ harnessId, root }) => ({
-        source: {
-          id: skillSourceId(["native", harnessId, root.scope, root.path]),
-          kind: "native" as const,
-          scope: root.scope,
-          label: root.label,
-          path: root.path,
-          harnessIds: [harnessId],
-          provisioning: [],
-        },
-        missingIsDiagnostic: false,
-      }))
+    return Promise.all(
+      declarations
+        .filter(({ root }) => include === "all" || root.scope !== "project")
+        .map(async ({ harnessId, root }) => {
+          const physicalPath = await realpath(root.path).catch(() =>
+            resolve(root.path)
+          )
+          return {
+            source: {
+              id: skillSourceId(["native", root.scope, physicalPath]),
+              kind: "native" as const,
+              scope: root.scope,
+              label: root.label,
+              path: root.path,
+              harnessIds: [harnessId],
+              editable: false,
+              provisioning: [],
+            },
+            missingIsDiagnostic: false,
+          }
+        })
+    )
   }
 
   async #scan(
@@ -138,8 +151,36 @@ export class SkillInventory {
 
 function uniqueById(sources: SourceToScan[]): SourceToScan[] {
   const unique = new Map<string, SourceToScan>()
-  for (const entry of sources) unique.set(entry.source.id, entry)
+  for (const entry of sources) {
+    const existing = unique.get(entry.source.id)
+    if (!existing) {
+      unique.set(entry.source.id, entry)
+      continue
+    }
+    const harnessIds = [
+      ...new Set([...existing.source.harnessIds, ...entry.source.harnessIds]),
+    ].sort()
+    unique.set(entry.source.id, {
+      source: {
+        ...existing.source,
+        label:
+          existing.source.label === entry.source.label
+            ? existing.source.label
+            : sharedSourceLabel(existing.source.scope),
+        harnessIds,
+      },
+      missingIsDiagnostic:
+        existing.missingIsDiagnostic || entry.missingIsDiagnostic,
+    })
+  }
   return [...unique.values()]
+}
+
+function sharedSourceLabel(scope: SkillSource["scope"]): string {
+  if (scope === "project") return "Shared project skills"
+  if (scope === "user") return "Shared personal skills"
+  if (scope === "admin") return "Shared administrator skills"
+  return "Shared workspace skills"
 }
 
 function compareSources(left: SkillSource, right: SkillSource): number {

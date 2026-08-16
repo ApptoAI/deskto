@@ -14,6 +14,7 @@ function occurrence(id: string, name: string | null): SkillOccurrence {
     name,
     description: null,
     instructionDigest: null,
+    contentDigest: null,
     hasScripts: false,
     hasReferences: false,
     hasAssets: false,

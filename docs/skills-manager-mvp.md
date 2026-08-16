@@ -19,13 +19,15 @@ configured an attached Pack for Claude Code or Codex.
 - `Install` copies a Pack into Deskto's application data directory.
 - `Unlink` never deletes files. `Uninstall` moves a managed Pack to trash.
 - Duplicate names and invalid skills stay visible.
+- A skill-directory symlink that resolves outside its declared source stays
+  visible as an error, but Deskto does not read or preview its target.
 - `Configured` means the Harness Adapter accepted the skill root. It does not
   mean the agent used the skill.
 
 ## Domain records
 
 `SkillOccurrence` describes a physical skill directory, its parsed manifest,
-validation result, ownership, scope, and content digest.
+validation result, ownership, scope, and a digest of the complete directory.
 
 `SkillExposure` connects an occurrence to a Harness and records native
 discovery or the latest Pack configuration result.

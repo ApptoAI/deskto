@@ -67,7 +67,7 @@ describe("scanSkillSource", () => {
   })
 
   it.runIf(process.platform !== "win32")(
-    "follows a symlinked skill directory and records both paths",
+    "keeps an external symlink visible without reading outside the source",
     async () => {
       const root = await temporaryDirectory()
       const targetRoot = await temporaryDirectory()
@@ -81,10 +81,35 @@ describe("scanSkillSource", () => {
       expect(scanned.skills[0]?.occurrence).toMatchObject({
         directoryPath: join(root, "linked"),
         resolvedDirectoryPath: await realpath(join(targetRoot, "target")),
-        name: "linked",
+        name: null,
+        diagnostics: [
+          expect.objectContaining({ code: "skill-path-outside-source" }),
+        ],
       })
+      expect(scanned.skills[0]?.content).toBeNull()
     }
   )
+
+  it("changes the content digest when a resource changes", async () => {
+    const root = await temporaryDirectory()
+    await writeSkill(root, "review", "review", "Review changes")
+    const reference = join(root, "review", "references", "rules.md")
+    await mkdir(join(root, "review", "references"))
+    await writeFile(reference, "First version")
+
+    const before = await scanSkillSource(source(root), {
+      missingIsDiagnostic: false,
+    })
+    await writeFile(reference, "Second version")
+    const after = await scanSkillSource(source(root), {
+      missingIsDiagnostic: false,
+    })
+
+    expect(before.skills[0]?.occurrence.contentDigest).toMatch(/^sha256:/)
+    expect(after.skills[0]?.occurrence.contentDigest).not.toBe(
+      before.skills[0]?.occurrence.contentDigest
+    )
+  })
 
   it("omits a missing optional root and reports a required root", async () => {
     const parent = await temporaryDirectory()
@@ -125,6 +150,7 @@ function source(path: string): SkillSourceInput {
     label: "Test skills",
     path,
     harnessIds: ["test"],
+    editable: false,
     provisioning: [],
   }
 }

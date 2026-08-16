@@ -1,10 +1,18 @@
-import { existsSync } from "node:fs"
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import type { DatabaseSync } from "node:sqlite"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { openDatabase } from "../storage/database.js"
 import { Packs } from "../storage/packs.js"
@@ -66,6 +74,57 @@ describe("PackManager", () => {
       source: { kind: "zip", name: "draft-tools.zip" },
       contentDigest: installed.content_digest,
     })
+  })
+
+  it("registers the receipt before committing the staged directory", async () => {
+    const context = await testContext()
+    const source = join(context.root, "source")
+    await writePack(source)
+    const add = context.packs.add.bind(context.packs)
+    let observedRegisteredStaging = false
+    vi.spyOn(context.packs, "add").mockImplementation(
+      (name, path, metadata) => {
+        expect(existsSync(path)).toBe(false)
+        const record = add(name, path, metadata)
+        expect(context.packs.get(record.id).receipt_json).not.toBeNull()
+        observedRegisteredStaging = true
+        return record
+      }
+    )
+
+    const installed = await context.manager.installFolder(source)
+
+    expect(observedRegisteredStaging).toBe(true)
+    expect(existsSync(installed.path)).toBe(true)
+  })
+
+  it("rolls back the receipt and staging when the final rename fails", async () => {
+    const context = await testContext()
+    const source = join(context.root, "source")
+    await writePack(source)
+    const add = context.packs.add.bind(context.packs)
+    let blockedDestination = ""
+    vi.spyOn(context.packs, "add").mockImplementation(
+      (name, path, metadata) => {
+        const record = add(name, path, metadata)
+        blockedDestination = path
+        mkdirSync(path)
+        writeFileSync(join(path, "unrelated.txt"), "keep")
+        return record
+      }
+    )
+
+    await expect(context.manager.installFolder(source)).rejects.toThrow()
+
+    expect(context.packs.findByPath(blockedDestination)).toBeNull()
+    expect(
+      await readFile(join(blockedDestination, "unrelated.txt"), "utf8")
+    ).toBe("keep")
+    expect(
+      (await readdir(join(context.root, "managed"))).filter((name) =>
+        name.startsWith(".install-")
+      )
+    ).toEqual([])
   })
 
   it("trashes a managed Pack before deleting its record and attachments", async () => {
@@ -145,7 +204,37 @@ describe("PackManager", () => {
         instructions: "No",
       })
     ).rejects.toMatchObject({ code: "invalid-pack-operation" })
+
+    const otherManaged = await context.manager.create("Other Pack")
+    await expect(
+      context.manager.createSkill(otherManaged.id, {
+        name: "No",
+        description: "No",
+        instructions: "No",
+      })
+    ).rejects.toMatchObject({ code: "invalid-pack-operation" })
   })
+
+  it.runIf(process.platform !== "win32")(
+    "refuses to edit My Skills through a replaced skills symlink",
+    async () => {
+      const context = await testContext()
+      const pack = await context.manager.create("My Skills")
+      const outside = join(context.root, "outside")
+      await mkdir(outside)
+      await rm(join(pack.path, "skills"), { recursive: true })
+      await symlink(outside, join(pack.path, "skills"), "dir")
+
+      await expect(
+        context.manager.createSkill(pack.id, {
+          name: "Escaping",
+          description: "Must stay contained",
+          instructions: "Do not write outside the Pack.",
+        })
+      ).rejects.toMatchObject({ code: "invalid-pack-path" })
+      expect(await readdir(outside)).toEqual([])
+    }
+  )
 })
 
 describe("legacy Pack ownership", () => {

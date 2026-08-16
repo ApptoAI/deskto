@@ -13,20 +13,13 @@ import {
   rmdir,
   writeFile,
 } from "node:fs/promises"
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  posix,
-  relative,
-  resolve,
-} from "node:path"
+import { basename, dirname, join, posix, resolve } from "node:path"
 import type { Readable } from "node:stream"
 
 import yauzl, { type Entry, type ZipFile } from "yauzl"
 
 import { RuntimeError } from "../errors.js"
+import { pathIsDirectChild, pathIsWithin } from "../path-boundaries.js"
 import { readPackName, slugify, validatePackDirectory } from "./pack-files.js"
 import {
   defaultPackContentLimits,
@@ -40,14 +33,29 @@ export type MaterializedPack = PackDigest & {
   path: string
 }
 
+export type StagedManagedPack = MaterializedPack & {
+  commit(): Promise<void>
+  discard(): Promise<void>
+}
+
 export async function installPackFolder(
   sourcePath: string,
   managedRootPath: string,
   limits: PackContentLimits = defaultPackContentLimits
 ): Promise<MaterializedPack> {
+  return commitStagedPack(
+    await stagePackFolder(sourcePath, managedRootPath, limits)
+  )
+}
+
+export async function stagePackFolder(
+  sourcePath: string,
+  managedRootPath: string,
+  limits: PackContentLimits = defaultPackContentLimits
+): Promise<StagedManagedPack> {
   const managedRoot = await prepareManagedRoot(managedRootPath)
   const source = await validatePackDirectory(sourcePath)
-  if (isWithin(managedRoot, source))
+  if (pathIsWithin(managedRoot, source))
     throw new RuntimeError(
       "invalid-pack",
       "A Pack already inside the managed Pack folder cannot be installed again"
@@ -68,9 +76,13 @@ export async function installPackFolder(
       )
 
     const destination = join(managedRoot, managedDirectoryName(name))
-    await rename(stagedPack, destination)
-    await rmdir(stagingRoot).catch(() => undefined)
-    return { name, path: destination, ...copiedDigest }
+    return stagedManagedPack(
+      stagingRoot,
+      stagedPack,
+      destination,
+      name,
+      copiedDigest
+    )
   } catch (error) {
     await rm(stagingRoot, { recursive: true, force: true }).catch(
       () => undefined
@@ -84,6 +96,16 @@ export async function installPackZip(
   managedRootPath: string,
   limits: PackContentLimits = defaultPackContentLimits
 ): Promise<MaterializedPack> {
+  return commitStagedPack(
+    await stagePackZip(archivePath, managedRootPath, limits)
+  )
+}
+
+export async function stagePackZip(
+  archivePath: string,
+  managedRootPath: string,
+  limits: PackContentLimits = defaultPackContentLimits
+): Promise<StagedManagedPack> {
   const managedRoot = await prepareManagedRoot(managedRootPath)
   const archive = await resolveZipArchive(archivePath)
   const inspected = await inspectZipArchive(archive, limits)
@@ -96,9 +118,7 @@ export async function installPackZip(
     const digest = await digestPackDirectory(stagedPack, limits)
     const name = await readPackName(stagedPack)
     const destination = join(managedRoot, managedDirectoryName(name))
-    await rename(stagedPack, destination)
-    await rmdir(stagingRoot).catch(() => undefined)
-    return { name, path: destination, ...digest }
+    return stagedManagedPack(stagingRoot, stagedPack, destination, name, digest)
   } catch (error) {
     await rm(stagingRoot, { recursive: true, force: true }).catch(
       () => undefined
@@ -111,6 +131,13 @@ export async function createManagedPack(
   name: string,
   managedRootPath: string
 ): Promise<MaterializedPack> {
+  return commitStagedPack(await stageManagedPack(name, managedRootPath))
+}
+
+export async function stageManagedPack(
+  name: string,
+  managedRootPath: string
+): Promise<StagedManagedPack> {
   const managedRoot = await prepareManagedRoot(managedRootPath)
   const stagingRoot = await mkdtemp(join(managedRoot, ".create-"))
   const stagedPack = join(stagingRoot, "pack")
@@ -123,9 +150,7 @@ export async function createManagedPack(
     )
     const digest = await digestPackDirectory(stagedPack)
     const destination = join(managedRoot, managedDirectoryName(name))
-    await rename(stagedPack, destination)
-    await rmdir(stagingRoot).catch(() => undefined)
-    return { name, path: destination, ...digest }
+    return stagedManagedPack(stagingRoot, stagedPack, destination, name, digest)
   } catch (error) {
     await rm(stagingRoot, { recursive: true, force: true }).catch(
       () => undefined
@@ -134,37 +159,58 @@ export async function createManagedPack(
   }
 }
 
-/** Removes only a fresh, unregistered directory created by this installer. */
-export async function discardManagedPack(
-  packPath: string,
-  managedRootPath: string
-): Promise<void> {
-  if (!isManagedDirectChild(managedRootPath, packPath))
-    throw new RuntimeError(
-      "invalid-pack-path",
-      "Refusing to remove a path outside the managed Pack folder"
-    )
-  await rm(packPath, { recursive: true, force: true })
-}
-
 export function isManagedDirectChild(
   managedRootPath: string,
   packPath: string
 ): boolean {
-  return dirname(resolve(packPath)) === resolve(managedRootPath)
+  return pathIsDirectChild(managedRootPath, packPath)
+}
+
+function stagedManagedPack(
+  stagingRoot: string,
+  stagedPath: string,
+  destination: string,
+  name: string,
+  digest: PackDigest
+): StagedManagedPack {
+  let committed = false
+  return {
+    name,
+    path: destination,
+    ...digest,
+    async commit() {
+      await rename(stagedPath, destination)
+      committed = true
+      await rmdir(stagingRoot).catch(() => undefined)
+    },
+    async discard() {
+      if (committed) return
+      await rm(stagingRoot, { recursive: true, force: true })
+    },
+  }
+}
+
+async function commitStagedPack(
+  staged: StagedManagedPack
+): Promise<MaterializedPack> {
+  try {
+    await staged.commit()
+    return {
+      name: staged.name,
+      path: staged.path,
+      contentDigest: staged.contentDigest,
+      fileCount: staged.fileCount,
+      totalBytes: staged.totalBytes,
+    }
+  } catch (error) {
+    await staged.discard().catch(() => undefined)
+    throw error
+  }
 }
 
 async function prepareManagedRoot(path: string): Promise<string> {
   await mkdir(path, { recursive: true })
   return realpath(path)
-}
-
-function isWithin(root: string, candidate: string): boolean {
-  const pathFromRoot = relative(root, candidate)
-  return (
-    pathFromRoot === "" ||
-    (!pathFromRoot.startsWith("..") && !isAbsolute(pathFromRoot))
-  )
 }
 
 function managedDirectoryName(name: string): string {
@@ -433,7 +479,7 @@ async function extractZipArchive(
       throw invalidZip("Pack ZIP changed while it was being installed")
 
     const target = resolve(destination, ...outputPath.split("/"))
-    if (!isWithin(destination, target))
+    if (!pathIsWithin(destination, target))
       throw invalidZip(`Pack ZIP path escapes its root: ${raw.archivePath}`)
     if (raw.directory) {
       await mkdir(target, { recursive: true })

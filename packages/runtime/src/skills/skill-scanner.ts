@@ -8,6 +8,8 @@ import type {
 } from "@deskto/protocol"
 import { z } from "zod"
 
+import { digestPackDirectory } from "../packs/pack-digest.js"
+import { pathIsWithin } from "../path-boundaries.js"
 import { skillOccurrenceId } from "./skill-identifiers.js"
 import { parseSkillFile } from "./skill-parser.js"
 
@@ -40,6 +42,24 @@ export async function scanSkillSource(
     }
   }
 
+  const resolvedSourcePath = await realpath(source.path).catch(() => null)
+  if (!resolvedSourcePath) {
+    return {
+      source: {
+        ...source,
+        diagnostics: [
+          {
+            code: "source-unreadable",
+            severity: "error",
+            message: "Skill source could not be resolved",
+            path: source.path,
+          },
+        ],
+      },
+      skills: [],
+    }
+  }
+
   let entries
   try {
     entries = await readdir(source.path, { withFileTypes: true })
@@ -61,7 +81,12 @@ export async function scanSkillSource(
   )
   const skills = await Promise.all(
     candidates.map((entry) =>
-      scanSkillDirectory(source, entry.name, entry.isSymbolicLink())
+      scanSkillDirectory(
+        source,
+        resolvedSourcePath,
+        entry.name,
+        entry.isSymbolicLink()
+      )
     )
   )
   return {
@@ -74,6 +99,7 @@ export async function scanSkillSource(
 
 async function scanSkillDirectory(
   source: SkillSourceInput,
+  resolvedSourcePath: string,
   directoryName: string,
   isSymbolicLink: boolean
 ): Promise<ScannedSkill | null> {
@@ -81,12 +107,42 @@ async function scanSkillDirectory(
   const directory = await directoryTarget(directoryPath, isSymbolicLink)
   if (!directory) return null
   const skillFilePath = join(directoryPath, "SKILL.md")
+  if (!pathIsWithin(resolvedSourcePath, directory)) {
+    return {
+      occurrence: {
+        id: skillOccurrenceId(source.id, directoryName),
+        sourceId: source.id,
+        directoryName,
+        directoryPath,
+        resolvedDirectoryPath: directory,
+        skillFilePath,
+        name: null,
+        description: null,
+        instructionDigest: null,
+        contentDigest: null,
+        hasScripts: false,
+        hasReferences: false,
+        hasAssets: false,
+        diagnostics: [
+          {
+            code: "skill-path-outside-source",
+            severity: "error",
+            message: "Skill folder resolves outside its declared source",
+            path: directoryPath,
+          },
+        ],
+      },
+      content: null,
+    }
+  }
   const parsed = await parseSkillFile(skillFilePath)
-  const [hasScripts, hasReferences, hasAssets] = await Promise.all([
-    isDirectory(join(directoryPath, "scripts")),
-    isDirectory(join(directoryPath, "references")),
-    isDirectory(join(directoryPath, "assets")),
-  ])
+  const [hasScripts, hasReferences, hasAssets, contentDigest] =
+    await Promise.all([
+      isDirectory(join(directoryPath, "scripts")),
+      isDirectory(join(directoryPath, "references")),
+      isDirectory(join(directoryPath, "assets")),
+      digestSkillDirectory(directoryPath),
+    ])
   return {
     occurrence: {
       id: skillOccurrenceId(source.id, directoryName),
@@ -98,12 +154,35 @@ async function scanSkillDirectory(
       name: parsed.name,
       description: parsed.description,
       instructionDigest: parsed.instructionDigest,
+      contentDigest: contentDigest.value,
       hasScripts,
       hasReferences,
       hasAssets,
-      diagnostics: parsed.diagnostics,
+      diagnostics: contentDigest.diagnostic
+        ? [...parsed.diagnostics, contentDigest.diagnostic]
+        : parsed.diagnostics,
     },
     content: parsed.content,
+  }
+}
+
+async function digestSkillDirectory(path: string): Promise<{
+  value: string | null
+  diagnostic?: SkillDiagnostic
+}> {
+  try {
+    return { value: (await digestPackDirectory(path)).contentDigest }
+  } catch (error) {
+    const detail = error instanceof Error ? `: ${error.message}` : ""
+    return {
+      value: null,
+      diagnostic: {
+        code: "skill-content-unreadable",
+        severity: "error",
+        message: `Skill contents could not be hashed${detail}`,
+        path,
+      },
+    }
   }
 }
 

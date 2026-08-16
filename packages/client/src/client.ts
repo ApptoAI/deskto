@@ -1,5 +1,6 @@
 import type {
   JsonObject,
+  ManagedSkillDraft,
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
@@ -165,10 +166,7 @@ export class RuntimeClient {
     })
   }
 
-  createManagedSkill(
-    packId: string,
-    draft: { name: string; description: string; instructions: string }
-  ) {
+  createManagedSkill(packId: string, draft: ManagedSkillDraft) {
     return this.request({
       method: "skill.createManaged",
       params: { packId, ...draft },
@@ -178,7 +176,7 @@ export class RuntimeClient {
   updateManagedSkill(
     packId: string,
     directoryName: string,
-    draft: { name: string; description: string; instructions: string }
+    draft: ManagedSkillDraft
   ) {
     return this.request({
       method: "skill.updateManaged",
