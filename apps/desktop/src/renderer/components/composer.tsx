@@ -37,7 +37,7 @@ import {
   type PromptSuggestionOption,
 } from "@workspace/ui/components/chat/prompt-suggestions"
 
-import { describeError } from "../runtime/describe-error.js"
+import { describedErrorSchema } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { InlineError } from "./inline-error.js"
@@ -248,7 +248,7 @@ export function Composer({
       setReferences([])
       setTrigger(null)
     } catch (sendError) {
-      setError(describeError(sendError))
+      setError(describedErrorSchema.parse(sendError))
     } finally {
       setSending(false)
     }
@@ -261,7 +261,7 @@ export function Composer({
     try {
       await onCancel()
     } catch (cancelError) {
-      setError(describeError(cancelError))
+      setError(describedErrorSchema.parse(cancelError))
     }
   }
 

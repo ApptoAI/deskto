@@ -5,6 +5,7 @@ import {
   AsyncQueue,
   harnessFailure,
   type ActivityStart,
+  type ActivityUpdate,
   type ApprovalDecision,
   type ChangedFile,
   type ContextUsage,
@@ -16,20 +17,64 @@ import {
   type PlanStep,
   type TextGenerationInput,
 } from "@openappto/harness-sdk"
+import {
+  jsonObjectSchema,
+  jsonValueSchema,
+  type JsonObject,
+  type JsonValue,
+} from "@openappto/protocol"
+import { z } from "zod"
 
 import { normalizePlanStepStatus } from "../plan-status.js"
 import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
 
-import type {
-  CodexNotification,
-  CodexServerRequest,
-  CodexThreadResponse,
-  CodexTurnResponse,
+import type { CodexNotification, CodexServerRequest } from "./codex-protocol.js"
+import {
+  codexThreadResponseSchema,
+  codexTurnResponseSchema,
+  getString,
+  parseJsonObject,
 } from "./codex-protocol.js"
-import { getString, isRecord } from "./codex-protocol.js"
 import { JsonlClient } from "./jsonl-client.js"
+
+const codexModelListSchema = z.object({
+  data: z.array(jsonValueSchema),
+  nextCursor: z.string().nullable().optional(),
+})
+type CodexModelListResponse = z.infer<typeof codexModelListSchema>
+
+const codexLimitSlotSchema = z.object({
+  usedPercent: z.number().optional(),
+  used_percent: z.number().optional(),
+  resetsAt: z.number().optional(),
+  resets_at: z.number().optional(),
+})
+
+const compactDetailSchema = z.union([z.string(), z.array(z.string())])
+
+export interface CodexClient {
+  request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: z.ZodType<T>
+  ): Promise<T>
+  notify(method: string, params?: JsonObject): void
+  respond(id: string | number, result: JsonObject): void
+  respondMethodNotFound(id: string | number, method: string): void
+  onNotification(
+    listener: (notification: CodexNotification) => void
+  ): () => void
+  onRequest(listener: (request: CodexServerRequest) => void): () => void
+  onFailure(listener: (error: Error) => void): () => void
+  close(): void
+}
+
+export type CodexClientFactory = (command: string, cwd: string) => CodexClient
+
+const createCodexClient: CodexClientFactory = (command, cwd) =>
+  new JsonlClient(command, cwd)
 
 type PendingApproval = {
   id: string
@@ -55,6 +100,10 @@ type DelegationLifecycle = {
 export class CodexAdapter implements HarnessAdapterFactory {
   readonly descriptor = { id: "codex", name: "Codex" }
 
+  constructor(
+    private readonly clientFactory: CodexClientFactory = createCodexClient
+  ) {}
+
   async checkAvailability() {
     try {
       return { status: "available" as const, version: await readVersion() }
@@ -67,25 +116,22 @@ export class CodexAdapter implements HarnessAdapterFactory {
   }
 
   async listModels(): Promise<HarnessModelOption[]> {
-    const client = new JsonlClient("codex", process.cwd())
+    const client = this.clientFactory("codex", process.cwd())
     try {
       await initialize(client)
       const models: HarnessModelOption[] = []
       let cursor: string | null = null
       do {
-        const response: unknown = await client.request("model/list", {
-          includeHidden: false,
-          cursor,
-        })
-        if (!isRecord(response) || !Array.isArray(response.data)) {
-          throw new Error("Codex returned an invalid model catalog")
-        }
+        const response: CodexModelListResponse = await client.request(
+          "model/list",
+          { includeHidden: false, cursor },
+          codexModelListSchema
+        )
         for (const candidate of response.data) {
           const model = codexModel(candidate)
           if (model) models.push(model)
         }
-        cursor =
-          typeof response.nextCursor === "string" ? response.nextCursor : null
+        cursor = response.nextCursor ?? null
       } while (cursor)
       return models
     } finally {
@@ -94,7 +140,7 @@ export class CodexAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
-    return CodexSession.open(input, signal)
+    return CodexSession.open(input, signal, this.clientFactory)
   }
 
   generateText(
@@ -115,7 +161,7 @@ class CodexSession implements HarnessSession {
   readonly #activityThreads = new Map<string, string>()
   readonly #delegatedActivities = new Map<string, string>()
   readonly #delegationFailures = new Set<string>()
-  readonly #lastActivityShape = new Map<string, string>()
+  readonly #lastActivitySnapshot = new Map<string, string>()
   readonly #startedPlans = new Set<string>()
   readonly #settledActivities = new Set<string>()
   readonly events = this.#queue
@@ -126,7 +172,7 @@ class CodexSession implements HarnessSession {
   #closed = false
 
   private constructor(
-    private readonly client: JsonlClient,
+    private readonly client: CodexClient,
     private readonly input: HarnessRunInput
   ) {
     client.onNotification((notification) => this.#onNotification(notification))
@@ -143,9 +189,10 @@ class CodexSession implements HarnessSession {
 
   static async open(
     input: HarnessRunInput,
-    signal: AbortSignal
+    signal: AbortSignal,
+    clientFactory: CodexClientFactory
   ): Promise<CodexSession> {
-    const client = new JsonlClient("codex", input.projectPath)
+    const client = clientFactory("codex", input.projectPath)
     const session = new CodexSession(client, input)
     const abort = () => client.close()
     signal.addEventListener("abort", abort, { once: true })
@@ -164,10 +211,11 @@ class CodexSession implements HarnessSession {
   async cancel(): Promise<void> {
     try {
       if (this.#threadId && this.#turnId) {
-        await this.client.request("turn/interrupt", {
-          threadId: this.#threadId,
-          turnId: this.#turnId,
-        })
+        await this.client.request(
+          "turn/interrupt",
+          { threadId: this.#threadId, turnId: this.#turnId },
+          jsonValueSchema
+        )
       }
     } catch {
       return
@@ -202,16 +250,21 @@ class CodexSession implements HarnessSession {
     const params = {
       cwd: this.input.projectPath,
       ...permissions.thread,
-      ...(this.input.executionProfile.modelId
-        ? { model: this.input.executionProfile.modelId }
-        : {}),
+    }
+    if (this.input.executionProfile.modelId) {
+      Object.assign(params, { model: this.input.executionProfile.modelId })
     }
     const response = this.input.providerSessionId
-      ? await this.client.request<CodexThreadResponse>("thread/resume", {
-          ...params,
-          threadId: this.input.providerSessionId,
-        })
-      : await this.client.request<CodexThreadResponse>("thread/start", params)
+      ? await this.client.request(
+          "thread/resume",
+          { ...params, threadId: this.input.providerSessionId },
+          codexThreadResponseSchema
+        )
+      : await this.client.request(
+          "thread/start",
+          params,
+          codexThreadResponseSchema
+        )
 
     this.#threadId = response.thread.id
     this.#queue.push({
@@ -220,17 +273,22 @@ class CodexSession implements HarnessSession {
     })
 
     const input = codexTurnInput(this.input)
-    const turn = await this.client.request<CodexTurnResponse>("turn/start", {
+    const turnParams = {
       threadId: response.thread.id,
       input,
       ...permissions.turn,
-      ...(this.input.executionProfile.modelId
-        ? { model: this.input.executionProfile.modelId }
-        : {}),
-      ...(this.input.executionProfile.effort
-        ? { effort: this.input.executionProfile.effort }
-        : {}),
-    })
+    }
+    if (this.input.executionProfile.modelId) {
+      Object.assign(turnParams, { model: this.input.executionProfile.modelId })
+    }
+    if (this.input.executionProfile.effort) {
+      Object.assign(turnParams, { effort: this.input.executionProfile.effort })
+    }
+    const turn = await this.client.request(
+      "turn/start",
+      jsonObjectSchema.parse(turnParams),
+      codexTurnResponseSchema
+    )
     this.#turnId = turn.turn.id
   }
 
@@ -243,9 +301,13 @@ class CodexSession implements HarnessSession {
     const { skillRoots } = this.input.customization
     if (skillRoots.length === 0) return
     await this.client
-      .request("skills/extraRoots/set", {
-        extraRoots: skillRoots.map((root) => root.path),
-      })
+      .request(
+        "skills/extraRoots/set",
+        {
+          extraRoots: skillRoots.map((root) => root.path),
+        },
+        jsonValueSchema
+      )
       .catch(() => undefined)
   }
 
@@ -286,7 +348,7 @@ class CodexSession implements HarnessSession {
     ) {
       const scope = this.#activityScope(params)
       if (!scope) return
-      const item = isRecord(params.item) ? params.item : undefined
+      const item = parseJsonObject(params.item)
       const delegation = codexDelegationLifecycle(item)
       if (delegation) {
         const activityId = getString(item, "id")
@@ -313,7 +375,7 @@ class CodexSession implements HarnessSession {
         this.#activityThreads.set(activity.id, scope.providerThreadId)
       }
       if (notification.method === "item/started") {
-        this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
+        this.#lastActivitySnapshot.set(activity.id, JSON.stringify(activity))
         this.#queue.push({ type: "activity.started", activity })
       } else if (notification.method === "item/updated") {
         // Codex repeats item/updated while an item runs; identical shapes
@@ -352,7 +414,7 @@ class CodexSession implements HarnessSession {
         return
       }
       if (!this.#isCurrentTurn(params)) return
-      const error = isRecord(params.error) ? params.error : undefined
+      const error = parseJsonObject(params.error)
       this.#queue.push({
         type: "turn.failed",
         failure: harnessFailure(
@@ -371,7 +433,7 @@ class CodexSession implements HarnessSession {
       notificationThreadId !== this.#threadId &&
       this.#delegatedActivities.has(notificationThreadId)
     ) {
-      const childTurn = isRecord(params.turn) ? params.turn : undefined
+      const childTurn = parseJsonObject(params.turn)
       this.#settleDelegatedThread(
         notificationThreadId,
         getString(childTurn, "status") === "completed" ? "completed" : "failed"
@@ -379,12 +441,12 @@ class CodexSession implements HarnessSession {
       return
     }
     if (!this.#isCurrentTurn(params)) return
-    const turn = isRecord(params.turn) ? params.turn : undefined
+    const turn = parseJsonObject(params.turn)
     const status = getString(turn, "status")
     if (status === "completed") {
       this.#queue.push({ type: "turn.completed" })
     } else if (status !== "interrupted") {
-      const error = isRecord(turn?.error) ? turn.error : undefined
+      const error = parseJsonObject(turn?.error)
       this.#queue.push({
         type: "turn.failed",
         failure: harnessFailure(
@@ -396,7 +458,7 @@ class CodexSession implements HarnessSession {
     this.#finish()
   }
 
-  #isCurrentThread(params: Record<string, unknown>): boolean {
+  #isCurrentThread(params: JsonObject): boolean {
     const threadId = getString(params, "threadId")
     return (
       threadId === undefined ||
@@ -405,8 +467,8 @@ class CodexSession implements HarnessSession {
     )
   }
 
-  #isCurrentTurn(params: Record<string, unknown>): boolean {
-    const turn = isRecord(params.turn) ? params.turn : undefined
+  #isCurrentTurn(params: JsonObject): boolean {
+    const turn = parseJsonObject(params.turn)
     const turnId = getString(params, "turnId") ?? getString(turn, "id")
     return (
       this.#isCurrentThread(params) &&
@@ -416,7 +478,7 @@ class CodexSession implements HarnessSession {
     )
   }
 
-  #activityScope(params: Record<string, unknown>): ActivityScope | undefined {
+  #activityScope(params: JsonObject): ActivityScope | undefined {
     if (this.#isCurrentTurn(params)) return {}
     const threadId = getString(params, "threadId")
     if (!threadId) return undefined
@@ -460,7 +522,7 @@ class CodexSession implements HarnessSession {
     this.#settledActivities.add(activityId)
     this.#activityThreads.delete(activityId)
     this.#delegationFailures.delete(activityId)
-    this.#lastActivityShape.delete(activityId)
+    this.#lastActivitySnapshot.delete(activityId)
     for (const [candidateThreadId, candidateActivityId] of this
       .#delegatedActivities) {
       if (candidateActivityId === activityId) {
@@ -471,7 +533,7 @@ class CodexSession implements HarnessSession {
   }
 
   /** The current app-server sends plans outside the item lifecycle. */
-  #pushPlan(params: Record<string, unknown>, scope: ActivityScope): void {
+  #pushPlan(params: JsonObject, scope: ActivityScope): void {
     const steps = codexPlanSteps(params)
     if (steps.length === 0) return
     const id = scope.providerThreadId
@@ -480,9 +542,9 @@ class CodexSession implements HarnessSession {
     const activity: ActivityStart = {
       id,
       name: "Plan",
-      ...(scope.parentId ? { parentId: scope.parentId } : {}),
       payload: { kind: "plan", steps },
     }
+    if (scope.parentId) activity.parentId = scope.parentId
     if (scope.providerThreadId) {
       this.#activityThreads.set(activity.id, scope.providerThreadId)
     }
@@ -491,25 +553,21 @@ class CodexSession implements HarnessSession {
       return
     }
     this.#startedPlans.add(activity.id)
-    this.#lastActivityShape.set(activity.id, JSON.stringify(activity))
+    this.#lastActivitySnapshot.set(activity.id, JSON.stringify(activity))
     this.#queue.push({ type: "activity.started", activity })
   }
 
   #pushActivityUpdate(activity: ActivityStart): void {
-    const shape = JSON.stringify(activity)
-    if (this.#lastActivityShape.get(activity.id) === shape) return
-    this.#lastActivityShape.set(activity.id, shape)
-    this.#queue.push({
-      type: "activity.updated",
-      update: {
-        id: activity.id,
-        name: activity.name,
-        ...(activity.detail !== undefined ? { detail: activity.detail } : {}),
-        ...(activity.payload !== undefined
-          ? { payload: activity.payload }
-          : {}),
-      },
-    })
+    const snapshot = JSON.stringify(activity)
+    if (this.#lastActivitySnapshot.get(activity.id) === snapshot) return
+    this.#lastActivitySnapshot.set(activity.id, snapshot)
+    const update: ActivityUpdate = {
+      id: activity.id,
+      name: activity.name,
+    }
+    if (activity.detail !== undefined) update.detail = activity.detail
+    if (activity.payload !== undefined) update.payload = activity.payload
+    this.#queue.push({ type: "activity.updated", update })
   }
 
   #onRequest(request: CodexServerRequest): void {
@@ -526,18 +584,18 @@ class CodexSession implements HarnessSession {
     const reason = request.params
       ? getString(request.params, "reason")
       : undefined
+    const approvalRequest: PendingApproval["request"] = {
+      id: approvalId,
+      kind,
+      title:
+        kind === "command" ? "Allow this command?" : "Allow this file change?",
+    }
+    const detail = command ?? reason
+    if (detail) approvalRequest.detail = detail
     this.#approvalQueue.push({
       id: approvalId,
       requestId: request.id,
-      request: {
-        id: approvalId,
-        kind,
-        title:
-          kind === "command"
-            ? "Allow this command?"
-            : "Allow this file change?",
-        ...(command || reason ? { detail: command ?? reason } : {}),
-      },
+      request: approvalRequest,
     })
     this.#showNextApproval()
   }
@@ -557,7 +615,7 @@ class CodexSession implements HarnessSession {
       }
     }
     this.#discardApprovals()
-    this.#lastActivityShape.clear()
+    this.#lastActivitySnapshot.clear()
     this.client.close()
     this.#queue.close()
   }
@@ -578,7 +636,7 @@ class CodexSession implements HarnessSession {
 
 export function codexTurnInput(
   input: Pick<HarnessRunInput, "prompt" | "references">
-): Record<string, unknown>[] {
+): JsonObject[] {
   return [
     { type: "text", text: input.prompt, text_elements: [] },
     ...input.references.map((reference) =>
@@ -589,37 +647,45 @@ export function codexTurnInput(
   ]
 }
 
-async function initialize(client: JsonlClient): Promise<void> {
-  await client.request("initialize", {
-    clientInfo: { name: "appto", title: "Appto", version: "0.0.1" },
-    capabilities: { experimentalApi: false, requestAttestation: false },
-  })
+async function initialize(client: CodexClient): Promise<void> {
+  await client.request(
+    "initialize",
+    {
+      clientInfo: { name: "appto", title: "Appto", version: "0.0.1" },
+      capabilities: { experimentalApi: false, requestAttestation: false },
+    },
+    jsonValueSchema
+  )
   client.notify("initialized")
 }
 
-function codexModel(value: unknown): HarnessModelOption | undefined {
-  if (!isRecord(value)) return undefined
-  const id = getString(value, "id") ?? getString(value, "model")
-  const name = getString(value, "displayName")
+function codexModel(value: JsonValue): HarnessModelOption | undefined {
+  const record = parseJsonObject(value)
+  if (!record) return undefined
+  const id = getString(record, "id") ?? getString(record, "model")
+  const name = getString(record, "displayName")
   if (!id || !name) return undefined
-  const supportedEfforts = Array.isArray(value.supportedReasoningEfforts)
-    ? value.supportedReasoningEfforts.flatMap((option) => {
-        const effort = getString(option, "reasoningEffort")
+  const effortList = z
+    .array(jsonValueSchema)
+    .safeParse(record.supportedReasoningEfforts)
+  const supportedEfforts = effortList.success
+    ? effortList.data.flatMap((option) => {
+        const effort = getString(parseJsonObject(option), "reasoningEffort")
         return effort ? [effort] : []
       })
     : []
-  const defaultEffort = getString(value, "defaultReasoningEffort")
-  return {
+  const defaultEffort = getString(record, "defaultReasoningEffort")
+  const model: HarnessModelOption = {
     id,
     name,
-    ...(getString(value, "description")
-      ? { description: getString(value, "description") }
-      : {}),
     supportedEfforts,
-    ...(defaultEffort ? { defaultEffort } : {}),
-    isDefault: value.isDefault === true,
+    isDefault: record.isDefault === true,
     supportedPermissionModes: ["approval-required", "auto", "full-access"],
   }
+  const description = getString(record, "description")
+  if (description) model.description = description
+  if (defaultEffort) model.defaultEffort = defaultEffort
+  return model
 }
 
 function codexPermissions(
@@ -676,33 +742,40 @@ function codexPermissions(
 }
 
 /** `tokenUsage.last` describes the latest model call, so its total is the current context occupancy. */
-function codexContextUsage(value: unknown): ContextUsage | undefined {
-  if (!isRecord(value)) return undefined
-  const last = isRecord(value.last) ? value.last : undefined
-  const usedTokens = positiveTokens(last?.totalTokens)
+function codexContextUsage(
+  value: JsonValue | undefined
+): ContextUsage | undefined {
+  const record = parseJsonObject(value)
+  if (!record) return undefined
+  const last = parseJsonObject(record.last)
+  const parsedUsedTokens = z.number().safeParse(last?.totalTokens)
+  const usedTokens = positiveTokens(
+    parsedUsedTokens.success ? parsedUsedTokens.data : undefined
+  )
   if (!usedTokens) return undefined
-  const maxTokens = positiveTokens(value.modelContextWindow)
-  return { usedTokens, ...(maxTokens ? { maxTokens } : {}) }
+  const parsedMaxTokens = z.number().safeParse(record.modelContextWindow)
+  const maxTokens = positiveTokens(
+    parsedMaxTokens.success ? parsedMaxTokens.data : undefined
+  )
+  const usage: ContextUsage = { usedTokens }
+  if (maxTokens) usage.maxTokens = maxTokens
+  return usage
 }
 
-export function codexLimitResetAt(value: unknown): string | undefined {
-  if (!isRecord(value)) return undefined
-  const limits = isRecord(value.rateLimits) ? value.rateLimits : value
+export function codexLimitResetAt(
+  value: JsonValue | undefined
+): string | undefined {
+  const record = parseJsonObject(value)
+  if (!record) return undefined
+  const limits = parseJsonObject(record.rateLimits) ?? record
   const slots = [limits.primary, limits.secondary]
-    .filter(isRecord)
+    .flatMap((value) => {
+      const parsed = codexLimitSlotSchema.safeParse(value)
+      return parsed.success ? [parsed.data] : []
+    })
     .map((slot) => ({
-      usedPercent:
-        typeof slot.usedPercent === "number"
-          ? slot.usedPercent
-          : typeof slot.used_percent === "number"
-            ? slot.used_percent
-            : -1,
-      reset:
-        typeof slot.resetsAt === "number"
-          ? slot.resetsAt
-          : typeof slot.resets_at === "number"
-            ? slot.resets_at
-            : undefined,
+      usedPercent: slot.usedPercent ?? slot.used_percent ?? -1,
+      reset: slot.resetsAt ?? slot.resets_at,
     }))
     .filter(
       (slot): slot is { usedPercent: number; reset: number } =>
@@ -715,7 +788,7 @@ export function codexLimitResetAt(value: unknown): string | undefined {
 }
 
 export function codexActivity(
-  item: Record<string, unknown> | undefined
+  item: JsonObject | undefined
 ): ActivityStart | undefined {
   const id = getString(item, "id")
   const type = getString(item, "type")
@@ -818,7 +891,7 @@ const codexPlanActivityId = "codex-plan"
 function codexActivityOutcome(
   type: string | undefined,
   status: string | undefined,
-  item: Record<string, unknown> | undefined
+  item: JsonObject | undefined
 ): "completed" | "failed" {
   if (status !== undefined)
     return status === "completed" ? "completed" : "failed"
@@ -830,20 +903,21 @@ function codexActivityOutcome(
 }
 
 function codexDelegationLifecycle(
-  item: Record<string, unknown> | undefined
+  item: JsonObject | undefined
 ): DelegationLifecycle | undefined {
   const type = getString(item, "type")
   if (type === "subAgentActivity") {
     const threadId = getString(item, "agentThreadId")
     const kind = getString(item, "kind")
-    return {
+    const lifecycle: DelegationLifecycle = {
       childThreadIds: kind === "started" && threadId ? [threadId] : [],
       defersCompletion: kind === "started",
-      ...(kind === "interrupted" && threadId
-        ? { interruptedThreadId: threadId }
-        : {}),
       terminalStates: [],
     }
+    if (kind === "interrupted" && threadId) {
+      lifecycle.interruptedThreadId = threadId
+    }
+    return lifecycle
   }
   if (type !== "collabAgentToolCall") return undefined
 
@@ -851,12 +925,10 @@ function codexDelegationLifecycle(
     getString(item, "tool") === "spawnAgent"
       ? stringArray(item?.receiverThreadIds)
       : []
-  const states = isRecord(item?.agentsStates) ? item.agentsStates : {}
+  const states = parseJsonObject(item?.agentsStates) ?? {}
   const terminalStates = Object.entries(states).flatMap(
     ([threadId, rawState]): DelegationLifecycle["terminalStates"] => {
-      const state = isRecord(rawState)
-        ? getString(rawState, "status")
-        : undefined
+      const state = getString(parseJsonObject(rawState), "status")
       if (state === "completed" || state === "shutdown") {
         return [{ threadId, outcome: "completed" }]
       }
@@ -877,10 +949,9 @@ function codexDelegationLifecycle(
   }
 }
 
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : []
+function stringArray(value: JsonValue | undefined): string[] {
+  const parsed = z.array(z.string()).safeParse(value)
+  return parsed.success ? parsed.data : []
 }
 
 function subagentName(agentPath: string | undefined): string {
@@ -889,13 +960,13 @@ function subagentName(agentPath: string | undefined): string {
 }
 
 function collabToolName(tool: string | undefined): string {
-  const names: Record<string, string> = {
-    sendInput: "Contact subagent",
-    resumeAgent: "Resume subagent",
-    wait: "Wait for subagents",
-    closeAgent: "Close subagent",
-  }
-  return names[tool ?? ""] ?? "Use subagent"
+  const names = new Map<string, string>([
+    ["sendInput", "Contact subagent"],
+    ["resumeAgent", "Resume subagent"],
+    ["wait", "Wait for subagents"],
+    ["closeAgent", "Close subagent"],
+  ])
+  return names.get(tool ?? "") ?? "Use subagent"
 }
 
 function firstLine(value: string, maxLength: number): string {
@@ -906,43 +977,35 @@ function detailOf(detail: string | undefined): { detail?: string } {
   return detail ? { detail } : {}
 }
 
-function compactDetail(value: unknown): string | undefined {
-  if (typeof value === "string") return value.slice(0, 500)
-  if (Array.isArray(value)) {
-    const text = value
-      .filter((part): part is string => typeof part === "string")
-      .join(" ")
-    return text ? text.slice(0, 500) : undefined
-  }
-  return undefined
+function compactDetail(value: JsonValue | undefined): string | undefined {
+  const parsed = compactDetailSchema.safeParse(value)
+  if (!parsed.success) return undefined
+  const text = Array.isArray(parsed.data) ? parsed.data.join(" ") : parsed.data
+  return text ? text.slice(0, 500) : undefined
 }
 
-function changedFiles(value: unknown): ChangedFile[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((change) => {
-    const path = getString(change, "path")
+function changedFiles(value: JsonValue | undefined): ChangedFile[] {
+  const parsed = z.array(jsonValueSchema).safeParse(value)
+  if (!parsed.success) return []
+  return parsed.data.flatMap((change) => {
+    const record = parseJsonObject(change)
+    const path = getString(record, "path")
     if (!path) return []
-    const additions = fileChangeCount(change, "additions")
-    const deletions = fileChangeCount(change, "deletions")
-    return [
-      {
-        path,
-        ...(additions !== undefined ? { additions } : {}),
-        ...(deletions !== undefined ? { deletions } : {}),
-      },
-    ]
+    const additions = fileChangeCount(record, "additions")
+    const deletions = fileChangeCount(record, "deletions")
+    const file: ChangedFile = { path }
+    if (additions !== undefined) file.additions = additions
+    if (deletions !== undefined) file.deletions = deletions
+    return [file]
   })
 }
 
 function fileChangeCount(
-  value: unknown,
+  value: JsonObject | undefined,
   key: "additions" | "deletions"
 ): number | undefined {
-  if (!isRecord(value)) return undefined
-  const count = value[key]
-  return typeof count === "number" && Number.isInteger(count) && count >= 0
-    ? count
-    : undefined
+  const parsed = z.number().int().nonnegative().safeParse(value?.[key])
+  return parsed.success ? parsed.data : undefined
 }
 
 function fileSummary(files: ChangedFile[]): string | undefined {
@@ -957,21 +1020,27 @@ function fileSummary(files: ChangedFile[]): string | undefined {
  * Codex plan items are experimental app-server surface; accept the step-list
  * shapes seen in the wild and fall back to a plain row when none match.
  */
-export function codexPlanSteps(item: Record<string, unknown>): PlanStep[] {
+export function codexPlanSteps(item: JsonObject): PlanStep[] {
   const candidates = [item.plan, item.steps, item.items]
-  const list = candidates.find(Array.isArray)
-  if (!list) return []
-  return list.flatMap((entry) => {
-    if (typeof entry === "string") return [{ text: entry, status: "pending" }]
-    if (!isRecord(entry)) return []
+  const parsedList = candidates
+    .map((candidate) => z.array(jsonValueSchema).safeParse(candidate))
+    .find((candidate) => candidate.success)
+  if (!parsedList?.success) return []
+  return parsedList.data.flatMap((entry) => {
+    const textEntry = z.string().safeParse(entry)
+    if (textEntry.success) {
+      return [{ text: textEntry.data, status: "pending" }]
+    }
+    const record = parseJsonObject(entry)
+    if (!record) return []
     const text =
-      getString(entry, "step") ??
-      getString(entry, "text") ??
-      getString(entry, "content") ??
-      getString(entry, "title")
+      getString(record, "step") ??
+      getString(record, "text") ??
+      getString(record, "content") ??
+      getString(record, "title")
     if (!text) return []
     return [
-      { text, status: normalizePlanStepStatus(getString(entry, "status")) },
+      { text, status: normalizePlanStepStatus(getString(record, "status")) },
     ]
   })
 }

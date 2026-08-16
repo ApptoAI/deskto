@@ -16,8 +16,11 @@ export function useRuntimeEvent<T extends RuntimeEvent["type"]>(
   useEffect(
     () =>
       client.subscribe((event) => {
-        if (event.type === type)
+        if (event.type === type) {
+          // SAFETY: RuntimeEvent is a discriminated union on `type`; equality
+          // establishes the matching Extract member before this callback runs.
           onEvent(event as Extract<RuntimeEvent, { type: T }>)
+        }
       }),
     [client, type, onEvent]
   )

@@ -22,9 +22,10 @@ export function harnessFailure(
   const kind = usageLimitPatterns.some((pattern) => pattern.test(matchText))
     ? "usage-limit"
     : "error"
-  return {
+  const failure: HarnessFailure = {
     kind,
     message,
-    ...(kind === "usage-limit" && resetAt ? { resetAt } : {}),
   }
+  if (kind === "usage-limit" && resetAt) failure.resetAt = resetAt
+  return failure
 }

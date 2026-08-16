@@ -52,44 +52,52 @@ const binaryPreviewLimit = 10_000_000
 const officePreviewLimit = 20_000_000
 const capturedFilesLimit = 200
 
-const formats: Record<string, Pick<Artifact, "mediaType" | "previewKind">> = {
-  ".md": { mediaType: "text/markdown", previewKind: "markdown" },
-  ".markdown": { mediaType: "text/markdown", previewKind: "markdown" },
-  ".csv": { mediaType: "text/csv", previewKind: "csv" },
-  ".txt": { mediaType: "text/plain", previewKind: "text" },
-  ".log": { mediaType: "text/plain", previewKind: "text" },
-  ".json": { mediaType: "application/json", previewKind: "text" },
-  ".yaml": { mediaType: "text/yaml", previewKind: "text" },
-  ".yml": { mediaType: "text/yaml", previewKind: "text" },
-  ".xml": { mediaType: "application/xml", previewKind: "text" },
-  ".html": { mediaType: "text/html", previewKind: "html" },
-  ".htm": { mediaType: "text/html", previewKind: "html" },
-  ".css": { mediaType: "text/css", previewKind: "text" },
-  ".js": { mediaType: "text/javascript", previewKind: "text" },
-  ".jsx": { mediaType: "text/javascript", previewKind: "text" },
-  ".ts": { mediaType: "text/typescript", previewKind: "text" },
-  ".tsx": { mediaType: "text/typescript", previewKind: "text" },
-  ".py": { mediaType: "text/x-python", previewKind: "text" },
-  ".sql": { mediaType: "application/sql", previewKind: "text" },
-  ".sh": { mediaType: "application/x-sh", previewKind: "text" },
-  ".pdf": { mediaType: "application/pdf", previewKind: "pdf" },
-  ".xlsx": {
-    mediaType:
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    previewKind: "spreadsheet",
-  },
-  ".docx": {
-    mediaType:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    previewKind: "document",
-  },
-  ".png": { mediaType: "image/png", previewKind: "image" },
-  ".jpg": { mediaType: "image/jpeg", previewKind: "image" },
-  ".jpeg": { mediaType: "image/jpeg", previewKind: "image" },
-  ".gif": { mediaType: "image/gif", previewKind: "image" },
-  ".webp": { mediaType: "image/webp", previewKind: "image" },
-  ".avif": { mediaType: "image/avif", previewKind: "image" },
-}
+type ArtifactFormat = Pick<Artifact, "mediaType" | "previewKind">
+
+const formats = new Map<string, ArtifactFormat>([
+  [".md", { mediaType: "text/markdown", previewKind: "markdown" }],
+  [".markdown", { mediaType: "text/markdown", previewKind: "markdown" }],
+  [".csv", { mediaType: "text/csv", previewKind: "csv" }],
+  [".txt", { mediaType: "text/plain", previewKind: "text" }],
+  [".log", { mediaType: "text/plain", previewKind: "text" }],
+  [".json", { mediaType: "application/json", previewKind: "text" }],
+  [".yaml", { mediaType: "text/yaml", previewKind: "text" }],
+  [".yml", { mediaType: "text/yaml", previewKind: "text" }],
+  [".xml", { mediaType: "application/xml", previewKind: "text" }],
+  [".html", { mediaType: "text/html", previewKind: "html" }],
+  [".htm", { mediaType: "text/html", previewKind: "html" }],
+  [".css", { mediaType: "text/css", previewKind: "text" }],
+  [".js", { mediaType: "text/javascript", previewKind: "text" }],
+  [".jsx", { mediaType: "text/javascript", previewKind: "text" }],
+  [".ts", { mediaType: "text/typescript", previewKind: "text" }],
+  [".tsx", { mediaType: "text/typescript", previewKind: "text" }],
+  [".py", { mediaType: "text/x-python", previewKind: "text" }],
+  [".sql", { mediaType: "application/sql", previewKind: "text" }],
+  [".sh", { mediaType: "application/x-sh", previewKind: "text" }],
+  [".pdf", { mediaType: "application/pdf", previewKind: "pdf" }],
+  [
+    ".xlsx",
+    {
+      mediaType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      previewKind: "spreadsheet",
+    },
+  ],
+  [
+    ".docx",
+    {
+      mediaType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      previewKind: "document",
+    },
+  ],
+  [".png", { mediaType: "image/png", previewKind: "image" }],
+  [".jpg", { mediaType: "image/jpeg", previewKind: "image" }],
+  [".jpeg", { mediaType: "image/jpeg", previewKind: "image" }],
+  [".gif", { mediaType: "image/gif", previewKind: "image" }],
+  [".webp", { mediaType: "image/webp", previewKind: "image" }],
+  [".avif", { mediaType: "image/avif", previewKind: "image" }],
+])
 
 export class Artifacts {
   constructor(private readonly database: DatabaseSync) {}
@@ -99,6 +107,8 @@ export class Artifacts {
     turnId: string,
     paths: string[]
   ): PreparedArtifactCapture | undefined {
+    // SAFETY: the joins select the two non-null text columns in TurnProjectRow
+    // and turns.id limits the result to one row or undefined.
     const turn = this.database
       .prepare(
         `SELECT projects.id AS project_id, projects.path AS project_path
@@ -131,6 +141,8 @@ export class Artifacts {
   }
 
   listForThread(threadId: string): TurnOutput[] {
+    // SAFETY: the CTE selects every ArtifactRow column plus the three non-null
+    // OutputRow fields named by the query.
     const rows = this.database
       .prepare(
         `WITH ranked_outputs AS (
@@ -166,6 +178,8 @@ export class Artifacts {
   }
 
   preview(threadId: string, artifactId: string): ArtifactPreview {
+    // SAFETY: the query selects every ArtifactRow column plus a non-null
+    // project_path, and artifacts.id permits at most one row.
     const row = this.database
       .prepare(
         `SELECT artifacts.*, projects.path AS project_path
@@ -241,6 +255,8 @@ export class Artifacts {
   ): Artifact {
     const now = new Date().toISOString()
     const format = formatFor(file.relativePath)
+    // SAFETY: the unique project/path lookup selects a complete ArtifactRow or
+    // returns undefined when this is the first capture.
     const existing = this.database
       .prepare(
         "SELECT * FROM artifacts WHERE project_id = ? AND relative_path = ?"
@@ -342,9 +358,9 @@ function safeProjectFile(
   }
 }
 
-function formatFor(path: string): Pick<Artifact, "mediaType" | "previewKind"> {
+function formatFor(path: string): ArtifactFormat {
   return (
-    formats[extname(path).toLowerCase()] ?? {
+    formats.get(extname(path).toLowerCase()) ?? {
       mediaType: "application/octet-stream",
       previewKind: "unsupported",
     }

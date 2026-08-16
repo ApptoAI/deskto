@@ -372,10 +372,12 @@ function CsvPreview({ content }: { content: string }) {
   )
 }
 
-function parseCsv(content: string): {
+type CsvPreview = {
   rows: string[][]
   maxColumns: number
-} {
+}
+
+function parseCsv(content: string): CsvPreview {
   const rows: string[][] = []
   let row: string[] = []
   let value = ""

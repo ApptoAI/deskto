@@ -10,19 +10,15 @@ function formatReset(resetAt: string): string | undefined {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate()
   const options: Intl.DateTimeFormatOptions = {
-    ...(sameDay
-      ? {}
-      : {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          ...(date.getFullYear() === now.getFullYear()
-            ? {}
-            : { year: "numeric" }),
-        }),
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
+  }
+  if (!sameDay) {
+    options.weekday = "short"
+    options.month = "short"
+    options.day = "numeric"
+    if (date.getFullYear() !== now.getFullYear()) options.year = "numeric"
   }
   return new Intl.DateTimeFormat(undefined, options).format(date)
 }

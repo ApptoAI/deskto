@@ -10,7 +10,7 @@ import {
   type Selection,
 } from "@openappto/protocol"
 
-import { RuntimeError, errorMessage } from "./errors.js"
+import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import {
   createPackDirectory,
@@ -22,6 +22,7 @@ import {
 import { ProjectEntries } from "./project-entries.js"
 import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
+import type { WorkspacePatch } from "./storage/workspaces.js"
 import type { TurnCoordinator } from "./turn-coordinator.js"
 import type { UserSettings } from "./user-settings.js"
 
@@ -60,13 +61,15 @@ export class RequestRouter {
   ): Promise<RuntimeResponse<M>> {
     try {
       const data = await this.#dispatch(request)
+      // SAFETY: #dispatch switches on request.method and returns the matching
+      // RuntimeResponses member for every RuntimeMethod branch.
       return { ok: true, data } as RuntimeResponse<M>
     } catch (error) {
       return {
         ok: false,
         error: {
           code: error instanceof RuntimeError ? error.code : "runtime-error",
-          message: errorMessage(error),
+          message: runtimeErrorMessageSchema.parse(error),
         },
       }
     }
@@ -107,19 +110,19 @@ export class RequestRouter {
         return workspace
       }
       case "workspace.update": {
+        const patch: WorkspacePatch = {}
+        if (request.params.name !== undefined) {
+          patch.name = requiredName(request.params.name)
+        }
+        if (request.params.color !== undefined) {
+          patch.color = request.params.color
+        }
+        if (request.params.icon !== undefined) {
+          patch.icon = request.params.icon
+        }
         const workspace = this.store.workspaces.update(
           request.params.workspaceId,
-          {
-            ...(request.params.name === undefined
-              ? {}
-              : { name: requiredName(request.params.name) }),
-            ...(request.params.color === undefined
-              ? {}
-              : { color: request.params.color }),
-            ...(request.params.icon === undefined
-              ? {}
-              : { icon: request.params.icon }),
-          }
+          patch
         )
         this.events.workspaceChanged()
         return workspace

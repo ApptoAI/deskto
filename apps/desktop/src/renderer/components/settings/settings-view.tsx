@@ -8,7 +8,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { formatAge } from "../../lib/format-time.js"
 import { describeHarnessHealth } from "../../lib/harness.js"
-import { describeError } from "../../runtime/describe-error.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { HarnessLogo } from "../brand-logos.js"
@@ -35,7 +35,7 @@ export function SettingsView({
     try {
       harnesses.replace(await action())
     } catch (error) {
-      setActionError(describeError(error))
+      setActionError(describedErrorSchema.parse(error))
     } finally {
       setPending((current) => {
         const next = new Set(current)

@@ -14,6 +14,8 @@ export class Projects {
   ) {}
 
   list(): Project[] {
+    // SAFETY: migrations define every projects column used by ProjectRow, and
+    // this query selects the complete row without computed fields.
     const rows = this.database
       .prepare("SELECT * FROM projects ORDER BY updated_at DESC")
       .all() as ProjectRow[]
@@ -27,6 +29,8 @@ export class Projects {
    */
   add(path: string, name: string, workspaceId: string): Project {
     this.workspaces.get(workspaceId)
+    // SAFETY: migrations define projects.path as unique and every selected
+    // column matches ProjectRow; absence is represented by undefined.
     const existing = this.database
       .prepare("SELECT * FROM projects WHERE path = ?")
       .get(path) as ProjectRow | undefined
@@ -74,6 +78,8 @@ export class Projects {
   }
 
   get(id: string): Project {
+    // SAFETY: projects.id is the primary key and SELECT * matches ProjectRow;
+    // SQLite returns undefined when no row has that id.
     const row = this.database
       .prepare("SELECT * FROM projects WHERE id = ?")
       .get(id) as ProjectRow | undefined

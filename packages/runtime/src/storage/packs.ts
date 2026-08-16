@@ -13,12 +13,16 @@ export class Packs {
   ) {}
 
   list(): PackRow[] {
+    // SAFETY: migrations define the packs table with the PackRow columns, and
+    // this query selects complete rows only.
     return this.database
       .prepare("SELECT * FROM packs ORDER BY name, created_at")
       .all() as PackRow[]
   }
 
   get(id: string): PackRow {
+    // SAFETY: packs.id is the primary key and SELECT * matches PackRow;
+    // SQLite returns undefined when the pack is absent.
     const row = this.database
       .prepare("SELECT * FROM packs WHERE id = ?")
       .get(id) as PackRow | undefined
@@ -28,6 +32,8 @@ export class Packs {
 
   /** Registering a path twice returns the existing pack. */
   add(name: string, path: string): PackRow {
+    // SAFETY: packs.path is unique and SELECT * matches PackRow; an unmatched
+    // path produces undefined.
     const existing = this.database
       .prepare("SELECT * FROM packs WHERE path = ?")
       .get(path) as PackRow | undefined
@@ -57,6 +63,7 @@ export class Packs {
 
   /** All attachments in one query, for list views over every pack. */
   attachedWorkspaceIds(): Map<string, string[]> {
+    // SAFETY: workspace_packs declares both selected columns as non-null text.
     const rows = this.database
       .prepare(
         "SELECT pack_id, workspace_id FROM workspace_packs ORDER BY workspace_id"
@@ -72,6 +79,7 @@ export class Packs {
   }
 
   workspaceIdsFor(packId: string): string[] {
+    // SAFETY: workspace_packs.workspace_id is non-null text for every row.
     return (
       this.database
         .prepare(
@@ -101,6 +109,8 @@ export class Packs {
 
   /** Packs attached to this workspace, for session customization. */
   attachedToWorkspace(workspaceId: string): PackRow[] {
+    // SAFETY: the join selects complete packs rows, whose migration columns
+    // match PackRow.
     return this.database
       .prepare(
         "SELECT p.* FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"

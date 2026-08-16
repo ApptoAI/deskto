@@ -11,6 +11,8 @@ export {
   defineSetting,
   type SettingDefinition,
   type SettingInput,
+  type SettingValue,
+  type SettingValues,
 } from "./definition.js"
 export {
   formatKeybinding,

@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react"
+import { useEffect, useState } from "react"
+import type { z } from "zod"
 
 /**
  * Renderer-only UI state that should survive restarts (collapsed sections,
@@ -8,34 +9,26 @@ import { useCallback, useState } from "react"
 export function useLocalStorage<T>(
   key: string,
   initial: T,
-  decode: (value: unknown) => T
+  schema: z.ZodType<T>
 ) {
   const [value, setValue] = useState<T>(() => {
     try {
       const raw = window.localStorage.getItem(key)
-      return raw === null ? initial : decode(JSON.parse(raw))
+      if (raw === null) return initial
+      const parsed = schema.safeParse(JSON.parse(raw))
+      return parsed.success ? parsed.data : initial
     } catch {
       return initial
     }
   })
 
-  const set = useCallback(
-    (next: T | ((previous: T) => T)) => {
-      setValue((previous) => {
-        const resolved =
-          typeof next === "function"
-            ? (next as (previous: T) => T)(previous)
-            : next
-        try {
-          window.localStorage.setItem(key, JSON.stringify(resolved))
-        } catch {
-          // Persistence is best-effort; the in-memory state still updates.
-        }
-        return resolved
-      })
-    },
-    [key]
-  )
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value))
+    } catch {
+      // Persistence is best-effort; the in-memory state still updates.
+    }
+  }, [key, value])
 
-  return [value, set] as const
+  return [value, setValue] as const
 }

@@ -5,11 +5,13 @@ import type {
   HarnessModelOption,
 } from "@openappto/harness-sdk"
 import type { Harness } from "@openappto/protocol"
+import { z } from "zod"
 
-import { RuntimeError, errorMessage } from "./errors.js"
+import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { Settings } from "./storage/settings.js"
 
 const enabledSettingKey = "harness.enabled"
+const enabledHarnessesSchema = z.record(z.string(), z.boolean())
 
 // How long a probe result stays trusted. Reads within this window reuse it;
 // older results are re-checked on the next read.
@@ -59,8 +61,10 @@ export class HarnessRegistry {
     this.#settings = settings
     this.#onChanged = options.onChanged ?? (() => {})
     this.#probeGate = (options.probeGate ?? Promise.resolve()).catch(() => {})
-    const enabled =
-      settings.get<Record<string, boolean>>(enabledSettingKey) ?? {}
+    const parsedEnabled = enabledHarnessesSchema.safeParse(
+      settings.get(enabledSettingKey)
+    )
+    const enabled = parsedEnabled.success ? parsedEnabled.data : {}
     for (const factory of factories) {
       if (this.#entries.has(factory.descriptor.id)) {
         throw new RuntimeError(
@@ -110,8 +114,10 @@ export class HarnessRegistry {
       entry.enabled = enabled
       // Merge into the stored record: harnesses not registered in this
       // process keep their saved preference.
-      const stored =
-        this.#settings.get<Record<string, boolean>>(enabledSettingKey) ?? {}
+      const parsedStored = enabledHarnessesSchema.safeParse(
+        this.#settings.get(enabledSettingKey)
+      )
+      const stored = parsedStored.success ? parsedStored.data : {}
       stored[id] = enabled
       this.#settings.set(enabledSettingKey, stored)
     }
@@ -253,7 +259,10 @@ export class HarnessRegistry {
         models = await this.#modelsFor(entry, availability, force)
       }
     } catch (error) {
-      availability = { status: "unavailable", reason: errorMessage(error) }
+      availability = {
+        status: "unavailable",
+        reason: runtimeErrorMessageSchema.parse(error),
+      }
       models = []
     }
     const probe: Probe = {
@@ -309,9 +318,9 @@ function withTimeout<T>(
         clearTimeout(timer)
         resolve(value)
       },
-      (error: unknown) => {
+      (error) => {
         clearTimeout(timer)
-        reject(error instanceof Error ? error : new Error(String(error)))
+        reject(new Error(runtimeErrorMessageSchema.parse(error)))
       }
     )
   })

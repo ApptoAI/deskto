@@ -1,10 +1,12 @@
 import type {
+  JsonObject,
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
   RuntimeResponses,
   RuntimeTransport,
 } from "@openappto/protocol"
+import { turnInputSchema } from "@openappto/protocol"
 import type { TurnInput } from "@openappto/protocol"
 
 export class RuntimeClientError extends Error {
@@ -57,7 +59,7 @@ export class RuntimeClient {
   }
 
   /** Applies setting overrides; a null entry clears one back to its default. */
-  updateSettings(entries: Record<string, unknown>) {
+  updateSettings(entries: JsonObject) {
     return this.request({ method: "settings.update", params: { entries } })
   }
 
@@ -226,12 +228,12 @@ export class RuntimeClient {
   }
 
   startTurn(threadId: string, input: TurnInput | string) {
+    const parsedInput = turnInputSchema.safeParse(input)
     return this.request({
       method: "turn.start",
-      params:
-        typeof input === "string"
-          ? { threadId, prompt: input }
-          : { threadId, input },
+      params: parsedInput.success
+        ? { threadId, input: parsedInput.data }
+        : { threadId, prompt: String(input) },
     })
   }
 

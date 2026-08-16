@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises"
 import path from "node:path"
 
 import { dialog, ipcMain, shell } from "electron"
+import { z } from "zod"
 
 import {
   openExternalChannel,
@@ -33,42 +34,39 @@ export function registerDesktopIpc(): void {
   // Directories only: shell.openPath on a file would hand it to whatever
   // app claims that type, so a stray path could launch something. A folder
   // just opens the file manager.
-  ipcMain.handle(
-    openFolderChannel,
-    async (_event, value: unknown): Promise<void> => {
-      if (typeof value !== "string" || !path.isAbsolute(value)) {
-        throw new Error("The project folder path is invalid.")
-      }
-
-      let entry
-      try {
-        entry = await stat(value)
-      } catch {
-        throw new Error("The project folder is not available.")
-      }
-      if (!entry.isDirectory()) {
-        throw new Error("The project path is not a folder.")
-      }
-
-      const error = await shell.openPath(value)
-      if (error) {
-        throw new Error(error)
-      }
+  ipcMain.handle(openFolderChannel, async (_event, value): Promise<void> => {
+    const parsed = z.string().safeParse(value)
+    if (!parsed.success || !path.isAbsolute(parsed.data)) {
+      throw new Error("The project folder path is invalid.")
     }
-  )
+    const folderPath = parsed.data
 
-  ipcMain.handle(
-    openExternalChannel,
-    async (_event, value: unknown): Promise<void> => {
-      if (typeof value !== "string") return
-
-      try {
-        const url = new URL(value)
-        if (!allowedExternalProtocols.has(url.protocol)) return
-        await shell.openExternal(url.toString())
-      } catch {
-        return
-      }
+    let entry
+    try {
+      entry = await stat(folderPath)
+    } catch {
+      throw new Error("The project folder is not available.")
     }
-  )
+    if (!entry.isDirectory()) {
+      throw new Error("The project path is not a folder.")
+    }
+
+    const error = await shell.openPath(folderPath)
+    if (error) {
+      throw new Error(error)
+    }
+  })
+
+  ipcMain.handle(openExternalChannel, async (_event, value): Promise<void> => {
+    const parsed = z.string().safeParse(value)
+    if (!parsed.success) return
+
+    try {
+      const url = new URL(parsed.data)
+      if (!allowedExternalProtocols.has(url.protocol)) return
+      await shell.openExternal(url.toString())
+    } catch {
+      return
+    }
+  })
 }

@@ -33,6 +33,8 @@ export class Turns {
     const prompt = input.text
     const promptReferences =
       input.references.length > 0 ? JSON.stringify(input.references) : null
+    // SAFETY: the query selects a complete ThreadRow plus the three named
+    // project and EXISTS fields declared in this intersection.
     const context = this.database
       .prepare(
         "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
@@ -96,7 +98,7 @@ export class Turns {
         .run(now, now, threadId)
     })
 
-    return {
+    const activeTurn: ActiveTurnRecord = {
       turnId,
       assistantMessageId,
       prompt,
@@ -109,10 +111,11 @@ export class Turns {
         permissionMode: context.permission_mode,
       },
       generateTitle,
-      ...(context.provider_session_id
-        ? { providerSessionId: context.provider_session_id }
-        : {}),
     }
+    if (context.provider_session_id) {
+      activeTurn.providerSessionId = context.provider_session_id
+    }
+    return activeTurn
   }
 
   setProviderSession(
@@ -176,6 +179,8 @@ export class Turns {
   }
 
   requireMessage(id: string): Message {
+    // SAFETY: messages.id is the primary key and SELECT * matches MessageRow;
+    // SQLite returns undefined for a missing id.
     const row = this.database
       .prepare("SELECT * FROM messages WHERE id = ?")
       .get(id) as MessageRow | undefined
@@ -223,15 +228,16 @@ export class Turns {
         )
         .run(now, threadId)
     })
-    return {
+    const record: Approval = {
       id: approval.id,
       threadId,
       kind: approval.kind,
       title: approval.title,
       status: "pending",
       createdAt: now,
-      ...(approval.detail ? { detail: approval.detail } : {}),
     }
+    if (approval.detail) record.detail = approval.detail
+    return record
   }
 
   assertPendingApproval(threadId: string, approvalId: string): void {

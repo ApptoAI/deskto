@@ -76,14 +76,14 @@ function keptPermissionMode(
 /** Sentinel for "use the model's native default", stored as effort: null. */
 export const DEFAULT_EFFORT = "__default__"
 
-const effortLabels: Record<string, string> = {
-  [DEFAULT_EFFORT]: "Default",
-  xhigh: "Extra high",
-  none: "No thinking",
-}
+const effortLabels = new Map<string, string>([
+  [DEFAULT_EFFORT, "Default"],
+  ["xhigh", "Extra high"],
+  ["none", "No thinking"],
+])
 
 export function effortLabel(effort: string): string {
   return (
-    effortLabels[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1)
+    effortLabels.get(effort) ?? effort.charAt(0).toUpperCase() + effort.slice(1)
   )
 }

@@ -1,4 +1,4 @@
-import type { ComponentProps, ComponentType, ReactNode } from "react"
+import type { ComponentProps, ReactNode } from "react"
 
 /**
  * Provider logos, keyed by harness id. Drawn like lucide icons — plain inline
@@ -34,18 +34,13 @@ export function OpenAILogo(props: ComponentProps<"svg">) {
   )
 }
 
-const logoByHarnessId: Record<string, ComponentType<ComponentProps<"svg">>> = {
-  claude: ClaudeLogo,
-  codex: OpenAILogo,
-}
-
 /** Provider tints, matched to each brand; unknown harnesses stay neutral.
     Lives beside the logo map so adding a harness is one file, and so the
     rest of the UI never has to name a provider. */
-export const harnessAccentByHarnessId: Record<string, string> = {
-  claude: "text-[#D97757]",
-  codex: "text-foreground",
-}
+export const harnessAccentByHarnessId = new Map<string, string>([
+  ["claude", "text-[#D97757]"],
+  ["codex", "text-foreground"],
+])
 
 /** Renders the provider logo for a harness, or the fallback (nothing by
     default) for unknown harnesses. */
@@ -54,6 +49,7 @@ export function HarnessLogo({
   fallback = null,
   ...props
 }: { harnessId: string; fallback?: ReactNode } & ComponentProps<"svg">) {
-  const Logo = logoByHarnessId[harnessId]
-  return Logo ? <Logo {...props} /> : fallback
+  if (harnessId === "claude") return <ClaudeLogo {...props} />
+  if (harnessId === "codex") return <OpenAILogo {...props} />
+  return fallback
 }

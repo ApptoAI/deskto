@@ -21,21 +21,23 @@ interface TimelineMinimapItem {
   preview?: string | null
 }
 
+type MinimapAnchor = {
+  "data-minimap-anchor": string
+  tabIndex: number
+}
+
 /**
  * Marks a row as a minimap stop. Spread onto the element the rail should
  * scroll to and watch, keeping the attribute name in one place. The row is
  * made programmatically focusable so a jump can land focus on it without
  * adding a tab stop per message.
  */
-function minimapAnchor(id: string): {
-  "data-minimap-anchor": string
-  tabIndex: number
-} {
+function minimapAnchor(id: string): MinimapAnchor {
   return { [anchorAttribute]: id, tabIndex: -1 }
 }
 
 function anchorSelector(id: string): string {
-  const escaped = typeof CSS !== "undefined" ? CSS.escape(id) : id
+  const escaped = CSS.escape(id)
   return `[${anchorAttribute}="${escaped}"]`
 }
 

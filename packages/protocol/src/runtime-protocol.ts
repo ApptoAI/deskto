@@ -5,6 +5,7 @@ import {
   artifactPreviewSchema,
   approvalSchema,
   harnessSchema,
+  jsonObjectSchema,
   executionProfileSchema,
   messageSchema,
   packSchema,
@@ -36,7 +37,7 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   z.object({
     method: z.literal("settings.update"),
     // A null entry clears that override back to its default value.
-    params: z.object({ entries: z.record(z.string(), z.unknown()) }),
+    params: z.object({ entries: jsonObjectSchema }),
   }),
   z.object({ method: z.literal("workspace.list"), params: z.object({}) }),
   z.object({

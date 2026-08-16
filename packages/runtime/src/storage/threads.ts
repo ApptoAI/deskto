@@ -35,6 +35,8 @@ export class Threads {
 
   list(projectId: string): Thread[] {
     this.projects.get(projectId)
+    // SAFETY: migrations define every threads column in ThreadRow, and this
+    // query selects complete rows.
     const rows = this.database
       .prepare(
         "SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC"
@@ -149,6 +151,8 @@ export class Threads {
   /** One statement per write: RETURNING hands back the updated row, and an
       empty result doubles as the missing-id check. */
   #updateReturning(sql: string, ...params: (string | null)[]): Thread {
+    // SAFETY: every caller supplies an UPDATE threads ... RETURNING * query;
+    // that result matches ThreadRow or is absent when no id matched.
     const row = this.database.prepare(sql).get(...params) as
       | ThreadRow
       | undefined
@@ -232,6 +236,8 @@ export class Threads {
   }
 
   getRow(id: string): ThreadRow {
+    // SAFETY: threads.id is the primary key and SELECT * matches ThreadRow;
+    // SQLite returns undefined when no thread has that id.
     const row = this.database
       .prepare("SELECT * FROM threads WHERE id = ?")
       .get(id) as ThreadRow | undefined
@@ -241,29 +247,36 @@ export class Threads {
 
   view(id: string): ThreadView {
     const thread = toThread(this.getRow(id))
+    // SAFETY: SELECT * matches MessageRow because migrations own the messages
+    // schema and every column is selected.
     const messages = this.database
       .prepare(
         "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at, rowid"
       )
       .all(id) as MessageRow[]
+    // SAFETY: the query selects a complete ApprovalRow and LIMIT 1 yields
+    // either one row or undefined.
     const approval = this.database
       .prepare(
         "SELECT * FROM approvals WHERE thread_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
       )
       .get(id) as ApprovalRow | undefined
+    // SAFETY: SELECT * matches ActivityRow because migrations own the
+    // activities schema and every column is selected.
     const activities = this.database
       .prepare(
         "SELECT * FROM activities WHERE thread_id = ? ORDER BY created_at, rowid"
       )
       .all(id) as ActivityRow[]
 
-    return {
+    const view: ThreadView = {
       thread,
       messages: messages.map(toMessage),
       activities: activities.map(toActivity),
-      ...(approval ? { pendingApproval: toApproval(approval) } : {}),
       seq: this.sequences.current(id),
     }
+    if (approval) view.pendingApproval = toApproval(approval)
+    return view
   }
 
   get(id: string): Thread {

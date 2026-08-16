@@ -3,14 +3,14 @@ import type { Approval } from "@openappto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
-import { describeError } from "../../runtime/describe-error.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { InlineError } from "../inline-error.js"
 
-const kindHeadings: Record<Approval["kind"], string> = {
+const kindHeadings = {
   command: "The agent wants to run a command",
   "file-change": "The agent wants to change files",
   tool: "The agent wants to use a tool",
-}
+} satisfies Record<Approval["kind"], string>
 
 export function ApprovalPanel({
   approval,
@@ -28,7 +28,7 @@ export function ApprovalPanel({
     try {
       await onResolve(decision)
     } catch (resolveError) {
-      setError(describeError(resolveError))
+      setError(describedErrorSchema.parse(resolveError))
     } finally {
       setPending(null)
     }

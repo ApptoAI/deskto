@@ -1,6 +1,7 @@
 import {
   query,
   type CanUseTool,
+  type Options,
   type Query,
   type SDKMessage,
   type SDKUserMessage,
@@ -19,19 +20,65 @@ import {
   type PlanStep,
   type TextGenerationInput,
 } from "@openappto/harness-sdk"
+import {
+  jsonObjectSchema,
+  jsonValueSchema,
+  type JsonObject,
+  type JsonValue,
+} from "@openappto/protocol"
+import { z } from "zod"
 
 import { normalizePlanStepStatus } from "../plan-status.js"
 import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
+import { createErrorMessageSchema } from "../../errors.js"
 
 import { claudePluginsFor, claudeSkillCommand } from "./claude-packs.js"
+
+export type ClaudeQuery = Pick<
+  Query,
+  "close" | "interrupt" | "supportedModels" | "getContextUsage"
+> &
+  AsyncIterable<SDKMessage>
+
+export type ClaudeQueryFactory = (
+  input: Parameters<typeof query>[0]
+) => ClaudeQuery
 
 type ClaudeAdapterOptions = {
   executablePath?: string
   /** Stable app-owned directory for generated pack plugin shims. */
   packShimsPath?: string
+  queryFactory?: ClaudeQueryFactory
 }
+
+const claudeErrorMessageSchema = createErrorMessageSchema(
+  "Claude stopped unexpectedly"
+)
+
+const claudePlanSchema = z.object({
+  todos: z.array(
+    z.object({ content: z.string(), status: z.string().optional() })
+  ),
+})
+
+const readableToolNames = new Map<string, string>([
+  ["Bash", "Run command"],
+  ["Edit", "Edit file"],
+  ["Glob", "Find files"],
+  ["Grep", "Search files"],
+  ["Read", "Read file"],
+  ["WebFetch", "Fetch webpage"],
+  ["WebSearch", "Search web"],
+  ["Write", "Write file"],
+  ["NotebookEdit", "Edit notebook"],
+])
+
+type ClaudeAssistantUsage = Extract<
+  SDKMessage,
+  { type: "assistant" }
+>["message"]["usage"]
 
 type PendingApproval = {
   id: string
@@ -51,14 +98,13 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
   async listModels(): Promise<HarnessModelOption[]> {
     const abortController = new AbortController()
     const prompt = new AsyncQueue<SDKUserMessage>()
-    const discovery = query({
+    const options: Options = { abortController }
+    if (this.options.executablePath) {
+      options.pathToClaudeCodeExecutable = this.options.executablePath
+    }
+    const discovery = (this.options.queryFactory ?? query)({
       prompt,
-      options: {
-        abortController,
-        ...(this.options.executablePath
-          ? { pathToClaudeCodeExecutable: this.options.executablePath }
-          : {}),
-      },
+      options,
     })
     try {
       const models = await discovery.supportedModels()
@@ -107,7 +153,7 @@ class ClaudeSession implements HarnessSession {
   readonly #backgroundActivities = new Set<string>()
   readonly #settledActivities = new Set<string>()
   readonly #taskActivities = new Map<string, string>()
-  readonly #query: Query
+  readonly #query: ClaudeQuery
   readonly events = this.#queue
   #activeApproval?: PendingApproval
   #closed = false
@@ -122,7 +168,11 @@ class ClaudeSession implements HarnessSession {
   constructor(
     input: HarnessRunInput,
     signal: AbortSignal,
-    { executablePath, packShimsPath }: ClaudeAdapterOptions
+    {
+      executablePath,
+      packShimsPath,
+      queryFactory = query,
+    }: ClaudeAdapterOptions
   ) {
     if (signal.aborted) this.#abortController.abort()
     signal.addEventListener("abort", () => this.#abortController.abort(), {
@@ -145,6 +195,7 @@ class ClaudeSession implements HarnessSession {
           this.#showNextApproval()
         }
 
+        const parsedToolInput = jsonValueSchema.safeParse(toolInput)
         this.#approvalQueue.push({
           id: approvalId,
           resolve: finish,
@@ -152,7 +203,11 @@ class ClaudeSession implements HarnessSession {
             id: approvalId,
             kind: toolName === "Bash" ? "command" : "tool",
             title: options.title ?? options.displayName ?? `Allow ${toolName}`,
-            detail: options.description ?? readableInput(toolInput),
+            detail:
+              options.description ??
+              readableInput(
+                parsedToolInput.success ? parsedToolInput.data : null
+              ),
           },
         })
         this.#showNextApproval()
@@ -163,40 +218,28 @@ class ClaudeSession implements HarnessSession {
           })
       })
 
-    this.#query = query({
-      prompt: claudePrompt(input),
-      options: {
-        abortController: this.#abortController,
-        canUseTool,
-        cwd: input.projectPath,
-        includePartialMessages: true,
-        permissionMode: claudePermissionMode(
-          input.executionProfile.permissionMode
-        ),
-        allowDangerouslySkipPermissions:
-          input.executionProfile.permissionMode === "full-access",
-        ...(input.executionProfile.modelId
-          ? { model: input.executionProfile.modelId }
-          : {}),
-        ...(input.executionProfile.effort
-          ? {
-              effort: input.executionProfile.effort as
-                | "low"
-                | "medium"
-                | "high"
-                | "xhigh"
-                | "max",
-            }
-          : {}),
-        settingSources: ["user", "project", "local"],
-        systemPrompt: { type: "preset", preset: "claude_code" },
-        ...(pluginShims.length > 0 ? { plugins: pluginShims } : {}),
-        ...(executablePath
-          ? { pathToClaudeCodeExecutable: executablePath }
-          : {}),
-        ...(input.providerSessionId ? { resume: input.providerSessionId } : {}),
-      },
-    })
+    const options: Options = {
+      abortController: this.#abortController,
+      canUseTool,
+      cwd: input.projectPath,
+      includePartialMessages: true,
+      permissionMode: claudePermissionMode(
+        input.executionProfile.permissionMode
+      ),
+      allowDangerouslySkipPermissions:
+        input.executionProfile.permissionMode === "full-access",
+      settingSources: ["user", "project", "local"],
+      systemPrompt: { type: "preset", preset: "claude_code" },
+    }
+    if (input.executionProfile.modelId)
+      options.model = input.executionProfile.modelId
+    if (input.executionProfile.effort) {
+      options.effort = claudeEffort(input.executionProfile.effort)
+    }
+    if (pluginShims.length > 0) options.plugins = pluginShims
+    if (executablePath) options.pathToClaudeCodeExecutable = executablePath
+    if (input.providerSessionId) options.resume = input.providerSessionId
+    this.#query = queryFactory({ prompt: claudePrompt(input), options })
 
     void this.#consume()
   }
@@ -228,7 +271,10 @@ class ClaudeSession implements HarnessSession {
       if (!this.#abortController.signal.aborted) {
         this.#emitTerminal({
           type: "turn.failed",
-          failure: harnessFailure(errorMessage(error), this.#usageLimitResetAt),
+          failure: harnessFailure(
+            claudeErrorMessageSchema.parse(error),
+            this.#usageLimitResetAt
+          ),
         })
       }
     } finally {
@@ -242,13 +288,12 @@ class ClaudeSession implements HarnessSession {
         this.#usageLimitResetAt = message.rate_limit_info.resetsAt
           ? isoFromEpoch(message.rate_limit_info.resetsAt)
           : undefined
-        this.#emitUsageLimit({
+        const failure: HarnessFailure = {
           kind: "usage-limit",
           message: "Claude Code usage limit reached",
-          ...(this.#usageLimitResetAt
-            ? { resetAt: this.#usageLimitResetAt }
-            : {}),
-        })
+        }
+        if (this.#usageLimitResetAt) failure.resetAt = this.#usageLimitResetAt
+        this.#emitUsageLimit(failure)
       }
       return
     }
@@ -317,23 +362,25 @@ class ClaudeSession implements HarnessSession {
       }
       for (const block of message.message.content) {
         if (block.type !== "tool_use") continue
+        const parsedInput = jsonValueSchema.safeParse(block.input)
+        const input = parsedInput.success ? parsedInput.data : null
         const parentId = message.parent_tool_use_id ?? undefined
         // The main thread's todo list is the Turn's plan: one activity,
         // updated in place. A subagent's own todos stay ordinary tool rows.
         if (!parentId && block.name === "TodoWrite") {
-          this.#pushPlan(block.input)
+          this.#pushPlan(input)
           continue
         }
         if (
           !parentId &&
           isClaudeSubagentTool(block.name) &&
-          subagentRunsInBackground(block.name, block.input)
+          subagentRunsInBackground(block.name, input)
         ) {
           this.#backgroundActivities.add(block.id)
         }
         this.#queue.push({
           type: "activity.started",
-          activity: claudeActivity(block.id, block.name, block.input, parentId),
+          activity: claudeActivity(block.id, block.name, input, parentId),
         })
       }
       return
@@ -408,15 +455,8 @@ class ClaudeSession implements HarnessSession {
 
   #pushUsage(usedTokens: number): void {
     this.#lastUsedTokens = usedTokens
-    this.#queue.push({
-      type: "usage.updated",
-      usage: {
-        usedTokens,
-        ...(this.#lastKnownMaxTokens
-          ? { maxTokens: this.#lastKnownMaxTokens }
-          : {}),
-      },
-    })
+    const usage = { usedTokens, maxTokens: this.#lastKnownMaxTokens }
+    this.#queue.push({ type: "usage.updated", usage })
   }
 
   #completeActivity(id: string, outcome: "completed" | "failed"): void {
@@ -431,7 +471,7 @@ class ClaudeSession implements HarnessSession {
   }
 
   /** Emits the plan once, then updates the same activity in place. */
-  #pushPlan(input: unknown): void {
+  #pushPlan(input: JsonValue): void {
     const steps = planStepsFromTodos(input)
     if (steps.length === 0) return
     const payload = { kind: "plan" as const, steps }
@@ -545,40 +585,53 @@ const planActivityId = "claude-plan"
 export function claudeActivity(
   id: string,
   toolName: string,
-  input: unknown,
+  input: JsonValue,
   parentId: string | undefined
 ): ActivityStart {
-  const base = { id, ...(parentId ? { parentId } : {}) }
+  const base: Pick<ActivityStart, "id" | "parentId"> = { id }
+  if (parentId) base.parentId = parentId
   const detail = readableInput(input)
 
   if (isClaudeSubagentTool(toolName)) {
-    const description = isRecord(input) ? input.description : undefined
-    const agentType = isRecord(input) ? input.subagent_type : undefined
-    return {
+    const record = parseClaudeInput(input)
+    const parsedDescription = z.string().safeParse(record?.description)
+    const parsedAgentType = z.string().safeParse(record?.subagent_type)
+    const description = parsedDescription.success
+      ? parsedDescription.data
+      : undefined
+    const agentType = parsedAgentType.success ? parsedAgentType.data : undefined
+    const activity: ActivityStart = {
       ...base,
-      name: typeof description === "string" ? description : "Subagent",
-      ...(typeof agentType === "string"
-        ? { detail: agentType, payload: { kind: "subagent", agentType } }
-        : { payload: { kind: "subagent" } }),
+      name: description ?? "Subagent",
+      payload: { kind: "subagent" },
     }
+    if (agentType) {
+      activity.detail = agentType
+      activity.payload = { kind: "subagent", agentType }
+    }
+    return activity
   }
 
   if (fileChangeTools.has(toolName)) {
-    const filePath = isRecord(input)
-      ? [input.file_path, input.notebook_path].find(
-          (value): value is string => typeof value === "string"
-        )
-      : undefined
-    return {
+    const record = parseClaudeInput(input)
+    const filePath = [record?.file_path, record?.notebook_path].flatMap(
+      (value) => {
+        const parsed = z.string().safeParse(value)
+        return parsed.success ? [parsed.data] : []
+      }
+    )[0]
+    const activity: ActivityStart = {
       ...base,
       name: readableToolName(toolName),
-      ...(filePath
-        ? {
-            detail: filePath,
-            payload: { kind: "file-change", files: [{ path: filePath }] },
-          }
-        : {}),
     }
+    if (filePath) {
+      activity.detail = filePath
+      activity.payload = {
+        kind: "file-change",
+        files: [{ path: filePath }],
+      }
+    }
+    return activity
   }
 
   const mcp = mcpToolParts(toolName)
@@ -591,22 +644,25 @@ export function claudeActivity(
     }
   }
 
-  return {
+  const activity: ActivityStart = {
     ...base,
     name: readableToolName(toolName),
-    ...(detail ? { detail } : {}),
     payload: { kind: "tool", tool: toolCategory(toolName) },
   }
+  if (detail) activity.detail = detail
+  return activity
 }
 
 function isClaudeSubagentTool(toolName: string): boolean {
   return toolName === "Agent" || toolName === "Task"
 }
 
-function subagentRunsInBackground(toolName: string, input: unknown): boolean {
-  if (!isRecord(input)) return toolName === "Agent"
-  if (toolName === "Agent") return input.run_in_background !== false
-  return input.run_in_background === true
+function subagentRunsInBackground(toolName: string, input: JsonValue): boolean {
+  const record = parseClaudeInput(input)
+  const parsed = z.boolean().safeParse(record?.run_in_background)
+  if (!parsed.success) return toolName === "Agent"
+  if (toolName === "Agent") return parsed.data
+  return parsed.data
 }
 
 function toolCategory(
@@ -634,44 +690,27 @@ function mcpToolParts(
   }
 }
 
-export function planStepsFromTodos(input: unknown): PlanStep[] {
-  if (!isRecord(input) || !Array.isArray(input.todos)) return []
-  return input.todos.flatMap((todo) => {
-    if (!isRecord(todo) || typeof todo.content !== "string") return []
-    const status = typeof todo.status === "string" ? todo.status : undefined
-    return [{ text: todo.content, status: normalizePlanStepStatus(status) }]
-  })
+export function planStepsFromTodos(input: JsonValue): PlanStep[] {
+  const parsed = claudePlanSchema.safeParse(input)
+  if (!parsed.success) return []
+  return parsed.data.todos.map((todo) => ({
+    text: todo.content,
+    status: normalizePlanStepStatus(todo.status),
+  }))
 }
 
-function readableInput(input: unknown): string | undefined {
-  if (!isRecord(input)) return undefined
-  const command = input.command
-  if (typeof command === "string") return command
-
-  const filePath = input.file_path
-  if (typeof filePath === "string") return filePath
-  const query = input.query
-  if (typeof query === "string") return query
-  const pattern = input.pattern
-  if (typeof pattern === "string") return pattern
-  const url = input.url
-  if (typeof url === "string") return url
+function readableInput(input: JsonValue): string | undefined {
+  const record = parseClaudeInput(input)
+  if (!record) return undefined
+  for (const key of ["command", "file_path", "query", "pattern", "url"]) {
+    const parsed = z.string().safeParse(record[key])
+    if (parsed.success) return parsed.data
+  }
   return undefined
 }
 
 function readableToolName(name: string): string {
-  const names: Record<string, string> = {
-    Bash: "Run command",
-    Edit: "Edit file",
-    Glob: "Find files",
-    Grep: "Search files",
-    Read: "Read file",
-    WebFetch: "Fetch webpage",
-    WebSearch: "Search web",
-    Write: "Write file",
-    NotebookEdit: "Edit notebook",
-  }
-  return names[name] ?? name
+  return readableToolNames.get(name) ?? name
 }
 
 function claudePermissionMode(
@@ -683,8 +722,7 @@ function claudePermissionMode(
 }
 
 /** Tokens occupying the context after a model call: the full prompt (cached or not) plus the reply. */
-function contextTokens(usage: unknown): number {
-  if (!isRecord(usage)) return 0
+function contextTokens(usage: ClaudeAssistantUsage): number {
   return (
     (positiveTokens(usage.input_tokens) ?? 0) +
     (positiveTokens(usage.cache_creation_input_tokens) ?? 0) +
@@ -701,12 +739,9 @@ function primaryContextWindow(
   return positiveTokens(modelUsage[primaryModel]?.contextWindow)
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Claude stopped unexpectedly"
+function parseClaudeInput(input: JsonValue): JsonObject | undefined {
+  const parsed = jsonObjectSchema.safeParse(input)
+  return parsed.success ? parsed.data : undefined
 }
 
 /** Maps Claude's assistant error frame, which may still be followed by a successful result. */
@@ -721,9 +756,23 @@ export function claudeAssistantFailure(
     .flatMap((block) => (block.type === "text" ? [block.text] : []))
     .join("\n")
     .trim()
-  return {
+  const failure: HarnessFailure = {
     kind: "usage-limit",
     message: text || "Claude Code usage limit reached",
-    ...(resetAt ? { resetAt } : {}),
+  }
+  if (resetAt) failure.resetAt = resetAt
+  return failure
+}
+
+function claudeEffort(value: string): Options["effort"] {
+  switch (value) {
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+    case "max":
+      return value
+    default:
+      return undefined
   }
 }

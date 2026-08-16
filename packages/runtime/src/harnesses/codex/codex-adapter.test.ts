@@ -1,48 +1,7 @@
 import type { HarnessEvent } from "@openappto/harness-sdk"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-
-const { clientState } = vi.hoisted(() => ({
-  clientState: {
-    notification: undefined as
-      | ((notification: {
-          method: string
-          params?: Record<string, unknown>
-        }) => void)
-      | undefined,
-  },
-}))
-
-vi.mock("./jsonl-client.js", () => ({
-  JsonlClient: class {
-    request<T>(method: string): Promise<T> {
-      const response =
-        method === "thread/start"
-          ? { thread: { id: "thread-1" } }
-          : method === "turn/start"
-            ? { turn: { id: "turn-1" } }
-            : {}
-      return Promise.resolve(response as T)
-    }
-
-    notify() {}
-    respond() {}
-    respondMethodNotFound() {}
-    close() {}
-
-    onNotification(listener: NonNullable<typeof clientState.notification>) {
-      clientState.notification = listener
-      return () => {}
-    }
-
-    onRequest() {
-      return () => {}
-    }
-
-    onFailure() {
-      return () => {}
-    }
-  },
-}))
+import type { JsonObject, JsonValue } from "@openappto/protocol"
+import type { ZodType } from "zod"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import {
   CodexAdapter,
@@ -50,10 +9,57 @@ import {
   codexLimitResetAt,
   codexPlanSteps,
   codexTurnInput,
+  type CodexClient,
+  type CodexClientFactory,
 } from "./codex-adapter.js"
+import type { CodexNotification } from "./codex-protocol.js"
+
+interface ClientState {
+  notification?: (notification: CodexNotification) => void
+}
+
+const clientState: ClientState = {}
+
+class FakeCodexClient implements CodexClient {
+  request<T extends JsonValue>(
+    method: string,
+    _params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    const response: JsonValue =
+      method === "thread/start"
+        ? { thread: { id: "thread-1" } }
+        : method === "turn/start"
+          ? { turn: { id: "turn-1" } }
+          : {}
+    return Promise.resolve(schema.parse(response))
+  }
+
+  notify(): void {}
+  respond(): void {}
+  respondMethodNotFound(): void {}
+  close(): void {}
+
+  onNotification(listener: (notification: CodexNotification) => void) {
+    clientState.notification = listener
+    return () => {
+      if (clientState.notification === listener) delete clientState.notification
+    }
+  }
+
+  onRequest() {
+    return () => {}
+  }
+
+  onFailure() {
+    return () => {}
+  }
+}
+
+const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
-  clientState.notification = undefined
+  delete clientState.notification
 })
 
 describe("codexTurnInput", () => {
@@ -276,7 +282,7 @@ describe("codexPlanSteps", () => {
 
 describe("CodexAdapter activity notifications", () => {
   it("nests child work and scopes child failures to the subagent", async () => {
-    const session = await new CodexAdapter().start(
+    const session = await new CodexAdapter(clientFactory).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -473,7 +479,7 @@ describe("CodexAdapter activity notifications", () => {
   })
 
   it("fails a spawn that never created a delegated thread", async () => {
-    const session = await new CodexAdapter().start(
+    const session = await new CodexAdapter(clientFactory).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -535,7 +541,7 @@ describe("CodexAdapter activity notifications", () => {
   })
 
   it("fails a delegated activity when Codex interrupts its thread", async () => {
-    const session = await new CodexAdapter().start(
+    const session = await new CodexAdapter(clientFactory).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -619,7 +625,7 @@ describe("CodexAdapter activity notifications", () => {
   })
 
   it("uses type fallbacks only when an item status is absent", async () => {
-    const session = await new CodexAdapter().start(
+    const session = await new CodexAdapter(clientFactory).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -706,7 +712,7 @@ describe("CodexAdapter activity notifications", () => {
   })
 
   it("keeps a fleet running until every delegated thread settles", async () => {
-    const session = await new CodexAdapter().start(
+    const session = await new CodexAdapter(clientFactory).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",

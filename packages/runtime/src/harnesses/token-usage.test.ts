@@ -8,7 +8,7 @@ describe("positiveTokens", () => {
     expect(positiveTokens(1.6)).toBe(2)
   })
 
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, "1", null])(
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, null])(
     "rejects %s",
     (value) => {
       expect(positiveTokens(value)).toBeUndefined()

@@ -8,6 +8,7 @@ import {
   type ContextUsage,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessRunInput,
   type HarnessSession,
 } from "@openappto/harness-sdk"
 import type {
@@ -17,10 +18,14 @@ import type {
   TurnInput,
 } from "@openappto/protocol"
 
-import { RuntimeError, errorMessage } from "./errors.js"
+import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { resolvePromptReferences } from "./prompt-references.js"
+import type {
+  ActivityStartInput,
+  ActivityUpdateInput,
+} from "./storage/activities.js"
 import type { PreparedArtifactCapture } from "./storage/artifacts.js"
 import type { Store } from "./storage/store.js"
 import type { ActiveTurnRecord } from "./storage/turns.js"
@@ -120,27 +125,25 @@ export class TurnCoordinator {
     this.#changed(threadId)
 
     try {
-      const session = await harness.start(
-        {
-          threadId,
-          turnId: turn.turnId,
-          projectPath: turn.projectPath,
-          prompt: input.text,
-          references,
-          executionProfile: turn.executionProfile,
-          customization: {
-            skillRoots: existingSkillRoots(
-              this.store.packs
-                .attachedToWorkspace(turn.workspaceId)
-                .map(({ path, name }) => ({ path, name }))
-            ),
-          },
-          ...(turn.providerSessionId
-            ? { providerSessionId: turn.providerSessionId }
-            : {}),
+      const runInput: HarnessRunInput = {
+        threadId,
+        turnId: turn.turnId,
+        projectPath: turn.projectPath,
+        prompt: input.text,
+        references,
+        executionProfile: turn.executionProfile,
+        customization: {
+          skillRoots: existingSkillRoots(
+            this.store.packs
+              .attachedToWorkspace(turn.workspaceId)
+              .map(({ path, name }) => ({ path, name }))
+          ),
         },
-        starting.controller.signal
-      )
+      }
+      if (turn.providerSessionId) {
+        runInput.providerSessionId = turn.providerSessionId
+      }
+      const session = await harness.start(runInput, starting.controller.signal)
       if (starting.cancelled || this.#runs.get(threadId) !== starting) {
         await session.cancel().catch(() => undefined)
         return this.store.threads.view(threadId)
@@ -177,7 +180,7 @@ export class TurnCoordinator {
           threadId,
           turn.turnId,
           turn.assistantMessageId,
-          harnessFailure(errorMessage(error))
+          harnessFailure(runtimeErrorMessageSchema.parse(error))
         )
         this.#changed(threadId)
       }
@@ -207,7 +210,7 @@ export class TurnCoordinator {
       await run.session.cancel()
     } catch (error) {
       run.terminal = true
-      const message = `Could not stop the harness: ${errorMessage(error)}`
+      const message = `Could not stop the harness: ${runtimeErrorMessageSchema.parse(error)}`
       this.store.activities.settleRunning(run.turnId, "failed")
       this.store.turns.fail(
         threadId,
@@ -284,7 +287,7 @@ export class TurnCoordinator {
           "This task has no active turn"
         )
       }
-      const message = `Could not answer the harness: ${errorMessage(error)}`
+      const message = `Could not answer the harness: ${runtimeErrorMessageSchema.parse(error)}`
       this.#fail(threadId, run, harnessFailure(message))
       await run.session.cancel().catch(() => undefined)
       throw new RuntimeError("approval-failed", message)
@@ -339,7 +342,11 @@ export class TurnCoordinator {
       }
     } catch (error) {
       if (!run.cancelled && !run.terminal) {
-        this.#fail(threadId, run, harnessFailure(errorMessage(error)))
+        this.#fail(
+          threadId,
+          run,
+          harnessFailure(runtimeErrorMessageSchema.parse(error))
+        )
         await run.session.cancel().catch(() => undefined)
       }
     } finally {
@@ -473,16 +480,15 @@ export class TurnCoordinator {
       ? run.activityIds.get(activity.parentId)
       : undefined
     if (!parentId) this.#closeSegment(threadId, run)
+    const startInput: ActivityStartInput = { name: activity.name }
+    if (activity.detail) startInput.detail = activity.detail
+    if (activity.payload) startInput.payload = activity.payload
+    if (parentId) startInput.parentId = parentId
     const record = this.store.activities.start(
       threadId,
       run.turnId,
       run.ordinal++,
-      {
-        name: activity.name,
-        ...(activity.detail ? { detail: activity.detail } : {}),
-        ...(activity.payload ? { payload: activity.payload } : {}),
-        ...(parentId ? { parentId } : {}),
-      }
+      startInput
     )
     run.activityIds.set(activity.id, record.id)
     this.events.delta(threadId, { type: "activity.upserted", activity: record })
@@ -495,11 +501,11 @@ export class TurnCoordinator {
   ): void {
     const id = run.activityIds.get(update.id)
     if (!id) return
-    const record = this.store.activities.update(id, {
-      ...(update.name !== undefined ? { name: update.name } : {}),
-      ...(update.detail !== undefined ? { detail: update.detail } : {}),
-      ...(update.payload !== undefined ? { payload: update.payload } : {}),
-    })
+    const patch: ActivityUpdateInput = {}
+    if (update.name !== undefined) patch.name = update.name
+    if (update.detail !== undefined) patch.detail = update.detail
+    if (update.payload !== undefined) patch.payload = update.payload
+    const record = this.store.activities.update(id, patch)
     if (record)
       this.events.delta(threadId, {
         type: "activity.upserted",

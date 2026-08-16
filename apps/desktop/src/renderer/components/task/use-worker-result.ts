@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react"
+import { z } from "zod"
 
 import type { QueryState } from "../../runtime/use-runtime-query.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { base64ToArrayBuffer } from "./preview-bytes.js"
 
 type WorkerSuccess = { ok: true }
-type WorkerFailure = { ok: false; message: string }
+const workerFailureSchema = z.object({
+  ok: z.literal(false),
+  message: z.string(),
+})
 
 export function useWorkerResult<Message extends WorkerSuccess, Result>(
   createWorker: () => Worker,
   dataBase64: string,
+  messageSchema: z.ZodType<Message>,
   transform: (message: Message) => Result | Promise<Result>,
   workerFailureMessage: string,
   unreadableResultMessage: string
@@ -29,20 +35,26 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
       const createdWorker = createWorker()
       worker = createdWorker
       const data = base64ToArrayBuffer(dataBase64)
-      createdWorker.onmessage = (
-        event: MessageEvent<Message | WorkerFailure>
-      ) => {
+      createdWorker.onmessage = (event: MessageEvent) => {
         createdWorker.terminate()
         if (!active) return
-        const result = event.data
-        if (!result.ok) {
+        const failure = workerFailureSchema.safeParse(event.data)
+        if (failure.success) {
           setSnapshot({
             dataBase64,
-            state: { status: "error", message: result.message },
+            state: { status: "error", message: failure.data.message },
           })
           return
         }
-        void (async () => transform(result as Message))().then(
+        const message = messageSchema.safeParse(event.data)
+        if (!message.success) {
+          setSnapshot({
+            dataBase64,
+            state: { status: "error", message: unreadableResultMessage },
+          })
+          return
+        }
+        void (async () => transform(message.data))().then(
           (result) => {
             if (active) {
               setSnapshot({
@@ -51,14 +63,13 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
               })
             }
           },
-          (error: unknown) => {
+          (error) => {
             if (!active) return
             setSnapshot({
               dataBase64,
               state: {
                 status: "error",
-                message:
-                  error instanceof Error ? error.message : String(error),
+                message: describedErrorSchema.parse(error),
               },
             })
           }
@@ -86,7 +97,7 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
       createdWorker.postMessage(data, [data])
     } catch (error) {
       worker?.terminate()
-      const message = error instanceof Error ? error.message : String(error)
+      const message = describedErrorSchema.parse(error)
       queueMicrotask(() => {
         if (active) {
           setSnapshot({
@@ -106,6 +117,7 @@ export function useWorkerResult<Message extends WorkerSuccess, Result>(
   }, [
     createWorker,
     dataBase64,
+    messageSchema,
     transform,
     unreadableResultMessage,
     workerFailureMessage,

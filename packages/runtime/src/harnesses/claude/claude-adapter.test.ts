@@ -1,10 +1,7 @@
-import type { Query, SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
 import type { HarnessEvent } from "@openappto/harness-sdk"
+import type { JsonValue } from "@openappto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-
-const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }))
-
-vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: queryMock }))
 
 import {
   ClaudeAdapter,
@@ -12,7 +9,17 @@ import {
   claudeAssistantFailure,
   claudePrompt,
   planStepsFromTodos,
+  type ClaudeQuery,
+  type ClaudeQueryFactory,
 } from "./claude-adapter.js"
+
+const queryMock = vi.fn<ClaudeQueryFactory>()
+const emptyAssistantUsage = {
+  input_tokens: 0,
+  cache_creation_input_tokens: 0,
+  cache_read_input_tokens: 0,
+  output_tokens: 0,
+}
 
 beforeEach(() => queryMock.mockReset())
 
@@ -265,7 +272,7 @@ describe("planStepsFromTodos", () => {
 
 describe("claudeAssistantFailure", () => {
   it("maps the rate-limit assistant frame even when Claude later reports success", () => {
-    const message = {
+    const message = sdkMessage({
       type: "assistant",
       error: "rate_limit",
       message: {
@@ -276,7 +283,7 @@ describe("claudeAssistantFailure", () => {
           },
         ],
       },
-    } as unknown as SDKMessage
+    })
 
     expect(claudeAssistantFailure(message)).toEqual({
       kind: "usage-limit",
@@ -285,10 +292,10 @@ describe("claudeAssistantFailure", () => {
   })
 
   it("ignores ordinary assistant messages", () => {
-    const message = {
+    const message = sdkMessage({
       type: "assistant",
       message: { content: [{ type: "text", text: "Done" }] },
-    } as unknown as SDKMessage
+    })
 
     expect(claudeAssistantFailure(message)).toBeUndefined()
   })
@@ -298,10 +305,12 @@ describe("ClaudeAdapter", () => {
   it("emits only the usage-limit failure when Claude later reports success", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
-        {
+        sdkMessage({
           type: "assistant",
           error: "rate_limit",
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "text",
@@ -309,16 +318,16 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "result",
           subtype: "success",
           modelUsage: {},
-        } as unknown as SDKMessage,
+        }),
       ])
     )
 
-    const session = await new ClaudeAdapter().start(
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -351,10 +360,12 @@ describe("ClaudeAdapter", () => {
   it("keeps one plan activity per turn and settles it on completion", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
-        {
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: null,
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "tool_use",
@@ -364,11 +375,13 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: null,
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "tool_use",
@@ -380,16 +393,16 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "result",
           subtype: "success",
           modelUsage: {},
-        } as unknown as SDKMessage,
+        }),
       ])
     )
 
-    const session = await new ClaudeAdapter().start(
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -439,10 +452,12 @@ describe("ClaudeAdapter", () => {
   it("keeps a subagent TodoWrite as an ordinary nested activity", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
-        {
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: "task-1",
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "tool_use",
@@ -452,16 +467,16 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "result",
           subtype: "success",
           modelUsage: {},
-        } as unknown as SDKMessage,
+        }),
       ])
     )
 
-    const session = await new ClaudeAdapter().start(
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -497,10 +512,12 @@ describe("ClaudeAdapter", () => {
   it("tracks a background Agent until its task notification", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
-        {
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: null,
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "tool_use",
@@ -513,16 +530,16 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "system",
           subtype: "task_started",
           task_id: "task-1",
           tool_use_id: "agent-1",
           description: "Research the repo",
           subagent_type: "Explore",
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "user",
           parent_tool_use_id: null,
           message: {
@@ -534,8 +551,8 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: "agent-1",
           message: {
@@ -548,8 +565,8 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "user",
           parent_tool_use_id: "agent-1",
           message: {
@@ -561,24 +578,24 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "system",
           subtype: "task_notification",
           task_id: "task-1",
           tool_use_id: "agent-1",
           status: "completed",
           summary: "Research complete",
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "result",
           subtype: "success",
           modelUsage: {},
-        } as unknown as SDKMessage,
+        }),
       ])
     )
 
-    const session = await new ClaudeAdapter().start(
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -634,10 +651,12 @@ describe("ClaudeAdapter", () => {
   it("uses task notifications as the terminal edge for background tools", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
-        {
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: null,
           message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
             content: [
               {
                 type: "tool_use",
@@ -647,16 +666,16 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "system",
           subtype: "task_started",
           task_id: "task-1",
           tool_use_id: "bash-1",
           description: "Run tests",
           task_type: "shell",
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "user",
           parent_tool_use_id: null,
           message: {
@@ -668,24 +687,24 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "system",
           subtype: "task_notification",
           task_id: "task-1",
           tool_use_id: "bash-1",
           status: "failed",
           summary: "Tests failed",
-        } as unknown as SDKMessage,
-        {
+        }),
+        sdkMessage({
           type: "result",
           subtype: "success",
           modelUsage: {},
-        } as unknown as SDKMessage,
+        }),
       ])
     )
 
-    const session = await new ClaudeAdapter().start(
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
       {
         threadId: "thread-1",
         turnId: "turn-1",
@@ -724,11 +743,22 @@ describe("ClaudeAdapter", () => {
   })
 })
 
-function fakeQuery(messages: SDKMessage[]): Query {
+function sdkMessage(
+  message: { type: SDKMessage["type"] } & Record<string, JsonValue>
+): SDKMessage {
+  // SAFETY: These fixtures include every field read by the adapter for their
+  // discriminant and are consumed only by the in-process fake query.
+  return message as SDKMessage
+}
+
+function fakeQuery(messages: SDKMessage[]): ClaudeQuery {
   return {
     async *[Symbol.asyncIterator]() {
       yield* messages
     },
     close: vi.fn(),
-  } as unknown as Query
+    interrupt: vi.fn(() => Promise.resolve(undefined)),
+    supportedModels: vi.fn(() => Promise.resolve([])),
+    getContextUsage: vi.fn(() => Promise.reject(new Error("Not available"))),
+  }
 }

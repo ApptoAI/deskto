@@ -1,5 +1,10 @@
 import { z } from "zod"
 
+export const jsonValueSchema = z.json()
+export type JsonValue = z.infer<typeof jsonValueSchema>
+export const jsonObjectSchema = z.record(z.string(), jsonValueSchema)
+export type JsonObject = z.infer<typeof jsonObjectSchema>
+
 export const harnessSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -150,9 +155,9 @@ export type Preferences = z.infer<typeof preferencesSchema>
  */
 export const settingsSnapshotSchema = z.object({
   /** Every setting key mapped to the value currently in effect. */
-  values: z.record(z.string(), z.unknown()),
+  values: jsonObjectSchema,
   /** The subset the user has changed, keyed the same way. */
-  overrides: z.record(z.string(), z.unknown()),
+  overrides: jsonObjectSchema,
 })
 
 export type SettingsSnapshot = z.infer<typeof settingsSnapshotSchema>

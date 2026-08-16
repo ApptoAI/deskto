@@ -1,6 +1,7 @@
 import type {
+  RequestFor,
   RuntimeEvent,
-  RuntimeRequest,
+  RuntimeMethod,
   RuntimeResponse,
 } from "@openappto/protocol"
 
@@ -11,7 +12,9 @@ export type PickedProject = {
 
 export interface DesktopApi {
   runtime: {
-    request(request: RuntimeRequest): Promise<RuntimeResponse>
+    request<M extends RuntimeMethod>(
+      request: RequestFor<M>
+    ): Promise<RuntimeResponse<M>>
     subscribe(listener: (event: RuntimeEvent) => void): () => void
   }
   pickProject(): Promise<PickedProject | undefined>

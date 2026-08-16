@@ -4,6 +4,7 @@ import {
   visibleColumnLimit,
   visibleRowLimit,
   visibleSheetLimit,
+  previewCellSchema,
   type WorkbookPreview,
 } from "./spreadsheet-preview-data.js"
 
@@ -21,7 +22,11 @@ self.onmessage = async (event: MessageEvent<ArrayBuffer>) => {
           sheet: sheet.sheet,
           data: sheet.data
             .slice(0, visibleRowLimit)
-            .map((row) => row.slice(0, visibleColumnLimit)),
+            .map((row) =>
+              row
+                .slice(0, visibleColumnLimit)
+                .map((cell) => previewCellSchema.parse(cell))
+            ),
           totalRows: sheet.data.length,
           maxColumns,
         }

@@ -1,6 +1,10 @@
 import { z } from "zod"
 
-import { defineSetting, type SettingDefinition } from "./definition.js"
+import {
+  defineSetting,
+  type SettingDefinition,
+  type SettingValue,
+} from "./definition.js"
 import { keybindingSchema } from "./keybinding.js"
 
 export const harnessModelSelectionSchema = z
@@ -55,7 +59,7 @@ export const appSettings = {
   }),
 }
 
-export const settingDefinitions: readonly SettingDefinition<unknown>[] =
+export const settingDefinitions: readonly SettingDefinition<SettingValue>[] =
   Object.values(appSettings)
 
 const definitionsByKey = new Map(
@@ -77,6 +81,6 @@ export const harnessModelSettings = settingDefinitions.filter(
 
 export function settingDefinition(
   key: string
-): SettingDefinition<unknown> | undefined {
+): SettingDefinition<SettingValue> | undefined {
   return definitionsByKey.get(key)
 }

@@ -59,7 +59,7 @@ async function readLoginShellPath(): Promise<string[]> {
   }
 }
 
-function pathProbe(): { shell: string; command: string } {
+function pathProbe() {
   const fallback = process.platform === "darwin" ? "/bin/zsh" : "/bin/bash"
   const configured = process.env.SHELL
   const name = configured ? path.basename(configured) : ""
