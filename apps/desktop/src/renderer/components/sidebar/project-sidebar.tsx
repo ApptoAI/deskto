@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Project, Workspace } from "@deskto/protocol"
@@ -10,8 +11,8 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 import { useKeybindingLabel } from "../../settings/use-keybinding.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
-import { DesktoLockup } from "../deskto-logo.js"
 import { ProjectSwitcher } from "./project-switcher.js"
+import { SidebarFrame } from "./sidebar-frame.js"
 import { TaskList, type InboxActions } from "./task-list.js"
 import { WorkspaceSwitcher } from "./workspace-switcher.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
@@ -37,6 +38,7 @@ export function ProjectSidebar({
   onNewTask,
   onRetryThreads,
   onOpenSettings,
+  focusSettings,
   inboxActions,
 }: {
   workspace: Workspace | null
@@ -59,18 +61,19 @@ export function ProjectSidebar({
   onNewTask: () => void
   onRetryThreads: () => void
   onOpenSettings: () => void
+  /** True when Settings just closed, so the button that opened it takes focus
+      back instead of leaving the caret on the body. */
+  focusSettings: boolean
   inboxActions: InboxActions
 }) {
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
+  const settingsButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (focusSettings) settingsButton.current?.focus()
+  }, [focusSettings])
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-sidebar xl:w-80">
-      {/* Traffic lights sit at the left of this strip, so the logo takes the
-          right. Still a drag region — the svg is not an interactive target. */}
-      <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">
-        <DesktoLockup className="h-[15px] w-auto text-foreground/70" />
-      </div>
-
+    <SidebarFrame>
       <div className="no-drag px-2 pb-3">
         <WorkspaceSwitcher
           workspace={workspace}
@@ -158,6 +161,7 @@ export function ProjectSidebar({
 
       <div className="no-drag border-t border-border p-2">
         <Button
+          ref={settingsButton}
           variant="ghost"
           size="sm"
           className="w-full justify-start text-muted-foreground"
@@ -167,6 +171,6 @@ export function ProjectSidebar({
           Settings
         </Button>
       </div>
-    </aside>
+    </SidebarFrame>
   )
 }
