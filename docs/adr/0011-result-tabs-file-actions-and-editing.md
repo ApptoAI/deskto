@@ -45,9 +45,11 @@ the shell to touch a file the Runtime did not vouch for.
 Opening is restricted to an explicit list of document formats, listed
 separately from the preview formats rather than derived from them. Handing a
 path to the shell launches whatever claims that type, and an agent chooses
-both the name and the contents of every file it writes: a script, a page that
-runs when a browser opens it, and a macro-bearing legacy Office file are all
-previewable and none are safe to launch.
+both the name and the contents of every file it writes. Scripts and active
+markup with preview support remain previewable but cannot be launched. Legacy
+and macro-enabled Office formats (`.doc`, `.xls`, `.ppt`, `.docm`, `.xlsm`,
+`.pptm`, and `.rtf`) have neither an inline preview nor an open action; they
+can only be copied or revealed.
 
 `artifact.write` replaces the file behind a result. It accepts plain text,
 Markdown, and CSV only, and refuses when the file's modification time no
