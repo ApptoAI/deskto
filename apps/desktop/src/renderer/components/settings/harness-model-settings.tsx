@@ -1,12 +1,12 @@
 import { useState } from "react"
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 import {
   harnessModelSettings,
   isOverridden,
   settingValue,
   type HarnessModelSelection,
   type SettingDefinition,
-} from "@openappto/settings"
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -35,7 +35,7 @@ export function HarnessModelSettings({
       <div>
         <h2 className="text-sm font-medium">Generated text</h2>
         <p className="text-xs text-muted-foreground">
-          Choose models for short text Appto creates automatically.
+          Choose models for short text Deskto creates automatically.
         </p>
       </div>
 

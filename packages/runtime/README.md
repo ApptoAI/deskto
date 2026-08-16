@@ -1,10 +1,10 @@
-# @openappto/runtime
+# @deskto/runtime
 
-The application service behind Appto. The Runtime owns workspaces, projects, packs, threads, turns, SQLite persistence, and the Harness sessions that do the actual work. It is a headless library: the Electron main process embeds it today, and a hosted server could embed the same code later.
+The application service behind Deskto. The Runtime owns workspaces, projects, packs, threads, turns, SQLite persistence, and the Harness sessions that do the actual work. It is a headless library: the Electron main process embeds it today, and a hosted server could embed the same code later.
 
 ## What it does
 
-`createRuntime(options)` returns a `Runtime` that implements the `RuntimeTransport` interface from `@openappto/protocol`. Hosts hand it a database path and a list of harness adapters; clients talk to it through `request()` and `subscribe()`.
+`createRuntime(options)` returns a `Runtime` that implements the `RuntimeTransport` interface from `@deskto/protocol`. Hosts hand it a database path and a list of harness adapters; clients talk to it through `request()` and `subscribe()`.
 
 Internally the Runtime is four collaborators:
 
@@ -15,7 +15,7 @@ Internally the Runtime is four collaborators:
 
 ## Harness adapters
 
-Two adapters ship in `src/harnesses/`, both implementing the `HarnessAdapterFactory` contract from `@openappto/harness-sdk`:
+Two adapters ship in `src/harnesses/`, both implementing the `HarnessAdapterFactory` contract from `@deskto/harness-sdk`:
 
 - `ClaudeAdapter` drives Claude Code through `@anthropic-ai/claude-agent-sdk`. It streams partial messages as `message.delta`, classifies tool use into typed activities (TodoWrite becomes the Turn's plan, Agent and the legacy Task name become subagents, edits become file changes, and `parent_tool_use_id` nests a subagent's work under it), and uses task notifications to track background agents through their real completion. It routes permission checks through `canUseTool` so they surface as approvals and resumes sessions via the stored provider session id. Pack skill roots become generated local plugins (a manifest plus a symlink, with MCP discovery off).
 - `CodexAdapter` spawns `codex app-server` and speaks JSON-RPC over JSONL. It maps item events to typed activities, reads working plans from `turn/plan/updated`, and turns `subAgentActivity` and collaboration calls into provider-neutral subagent work. Tool and file activities from child provider threads nest under the subagent that spawned them, while child narration stays out of the main Turn. The adapter forwards command and file-change approval requests and cancels with `turn/interrupt`. Pack skill roots go through the `skills/extraRoots/set` RPC, best effort: a codex version without it degrades silently.
@@ -27,14 +27,14 @@ Provider types stay inside their adapter. By the time anything reaches the Clien
 ## Embedding
 
 ```ts
-import { createRuntime, ClaudeAdapter, CodexAdapter } from "@openappto/runtime"
+import { createRuntime, ClaudeAdapter, CodexAdapter } from "@deskto/runtime"
 
 const runtime = createRuntime({
-  databasePath: join(userDataDir, "appto.sqlite"),
+  databasePath: join(userDataDir, "deskto.sqlite"),
   harnesses: [new ClaudeAdapter(), new CodexAdapter()],
 })
 ```
 
 `RuntimeOptions` also accepts `harnessRefreshMs` and a `probeGate` promise, which delays availability probes until the host is ready (the desktop app resolves it after rebuilding PATH from the login shell). Call `runtime.close()` on shutdown.
 
-Tests run with `pnpm --filter @openappto/runtime test` (vitest), using `ScriptedHarness` from the harness SDK instead of real providers.
+Tests run with `pnpm --filter @deskto/runtime test` (vitest), using `ScriptedHarness` from the harness SDK instead of real providers.

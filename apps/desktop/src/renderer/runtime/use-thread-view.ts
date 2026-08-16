@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react"
-import { applyThreadDelta } from "@openappto/client"
-import type { ThreadView } from "@openappto/protocol"
+import { applyThreadDelta } from "@deskto/client"
+import type { ThreadView } from "@deskto/protocol"
 
 import { useRuntimeClient } from "./runtime-client-context.js"
 import { useRuntimeEvent } from "./use-runtime-event.js"

@@ -4,7 +4,7 @@ import {
   matchesKeybinding,
   parseKeybinding,
   type SettingDefinition,
-} from "@openappto/settings"
+} from "@deskto/settings"
 
 import { keyboardPlatform } from "../lib/platform.js"
 import { useSettingValue } from "./settings-context.js"

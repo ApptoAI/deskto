@@ -3,8 +3,8 @@ import {
   settingDefinition,
   type SettingValues,
   type SettingsSnapshot,
-} from "@openappto/settings"
-import { jsonObjectSchema, type JsonObject } from "@openappto/protocol"
+} from "@deskto/settings"
+import { jsonObjectSchema, type JsonObject } from "@deskto/protocol"
 
 import { RuntimeError } from "./errors.js"
 import type { Settings } from "./storage/settings.js"
@@ -13,7 +13,7 @@ const storageKey = "user-settings"
 
 /**
  * Validates and stores user overrides for the settings registry in
- * `@openappto/settings`. Overrides live as one JSON object in the settings
+ * `@deskto/settings`. Overrides live as one JSON object in the settings
  * table; defaults never leave the registry, so shipping a new default reaches
  * every user who has not overridden that setting.
  */

@@ -19,7 +19,7 @@ import {
   sep,
 } from "node:path"
 
-import type { Artifact, ArtifactPreview, TurnOutput } from "@openappto/protocol"
+import type { Artifact, ArtifactPreview, TurnOutput } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"

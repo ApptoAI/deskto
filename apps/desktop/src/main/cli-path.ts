@@ -12,8 +12,8 @@ const maxProbeOutputLength = 4_000_000
 
 // The shell profile may print anything before or after the probe output, so
 // the value is fenced with markers instead of trusting the stream as a whole.
-const pathStartMarker = "__APPTO_PATH_START__"
-const pathEndMarker = "__APPTO_PATH_END__"
+const pathStartMarker = "__DESKTO_PATH_START__"
+const pathEndMarker = "__DESKTO_PATH_END__"
 
 // Shells whose -ilc flags and "$PATH" expansion behave the POSIX way. fish is
 // handled separately; anything else (tcsh, nu, ...) gets the stock shell.

@@ -1,13 +1,13 @@
 import { dirname, join } from "node:path"
 
-import type { HarnessAdapterFactory } from "@openappto/harness-sdk"
+import type { HarnessAdapterFactory } from "@deskto/harness-sdk"
 import type {
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
   RuntimeResponse,
   RuntimeTransport,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { HarnessRegistry } from "./harness-registry.js"
 import { RequestRouter } from "./request-router.js"

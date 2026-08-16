@@ -7,7 +7,7 @@ import {
   settingValue,
   type SettingDefinition,
   type SettingValues,
-} from "@openappto/settings"
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -44,7 +44,7 @@ export function ShortcutSettings() {
 
       {loadError ? (
         <StatusPanel
-          title="Appto cannot read your settings"
+          title="Deskto cannot read your settings"
           description={loadError}
           tone="danger"
         >

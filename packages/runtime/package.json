@@ -1,5 +1,5 @@
 {
-  "name": "@openappto/runtime",
+  "name": "@deskto/runtime",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.231",
-    "@openappto/harness-sdk": "workspace:*",
-    "@openappto/protocol": "workspace:*",
-    "@openappto/settings": "workspace:*",
+    "@deskto/harness-sdk": "workspace:*",
+    "@deskto/protocol": "workspace:*",
+    "@deskto/settings": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

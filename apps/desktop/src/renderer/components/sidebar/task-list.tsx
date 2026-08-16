@@ -11,7 +11,7 @@ import PinOffIcon from "lucide-react/dist/esm/icons/pin-off"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
 import RotateCcwIcon from "lucide-react/dist/esm/icons/rotate-ccw"
 import Trash2Icon from "lucide-react/dist/esm/icons/trash-2"
-import type { Thread } from "@openappto/protocol"
+import type { Thread } from "@deskto/protocol"
 import {
   autoDoneAfterDays,
   canMarkDone,
@@ -24,7 +24,7 @@ import {
   threadCameBack,
   type InboxSection,
   type SnoozePreset,
-} from "@openappto/client"
+} from "@deskto/client"
 
 import { cn } from "@workspace/ui/lib/utils"
 import { Button } from "@workspace/ui/components/button"
@@ -104,12 +104,12 @@ export function TaskList({
 }) {
   const now = useNowMinute()
   const [laterExpanded, setLaterExpanded] = useLocalStorage(
-    "appto.sidebar.later-expanded",
+    "deskto.sidebar.later-expanded",
     false,
     z.boolean()
   )
   const [doneExpanded, setDoneExpanded] = useLocalStorage(
-    "appto.sidebar.done-expanded",
+    "deskto.sidebar.done-expanded",
     false,
     z.boolean()
   )

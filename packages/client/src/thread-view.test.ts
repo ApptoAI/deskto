@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Activity, Message, ThreadView } from "@openappto/protocol"
+import type { Activity, Message, ThreadView } from "@deskto/protocol"
 
 import { applyThreadDelta, type ThreadDeltaEvent } from "./thread-view.js"
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { Activity, ActivityPayload } from "@openappto/protocol"
+import type { Activity, ActivityPayload } from "@deskto/protocol"
 
 import { toActivity, type ActivityRow } from "./records.js"
 

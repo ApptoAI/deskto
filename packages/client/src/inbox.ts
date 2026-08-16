@@ -1,4 +1,4 @@
-import { isActivityBlocked, type Thread } from "@openappto/protocol"
+import { isActivityBlocked, type Thread } from "@deskto/protocol"
 
 /**
  * The task inbox (ADR 0007): pure classification over thread records, shared

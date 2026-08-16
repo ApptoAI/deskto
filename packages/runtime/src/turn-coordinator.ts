@@ -10,13 +10,13 @@ import {
   type HarnessFailure,
   type HarnessRunInput,
   type HarnessSession,
-} from "@openappto/harness-sdk"
+} from "@deskto/harness-sdk"
 import type {
   Activity,
   ThreadDeltaChange,
   ThreadView,
   TurnInput,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"

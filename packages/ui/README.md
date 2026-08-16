@@ -1,6 +1,6 @@
 # @workspace/ui
 
-Reusable DOM components for Appto surfaces. The package holds the design-system primitives and the chat-specific components the desktop renderer composes into screens. It never imports Electron or calls the Runtime; everything here renders props and fires callbacks.
+Reusable DOM components for Deskto surfaces. The package holds the design-system primitives and the chat-specific components the desktop renderer composes into screens. It never imports Electron or calls the Runtime; everything here renders props and fires callbacks.
 
 ## What is in it
 

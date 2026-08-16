@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { createInterface } from "node:readline"
-import { jsonValueSchema } from "@openappto/protocol"
+import { jsonValueSchema } from "@deskto/protocol"
 import { z } from "zod"
 
 import type {

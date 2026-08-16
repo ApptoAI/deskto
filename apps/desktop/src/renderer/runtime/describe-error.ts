@@ -1,4 +1,4 @@
-import { RuntimeClientError } from "@openappto/client"
+import { RuntimeClientError } from "@deskto/client"
 import { z } from "zod"
 
 export const describedErrorSchema = z

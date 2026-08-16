@@ -1,4 +1,4 @@
-import type { ExecutionProfile } from "@openappto/protocol"
+import type { ExecutionProfile } from "@deskto/protocol"
 
 import {
   DEFAULT_EFFORT,

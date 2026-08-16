@@ -1,4 +1,4 @@
-import type { RuntimeEvent, ThreadView } from "@openappto/protocol"
+import type { RuntimeEvent, ThreadView } from "@deskto/protocol"
 
 export type ThreadDeltaEvent = Extract<RuntimeEvent, { type: "thread.delta" }>
 

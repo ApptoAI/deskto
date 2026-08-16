@@ -30,4 +30,4 @@ const api: DesktopApi = {
   openFolder: (path) => ipcRenderer.invoke(openFolderChannel, path),
 }
 
-contextBridge.exposeInMainWorld("appto", api)
+contextBridge.exposeInMainWorld("deskto", api)

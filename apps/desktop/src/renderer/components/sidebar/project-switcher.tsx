@@ -3,7 +3,7 @@ import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
 import FolderPlusIcon from "lucide-react/dist/esm/icons/folder-plus"
 import LayersIcon from "lucide-react/dist/esm/icons/layers"
-import type { Project, Workspace } from "@openappto/protocol"
+import type { Project, Workspace } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

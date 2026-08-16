@@ -1,7 +1,7 @@
 import { ipcMain, type WebContents } from "electron"
 
-import { runtimeRequestSchema } from "@openappto/protocol"
-import type { Runtime } from "@openappto/runtime"
+import { runtimeRequestSchema } from "@deskto/protocol"
+import type { Runtime } from "@deskto/runtime"
 
 import {
   runtimeEventChannel,

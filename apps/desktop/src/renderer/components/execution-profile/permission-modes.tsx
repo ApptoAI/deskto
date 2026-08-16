@@ -1,7 +1,7 @@
 import LockIcon from "lucide-react/dist/esm/icons/lock"
 import LockOpenIcon from "lucide-react/dist/esm/icons/lock-open"
 import ShieldAlertIcon from "lucide-react/dist/esm/icons/shield-alert"
-import type { ExecutionProfile } from "@openappto/protocol"
+import type { ExecutionProfile } from "@deskto/protocol"
 
 import type { ProfileOption } from "./profile-menu.js"
 
