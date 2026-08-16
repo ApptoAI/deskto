@@ -53,7 +53,12 @@ export function CsvPreview({ content }: { content: string }) {
 
 function truncationNotice(hiddenRows: number, hiddenColumns: number): string {
   const parts: string[] = []
-  if (hiddenRows > 0) parts.push(`${hiddenRows} more rows`)
-  if (hiddenColumns > 0) parts.push(`${hiddenColumns} more columns`)
-  return `${parts.join(" and ")} are not shown in this preview.`
+  if (hiddenRows > 0)
+    parts.push(`${hiddenRows} more ${hiddenRows === 1 ? "row" : "rows"}`)
+  if (hiddenColumns > 0)
+    parts.push(
+      `${hiddenColumns} more ${hiddenColumns === 1 ? "column" : "columns"}`
+    )
+  const verb = hiddenRows + hiddenColumns === 1 ? "is" : "are"
+  return `${parts.join(" and ")} ${verb} not shown in this preview.`
 }

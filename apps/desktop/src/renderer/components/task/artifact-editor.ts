@@ -30,6 +30,10 @@ export function useDraft<T>(
     setDraft(parse(content))
     setDirty(false)
   }, [content, parse])
+  const changeDraft = useCallback((next: T) => {
+    setDraft(next)
+    setDirty(true)
+  }, [])
 
   useEffect(() => {
     onDirtyChange(dirty)
@@ -38,10 +42,7 @@ export function useDraft<T>(
   return {
     draft,
     dirty,
-    setDraft: (next: T) => {
-      setDraft(next)
-      setDirty(true)
-    },
+    setDraft: changeDraft,
     discard,
   }
 }

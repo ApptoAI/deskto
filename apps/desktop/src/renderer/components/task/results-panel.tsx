@@ -295,7 +295,7 @@ function ResultTabContent({
 
   const canEdit =
     isEditableArtifactKind(artifact.previewKind) && content !== undefined
-  const stale = session !== null && session.version !== artifact.updatedAt
+  const stale = session !== null && session.version < artifact.updatedAt
   const fileAction = { threadId, artifactId: artifact.id }
 
   return (

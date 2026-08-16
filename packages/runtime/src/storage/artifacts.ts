@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import {
   closeSync,
   constants,
+  fchmodSync,
   fstatSync,
   openSync,
   readSync,
@@ -246,6 +247,8 @@ export class Artifacts {
     return {
       artifactId,
       absolutePath: file.absolutePath,
+      device: String(file.stats.dev),
+      inode: String(file.stats.ino),
       // Read from the resolved file: a symlink inside the Project could point
       // a harmless-looking name at a different extension.
       openable: isOpenableArtifactPath(file.relativePath),
@@ -379,6 +382,7 @@ export class Artifacts {
     file: SafeProjectFile
   ): Artifact {
     const now = new Date().toISOString()
+    const fileUpdatedAt = modifiedAt(file.stats)
     const format = formatFor(file.relativePath)
     // SAFETY: the unique project/path lookup selects a complete ArtifactRow or
     // returns undefined when this is the first capture.
@@ -398,7 +402,7 @@ export class Artifacts {
           format.mediaType,
           format.previewKind,
           file.stats.size,
-          now,
+          fileUpdatedAt,
           id
         )
     } else {
@@ -415,7 +419,7 @@ export class Artifacts {
           format.previewKind,
           file.stats.size,
           now,
-          now
+          fileUpdatedAt
         )
     }
     this.database
@@ -583,6 +587,9 @@ function writeSafeProjectFile(file: SafeProjectFile, data: Buffer): Stats {
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
       target.mode
     )
+    // openSync applies the process umask even when a mode is supplied. Restore
+    // the original permissions before the temp file replaces the target.
+    fchmodSync(descriptor, target.mode)
     let offset = 0
     while (offset < data.byteLength) {
       offset += writeSync(

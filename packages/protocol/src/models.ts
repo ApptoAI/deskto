@@ -394,6 +394,9 @@ export function isEditableArtifact(artifact: Artifact): boolean {
 export const artifactLocationSchema = z.object({
   artifactId: z.string(),
   absolutePath: z.string(),
+  /** File identity captured by the Runtime's containment check. */
+  device: z.string(),
+  inode: z.string(),
   /** False when the format is not safe to hand to the operating system. */
   openable: z.boolean(),
 })

@@ -39,6 +39,13 @@ describe("round trip", () => {
       expect(serializeCsv(parseCsv(content))).toBe(content)
     })
   }
+
+  it("preserves a tab-delimited file and treats commas as text", () => {
+    const content = 'a,b\t"c\td"\n'
+    const parsed = parseCsv(content, "\t")
+    expect(parsed.rows).toEqual([["a,b", "c\td"]])
+    expect(serializeCsv(parsed, "\t")).toBe(content)
+  })
 })
 
 describe("parseCsv", () => {

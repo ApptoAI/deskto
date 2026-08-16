@@ -25,6 +25,7 @@ export function CsvEditor({
   onSave,
   onDirtyChange,
 }: ArtifactEditorProps) {
+  const loaded = useMemo(() => parseCsv(content), [content])
   const { draft, dirty, setDraft, discard } = useDraft(
     content,
     parseCsv,
@@ -43,8 +44,8 @@ export function CsvEditor({
   )
 
   if (
-    draft.rows.length > csvEditRowLimit ||
-    draft.columns > csvEditColumnLimit
+    loaded.rows.length > csvEditRowLimit ||
+    loaded.columns > csvEditColumnLimit
   ) {
     return (
       <PreviewUnavailable
@@ -65,6 +66,7 @@ export function CsvEditor({
             <Button
               variant="ghost"
               size="sm"
+              disabled={draft.rows.length >= csvEditRowLimit}
               onClick={() => setDraft(withRow(draft))}
             >
               <PlusIcon data-icon="inline-start" />
@@ -73,6 +75,7 @@ export function CsvEditor({
             <Button
               variant="ghost"
               size="sm"
+              disabled={draft.columns >= csvEditColumnLimit}
               onClick={() => setDraft(withColumn(draft))}
             >
               <PlusIcon data-icon="inline-start" />
