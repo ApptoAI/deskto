@@ -8,7 +8,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import { openFolder } from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
-import { describeError } from "../../runtime/describe-error.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import { type QueryState } from "../../runtime/use-runtime-query.js"
 import { useThreadView } from "../../runtime/use-thread-view.js"
@@ -96,7 +96,7 @@ export function TaskView({
     try {
       replace(await client.configureThread(thread.id, next))
     } catch (error) {
-      setProfileError(describeError(error))
+      setProfileError(describedErrorSchema.parse(error))
     }
   }
 
@@ -105,7 +105,7 @@ export function TaskView({
     try {
       await openFolder(path)
     } catch (error) {
-      setFolderError(describeError(error))
+      setFolderError(describedErrorSchema.parse(error))
     }
   }
 

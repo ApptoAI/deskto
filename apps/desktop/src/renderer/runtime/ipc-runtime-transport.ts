@@ -18,7 +18,7 @@ export class IpcRuntimeTransport implements RuntimeTransport {
   request<M extends RuntimeMethod>(
     request: RequestFor<M>
   ): Promise<RuntimeResponse<M>> {
-    return this.bridge.request(request) as Promise<RuntimeResponse<M>>
+    return this.bridge.request(request)
   }
 
   subscribe(listener: (event: RuntimeEvent) => void): () => void {

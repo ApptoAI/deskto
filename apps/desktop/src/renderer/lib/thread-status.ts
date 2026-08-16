@@ -6,7 +6,7 @@ type StatusPresentation = {
   textClassName: string
 }
 
-const presentations: Record<Thread["status"], StatusPresentation> = {
+const presentations = {
   idle: {
     label: "Ready",
     dotClassName: "bg-muted-foreground/50",
@@ -27,7 +27,7 @@ const presentations: Record<Thread["status"], StatusPresentation> = {
     dotClassName: "bg-destructive",
     textClassName: "text-destructive",
   },
-}
+} satisfies Record<Thread["status"], StatusPresentation>
 
 export function describeThreadStatus(
   status: Thread["status"]

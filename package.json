@@ -6,14 +6,16 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "desktop:dev": "turbo dev --filter=@openappto/desktop",
-    "lint": "turbo lint",
+    "lint": "oxlint . && turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
     "test": "turbo test"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.78.0",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
+    "oxlint": "1.78.0",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "turbo": "^2.9.18",

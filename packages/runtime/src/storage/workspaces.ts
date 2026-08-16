@@ -7,10 +7,18 @@ import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import { toWorkspace, type WorkspaceRow } from "./records.js"
 
+export type WorkspacePatch = {
+  name?: string
+  color?: string
+  icon?: string
+}
+
 export class Workspaces {
   constructor(private readonly database: DatabaseSync) {}
 
   list(): Workspace[] {
+    // SAFETY: migrations define every workspaces column used by WorkspaceRow,
+    // and this query selects complete rows.
     const rows = this.database
       .prepare("SELECT * FROM workspaces ORDER BY sort_order, created_at")
       .all() as WorkspaceRow[]
@@ -18,6 +26,8 @@ export class Workspaces {
   }
 
   get(id: string): Workspace {
+    // SAFETY: workspaces.id is the primary key and SELECT * matches
+    // WorkspaceRow; SQLite returns undefined for a missing id.
     const row = this.database
       .prepare("SELECT * FROM workspaces WHERE id = ?")
       .get(id) as WorkspaceRow | undefined
@@ -28,6 +38,7 @@ export class Workspaces {
 
   create(name: string, color: string, icon: string): Workspace {
     const now = new Date().toISOString()
+    // SAFETY: COALESCE always returns one row with an integer `next` value.
     const { next } = this.database
       .prepare(
         "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM workspaces"
@@ -58,10 +69,7 @@ export class Workspaces {
     return workspace
   }
 
-  update(
-    id: string,
-    patch: { name?: string; color?: string; icon?: string }
-  ): Workspace {
+  update(id: string, patch: WorkspacePatch): Workspace {
     const current = this.get(id)
     const next: Workspace = {
       ...current,

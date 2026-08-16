@@ -1,3 +1,5 @@
+import { z } from "zod"
+
 export class RuntimeError extends Error {
   constructor(
     readonly code: string,
@@ -8,6 +10,13 @@ export class RuntimeError extends Error {
   }
 }
 
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown runtime error"
+export function createErrorMessageSchema(fallback: string) {
+  return z
+    .instanceof(Error)
+    .transform((error) => error.message)
+    .catch(fallback)
 }
+
+export const runtimeErrorMessageSchema = createErrorMessageSchema(
+  "Unknown runtime error"
+)

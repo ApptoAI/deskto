@@ -16,7 +16,7 @@ export function registerRuntimeIpc(
     if (!webContents.isDestroyed()) webContents.send(runtimeEventChannel, event)
   })
 
-  ipcMain.handle(runtimeRequestChannel, (_event, value: unknown) => {
+  ipcMain.handle(runtimeRequestChannel, (_event, value) => {
     const parsed = runtimeRequestSchema.safeParse(value)
     if (!parsed.success) {
       return {

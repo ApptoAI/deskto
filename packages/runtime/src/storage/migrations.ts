@@ -222,6 +222,8 @@ const migrations = [
 ]
 
 export function migrate(database: DatabaseSync): void {
+  // SAFETY: PRAGMA user_version always returns one row with an integer
+  // user_version field in SQLite.
   const currentVersion = database.prepare("PRAGMA user_version").get() as {
     user_version: number
   }

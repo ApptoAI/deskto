@@ -6,10 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import type { RuntimeClient } from "@openappto/client"
 import { appSettings } from "@openappto/settings"
 
 import { personalWorkspaceId, type Selection } from "@openappto/protocol"
 import { Button } from "@workspace/ui/components/button"
+import { z } from "zod"
 
 import { InlineError } from "../components/inline-error.js"
 import { SettingsView } from "../components/settings/settings-view.js"
@@ -24,7 +26,7 @@ import {
 } from "../components/workspace/workspace-dialog.js"
 import { pickPackFolder, pickProjectFolder } from "../lib/desktop.js"
 import { useLocalStorage } from "../lib/use-local-storage.js"
-import { describeError } from "../runtime/describe-error.js"
+import { describedErrorSchema } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
@@ -44,13 +46,17 @@ type MainView =
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 type ProjectScope = "all" | "project"
 
-function decodeProjectScopeMap(value: unknown): Record<string, ProjectScope> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, ProjectScope] =>
-        entry[1] === "all" || entry[1] === "project"
-    )
+const projectScopeMapSchema = z.record(z.string(), z.enum(["all", "project"]))
+
+function useProjectThreadLoader(
+  client: RuntimeClient,
+  projectId: string | null,
+  allProjects: boolean
+) {
+  return useMemo(
+    () =>
+      projectId && !allProjects ? () => client.listThreads(projectId) : null,
+    [client, projectId, allProjects]
   )
 }
 
@@ -139,19 +145,17 @@ export function Workbench() {
   // same way the composer remembers the last model.
   const [projectScopeMap, setProjectScopeMap] = useLocalStorage<
     Record<string, ProjectScope>
-  >("appto.sidebar.project-scope.v1", {}, decodeProjectScopeMap)
+  >("appto.sidebar.project-scope.v1", {}, projectScopeMapSchema)
   const allProjects = activeWorkspaceId
     ? (projectScopeMap[activeWorkspaceId] ?? "project") === "all"
     : false
 
   // Gated on the visible scope: in all-projects mode this query's result is
   // never rendered, and every thread.changed would refetch it for nothing.
-  const loadThreads = useMemo(
-    () =>
-      activeProjectId && !allProjects
-        ? () => client.listThreads(activeProjectId)
-        : null,
-    [client, activeProjectId, allProjects]
+  const loadThreads = useProjectThreadLoader(
+    client,
+    activeProjectId,
+    allProjects
   )
   const threads = useRuntimeQuery(loadThreads)
   const revalidateThreads = threads.revalidate
@@ -258,7 +262,7 @@ export function Workbench() {
       const next: Selection = {
         lastWorkspaceId: activeWorkspaceId,
         lastProjectIds: {
-          ...(selection?.lastProjectIds ?? {}),
+          ...selection?.lastProjectIds,
           [activeWorkspaceId]: projectId,
         },
       }
@@ -307,7 +311,7 @@ export function Workbench() {
     try {
       return await action()
     } catch (error) {
-      setActionError(describeError(error))
+      setActionError(describedErrorSchema.parse(error))
       throw error
     }
   }
@@ -343,9 +347,11 @@ export function Workbench() {
   // and the list queries refetch from there like every other thread update.
   // Memoized so every task row is not handed a fresh identity per render.
   const inboxActions: InboxActions = useMemo(() => {
-    const run = (action: () => Promise<unknown>) => {
+    const run = <Result,>(action: () => Promise<Result>) => {
       setActionError(null)
-      action().catch((error: unknown) => setActionError(describeError(error)))
+      action().catch((error) =>
+        setActionError(describedErrorSchema.parse(error))
+      )
     }
     return {
       onSetDone: (threadId, done) =>

@@ -2,6 +2,11 @@ import type { Harness } from "@openappto/protocol"
 
 import type { QueryState } from "../runtime/use-runtime-query.js"
 
+type HarnessHealth = {
+  dotClassName: string
+  detail: string
+}
+
 export function isHarnessAvailable(harness: Harness): boolean {
   return harness.enabled && harness.availability.status === "available"
 }
@@ -14,10 +19,7 @@ export function harnessUnavailableReason(harness: Harness): string | null {
 }
 
 /** Status dot and one-line detail shared by every place harness health shows. */
-export function describeHarnessHealth(harness: Harness): {
-  dotClassName: string
-  detail: string
-} {
+export function describeHarnessHealth(harness: Harness): HarnessHealth {
   if (!harness.enabled) {
     return {
       dotClassName: "bg-muted-foreground/40",

@@ -27,8 +27,6 @@ export interface Keybinding {
   shift: boolean
 }
 
-type ModifierName = "mod" | "ctrl" | "alt" | "shift"
-
 const modifierNames = new Set<string>(["mod", "ctrl", "alt", "shift"])
 const modifierEventKeys = new Set([
   "meta",
@@ -40,6 +38,13 @@ const modifierEventKeys = new Set([
 // Keydowns that stand in for composition state rather than a real key.
 const compositionEventKeys = new Set(["dead", "process", "unidentified"])
 const functionKeyPattern = /^f([1-9]|1[0-9]|2[0-4])$/
+const parsedKeybindingSchema = z.object({
+  key: z.string(),
+  mod: z.boolean(),
+  ctrl: z.boolean(),
+  alt: z.boolean(),
+  shift: z.boolean(),
+})
 
 export function parseKeybinding(value: string): Keybinding | null {
   const parts = value.toLowerCase().split("+")
@@ -55,7 +60,10 @@ export function parseKeybinding(value: string): Keybinding | null {
   }
   for (const part of parts.slice(0, -1)) {
     if (!modifierNames.has(part)) return null
-    binding[part as ModifierName] = true
+    if (part === "mod") binding.mod = true
+    else if (part === "ctrl") binding.ctrl = true
+    else if (part === "alt") binding.alt = true
+    else if (part === "shift") binding.shift = true
   }
   return binding
 }
@@ -95,8 +103,13 @@ export function matchesKeybinding(
   event: KeyComboEvent,
   platform: Platform
 ): boolean {
-  const parsed =
-    typeof binding === "string" ? parseKeybinding(binding) : binding
+  const stringBinding = z.string().safeParse(binding)
+  const objectBinding = parsedKeybindingSchema.safeParse(binding)
+  const parsed = stringBinding.success
+    ? parseKeybinding(stringBinding.data)
+    : objectBinding.success
+      ? objectBinding.data
+      : null
   if (!parsed) return false
 
   const required = effectiveModifiers(parsed, platform)
@@ -138,14 +151,14 @@ export function keybindingFromEvent(
   return parts.join("+")
 }
 
-const displayKeys: Record<string, string> = {
-  escape: "Esc",
-  plus: "+",
-  arrowup: "↑",
-  arrowdown: "↓",
-  arrowleft: "←",
-  arrowright: "→",
-}
+const displayKeys = new Map<string, string>([
+  ["escape", "Esc"],
+  ["plus", "+"],
+  ["arrowup", "↑"],
+  ["arrowdown", "↓"],
+  ["arrowleft", "←"],
+  ["arrowright", "→"],
+])
 
 /** Renders a binding the way the platform writes shortcuts: ⌘N or Ctrl+N. */
 export function formatKeybinding(value: string, platform: Platform): string {
@@ -154,7 +167,7 @@ export function formatKeybinding(value: string, platform: Platform): string {
 
   const modifiers = effectiveModifiers(binding, platform)
   const key =
-    displayKeys[binding.key] ??
+    displayKeys.get(binding.key) ??
     (binding.key.length === 1
       ? binding.key.toUpperCase()
       : binding.key.charAt(0).toUpperCase() + binding.key.slice(1))

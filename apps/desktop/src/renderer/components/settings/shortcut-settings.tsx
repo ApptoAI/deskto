@@ -6,13 +6,14 @@ import {
   keybindingSettings,
   settingValue,
   type SettingDefinition,
+  type SettingValues,
 } from "@openappto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { keyboardPlatform } from "../../lib/platform.js"
-import { describeError } from "../../runtime/describe-error.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useSettings } from "../../settings/settings-context.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
@@ -21,12 +22,12 @@ export function ShortcutSettings() {
   const { snapshot, loadError, retry, update } = useSettings()
   const [actionError, setActionError] = useState<string | null>(null)
 
-  async function apply(entries: Record<string, unknown>) {
+  async function apply(entries: SettingValues) {
     setActionError(null)
     try {
       await update(entries)
     } catch (error) {
-      setActionError(describeError(error))
+      setActionError(describedErrorSchema.parse(error))
     }
   }
 

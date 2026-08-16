@@ -11,10 +11,13 @@ import { basename, join } from "node:path"
 
 import type { SkillRoot } from "@openappto/harness-sdk"
 import type { PackSkill } from "@openappto/protocol"
+import { z } from "zod"
 
 import type { PackRow } from "../storage/records.js"
 
 import { RuntimeError } from "../errors.js"
+
+const packManifestSchema = z.object({ name: z.string().trim().min(1) })
 
 /**
  * A Pack directory is provider-neutral: a small pack.json manifest and a
@@ -96,11 +99,10 @@ export async function validatePackDirectory(path: string): Promise<string> {
 
 export async function readPackName(packPath: string): Promise<string> {
   try {
-    const manifest = JSON.parse(
-      await readFile(join(packPath, "pack.json"), "utf8")
-    ) as { name?: unknown }
-    if (typeof manifest.name === "string" && manifest.name.trim())
-      return manifest.name.trim()
+    const parsed = packManifestSchema.safeParse(
+      JSON.parse(await readFile(join(packPath, "pack.json"), "utf8"))
+    )
+    if (parsed.success) return parsed.data.name
   } catch {
     // No readable manifest; the folder name is the next best label.
   }

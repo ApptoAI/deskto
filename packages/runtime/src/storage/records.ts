@@ -135,16 +135,14 @@ export function toProject(row: ProjectRow): Project {
 }
 
 export function toThread(row: ThreadRow): Thread {
-  const contextUsage =
-    row.context_used_tokens !== null
-      ? {
-          usedTokens: row.context_used_tokens,
-          ...(row.context_max_tokens !== null
-            ? { maxTokens: row.context_max_tokens }
-            : {}),
-        }
-      : undefined
-  return {
+  let contextUsage: Thread["contextUsage"]
+  if (row.context_used_tokens !== null) {
+    contextUsage = { usedTokens: row.context_used_tokens }
+    if (row.context_max_tokens !== null) {
+      contextUsage.maxTokens = row.context_max_tokens
+    }
+  }
+  const thread: Thread = {
     id: row.id,
     projectId: row.project_id,
     title: row.title,
@@ -155,7 +153,6 @@ export function toThread(row: ThreadRow): Thread {
       effort: row.effort,
       permissionMode: row.permission_mode,
     },
-    ...(contextUsage ? { contextUsage } : {}),
     lastUserMessageAt: row.last_user_message_at,
     lastTurnCompletedAt: row.last_turn_completed_at,
     lastVisitedAt: row.last_visited_at,
@@ -168,29 +165,34 @@ export function toThread(row: ThreadRow): Thread {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+  if (contextUsage) thread.contextUsage = contextUsage
+  return thread
 }
 
 export function toMessage(row: MessageRow): Message {
-  const failure = row.error
-    ? {
-        kind: row.failure_kind ?? ("error" as const),
-        message: row.error,
-        ...(row.failure_reset_at ? { resetAt: row.failure_reset_at } : {}),
-      }
-    : undefined
-  return {
+  let failure: Message["failure"]
+  if (row.error) {
+    failure = {
+      kind: row.failure_kind ?? ("error" as const),
+      message: row.error,
+    }
+    if (row.failure_reset_at) failure.resetAt = row.failure_reset_at
+  }
+  const message: Message = {
     id: row.id,
     threadId: row.thread_id,
-    ...(row.turn_id ? { turnId: row.turn_id } : {}),
     role: row.role,
     content: row.content,
-    ...(parsedPromptReferences(row.prompt_references) ?? {}),
     state: row.state,
-    ...(failure ? { failure } : {}),
-    ...(row.error ? { error: row.error } : {}),
-    ...(row.ordinal !== null ? { ordinal: row.ordinal } : {}),
     createdAt: row.created_at,
   }
+  if (row.turn_id) message.turnId = row.turn_id
+  const references = parsedPromptReferences(row.prompt_references)
+  if (references) message.references = references.references
+  if (failure) message.failure = failure
+  if (row.error) message.error = row.error
+  if (row.ordinal !== null) message.ordinal = row.ordinal
+  return message
 }
 
 function parsedPromptReferences(
@@ -208,19 +210,21 @@ function parsedPromptReferences(
 }
 
 export function toActivity(row: ActivityRow): Activity {
-  return {
+  const activity: Activity = {
     id: row.id,
     threadId: row.thread_id,
     turnId: row.turn_id,
     name: row.name,
     status: row.status,
     createdAt: row.created_at,
-    ...(row.detail ? { detail: row.detail } : {}),
-    ...(parsedPayload(row.payload) ?? {}),
-    ...(row.parent_id ? { parentActivityId: row.parent_id } : {}),
-    ...(row.ordinal !== null ? { ordinal: row.ordinal } : {}),
-    ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
   }
+  if (row.detail) activity.detail = row.detail
+  const payload = parsedPayload(row.payload)
+  if (payload) activity.payload = payload.payload
+  if (row.parent_id) activity.parentActivityId = row.parent_id
+  if (row.ordinal !== null) activity.ordinal = row.ordinal
+  if (row.finished_at) activity.finishedAt = row.finished_at
+  return activity
 }
 
 /** A payload written by a newer build than this one reads as a plain row. */
@@ -237,13 +241,14 @@ function parsedPayload(
 }
 
 export function toApproval(row: ApprovalRow): Approval {
-  return {
+  const approval: Approval = {
     id: row.id,
     threadId: row.thread_id,
     kind: row.kind,
     title: row.title,
     status: row.status,
     createdAt: row.created_at,
-    ...(row.detail ? { detail: row.detail } : {}),
   }
+  if (row.detail) approval.detail = row.detail
+  return approval
 }

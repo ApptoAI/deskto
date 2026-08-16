@@ -1,15 +1,24 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { createInterface } from "node:readline"
+import { jsonValueSchema } from "@openappto/protocol"
+import { z } from "zod"
 
 import type {
   CodexNotification,
   CodexServerRequest,
   JsonObject,
+  JsonValue,
 } from "./codex-protocol.js"
-import { isRecord } from "./codex-protocol.js"
+import {
+  codexNotificationSchema,
+  codexServerRequestSchema,
+  getString,
+  parseJsonObject,
+  parseJsonValue,
+} from "./codex-protocol.js"
 
 type PendingRequest = {
-  resolve: (value: unknown) => void
+  resolve: (value: JsonValue) => void
   reject: (error: Error) => void
 }
 
@@ -43,10 +52,21 @@ export class JsonlClient {
     })
   }
 
-  request<T>(method: string, params: JsonObject): Promise<T> {
+  request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: z.ZodType<T>
+  ): Promise<T> {
     const id = this.#nextId++
     return new Promise<T>((resolve, reject) => {
-      this.#pending.set(id, { resolve: (value) => resolve(value as T), reject })
+      this.#pending.set(id, {
+        resolve: (value) => {
+          const parsed = schema.safeParse(value)
+          if (parsed.success) resolve(parsed.data)
+          else reject(new Error(`Codex returned an invalid ${method} response`))
+        },
+        reject,
+      })
       this.#write({ id, method, params })
     })
   }
@@ -100,48 +120,41 @@ export class JsonlClient {
   }
 
   #onLine(line: string): void {
-    let message: unknown
-    try {
-      message = JSON.parse(line)
-    } catch {
-      return
-    }
-    if (!isRecord(message)) return
+    const value = parseJsonValue(line)
+    const message = parseJsonObject(value)
+    if (!message) return
 
-    if (
-      (typeof message.id === "number" || typeof message.id === "string") &&
-      typeof message.method === "string"
-    ) {
+    const serverRequest = codexServerRequestSchema.safeParse(message)
+    if (serverRequest.success) {
       for (const listener of this.#requestListeners) {
-        listener({
-          id: message.id,
-          method: message.method,
-          params: isRecord(message.params) ? message.params : undefined,
-        })
+        listener(serverRequest.data)
       }
       return
     }
 
-    if (typeof message.id === "number") {
-      const pending = this.#pending.get(message.id)
+    const responseId = z.number().safeParse(message.id)
+    if (responseId.success) {
+      const pending = this.#pending.get(responseId.data)
       if (!pending) return
-      this.#pending.delete(message.id)
-      if (isRecord(message.error)) {
+      this.#pending.delete(responseId.data)
+      const error = parseJsonObject(message.error)
+      if (error) {
         pending.reject(
-          new Error(String(message.error.message ?? "Codex request failed"))
+          new Error(getString(error, "message") ?? "Codex request failed")
         )
       } else {
-        pending.resolve(message.result)
+        const result = jsonValueSchema.safeParse(message.result)
+        if (result.success) pending.resolve(result.data)
+        else pending.reject(new Error("Codex response has no result"))
       }
       return
     }
 
-    if (typeof message.method === "string") {
-      const notification = {
-        method: message.method,
-        ...(isRecord(message.params) ? { params: message.params } : {}),
+    const notification = codexNotificationSchema.safeParse(message)
+    if (notification.success) {
+      for (const listener of this.#notificationListeners) {
+        listener(notification.data)
       }
-      for (const listener of this.#notificationListeners) listener(notification)
     }
   }
 

@@ -8,6 +8,8 @@ import {
 import {
   settingValue,
   type SettingDefinition,
+  type SettingValue,
+  type SettingValues,
   type SettingsSnapshot,
 } from "@openappto/settings"
 
@@ -22,7 +24,7 @@ type SettingsContextValue = {
   loadError: string | null
   retry: () => void
   /** Applies overrides; a null entry clears one back to its default. */
-  update: (entries: Record<string, unknown>) => Promise<void>
+  update: (entries: SettingValues) => Promise<void>
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null)
@@ -36,7 +38,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useSettingsChanged(useCallback(() => revalidate(), [revalidate]))
 
   const update = useCallback(
-    async (entries: Record<string, unknown>) => {
+    async (entries: SettingValues) => {
       replace(await client.updateSettings(entries))
     },
     [client, replace]
@@ -60,6 +62,8 @@ export function useSettings(): SettingsContextValue {
 }
 
 /** Reads one setting, serving its default while settings load. */
-export function useSettingValue<T>(definition: SettingDefinition<T>): T {
+export function useSettingValue<T extends SettingValue>(
+  definition: SettingDefinition<T>
+): T {
   return settingValue(useSettings().snapshot, definition)
 }

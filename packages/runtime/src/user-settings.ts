@@ -1,8 +1,10 @@
 import {
   resolveSettings,
   settingDefinition,
+  type SettingValues,
   type SettingsSnapshot,
 } from "@openappto/settings"
+import { jsonObjectSchema, type JsonObject } from "@openappto/protocol"
 
 import { RuntimeError } from "./errors.js"
 import type { Settings } from "./storage/settings.js"
@@ -27,7 +29,7 @@ export class UserSettings {
   }
 
   /** Applies overrides; a null entry clears one back to its default. */
-  update(entries: Record<string, unknown>): SettingsSnapshot {
+  update(entries: JsonObject): SettingsSnapshot {
     const stored = this.#stored()
     for (const [key, value] of Object.entries(entries)) {
       const definition = settingDefinition(key)
@@ -50,12 +52,8 @@ export class UserSettings {
     return resolveSettings(stored)
   }
 
-  #stored(): Record<string, unknown> {
-    const value = this.storage.get<unknown>(storageKey)
-    return isRecord(value) ? { ...value } : {}
+  #stored(): SettingValues {
+    const parsed = jsonObjectSchema.safeParse(this.storage.get(storageKey))
+    return parsed.success ? { ...parsed.data } : {}
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }

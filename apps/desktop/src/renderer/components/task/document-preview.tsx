@@ -1,4 +1,5 @@
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import { z } from "zod"
 
 import { InlineError } from "../inline-error.js"
 import { useWorkerResult } from "./use-worker-result.js"
@@ -7,6 +8,7 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
   const state = useWorkerResult(
     createDocumentWorker,
     dataBase64,
+    documentWorkerSuccessSchema,
     sanitizeDocument,
     "Document worker failed",
     "Document worker returned an unreadable result"
@@ -47,6 +49,11 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
 }
 
 type DocumentWorkerSuccess = { ok: true; html: string; warnings: number }
+const documentWorkerSuccessSchema: z.ZodType<DocumentWorkerSuccess> = z.object({
+  ok: z.literal(true),
+  html: z.string(),
+  warnings: z.number().int().nonnegative(),
+})
 
 function createDocumentWorker(): Worker {
   return new Worker(new URL("./document-worker.ts", import.meta.url), {

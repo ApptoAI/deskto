@@ -598,12 +598,12 @@ function SubagentBadge({ status }: { status: Activity["status"] }) {
 
 type Icon = typeof TerminalIcon
 
-const toolIcons: Record<string, Icon> = {
-  command: TerminalIcon,
-  search: SearchIcon,
-  web: GlobeIcon,
-  mcp: WrenchIcon,
-}
+const toolIcons = new Map<string, Icon>([
+  ["command", TerminalIcon],
+  ["search", SearchIcon],
+  ["web", GlobeIcon],
+  ["mcp", WrenchIcon],
+])
 
 function activityIcon(activity: Activity): Icon | undefined {
   const payload = activity.payload
@@ -611,7 +611,7 @@ function activityIcon(activity: Activity): Icon | undefined {
   if (payload.kind === "file-change") return FilePenIcon
   if (payload.kind === "subagent") return BotIcon
   if (payload.kind !== "tool") return undefined
-  return toolIcons[payload.tool]
+  return toolIcons.get(payload.tool)
 }
 
 /**

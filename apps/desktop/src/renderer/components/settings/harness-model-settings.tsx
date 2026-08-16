@@ -10,7 +10,7 @@ import {
 
 import { Button } from "@workspace/ui/components/button"
 
-import { describeError } from "../../runtime/describe-error.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { useSettings } from "../../settings/settings-context.js"
 import { HarnessLogo } from "../brand-logos.js"
@@ -69,7 +69,7 @@ function HarnessModelRow({
     try {
       await update({ [definition.key]: next })
     } catch (error) {
-      setActionError(describeError(error))
+      setActionError(describedErrorSchema.parse(error))
     }
   }
 

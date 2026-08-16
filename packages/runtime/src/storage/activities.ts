@@ -46,18 +46,19 @@ export class Activities {
       )
     // SQLite is synchronous here, so the inserted row is exactly the input;
     // composing it in memory skips a read-back on the streaming hot path.
-    return {
+    const record: Activity = {
       id,
       threadId,
       turnId,
       name: activity.name,
       status: "running",
-      ...(activity.detail ? { detail: activity.detail } : {}),
-      ...(activity.payload ? { payload: activity.payload } : {}),
-      ...(activity.parentId ? { parentActivityId: activity.parentId } : {}),
       ordinal,
       createdAt,
     }
+    if (activity.detail) record.detail = activity.detail
+    if (activity.payload) record.payload = activity.payload
+    if (activity.parentId) record.parentActivityId = activity.parentId
+    return record
   }
 
   /** Returns undefined when the activity is no longer running. */
@@ -92,6 +93,8 @@ export class Activities {
   }
 
   running(turnId: string): Activity[] {
+    // SAFETY: migrations define every activities column in ActivityRow, and
+    // SELECT * returns complete rows.
     const rows = this.database
       .prepare(
         "SELECT * FROM activities WHERE turn_id = ? AND status = 'running'"
@@ -114,6 +117,8 @@ export class Activities {
   }
 
   #find(id: string): Activity | undefined {
+    // SAFETY: activities.id is the primary key and SELECT * matches
+    // ActivityRow; SQLite returns undefined for a missing id.
     const row = this.database
       .prepare("SELECT * FROM activities WHERE id = ?")
       .get(id) as ActivityRow | undefined

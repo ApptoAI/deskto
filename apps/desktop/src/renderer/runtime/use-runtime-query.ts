@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { describeError } from "./describe-error.js"
+import { describedErrorSchema } from "./describe-error.js"
 
 export type QueryState<T> =
   | { status: "idle" }
@@ -57,13 +57,16 @@ export function useRuntimeQuery<T>(load: Load<T>): RuntimeQuery<T> {
           )
         }
       },
-      (error: unknown) => {
+      (error) => {
         if (request === latestRequest.current) {
           setSnapshot((current) =>
             current.load === nextLoad
               ? {
                   load: nextLoad,
-                  state: { status: "error", message: describeError(error) },
+                  state: {
+                    status: "error",
+                    message: describedErrorSchema.parse(error),
+                  },
                 }
               : current
           )

@@ -13,6 +13,11 @@ export type ComposerTrigger = {
   rangeEnd: number
 }
 
+type ComposerReplacement = {
+  text: string
+  cursor: number
+}
+
 export type ComposerCandidate =
   | { id: string; kind: "project-entry"; entry: ProjectEntry }
   | { id: string; kind: "skill"; skill: PackSkill }
@@ -79,7 +84,7 @@ export function replaceComposerTrigger(
   text: string,
   trigger: ComposerTrigger,
   replacement: string
-): { text: string; cursor: number } {
+): ComposerReplacement {
   const next = `${text.slice(0, trigger.rangeStart)}${replacement}${text.slice(trigger.rangeEnd)}`
   return { text: next, cursor: trigger.rangeStart + replacement.length }
 }

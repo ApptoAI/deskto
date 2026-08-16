@@ -19,6 +19,7 @@ describe("transaction", () => {
       })
     ).toThrow("stop")
 
+    // SAFETY: COUNT(*) always returns one row with the aliased numeric field.
     const row = database
       .prepare("SELECT COUNT(*) AS count FROM values_table")
       .get() as { count: number }

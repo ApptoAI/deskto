@@ -4,7 +4,7 @@ import { BrowserWindow, screen } from "electron"
 
 /** Opens large on a roomy display without overflowing a small one: most of
     the work area, capped so it never becomes an unwieldy full-screen sheet. */
-function defaultWindowSize(): { width: number; height: number } {
+function defaultWindowSize() {
   const workArea = screen.getPrimaryDisplay().workAreaSize
   return {
     width: Math.min(1760, Math.round(workArea.width * 0.9)),

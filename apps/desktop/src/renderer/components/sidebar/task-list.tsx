@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import type { ComponentProps, ReactNode } from "react"
+import { z } from "zod"
 import CheckIcon from "lucide-react/dist/esm/icons/check"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import ClockIcon from "lucide-react/dist/esm/icons/clock"
@@ -72,8 +73,6 @@ const DONE_INITIAL_COUNT = 10
 const DONE_PAGE_COUNT = 25
 const taskListFocusTargetId = "task-list-focus-target"
 
-const decodeBoolean = (value: unknown) => value === true
-
 /** Re-renders once a minute so auto-close and snooze wake-ups land while the
     app just sits open. */
 function useNowMinute(): string {
@@ -107,12 +106,12 @@ export function TaskList({
   const [laterExpanded, setLaterExpanded] = useLocalStorage(
     "appto.sidebar.later-expanded",
     false,
-    decodeBoolean
+    z.boolean()
   )
   const [doneExpanded, setDoneExpanded] = useLocalStorage(
     "appto.sidebar.done-expanded",
     false,
-    decodeBoolean
+    z.boolean()
   )
   const [doneVisibleCount, setDoneVisibleCount] = useState(DONE_INITIAL_COUNT)
   // The confirmation lives with the list, not the row: a row remounts when its
@@ -441,7 +440,7 @@ function TaskRow({
               harnessId={thread.harnessId}
               className={cn(
                 "size-3.5",
-                harnessAccentByHarnessId[thread.harnessId] ??
+                harnessAccentByHarnessId.get(thread.harnessId) ??
                   "text-muted-foreground"
               )}
               fallback={

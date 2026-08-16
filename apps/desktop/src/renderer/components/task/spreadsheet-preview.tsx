@@ -2,12 +2,14 @@ import { useState } from "react"
 
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 import { cn } from "@workspace/ui/lib/utils"
+import { z } from "zod"
 
 import { InlineError } from "../inline-error.js"
 import {
   visibleColumnLimit,
   visibleRowLimit,
   visibleSheetLimit,
+  previewCellSchema,
   type PreviewSheet,
   type WorkbookPreview,
 } from "./spreadsheet-preview-data.js"
@@ -17,6 +19,7 @@ export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
   const state = useWorkerResult(
     createSpreadsheetWorker,
     dataBase64,
+    workbookWorkerSuccessSchema,
     workbookFromWorker,
     "Workbook worker failed",
     "Workbook worker returned an unreadable result"
@@ -76,6 +79,20 @@ export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
 }
 
 type WorkbookWorkerSuccess = { ok: true; workbook: WorkbookPreview }
+const workbookWorkerSuccessSchema: z.ZodType<WorkbookWorkerSuccess> = z.object({
+  ok: z.literal(true),
+  workbook: z.object({
+    sheets: z.array(
+      z.object({
+        sheet: z.string(),
+        data: z.array(z.array(previewCellSchema)),
+        totalRows: z.number().int().nonnegative(),
+        maxColumns: z.number().int().nonnegative(),
+      })
+    ),
+    totalSheets: z.number().int().nonnegative(),
+  }),
+})
 
 function createSpreadsheetWorker(): Worker {
   return new Worker(new URL("./spreadsheet-worker.ts", import.meta.url), {
@@ -135,10 +152,13 @@ function previewLimitMessage(sheet: PreviewSheet): string {
   return `Preview limited to the first ${visibleColumnLimit} columns.`
 }
 
-function formatCell(value: unknown): string {
+type PreviewCell = PreviewSheet["data"][number][number] | undefined
+
+function formatCell(value: PreviewCell): string {
   if (value === null || value === undefined) return ""
   if (value instanceof Date) return value.toLocaleString()
-  if (typeof value === "boolean") return value ? "TRUE" : "FALSE"
+  if (value === true) return "TRUE"
+  if (value === false) return "FALSE"
   return String(value)
 }
 

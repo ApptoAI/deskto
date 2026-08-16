@@ -1,7 +1,7 @@
 import { RuntimeClientError } from "@openappto/client"
+import { z } from "zod"
 
-export function describeError(error: unknown): string {
-  if (error instanceof RuntimeClientError) return error.message
-  if (error instanceof Error) return error.message
-  return "The runtime did not explain what went wrong."
-}
+export const describedErrorSchema = z
+  .union([z.instanceof(RuntimeClientError), z.instanceof(Error)])
+  .transform((error) => error.message)
+  .catch("The runtime did not explain what went wrong.")

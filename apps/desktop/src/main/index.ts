@@ -2,6 +2,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 
 import { app, BrowserWindow, dialog } from "electron"
+import { z } from "zod"
 
 import { ClaudeAdapter, CodexAdapter, createRuntime } from "@openappto/runtime"
 
@@ -12,6 +13,10 @@ import { installContentSecurityPolicy } from "./security.js"
 import { createMainWindow } from "./window.js"
 
 const runtimeCloseTimeoutMs = 5_000
+const fatalStartupDetailSchema = z
+  .instanceof(Error)
+  .transform((error) => error.stack ?? error.message)
+  .catch("The application failed to start")
 
 let closeRuntime: (() => Promise<void>) | undefined
 
@@ -46,16 +51,18 @@ async function openApplication(): Promise<void> {
   registerDesktopIpc()
 
   const claudeExecutable = packagedClaudeExecutable()
+  const claudeAdapter = claudeExecutable
+    ? new ClaudeAdapter({
+        executablePath: claudeExecutable,
+        packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
+      })
+    : new ClaudeAdapter({
+        packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
+      })
   const runtime = createRuntime({
     databasePath: path.join(app.getPath("userData"), "appto.sqlite"),
     packsPath: path.join(app.getPath("userData"), "packs"),
-    harnesses: [
-      new ClaudeAdapter({
-        ...(claudeExecutable ? { executablePath: claudeExecutable } : {}),
-        packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
-      }),
-      new CodexAdapter(),
-    ],
+    harnesses: [claudeAdapter, new CodexAdapter()],
     probeGate: cliPathConfigured,
   })
   // Assigned before the window opens so a failure below still closes the
@@ -70,9 +77,7 @@ async function openApplication(): Promise<void> {
   }
 }
 
-function showFatalStartupError(error: unknown): void {
-  const detail =
-    error instanceof Error ? (error.stack ?? error.message) : String(error)
+function showFatalStartupError(detail: string): void {
   dialog.showErrorBox("Appto failed to start", detail)
   app.quit()
 }
@@ -100,7 +105,13 @@ const isPrimaryInstance = app.requestSingleInstanceLock()
 
 if (isPrimaryInstance) {
   app.on("second-instance", focusExistingMainWindow)
-  app.whenReady().then(() => openApplication().catch(showFatalStartupError))
+  app
+    .whenReady()
+    .then(() =>
+      openApplication().catch((error) =>
+        showFatalStartupError(fatalStartupDetailSchema.parse(error))
+      )
+    )
 } else {
   app.quit()
 }
