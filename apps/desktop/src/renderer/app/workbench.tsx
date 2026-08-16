@@ -14,6 +14,11 @@ import { Button } from "@workspace/ui/components/button"
 import { z } from "zod"
 
 import { InlineError } from "../components/inline-error.js"
+import {
+  firstSettingsPage,
+  type SettingsPageId,
+} from "../components/settings/settings-pages.js"
+import { SettingsSidebar } from "../components/settings/settings-sidebar.js"
 import { SettingsView } from "../components/settings/settings-view.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
@@ -38,10 +43,24 @@ import { useKeybinding } from "../settings/use-keybinding.js"
 
 // One value per possible main pane, so navigation cannot leave a stale
 // combination behind (e.g. a task opening underneath the settings screen).
+type WorkView = { kind: "new-task" } | { kind: "task"; threadId: string }
+
+// Settings takes over the whole window, sidebar included, so it carries the
+// pane it covered: Go back returns there instead of guessing a landing spot.
 type MainView =
-  | { kind: "new-task" }
-  | { kind: "task"; threadId: string }
-  | { kind: "settings" }
+  | WorkView
+  | { kind: "settings"; page: SettingsPageId; returnTo: WorkView }
+
+/**
+ * Sends the workbench back to a blank task without closing Settings: only Go
+ * back leaves that screen, so a shortcut or a workspace switch underneath it
+ * rewrites where Go back lands instead of tearing the screen down.
+ */
+function toNewTask(current: MainView): MainView {
+  return current.kind === "settings"
+    ? { ...current, returnTo: { kind: "new-task" } }
+    : { kind: "new-task" }
+}
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 type ProjectScope = "all" | "project"
@@ -223,28 +242,72 @@ export function Workbench() {
   useThreadDeleted(
     useCallback(
       (threadId: string) => {
-        setView((current) =>
-          current.kind === "task" && current.threadId === threadId
-            ? { kind: "new-task" }
-            : current
-        )
+        setView((current) => {
+          if (current.kind === "task" && current.threadId === threadId) {
+            return toNewTask(current)
+          }
+          // Settings stays open, but Go back cannot land on a task that is gone.
+          if (
+            current.kind === "settings" &&
+            current.returnTo.kind === "task" &&
+            current.returnTo.threadId === threadId
+          ) {
+            return toNewTask(current)
+          }
+          return current
+        })
         revalidateAfterThreadChanges()
       },
       [revalidateAfterThreadChanges]
     )
   )
 
+  // Settings covers the whole window, so a shortcut that quietly changed the
+  // screen behind it would land the user somewhere they never chose. Both
+  // shortcuts below stand down until Go back.
   useKeybinding(
     appSettings.newTaskKeybinding,
-    useCallback(() => setView({ kind: "new-task" }), [])
+    useCallback(
+      () =>
+        setView((current) =>
+          current.kind === "settings" ? current : { kind: "new-task" }
+        ),
+      []
+    )
   )
 
   const openThreadId = view.kind === "task" ? view.threadId : null
   const replaceSelection = selectionQuery.replace
 
+  // Opening Settings unmounts the button that was clicked; closing it puts
+  // focus back there rather than on the body.
+  const [focusSettingsButton, setFocusSettingsButton] = useState(false)
+
+  const openSettings = useCallback(() => {
+    setFocusSettingsButton(false)
+    setView((current) =>
+      current.kind === "settings"
+        ? current
+        : { kind: "settings", page: firstSettingsPage, returnTo: current }
+    )
+  }, [])
+
+  const selectSettingsPage = useCallback((page: SettingsPageId) => {
+    setView((current) =>
+      current.kind === "settings" ? { ...current, page } : current
+    )
+  }, [])
+
+  const leaveSettings = useCallback(() => {
+    setFocusSettingsButton(true)
+    setView((current) =>
+      current.kind === "settings" ? current.returnTo : current
+    )
+  }, [])
+
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
-      setView({ kind: "new-task" })
+      setView(toNewTask)
       replaceSelection({
         lastWorkspaceId: workspaceId,
         lastProjectIds: selection?.lastProjectIds ?? {},
@@ -257,7 +320,7 @@ export function Workbench() {
   const selectProject = useCallback(
     (projectId: string) => {
       if (!activeWorkspaceId) return
-      setView({ kind: "new-task" })
+      setView(toNewTask)
       setProjectScope("project")
       const next: Selection = {
         lastWorkspaceId: activeWorkspaceId,
@@ -275,13 +338,16 @@ export function Workbench() {
   )
 
   const selectAllProjects = useCallback(() => {
-    setView({ kind: "new-task" })
+    setView(toNewTask)
     setProjectScope("all")
   }, [setProjectScope])
 
+  const inSettings = view.kind === "settings"
   const cycleWorkspace = useCallback(
     (direction: number) => {
-      if (workspaces.length < 2) return
+      // The workspace switcher is off screen under Settings; switching there
+      // would write the new selection with nothing on screen to show for it.
+      if (inSettings || workspaces.length < 2) return
       const index = workspaces.findIndex(
         (workspace) => workspace.id === activeWorkspaceId
       )
@@ -289,7 +355,7 @@ export function Workbench() {
         workspaces[(index + direction + workspaces.length) % workspaces.length]!
       selectWorkspace(next.id)
     },
-    [workspaces, activeWorkspaceId, selectWorkspace]
+    [inSettings, workspaces, activeWorkspaceId, selectWorkspace]
   )
 
   useKeybinding(
@@ -384,7 +450,7 @@ export function Workbench() {
     return reportErrors(async () => {
       if (!activeWorkspace) return
       await client.deleteWorkspace(activeWorkspace.id)
-      setView({ kind: "new-task" })
+      setView(toNewTask)
       selectionQuery.revalidate()
     })
   }
@@ -433,29 +499,38 @@ export function Workbench() {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
-      <ProjectSidebar
-        workspace={activeWorkspace}
-        workspaces={workspaces}
-        projects={workspaceProjects}
-        activeProject={activeProject}
-        allProjects={allProjects}
-        onSelectProject={selectProject}
-        onSelectAllProjects={selectAllProjects}
-        onAddProject={addProject}
-        onMoveProject={moveProject}
-        addingProject={addingProject}
-        onSelectWorkspace={selectWorkspace}
-        onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
-        onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
-        threads={threads.state}
-        workspaceThreads={workspaceThreads.state}
-        openThreadId={openThreadId}
-        onOpenThread={openThread}
-        onNewTask={() => setView({ kind: "new-task" })}
-        onRetryThreads={revalidateAllThreads}
-        onOpenSettings={() => setView({ kind: "settings" })}
-        inboxActions={inboxActions}
-      />
+      {view.kind === "settings" ? (
+        <SettingsSidebar
+          page={view.page}
+          onSelectPage={selectSettingsPage}
+          onGoBack={leaveSettings}
+        />
+      ) : (
+        <ProjectSidebar
+          workspace={activeWorkspace}
+          workspaces={workspaces}
+          projects={workspaceProjects}
+          activeProject={activeProject}
+          allProjects={allProjects}
+          onSelectProject={selectProject}
+          onSelectAllProjects={selectAllProjects}
+          onAddProject={addProject}
+          onMoveProject={moveProject}
+          addingProject={addingProject}
+          onSelectWorkspace={selectWorkspace}
+          onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
+          onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
+          threads={threads.state}
+          workspaceThreads={workspaceThreads.state}
+          openThreadId={openThreadId}
+          onOpenThread={openThread}
+          onNewTask={() => setView(toNewTask)}
+          onRetryThreads={revalidateAllThreads}
+          onOpenSettings={openSettings}
+          focusSettings={focusSettingsButton}
+          inboxActions={inboxActions}
+        />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col">
         {actionError ? (
@@ -477,7 +552,7 @@ export function Workbench() {
         ) : null}
 
         {view.kind === "settings" ? (
-          <SettingsView harnesses={harnesses} />
+          <SettingsView page={view.page} harnesses={harnesses} />
         ) : listsError ? (
           <Screen>
             <StatusPanel
