@@ -30,13 +30,13 @@ export function toActivityTree(
     childrenByParent.set(parentId, siblings)
   }
 
-  const claimed = new Set<string>()
+  const claimed = new Set<Activity>()
   const build = (activity: Activity, ancestors: Set<string>): ActivityNode => {
-    claimed.add(activity.id)
+    claimed.add(activity)
     const nextAncestors = new Set(ancestors).add(activity.id)
     const children = (childrenByParent.get(activity.id) ?? []).flatMap(
       (child) =>
-        nextAncestors.has(child.id) || claimed.has(child.id)
+        nextAncestors.has(child.id) || claimed.has(child)
           ? []
           : [build(child, nextAncestors)]
     )
@@ -47,13 +47,13 @@ export function toActivityTree(
   for (const activity of activities) {
     const parentId = activity.parentActivityId
     if (parentId && byId.has(parentId)) continue
-    if (claimed.has(activity.id)) continue
+    if (claimed.has(activity)) continue
     roots.push(build(activity, new Set()))
   }
   // A cycle claims nobody, so its members are still unplaced here. They come
   // back as roots in their original order instead of vanishing.
   for (const activity of activities) {
-    if (claimed.has(activity.id)) continue
+    if (claimed.has(activity)) continue
     roots.push(build(activity, new Set()))
   }
   return roots

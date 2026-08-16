@@ -225,7 +225,7 @@ describe("thread timeline", () => {
     })
     expect(capLiveItems(items, true)).toEqual({ visible: items, hidden: 0 })
     expect(capLiveItems(calls.slice(0, 3), false)).toEqual({
-      visible: items.slice(0, 3),
+      visible: calls.slice(0, 3),
       hidden: 0,
     })
   })
@@ -236,6 +236,20 @@ describe("thread timeline", () => {
     const rows = buildTimeline({
       messages: [prompt("turn-1"), answer],
       activities: [tool("a", "turn-1", 1), subagent("agent", "turn-1", 2)],
+      running: false,
+    })
+
+    const worked = rows.find((row) => row.kind === "worked")
+    expect(worked).toMatchObject({ until: "2026-08-16T10:00:09.000Z" })
+  })
+
+  it("ends a segment at the latest Activity across its Turn keys", () => {
+    const rows = buildTimeline({
+      messages: [
+        prompt("prompt-turn"),
+        reply("answer", "provider-turn", "Done.", 2),
+      ],
+      activities: [subagent("agent", "provider-turn", 1)],
       running: false,
     })
 

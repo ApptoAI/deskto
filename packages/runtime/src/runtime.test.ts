@@ -1907,7 +1907,7 @@ describe("Runtime", () => {
           params: { threadId: thread.id },
         })
       )
-      return outputs.length > 0
+      return outputs.length === 2
     })
     const outputs = unwrap(
       await runtime.request({

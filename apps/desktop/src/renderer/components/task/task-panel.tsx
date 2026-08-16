@@ -159,7 +159,7 @@ export function TaskPanel({
       if (!aside) return
       event.preventDefault()
       event.currentTarget.setPointerCapture(event.pointerId)
-      const width = aside.getBoundingClientRect().width
+      const width = Math.round(aside.getBoundingClientRect().width)
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -338,6 +338,7 @@ function ActivityTab({
         </span>
         {runningAgents > 0 ? (
           <span
+            role="img"
             className="size-1.5 rounded-full bg-foreground/60 [animation-duration:1.4s] motion-safe:animate-pulse"
             aria-label={`${runningAgents} agents running`}
           />

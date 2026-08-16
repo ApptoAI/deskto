@@ -60,6 +60,17 @@ describe("toActivityTree", () => {
     expect(tree.map((node) => node.activity.id)).toEqual(["a"])
     expect(tree[0]?.children.map((node) => node.activity.id)).toEqual(["b"])
   })
+
+  it("surfaces repeated identifiers as separate roots", () => {
+    const first = activity("same")
+    const second = activity("same")
+    first.name = "first"
+    second.name = "second"
+
+    const tree = toActivityTree([first, second])
+
+    expect(tree.map((node) => node.activity.name)).toEqual(["first", "second"])
+  })
 })
 
 describe("subagentNodes", () => {

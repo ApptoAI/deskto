@@ -122,10 +122,10 @@ export class ClaudeTaskPlan {
       this.#keys.get(taskId) ?? (this.#tasks.has(taskId) ? taskId : undefined)
 
     if (status === "deleted") {
+      this.#held.delete(taskId)
       if (!key) return false
       this.#keys.delete(taskId)
-      this.#tasks.delete(key)
-      return true
+      return this.#tasks.delete(key)
     }
 
     const change: HeldChange = {}

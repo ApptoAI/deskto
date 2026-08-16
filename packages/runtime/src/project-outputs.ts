@@ -48,7 +48,8 @@ export class ProjectOutputSweep {
 
   /**
    * Returns nothing when the folder is unreadable or too large; the Turn then
-   * captures from Activities only. `onProduced` owns its own failures.
+   * captures from Activities only. Reporting failures do not interrupt Turn
+   * cleanup.
    */
   static async begin(
     root: string,
@@ -78,7 +79,7 @@ export class ProjectOutputSweep {
     const warranted = this.#everRequested
     this.close()
     await this.#settled
-    if (warranted) await this.#sweep()
+    if (warranted) await this.#attemptSweep()
   }
 
   close(): void {
@@ -100,10 +101,14 @@ export class ProjectOutputSweep {
     }
     this.#requested = false
     this.#running = true
-    this.#settled = this.#sweep().finally(() => {
+    this.#settled = this.#attemptSweep().finally(() => {
       this.#running = false
       this.#drain()
     })
+  }
+
+  #attemptSweep(): Promise<void> {
+    return this.#sweep().catch(() => undefined)
   }
 
   async #sweep(): Promise<void> {
@@ -137,13 +142,15 @@ async function scanProject(
   root: string
 ): Promise<Map<string, ScannedFile> | undefined> {
   const paths: string[] = []
-  const pending = [resolve(root)]
+  const rootDirectory = resolve(root)
+  const pending = [rootDirectory]
   while (pending.length > 0) {
     const directory = pending.pop()!
     let children
     try {
       children = await readdir(directory, { withFileTypes: true })
     } catch {
+      if (directory === rootDirectory) return undefined
       continue
     }
     for (const child of children) {

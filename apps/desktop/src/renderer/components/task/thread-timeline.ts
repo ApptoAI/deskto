@@ -116,8 +116,17 @@ function activityEndFor(
   segment: Segment,
   activityEnds: ReadonlyMap<string, string>
 ): string | undefined {
-  const turnKey = segmentTurnKey(segment)
-  return turnKey ? activityEnds.get(turnKey) : undefined
+  const turnKeys = new Set<string>()
+  const promptTurnKey = segmentTurnKey(segment)
+  if (promptTurnKey) turnKeys.add(promptTurnKey)
+  for (const entry of segment.body) turnKeys.add(entry.turnKey)
+
+  let latest: string | undefined
+  for (const turnKey of turnKeys) {
+    const endedAt = activityEnds.get(turnKey)
+    if (endedAt && (!latest || endedAt > latest)) latest = endedAt
+  }
+  return latest
 }
 
 /**
@@ -298,13 +307,15 @@ export function capLiveItems(items: LiveItem[], expanded: boolean) {
   if (expanded || toolCount <= maximumLiveToolRows) {
     return { visible: items, hidden: 0 }
   }
-  let toHide = toolCount - maximumLiveToolRows
-  return {
-    visible: items.filter((item) => {
-      if (item.kind === "message" || toHide === 0) return true
+  const hidden = toolCount - maximumLiveToolRows
+  let toHide = hidden
+  const visible: LiveItem[] = []
+  for (const item of items) {
+    if (item.kind === "activity" && toHide > 0) {
       toHide--
-      return false
-    }),
-    hidden: toolCount - maximumLiveToolRows,
+      continue
+    }
+    visible.push(item)
   }
+  return { visible, hidden }
 }

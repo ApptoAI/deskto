@@ -163,6 +163,17 @@ describe("ClaudeTaskPlan", () => {
     expect(plan.steps()).toEqual([])
   })
 
+  it("does not apply a held change after its task was deleted", () => {
+    const plan = new ClaudeTaskPlan()
+    plan.updated({ taskId: "5", status: "completed" })
+    plan.updated({ taskId: "5", status: "deleted" })
+
+    plan.created("call-1", { subject: "New task" })
+    plan.bind("call-1", "5")
+
+    expect(plan.steps()).toEqual([{ text: "New task", status: "pending" }])
+  })
+
   it("ignores calls and answers it cannot read", () => {
     const plan = new ClaudeTaskPlan()
 
