@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite"
 
-import { jsonValueSchema, type JsonValue } from "@openappto/protocol"
+import { jsonValueSchema, type JsonValue } from "@deskto/protocol"
 
 /** Key-value settings persisted as JSON. */
 export class Settings {

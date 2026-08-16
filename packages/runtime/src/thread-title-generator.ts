@@ -2,8 +2,8 @@ import {
   appSettings,
   settingValue,
   type HarnessModelSelection,
-} from "@openappto/settings"
-import type { ExecutionProfile } from "@openappto/protocol"
+} from "@deskto/settings"
+import type { ExecutionProfile } from "@deskto/protocol"
 
 import type { HarnessRegistry } from "./harness-registry.js"
 import type { Store } from "./storage/store.js"

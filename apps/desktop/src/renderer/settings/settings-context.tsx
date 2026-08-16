@@ -11,7 +11,7 @@ import {
   type SettingValue,
   type SettingValues,
   type SettingsSnapshot,
-} from "@openappto/settings"
+} from "@deskto/settings"
 
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"

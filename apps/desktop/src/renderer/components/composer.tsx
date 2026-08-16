@@ -23,8 +23,8 @@ import {
   replaceComposerTrigger,
   type ComposerCandidate,
   type ComposerTrigger,
-} from "@openappto/client"
-import type { PackSkill, PromptReference, TurnInput } from "@openappto/protocol"
+} from "@deskto/client"
+import type { PackSkill, PromptReference, TurnInput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

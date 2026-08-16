@@ -13,8 +13,8 @@ import {
   harnessFailure,
   type HarnessAdapterFactory,
   type TextGenerationInput,
-} from "@openappto/harness-sdk"
-import { ScriptedHarness } from "@openappto/harness-sdk/testing"
+} from "@deskto/harness-sdk"
+import { ScriptedHarness } from "@deskto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -32,7 +32,7 @@ afterEach(async () => {
 
 describe("Runtime", () => {
   it("generates the first Thread title with the configured model", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const mainHarness = new ScriptedHarness({ id: "main", name: "Main" })
     const writer = recordingTitleHarness({
@@ -100,7 +100,7 @@ describe("Runtime", () => {
   })
 
   it("uses the task model for title generation by default", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = recordingTitleHarness({
       id: "main",
@@ -150,7 +150,7 @@ describe("Runtime", () => {
   })
 
   it("does not replace an explicit title model when it fails", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const main = recordingTitleHarness({
       id: "main",
@@ -217,7 +217,7 @@ describe("Runtime", () => {
   })
 
   it("persists a provider-neutral usage limit in the thread", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const harness = new ScriptedHarness({ id: "future", name: "Future" })
@@ -299,7 +299,7 @@ describe("Runtime", () => {
   })
 
   it("stamps inbox facts and guards organization commands", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
@@ -422,7 +422,7 @@ describe("Runtime", () => {
   })
 
   it("deletes a Thread with its turn, and stops the harness working on it", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
@@ -492,7 +492,7 @@ describe("Runtime", () => {
   })
 
   it("ignores a pending approval response that fails after deletion", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const approvalHarness = delayedApprovalHarness()
     const runtime = createRuntime({
@@ -564,7 +564,7 @@ describe("Runtime", () => {
   })
 
   it("persists a resumable session and forwards an approval to its active harness", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const firstHarness = new ScriptedHarness({ id: "claude", name: "Claude" })
@@ -745,7 +745,7 @@ describe("Runtime", () => {
   })
 
   it("keeps a harness switched off across restarts and blocks new tasks on it", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const runtime = createRuntime({
@@ -804,7 +804,7 @@ describe("Runtime", () => {
   })
 
   it("remembers the last used execution profile across restarts", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const runtime = createRuntime({
@@ -864,7 +864,7 @@ describe("Runtime", () => {
   })
 
   it("stores setting overrides across restarts and rejects invalid ones", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const runtime = createRuntime({ databasePath, harnesses: [] })
@@ -932,7 +932,7 @@ describe("Runtime", () => {
   })
 
   it("groups projects into workspaces and keeps them when a workspace goes", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const runtime = createRuntime({
       databasePath: join(directory, "runtime.sqlite"),
@@ -1058,7 +1058,7 @@ describe("Runtime", () => {
   })
 
   it("delivers workspace pack skills to the harness session", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
@@ -1225,7 +1225,7 @@ describe("Runtime", () => {
   })
 
   it("interleaves typed activities with message segments and streams deltas", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
@@ -1233,7 +1233,7 @@ describe("Runtime", () => {
       harnesses: [harness],
     })
     const deltas: Extract<
-      import("@openappto/protocol").RuntimeEvent,
+      import("@deskto/protocol").RuntimeEvent,
       { type: "thread.delta" }
     >[] = []
     runtime.subscribe((event) => {
@@ -1388,7 +1388,7 @@ describe("Runtime", () => {
   })
 
   it("attributes safe file-change outputs to a Turn and previews them", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const projectPath = join(directory, "project")
     await mkdir(projectPath)
@@ -1607,7 +1607,7 @@ describe("Runtime", () => {
   })
 
   it("keeps one Artifact when later Turns change the same result", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     await writeFile(join(directory, "report.txt"), "first")
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
@@ -1689,7 +1689,7 @@ describe("Runtime", () => {
   })
 
   it("applies the output limit to each completed file-change Activity", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const paths = Array.from(
       { length: 205 },
@@ -1762,7 +1762,7 @@ describe("Runtime", () => {
   })
 
   it("orders prose after the tool work it follows and settles leftovers by outcome", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
@@ -1857,7 +1857,7 @@ describe("Runtime", () => {
   })
 
   it("cancels a turn while its harness is still starting", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness: HarnessAdapterFactory = {
       descriptor: { id: "slow", name: "Slow harness" },

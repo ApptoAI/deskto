@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import type { RuntimeEvent } from "@openappto/protocol"
+import type { RuntimeEvent } from "@deskto/protocol"
 
 import { useRuntimeClient } from "./runtime-client-context.js"
 

@@ -1,4 +1,4 @@
-import type { PlanStepStatus } from "@openappto/harness-sdk"
+import type { PlanStepStatus } from "@deskto/harness-sdk"
 
 /** Maps the step-status words providers use onto the shared vocabulary. */
 export function normalizePlanStepStatus(

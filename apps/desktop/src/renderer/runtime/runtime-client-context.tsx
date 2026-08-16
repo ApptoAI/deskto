@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react"
-import type { RuntimeClient } from "@openappto/client"
+import type { RuntimeClient } from "@deskto/client"
 
 const RuntimeClientContext = createContext<RuntimeClient | null>(null)
 

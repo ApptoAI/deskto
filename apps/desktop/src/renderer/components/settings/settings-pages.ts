@@ -20,12 +20,12 @@ type SettingsPage = {
 export const settingsPages = {
   agents: {
     label: "Agents",
-    description: "Choose which agents Appto may use for your tasks.",
+    description: "Choose which agents Deskto may use for your tasks.",
     icon: BotIcon,
   },
   models: {
     label: "Generated text",
-    description: "Choose models for short text Appto creates automatically.",
+    description: "Choose models for short text Deskto creates automatically.",
     icon: SparklesIcon,
   },
   shortcuts: {

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
-import type { Thread, Project, Workspace } from "@openappto/protocol"
-import { appSettings } from "@openappto/settings"
+import type { Thread, Project, Workspace } from "@deskto/protocol"
+import { appSettings } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 

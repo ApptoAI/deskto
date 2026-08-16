@@ -1,4 +1,4 @@
-# @openappto/protocol
+# @deskto/protocol
 
 The wire contract between a Client and the Runtime. This package defines every request the Runtime accepts, the shape of its responses and events, and the domain records both sides share. Client and Runtime depend on it; it depends only on zod.
 
@@ -18,7 +18,7 @@ Domain records, defined as zod schemas with types inferred from them:
 - `Harness`, an agent product with its availability and model catalog
 - `ThreadView`, the aggregate most calls return: the thread plus its messages, activities, any pending approval, and a `seq` delta cursor
 - `ExecutionProfile`, `Preferences`, and `Selection` (the last active workspace and project, so a restart reopens them)
-- `SettingsSnapshot`, the effective user settings: every value in effect plus the subset the user overrode. Values are opaque JSON here; both sides read them through `@openappto/settings`
+- `SettingsSnapshot`, the effective user settings: every value in effect plus the subset the user overrode. Values are opaque JSON here; both sides read them through `@deskto/settings`
 
 Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`. The groups are `harness.*` (list, setEnabled, refresh), `preferences.get`, `settings.*` (get, update), `workspace.*` (list, create, update, delete, setPack), `selection.*` (get, set), `pack.*` (list, create, import, remove), `project.*` (list, add, move), `thread.*` (list, create, configure, get), `turn.*` (start, cancel), and `approval.resolve`. The Runtime validates incoming requests with this schema at the IPC boundary.
 

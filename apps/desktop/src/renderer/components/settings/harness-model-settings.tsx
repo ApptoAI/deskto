@@ -1,12 +1,12 @@
 import { useState } from "react"
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 import {
   harnessModelSettings,
   isOverridden,
   settingValue,
   type HarnessModelSelection,
   type SettingDefinition,
-} from "@openappto/settings"
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -37,7 +37,7 @@ export function HarnessModelSettings({
           and the Agents page is the only other place that says why. */}
       {harnesses.state.status === "error" ? (
         <StatusPanel
-          title="Appto cannot read the list of agents"
+          title="Deskto cannot read the list of agents"
           description={harnesses.state.message}
           tone="danger"
         >

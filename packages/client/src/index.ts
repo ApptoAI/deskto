@@ -15,7 +15,7 @@ export {
   type ApplyThreadDeltaResult,
   type ThreadDeltaEvent,
 } from "./thread-view.js"
-export { canMarkDone, canSnooze, isActivityBlocked } from "@openappto/protocol"
+export { canMarkDone, canSnooze, isActivityBlocked } from "@deskto/protocol"
 export {
   autoDoneAfterDays,
   effectiveDone,

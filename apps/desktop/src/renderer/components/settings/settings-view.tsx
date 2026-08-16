@@ -1,5 +1,5 @@
 import type { ReactElement } from "react"
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { HarnessModelSettings } from "./harness-model-settings.js"

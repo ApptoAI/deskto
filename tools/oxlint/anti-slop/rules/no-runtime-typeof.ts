@@ -47,18 +47,19 @@ export const noRuntimeTypeofRule = defineRule({
 		defaultOptions: [{ allowInTypeGuards: false }],
 	},
 	createOnce(context) {
+		let allowInTypeGuards = false;
+
 		return {
-			UnaryExpression(node) {
+			before() {
 				const option = context.options?.[0];
-				const allowInTypeGuards =
+				allowInTypeGuards =
 					typeof option === "object" &&
 					option !== null &&
 					!Array.isArray(option) &&
 					option.allowInTypeGuards === true;
-				if (
-					node.operator === "typeof" &&
-					(!allowInTypeGuards || !isInsideTypeGuard(node))
-				) {
+			},
+			UnaryExpression(node) {
+				if (node.operator === "typeof" && (!allowInTypeGuards || !isInsideTypeGuard(node))) {
 					context.report({ node, messageId: "runtimeTypeof" });
 				}
 			},

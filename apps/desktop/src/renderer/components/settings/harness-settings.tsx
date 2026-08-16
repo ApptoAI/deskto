@@ -1,6 +1,6 @@
 import { useState } from "react"
 import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { Switch } from "@workspace/ui/components/switch"
@@ -73,7 +73,7 @@ export function HarnessSettings({
         <StatusPanel title="Checking which agents are installed…" />
       ) : harnesses.state.status === "error" ? (
         <StatusPanel
-          title="Appto cannot read the list of agents"
+          title="Deskto cannot read the list of agents"
           description={harnesses.state.message}
           tone="danger"
         >

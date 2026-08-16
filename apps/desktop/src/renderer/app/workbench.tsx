@@ -6,10 +6,10 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import type { RuntimeClient } from "@openappto/client"
-import { appSettings } from "@openappto/settings"
+import type { RuntimeClient } from "@deskto/client"
+import { appSettings } from "@deskto/settings"
 
-import { personalWorkspaceId, type Selection } from "@openappto/protocol"
+import { personalWorkspaceId, type Selection } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 import { z } from "zod"
 
@@ -164,7 +164,7 @@ export function Workbench() {
   // same way the composer remembers the last model.
   const [projectScopeMap, setProjectScopeMap] = useLocalStorage<
     Record<string, ProjectScope>
-  >("appto.sidebar.project-scope.v1", {}, projectScopeMapSchema)
+  >("deskto.sidebar.project-scope.v1", {}, projectScopeMapSchema)
   const allProjects = activeWorkspaceId
     ? (projectScopeMap[activeWorkspaceId] ?? "project") === "all"
     : false
@@ -543,7 +543,7 @@ export function Workbench() {
           <div className="flex items-center gap-3 px-6 pt-3">
             <InlineError
               className="min-w-0 flex-1"
-              message={`Appto cannot read the list of agents. ${harnesses.state.message}`}
+              message={`Deskto cannot read the list of agents. ${harnesses.state.message}`}
             />
             <Button variant="outline" size="sm" onClick={harnesses.revalidate}>
               Try again
@@ -556,7 +556,7 @@ export function Workbench() {
         ) : listsError ? (
           <Screen>
             <StatusPanel
-              title="Appto cannot reach the runtime"
+              title="Deskto cannot reach the runtime"
               description={listsError}
               tone="danger"
             >
@@ -580,7 +580,7 @@ export function Workbench() {
           <Screen>
             <StatusPanel
               title="Open a project folder"
-              description="Appto works inside one folder at a time. Choose the folder that holds the work you want done."
+              description="Deskto works inside one folder at a time. Choose the folder that holds the work you want done."
             >
               <Button onClick={addProject} disabled={addingProject}>
                 {addingProject ? "Opening…" : "Choose a folder"}

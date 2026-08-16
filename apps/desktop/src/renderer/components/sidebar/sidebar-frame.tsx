@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 
-import { ApptoLockup } from "../appto-logo.js"
+import { DesktoLockup } from "../deskto-logo.js"
 
 /**
  * The chrome both sidebars share: fixed width, the window drag strip, and the
@@ -13,7 +13,7 @@ export function SidebarFrame({ children }: { children: ReactNode }) {
       {/* Traffic lights sit at the left of this strip, so the logo takes the
           right. Still a drag region — the svg is not an interactive target. */}
       <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">
-        <ApptoLockup className="h-[15px] w-auto text-foreground/70" />
+        <DesktoLockup className="h-[15px] w-auto text-foreground/70" />
       </div>
       {children}
     </aside>

@@ -1,6 +1,6 @@
-# @openappto/harness-sdk
+# @deskto/harness-sdk
 
-The provider-neutral contract between the Appto Runtime and the agent products that do the work. A Harness is an agent product such as Claude Code or Codex. This package defines what every Harness looks like to the Runtime: how it describes itself, how a session runs, which events it emits, and how approvals flow. It has zero runtime dependencies and no provider, Electron, database, or UI imports.
+The provider-neutral contract between the Deskto Runtime and the agent products that do the work. A Harness is an agent product such as Claude Code or Codex. This package defines what every Harness looks like to the Runtime: how it describes itself, how a session runs, which events it emits, and how approvals flow. It has zero runtime dependencies and no provider, Electron, database, or UI imports.
 
 ## Why it exists
 
@@ -26,7 +26,7 @@ An activity may carry an `ActivityPayload` classifying it into a provider-neutra
 
 ## Testing helpers
 
-`@openappto/harness-sdk/testing` provides `ScriptedHarness`, a fake adapter for Runtime tests. Each `start()` call records a `ScriptedHarnessRun`, and the test drives the session by calling `emit(event)` and `finish()`, then asserts on `cancelled` and the recorded approval decisions. Runtime behavior gets tested without any provider installed.
+`@deskto/harness-sdk/testing` provides `ScriptedHarness`, a fake adapter for Runtime tests. Each `start()` call records a `ScriptedHarnessRun`, and the test drives the session by calling `emit(event)` and `finish()`, then asserts on `cancelled` and the recorded approval decisions. Runtime behavior gets tested without any provider installed.
 
 ## Adding a harness
 

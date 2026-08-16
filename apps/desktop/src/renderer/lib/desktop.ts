@@ -1,16 +1,16 @@
 /** Desktop-only capabilities, kept apart from the Runtime protocol. */
 export function openExternal(url: string): void {
-  void window.appto.openExternal(url)
+  void window.deskto.openExternal(url)
 }
 
 export function openFolder(path: string): Promise<void> {
-  return window.appto.openFolder(path)
+  return window.deskto.openFolder(path)
 }
 
 export function pickProjectFolder() {
-  return window.appto.pickProject()
+  return window.deskto.pickProject()
 }
 
 export function pickPackFolder() {
-  return window.appto.pickPack()
+  return window.deskto.pickPack()
 }

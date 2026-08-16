@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { Thread } from "@openappto/protocol"
+import type { Thread } from "@deskto/protocol"
 
 import {
   effectiveDone,

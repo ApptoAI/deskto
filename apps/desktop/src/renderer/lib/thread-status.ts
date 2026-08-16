@@ -1,4 +1,4 @@
-import type { Thread } from "@openappto/protocol"
+import type { Thread } from "@deskto/protocol"
 
 type StatusPresentation = {
   label: string

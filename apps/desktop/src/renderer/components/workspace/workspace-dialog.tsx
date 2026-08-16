@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Pack, Workspace } from "@openappto/protocol"
+import type { Pack, Workspace } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

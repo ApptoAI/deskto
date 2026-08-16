@@ -151,7 +151,7 @@ export type Preferences = z.infer<typeof preferencesSchema>
 /**
  * Effective settings after user overrides are applied to the defaults. Values
  * are opaque JSON at the protocol level; both sides read them through the
- * setting definitions in `@openappto/settings`.
+ * setting definitions in `@deskto/settings`.
  */
 export const settingsSnapshotSchema = z.object({
   /** Every setting key mapped to the value currently in effect. */

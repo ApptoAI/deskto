@@ -38,16 +38,16 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.231
         version: 0.3.231(@anthropic-ai/sdk@0.116.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
-      '@openappto/client':
+      '@deskto/client':
         specifier: workspace:*
         version: link:../../packages/client
-      '@openappto/protocol':
+      '@deskto/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@openappto/runtime':
+      '@deskto/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@openappto/settings':
+      '@deskto/settings':
         specifier: workspace:*
         version: link:../../packages/settings
       '@workspace/ui':
@@ -120,7 +120,7 @@ importers:
 
   packages/client:
     dependencies:
-      '@openappto/protocol':
+      '@deskto/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -221,13 +221,13 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.231
         version: 0.3.231(@anthropic-ai/sdk@0.116.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
-      '@openappto/harness-sdk':
+      '@deskto/harness-sdk':
         specifier: workspace:*
         version: link:../harness-sdk
-      '@openappto/protocol':
+      '@deskto/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@openappto/settings':
+      '@deskto/settings':
         specifier: workspace:*
         version: link:../settings
       zod:

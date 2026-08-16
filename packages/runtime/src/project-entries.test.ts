@@ -25,7 +25,7 @@ describe("ProjectEntries", () => {
   })
 
   it("preserves Git paths that require quoting in line-delimited output", async () => {
-    const root = await mkdtemp(join(tmpdir(), "openappto-entries-"))
+    const root = await mkdtemp(join(tmpdir(), "deskto-entries-"))
     try {
       const unicodePath = "żółć.md"
       const newlinePath = "line\nbreak.md"

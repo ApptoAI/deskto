@@ -3,8 +3,8 @@ import type {
   HarnessAdapterFactory,
   HarnessAvailability,
   HarnessModelOption,
-} from "@openappto/harness-sdk"
-import type { Harness } from "@openappto/protocol"
+} from "@deskto/harness-sdk"
+import type { Harness } from "@deskto/protocol"
 import { z } from "zod"
 
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
