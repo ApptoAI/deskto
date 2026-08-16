@@ -8,6 +8,7 @@ import {
   minimapPreviewText,
   minimapPreviewTranslate,
   minimapTopPercent,
+  minimapTrackHeightStyle,
 } from "./timeline-minimap.js"
 
 describe("minimapHeightStyle", () => {
@@ -18,6 +19,17 @@ describe("minimapHeightStyle", () => {
   it("holds a floor so a short conversation stays hittable", () => {
     expect(minimapHeightStyle(2)).toBe("min(48px, calc(100vh - 18rem))")
     expect(minimapHeightStyle(5)).toBe("min(48px, calc(100vh - 18rem))")
+  })
+})
+
+describe("minimapTrackHeightStyle", () => {
+  it("keeps the stops at their spacing inside a padded hit strip", () => {
+    expect(minimapTrackHeightStyle(2)).toBe("min(8px, calc(100vh - 18rem))")
+    expect(minimapTrackHeightStyle(5)).toBe("min(32px, calc(100vh - 18rem))")
+  })
+
+  it("matches the strip once the rail outgrows the floor", () => {
+    expect(minimapTrackHeightStyle(20)).toBe(minimapHeightStyle(20))
   })
 })
 

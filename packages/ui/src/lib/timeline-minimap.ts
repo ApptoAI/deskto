@@ -12,9 +12,10 @@
 export const minimapItemSpacing = 8
 
 /**
- * Floor on the rail's height. At its natural spacing a two-stop rail would be
- * 8px tall, which is a hover target nobody can hit; short conversations get a
- * rail that is reachable instead of one that is proportional.
+ * Floor on the hover target's height. At its natural spacing a two-stop rail
+ * would be 8px tall, which is a target nobody can hit; short conversations get
+ * a strip that is reachable instead of one that is proportional. The ticks
+ * themselves keep their spacing and sit centered in it.
  */
 export const minimapMinHeight = 48
 
@@ -40,12 +41,22 @@ export const minimapHitStripLeft = 12
 /** Widest the collapsed hover target ever gets, gutter permitting. */
 export const minimapHitStripMaxWidth = 40
 
+/** Height of the hover target, padded out for the pointer on short rails. */
 export function minimapHeightStyle(itemCount: number): string {
-  const natural = Math.max(
-    minimapMinHeight,
-    (itemCount - 1) * minimapItemSpacing
-  )
+  const natural = Math.max(minimapMinHeight, minimapTrackHeight(itemCount))
   return `min(${natural}px, ${minimapMaxHeight})`
+}
+
+/**
+ * Height of the tick column alone, which the padded hover target must not
+ * stretch: a two-stop rail keeps its stops 8px apart wherever the strip ends.
+ */
+export function minimapTrackHeightStyle(itemCount: number): string {
+  return `min(${minimapTrackHeight(itemCount)}px, ${minimapMaxHeight})`
+}
+
+function minimapTrackHeight(itemCount: number): number {
+  return Math.max(0, (itemCount - 1) * minimapItemSpacing)
 }
 
 export function minimapTopPercent(index: number, itemCount: number): number {

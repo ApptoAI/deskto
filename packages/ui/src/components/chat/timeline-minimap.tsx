@@ -9,6 +9,7 @@ import {
   minimapMinItems,
   minimapPreviewTranslate,
   minimapTopPercent,
+  minimapTrackHeightStyle,
 } from "@workspace/ui/lib/timeline-minimap"
 
 const anchorAttribute = "data-minimap-anchor"
@@ -206,61 +207,70 @@ function TimelineMinimap({
             }
           }}
         >
+          {/* The stops keep their own spacing, centered in a strip that may be
+              taller than they are. */}
           <span
             aria-hidden
-            className="absolute top-0 left-3 h-full w-px bg-border/40"
-          />
-          {items.map((item, tickIndex) => {
-            const distance = index === null ? null : Math.abs(tickIndex - index)
-            return (
-              <span
-                key={item.id}
-                aria-hidden
-                data-in-view="false"
-                ref={(node) => {
-                  if (node) ticksRef.current.set(item.id, node)
-                  else ticksRef.current.delete(item.id)
-                }}
-                style={{
-                  top: `${minimapTopPercent(tickIndex, items.length)}%`,
-                }}
-                className={cn(
-                  "pointer-events-none absolute left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/35 transition-[background-color,width] duration-150 data-[in-view=true]:bg-foreground/90 motion-reduce:transition-none",
-                  distance === 0
-                    ? "w-6 bg-muted-foreground/75"
-                    : distance === 1
-                      ? "w-4"
-                      : distance === 2
-                        ? "w-2.5"
-                        : "w-2"
-                )}
-              />
-            )
-          })}
-          {activeItem && index !== null ? (
-            // Inert on purpose. The card overhangs the message column, so
-            // anything it caught would be a click or a drag-select the reader
-            // aimed at the text underneath.
+            className="absolute top-1/2 left-0 block w-full -translate-y-1/2"
+            style={{ height: minimapTrackHeightStyle(items.length) }}
+          >
             <span
               aria-hidden
-              className="pointer-events-none absolute left-8 w-80"
-              style={{
-                top: `${minimapTopPercent(index, items.length)}%`,
-                transform: `translateY(${minimapPreviewTranslate(index, items.length)})`,
-              }}
-            >
-              <span className="block rounded-lg bg-popover p-3 text-left text-popover-foreground shadow-md ring-1 ring-foreground/10">
-                <span className="block truncate text-sm leading-5 font-medium">
-                  {activeItem.label}
-                </span>
-                {activeItem.preview ? (
-                  <span className="mt-1 line-clamp-3 text-sm leading-5 text-muted-foreground">
-                    {activeItem.preview}
+              className="absolute top-0 left-3 h-full w-px bg-border/40"
+            />
+            {items.map((item, tickIndex) => {
+              const distance =
+                index === null ? null : Math.abs(tickIndex - index)
+              return (
+                <span
+                  key={item.id}
+                  aria-hidden
+                  data-in-view="false"
+                  ref={(node) => {
+                    if (node) ticksRef.current.set(item.id, node)
+                    else ticksRef.current.delete(item.id)
+                  }}
+                  style={{
+                    top: `${minimapTopPercent(tickIndex, items.length)}%`,
+                  }}
+                  className={cn(
+                    "pointer-events-none absolute left-0 h-0.5 -translate-y-1/2 rounded-full bg-muted-foreground/35 transition-[background-color,width] duration-150 data-[in-view=true]:bg-foreground/90 motion-reduce:transition-none",
+                    distance === 0
+                      ? "w-6 bg-muted-foreground/75"
+                      : distance === 1
+                        ? "w-4"
+                        : distance === 2
+                          ? "w-2.5"
+                          : "w-2"
+                  )}
+                />
+              )
+            })}
+            {activeItem && index !== null ? (
+              // Inert on purpose. The card overhangs the message column, so
+              // anything it caught would be a click or a drag-select the reader
+              // aimed at the text underneath.
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-8 w-80"
+                style={{
+                  top: `${minimapTopPercent(index, items.length)}%`,
+                  transform: `translateY(${minimapPreviewTranslate(index, items.length)})`,
+                }}
+              >
+                <span className="block rounded-lg bg-popover p-3 text-left text-popover-foreground shadow-md ring-1 ring-foreground/10">
+                  <span className="block truncate text-sm leading-5 font-medium">
+                    {activeItem.label}
                   </span>
-                ) : null}
+                  {activeItem.preview ? (
+                    <span className="mt-1 line-clamp-3 text-sm leading-5 text-muted-foreground">
+                      {activeItem.preview}
+                    </span>
+                  ) : null}
+                </span>
               </span>
-            </span>
-          ) : null}
+            ) : null}
+          </span>
         </button>
       </div>
     </div>
