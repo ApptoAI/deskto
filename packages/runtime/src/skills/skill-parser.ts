@@ -44,14 +44,22 @@ export async function parseSkillFile(
   let bytes: Buffer
   try {
     if (opened.metadata.size > maxSkillFileBytes) {
-      return resultWithDiagnostic({
-        code: "skill-file-too-large",
-        severity: "error",
-        message: "SKILL.md is larger than 1 MiB",
-        path,
-      })
+      return tooLargeResult(path)
     }
-    bytes = await opened.handle.readFile()
+    const buffer = Buffer.allocUnsafe(maxSkillFileBytes + 1)
+    let length = 0
+    while (length < buffer.length) {
+      const { bytesRead } = await opened.handle.read(
+        buffer,
+        length,
+        buffer.length - length,
+        length
+      )
+      if (bytesRead === 0) break
+      length += bytesRead
+    }
+    if (length > maxSkillFileBytes) return tooLargeResult(path)
+    bytes = buffer.subarray(0, length)
   } catch (error) {
     return unreadableResult(path, missingFileSchema.safeParse(error).success)
   } finally {
@@ -139,6 +147,15 @@ export async function parseSkillFile(
     diagnostics
   )
   return { name, description, instructionDigest, content, diagnostics }
+}
+
+function tooLargeResult(path: string): ParsedSkillFile {
+  return resultWithDiagnostic({
+    code: "skill-file-too-large",
+    severity: "error",
+    message: "SKILL.md is larger than 1 MiB",
+    path,
+  })
 }
 
 function frontmatterFrom(content: string): string | null {
