@@ -26,15 +26,17 @@ import { ContextUsageMeter } from "../context-usage-meter.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
+import { ActivityAside } from "./activity-aside.js"
 import { ApprovalPanel } from "./approval-panel.js"
 import { MessageStream } from "./message-stream.js"
 import {
+  openActivityTab,
   openResultTab,
   retainResultTabs,
   useOpenNewestResult,
-} from "./result-tabs.js"
+} from "./panel-tabs.js"
 import { ResultsProvider } from "./results-context.js"
-import { ResultsPanel } from "./results-panel.js"
+import { TaskPanel } from "./task-panel.js"
 
 const noResults: TurnOutput[] = []
 
@@ -51,7 +53,7 @@ export function TaskView({
   const { state, revalidate, replace } = useThreadView(threadId)
   const [folderError, setFolderError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
-  const [resultsOpen, setResultsOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
 
   // Looking at the task clears its indicators (unread completion, "came
@@ -97,15 +99,19 @@ export function TaskView({
       )
     }
   }, [resultList, threadId])
-  useOpenNewestResult(threadId, resultList?.[0]?.artifact.id, resultsOpen)
+  useOpenNewestResult(threadId, resultList?.[0]?.artifact.id, panelOpen)
 
   const openResult = useCallback(
     (artifactId: string) => {
-      setResultsOpen(true)
+      setPanelOpen(true)
       openResultTab(threadId, artifactId)
     },
     [threadId]
   )
+  const openActivity = useCallback(() => {
+    setPanelOpen(true)
+    openActivityTab(threadId)
+  }, [threadId])
 
   if (state.status === "loading" || state.status === "idle") {
     return <StatusPanel title="Opening the task…" />
@@ -169,7 +175,9 @@ export function TaskView({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Bare drag strip: the task title and its status already read from
-          the sidebar row, so the header carries one action and no rule. */}
+          the sidebar row, so the header carries one action and no rule. It
+          spans the activity column too, so its actions stay in the window's
+          corner rather than sliding left when that column appears. */}
         <header className="drag-region flex h-10 shrink-0 items-center justify-end gap-1 px-3">
           {projectPath ? (
             <Button
@@ -187,8 +195,8 @@ export function TaskView({
             variant="ghost"
             size="sm"
             className="no-drag text-muted-foreground"
-            aria-pressed={resultsOpen}
-            onClick={() => setResultsOpen((open) => !open)}
+            aria-pressed={panelOpen}
+            onClick={() => setPanelOpen((open) => !open)}
           >
             <PanelRightIcon data-icon="inline-start" />
             Results
@@ -200,90 +208,102 @@ export function TaskView({
           </Button>
         </header>
 
-        {messages.length === 0 ? (
-          <StatusPanel
-            title="Nothing sent yet"
-            description="Write the first message to start this task."
-          />
-        ) : (
-          <ResultsProvider
-            outputs={resultList ?? noResults}
-            projectPath={projectPath}
-            onOpen={openResult}
-          >
-            <MessageStream
-              messages={messages}
-              activities={activities}
-              running={active}
-            />
-          </ResultsProvider>
-        )}
-
-        <div className="shrink-0 px-6 pb-6">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-            {folderError ? <InlineError message={folderError} /> : null}
-            {profileError ? <InlineError message={profileError} /> : null}
-
-            {pendingApproval ? (
-              <ApprovalPanel
-                approval={pendingApproval}
-                onResolve={async (decision) => {
-                  replace(
-                    await client.resolveApproval(
-                      thread.id,
-                      pendingApproval.id,
-                      decision
-                    )
-                  )
-                }}
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {messages.length === 0 ? (
+              <StatusPanel
+                title="Nothing sent yet"
+                description="Write the first message to start this task."
               />
-            ) : null}
+            ) : (
+              <ResultsProvider
+                outputs={resultList ?? noResults}
+                projectPath={projectPath}
+                onOpen={openResult}
+              >
+                <MessageStream
+                  messages={messages}
+                  activities={activities}
+                  running={active}
+                />
+              </ResultsProvider>
+            )}
+            <div className="shrink-0 px-6 pb-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+                {folderError ? <InlineError message={folderError} /> : null}
+                {profileError ? <InlineError message={profileError} /> : null}
 
-            <Composer
-              projectId={thread.projectId}
-              workspaceId={project.workspaceId}
-              label={`Message for ${thread.title}`}
-              placeholder={
-                active ? "The agent is working…" : "Ask for the next step"
-              }
-              running={active}
-              blockedReason={blockedReason}
-              onSend={async (input) => {
-                replace(await client.startTurn(thread.id, input))
-              }}
-              {...(models.length > 0 && !active
-                ? { onOpenModelPicker: () => setModelMenuOpen(true) }
-                : {})}
-              onCancel={async () => {
-                replace(await client.cancelTurn(thread.id))
-              }}
-              toolbar={
-                models.length > 0 ? (
-                  <ExecutionProfileToolbar
-                    models={models}
-                    profile={thread.executionProfile}
-                    onChange={handleProfileChange}
-                    harnessId={thread.harnessId}
-                    disabled={active}
-                    modelMenuOpen={modelMenuOpen}
-                    onModelMenuOpenChange={setModelMenuOpen}
+                {pendingApproval ? (
+                  <ApprovalPanel
+                    approval={pendingApproval}
+                    onResolve={async (decision) => {
+                      replace(
+                        await client.resolveApproval(
+                          thread.id,
+                          pendingApproval.id,
+                          decision
+                        )
+                      )
+                    }}
                   />
-                ) : null
-              }
-              trailing={
-                thread.contextUsage ? (
-                  <ContextUsageMeter usage={thread.contextUsage} />
-                ) : null
-              }
-            />
+                ) : null}
+
+                <Composer
+                  projectId={thread.projectId}
+                  workspaceId={project.workspaceId}
+                  label={`Message for ${thread.title}`}
+                  placeholder={
+                    active ? "The agent is working…" : "Ask for the next step"
+                  }
+                  running={active}
+                  blockedReason={blockedReason}
+                  onSend={async (input) => {
+                    replace(await client.startTurn(thread.id, input))
+                  }}
+                  {...(models.length > 0 && !active
+                    ? { onOpenModelPicker: () => setModelMenuOpen(true) }
+                    : {})}
+                  onCancel={async () => {
+                    replace(await client.cancelTurn(thread.id))
+                  }}
+                  toolbar={
+                    models.length > 0 ? (
+                      <ExecutionProfileToolbar
+                        models={models}
+                        profile={thread.executionProfile}
+                        onChange={handleProfileChange}
+                        harnessId={thread.harnessId}
+                        disabled={active}
+                        modelMenuOpen={modelMenuOpen}
+                        onModelMenuOpenChange={setModelMenuOpen}
+                      />
+                    ) : null
+                  }
+                  trailing={
+                    thread.contextUsage ? (
+                      <ContextUsageMeter usage={thread.contextUsage} />
+                    ) : null
+                  }
+                />
+              </div>
+            </div>
           </div>
+          {/* One slot, two sizes. The column carries the task's plan and
+            agents beside the conversation; opening the panel is that same
+            information at full width, so the column steps aside rather than
+            repeating it. It folds away entirely on a narrow window, where
+            the conversation needs the room more. */}
+          {!panelOpen ? (
+            <ActivityAside activities={activities} onOpen={openActivity} />
+          ) : null}
         </div>
       </div>
-      {resultsOpen ? (
-        <ResultsPanel
+      {panelOpen ? (
+        <TaskPanel
           threadId={threadId}
+          activities={activities}
           results={results.state}
-          onClose={() => setResultsOpen(false)}
+          onClose={() => setPanelOpen(false)}
         />
       ) : null}
     </div>

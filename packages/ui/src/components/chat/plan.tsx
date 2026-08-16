@@ -13,11 +13,17 @@ type PlanStepStatus = "pending" | "active" | "done"
 function Plan({
   title,
   steps,
+  wrap = false,
   className,
   ...props
 }: React.ComponentProps<"div"> & {
   title: string
   steps: { text: string; status: PlanStepStatus }[]
+  /**
+   * Lets a step run onto a second line instead of truncating. For narrow
+   * columns, where a one-line step is a step you cannot read.
+   */
+  wrap?: boolean
 }) {
   const done = steps.filter((step) => step.status === "done").length
 
@@ -38,7 +44,12 @@ function Plan({
       </p>
       <ol className="flex flex-col gap-1.5">
         {steps.map((step, index) => (
-          <PlanStepRow key={index} text={step.text} status={step.status} />
+          <PlanStepRow
+            key={index}
+            text={step.text}
+            status={step.status}
+            wrap={wrap}
+          />
         ))}
       </ol>
     </div>
@@ -48,21 +59,28 @@ function Plan({
 function PlanStepRow({
   text,
   status,
+  wrap,
 }: {
   text: string
   status: PlanStepStatus
+  wrap: boolean
 }) {
   return (
     <li
       data-status={status}
       className={cn(
-        "flex min-w-0 items-center gap-2.5",
+        "flex min-w-0 gap-2.5",
+        // A wrapped step is a block of text, so its glyph sits at the first
+        // line rather than at the middle of however many lines it grew to.
+        wrap ? "items-start" : "items-center",
         status === "pending" && "text-muted-foreground",
         status === "done" && "text-muted-foreground line-through"
       )}
     >
       <StepGlyph status={status} />
-      <span className="min-w-0 truncate">{text}</span>
+      <span className={cn("min-w-0", wrap ? "leading-relaxed" : "truncate")}>
+        {text}
+      </span>
     </li>
   )
 }

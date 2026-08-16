@@ -13,6 +13,7 @@ import {
 } from "@deskto/harness-sdk"
 import type {
   Activity,
+  ActivityPayload,
   ThreadDeltaChange,
   ThreadView,
   TurnInput,
@@ -21,6 +22,7 @@ import type {
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
+import { ProjectOutputSweep } from "./project-outputs.js"
 import { resolvePromptReferences } from "./prompt-references.js"
 import type {
   ActivityStartInput,
@@ -65,9 +67,20 @@ type ActiveRun = ActiveTurnRecord & {
   ordinal: number
   flushTimer?: ReturnType<typeof setTimeout>
   lastUsage?: ContextUsage
+  outputs?: ProjectOutputSweep
 }
 
 const streamFlushIntervalMs = 50
+
+/** A command, an MCP call, a subagent, or an unknown tool can write without saying so. */
+function reportsItsFileEffects(payload: ActivityPayload | undefined): boolean {
+  if (!payload) return false
+  if (payload.kind === "file-change" || payload.kind === "plan") return true
+  return (
+    payload.kind === "tool" &&
+    (payload.tool === "search" || payload.tool === "web")
+  )
+}
 
 export class TurnCoordinator {
   readonly #runs = new Map<string, StartingRun | ActiveRun>()
@@ -141,6 +154,11 @@ export class TurnCoordinator {
       if (turn.providerSessionId) {
         runInput.providerSessionId = turn.providerSessionId
       }
+      // Before the Harness starts, so the files it writes are new to it.
+      const outputs = await ProjectOutputSweep.begin(
+        turn.projectPath,
+        (paths) => this.#captureSweptOutputs(threadId, turn.turnId, paths)
+      )
       const session = await harness.start(runInput, starting.controller.signal)
       try {
         this.store.skillProvisioning.record(
@@ -153,6 +171,7 @@ export class TurnCoordinator {
         // abandon a Harness session that already started successfully.
       }
       if (starting.cancelled || this.#runs.get(threadId) !== starting) {
+        outputs?.close()
         await session.cancel().catch(() => undefined)
         return this.store.threads.view(threadId)
       }
@@ -170,6 +189,7 @@ export class TurnCoordinator {
         lastMessageId: turn.assistantMessageId,
         // The user message holds 0 and the first assistant segment holds 1.
         ordinal: 2,
+        outputs,
       }
       this.#runs.set(threadId, run)
       if (turn.generateTitle) {
@@ -214,6 +234,7 @@ export class TurnCoordinator {
 
     run.cancelled = true
     this.#flush(run)
+    this.#requestSweepForUnreportedWork(run)
     try {
       await run.session.cancel()
     } catch (error) {
@@ -226,8 +247,9 @@ export class TurnCoordinator {
         this.#terminalMessageId(run),
         harnessFailure(message)
       )
-      this.#runs.delete(threadId)
       this.#changed(threadId)
+      await run.outputs?.finish()
+      this.#runs.delete(threadId)
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -240,6 +262,7 @@ export class TurnCoordinator {
       )
       this.#changed(threadId)
     }
+    await run.outputs?.finish()
     this.#runs.delete(threadId)
     return this.store.threads.view(threadId)
   }
@@ -252,7 +275,10 @@ export class TurnCoordinator {
    */
   async discard(threadId: string): Promise<void> {
     this.#titles.cancel(threadId)
-    if (!this.#runs.has(threadId)) return
+    const run = this.#runs.get(threadId)
+    if (!run) return
+    // Sweeping would write rows on their way out with the Thread.
+    if (run.phase === "active") run.outputs?.close()
     this.#discarding.add(threadId)
     try {
       await this.cancel(threadId).catch(() => undefined)
@@ -314,6 +340,7 @@ export class TurnCoordinator {
         continue
       }
       this.#flush(run)
+      run.outputs?.close()
       await run.session.cancel().catch(() => undefined)
       if (!run.terminal) {
         run.terminal = true
@@ -358,7 +385,13 @@ export class TurnCoordinator {
         await run.session.cancel().catch(() => undefined)
       }
     } finally {
-      if (this.#runs.get(threadId) === run) this.#runs.delete(threadId)
+      // The provider is stopped before the final walk. Keeping the run in the
+      // map until capture finishes also prevents the next Turn from writing
+      // files that this one could claim.
+      if (!run.cancelled) await run.outputs?.finish()
+      if (!run.cancelled && this.#runs.get(threadId) === run) {
+        this.#runs.delete(threadId)
+      }
     }
   }
 
@@ -403,10 +436,10 @@ export class TurnCoordinator {
       case "turn.completed": {
         this.#flush(run)
         run.terminal = true
-        const captures = this.#prepareArtifactCaptures(
-          run.turnId,
-          this.store.activities.running(run.turnId)
-        )
+        const leftover = this.store.activities.running(run.turnId)
+        const captures = this.#prepareArtifactCaptures(run.turnId, leftover)
+        // Work the Harness never reported finishing still ran.
+        this.#requestSweepForUnreportedWork(run, leftover)
         // A finished turn settles leftover rows as completed; a red failure
         // mark on a good turn would blame work that simply never reported.
         const artifactsChanged = this.store.transaction(() => {
@@ -441,6 +474,7 @@ export class TurnCoordinator {
   #fail(threadId: string, run: ActiveRun, failure: HarnessFailure): void {
     this.#flush(run)
     run.terminal = true
+    this.#requestSweepForUnreportedWork(run)
     this.store.activities.settleRunning(run.turnId, "failed")
     this.store.turns.fail(
       threadId,
@@ -552,6 +586,39 @@ export class TurnCoordinator {
         activity: record,
       })
       if (artifactsChanged) this.events.artifactsChanged(threadId)
+    }
+    // A failed command counts: it can fail after its file already landed.
+    if (pending && !reportsItsFileEffects(pending.payload)) {
+      run.outputs?.request()
+    }
+  }
+
+  /** Swept files have no Activity to attribute them to, so the Turn owns them. */
+  #captureSweptOutputs(
+    threadId: string,
+    turnId: string,
+    paths: string[]
+  ): void {
+    try {
+      const capture = this.store.artifacts.prepareCapture(turnId, paths)
+      if (!capture || capture.files.length === 0) return
+      if (this.#captureArtifacts([capture])) {
+        this.events.artifactsChanged(threadId)
+      }
+    } catch {
+      // A sweep lands late: storage may be closed or the Thread already gone.
+    }
+  }
+
+  /** A still-running generic Activity may already have written its result. */
+  #requestSweepForUnreportedWork(
+    run: ActiveRun,
+    activities = this.store.activities.running(run.turnId)
+  ): void {
+    if (
+      activities.some((activity) => !reportsItsFileEffects(activity.payload))
+    ) {
+      run.outputs?.request()
     }
   }
 

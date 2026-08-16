@@ -42,6 +42,7 @@ import { projectSkillRootPaths } from "../../skills/project-skill-roots.js"
 import { createErrorMessageSchema } from "../../errors.js"
 
 import { claudeSkillCommand, provisionClaudePlugins } from "./claude-packs.js"
+import { ClaudeTaskPlan, isTaskPlanTool } from "./claude-task-plan.js"
 
 export type ClaudeQuery = Pick<
   Query,
@@ -187,6 +188,9 @@ class ClaudeSession implements HarnessSession {
   readonly #liveBackgroundTaskIds = new Set<string>()
   readonly #settledActivities = new Set<string>()
   readonly #taskActivities = new Map<string, string>()
+  /** Task-tool calls whose results feed the plan instead of settling a row. */
+  readonly #taskPlanCalls = new Set<string>()
+  readonly #taskPlan = new ClaudeTaskPlan()
   readonly #query: ClaudeQuery
   readonly events = this.#queue
   readonly skillProvisioning: SkillProvisioningResult[]
@@ -262,6 +266,31 @@ class ClaudeSession implements HarnessSession {
       abortController: this.#abortController,
       canUseTool,
       cwd: input.projectPath,
+      // The one place the CLI states which task a `TaskCreate` call produced.
+      // The call itself carries only a subject and the updates that follow
+      // carry only an id, so without this the two never meet.
+      hooks: {
+        TaskCreated: [
+          {
+            hooks: [
+              (hookInput, toolUseID) => {
+                if (
+                  hookInput.hook_event_name === "TaskCreated" &&
+                  toolUseID &&
+                  this.#taskPlan.bind(
+                    toolUseID,
+                    hookInput.task_id,
+                    hookInput.task_subject
+                  )
+                ) {
+                  this.#pushPlan(this.#taskPlan.steps())
+                }
+                return Promise.resolve({ continue: true })
+              },
+            ],
+          },
+        ],
+      },
       includePartialMessages: true,
       permissionMode: claudePermissionMode(
         input.executionProfile.permissionMode
@@ -449,10 +478,19 @@ class ClaudeSession implements HarnessSession {
         const parsedInput = jsonValueSchema.safeParse(block.input)
         const input = parsedInput.success ? parsedInput.data : null
         const parentId = message.parent_tool_use_id ?? undefined
-        // The main thread's todo list is the Turn's plan: one activity,
-        // updated in place. A subagent's own todos stay ordinary tool rows.
+        // The main thread's task list is the Turn's plan: one activity,
+        // updated in place. A subagent's own list stays ordinary tool rows.
         if (!parentId && block.name === "TodoWrite") {
-          this.#pushPlan(input)
+          this.#pushPlan(planStepsFromTodos(input))
+          continue
+        }
+        if (!parentId && isTaskPlanTool(block.name)) {
+          this.#taskPlanCalls.add(block.id)
+          const changed =
+            block.name === "TaskCreate"
+              ? this.#taskPlan.created(block.id, input)
+              : block.name === "TaskUpdate" && this.#taskPlan.updated(input)
+          if (changed) this.#pushPlan(this.#taskPlan.steps())
           continue
         }
         if (
@@ -477,6 +515,16 @@ class ClaudeSession implements HarnessSession {
         // Background tools return an immediate launch result. The matching
         // task_notification reports their actual outcome.
         if (this.#backgroundActivities.has(block.tool_use_id)) continue
+        // A plan tool never started an activity, so it has none to settle.
+        // Its answer is where a created task first says which id it got.
+        if (this.#taskPlanCalls.delete(block.tool_use_id)) {
+          const changed = this.#taskPlan.resolveCreated(
+            block.tool_use_id,
+            toolResultText(block.content)
+          )
+          if (changed) this.#pushPlan(this.#taskPlan.steps())
+          continue
+        }
         this.#completeActivity(
           block.tool_use_id,
           block.is_error ? "failed" : "completed"
@@ -574,9 +622,8 @@ class ClaudeSession implements HarnessSession {
   }
 
   /** Emits the plan once, then updates the same activity in place. */
-  #pushPlan(input: JsonValue): void {
-    const steps = planStepsFromTodos(input)
-    if (steps.length === 0) return
+  #pushPlan(steps: PlanStep[]): void {
+    if (steps.length === 0 && !this.#planStarted) return
     const payload = { kind: "plan" as const, steps }
     if (this.#planStarted) {
       this.#queue.push({
@@ -792,6 +839,25 @@ function mcpToolParts(
     server: rest.slice(0, separator),
     tool: rest.slice(separator + 2).replaceAll("_", " ") || toolName,
   }
+}
+
+type ToolResultContent = string | { type: string; text?: string }[]
+
+/**
+ * The text a tool answered with. A structured tool returns its JSON inside
+ * text blocks, so the blocks are joined before anyone tries to parse it.
+ */
+function toolResultText(
+  content: ToolResultContent | undefined
+): string | undefined {
+  if (content === undefined) return undefined
+  if (!Array.isArray(content)) return content
+  const text = content
+    .flatMap((block) =>
+      block.type === "text" && block.text ? [block.text] : []
+    )
+    .join("")
+  return text || undefined
 }
 
 export function planStepsFromTodos(input: JsonValue): PlanStep[] {
