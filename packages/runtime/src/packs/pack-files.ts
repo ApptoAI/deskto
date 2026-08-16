@@ -1,12 +1,5 @@
-import { existsSync, statSync } from "node:fs"
-import {
-  mkdir,
-  readdir,
-  readFile,
-  realpath,
-  stat,
-  writeFile,
-} from "node:fs/promises"
+import { statSync } from "node:fs"
+import { readFile, realpath, stat } from "node:fs/promises"
 import { basename, join } from "node:path"
 
 import type { SkillRoot } from "@deskto/harness-sdk"
@@ -14,6 +7,7 @@ import type { PackSkill } from "@deskto/protocol"
 import { z } from "zod"
 
 import type { PackRow } from "../storage/records.js"
+import { scanSkillSource } from "../skills/skill-scanner.js"
 
 import { RuntimeError } from "../errors.js"
 
@@ -30,10 +24,22 @@ export function skillsDirectory(packPath: string): string {
 
 /** Skill roots that actually exist right now; packs can vanish from disk. */
 export function existingSkillRoots(
-  packs: { path: string; name: string }[]
+  packs: {
+    id?: string
+    path: string
+    name: string
+    content_digest?: string | null
+  }[]
 ): SkillRoot[] {
   return packs
-    .map((pack) => ({ path: skillsDirectory(pack.path), name: pack.name }))
+    .map((pack) => ({
+      id: pack.id ?? pack.path,
+      path: skillsDirectory(pack.path),
+      name: pack.name,
+      ...(pack.content_digest
+        ? { contentDigest: pack.content_digest }
+        : undefined),
+    }))
     .filter((root) => isDirectory(root.path))
 }
 
@@ -59,28 +65,6 @@ export async function resolvedDirectory(
   if (!(await stat(resolved)).isDirectory())
     throw new RuntimeError(error.code, error.notFolder)
   return resolved
-}
-
-/**
- * Creates the pack directory, adopting a leftover folder with the same slug
- * (pack.remove keeps directories on disk) instead of failing on it.
- */
-export async function createPackDirectory(
-  packsRoot: string,
-  name: string
-): Promise<string> {
-  const slug = slugify(name)
-  if (!slug)
-    throw new RuntimeError("invalid-pack", "Pack name needs letters or digits")
-  const path = join(packsRoot, slug)
-
-  await mkdir(skillsDirectory(path), { recursive: true })
-  if (!existsSync(join(path, "pack.json")))
-    await writeFile(
-      join(path, "pack.json"),
-      `${JSON.stringify({ name }, null, 2)}\n`
-    )
-  return path
 }
 
 export async function validatePackDirectory(path: string): Promise<string> {
@@ -122,57 +106,37 @@ export async function readResolvedPackSkills(
   pack: Pick<PackRow, "id" | "name" | "path">
 ): Promise<ResolvedPackSkill[]> {
   const root = skillsDirectory(pack.path)
-  let entries
-  try {
-    entries = await readdir(root, { withFileTypes: true })
-  } catch {
-    return []
-  }
-
-  const skills = (
-    await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => readSkill(join(root, entry.name), entry.name, pack))
-    )
-  ).filter((skill): skill is ResolvedPackSkill => skill !== null)
-  return skills.sort((a, b) => a.skill.name.localeCompare(b.skill.name))
+  const scanned = await scanSkillSource(
+    {
+      id: pack.id,
+      kind: "pack",
+      scope: "workspace",
+      label: pack.name,
+      path: root,
+      harnessIds: [],
+      packId: pack.id,
+      provisioning: [],
+    },
+    { missingIsDiagnostic: true }
+  )
+  return scanned.skills
+    .filter(({ content }) => content !== null)
+    .map(({ occurrence }) => ({
+      path: occurrence.skillFilePath,
+      skill: {
+        id: packSkillId(pack.id, occurrence.directoryName),
+        packId: pack.id,
+        packName: pack.name,
+        name: occurrence.name ?? occurrence.directoryName,
+        description: occurrence.description ?? "",
+      },
+    }))
 }
 
 export async function readPackSkills(
   pack: Pick<PackRow, "id" | "name" | "path">
 ): Promise<PackSkill[]> {
   return (await readResolvedPackSkills(pack)).map((entry) => entry.skill)
-}
-
-async function readSkill(
-  directory: string,
-  fallbackName: string,
-  pack: Pick<PackRow, "id" | "name">
-): Promise<ResolvedPackSkill | null> {
-  let content: string
-  try {
-    content = await readFile(join(directory, "SKILL.md"), "utf8")
-  } catch {
-    return null
-  }
-  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1] ?? ""
-  return {
-    path: join(directory, "SKILL.md"),
-    skill: {
-      id: packSkillId(pack.id, fallbackName),
-      packId: pack.id,
-      packName: pack.name,
-      name: frontmatterValue(frontmatter, "name") ?? fallbackName,
-      description: frontmatterValue(frontmatter, "description") ?? "",
-    },
-  }
-}
-
-function frontmatterValue(frontmatter: string, key: string): string | null {
-  const match = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(frontmatter)
-  if (!match) return null
-  return match[1]!.trim().replace(/^["']|["']$/g, "") || null
 }
 
 export function slugify(name: string): string {

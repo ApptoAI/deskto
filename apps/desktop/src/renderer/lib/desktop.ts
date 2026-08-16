@@ -31,3 +31,7 @@ export function pickProjectFolder() {
 export function pickPackFolder() {
   return window.deskto.pickPack()
 }
+
+export function pickPackArchive() {
+  return window.deskto.pickPackArchive()
+}

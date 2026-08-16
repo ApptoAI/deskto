@@ -28,6 +28,7 @@ export interface DesktopApi {
   }
   pickProject(): Promise<PickedProject | undefined>
   pickPack(): Promise<PickedProject | undefined>
+  pickPackArchive(): Promise<PickedProject | undefined>
   openExternal(url: string): Promise<void>
   /** Reveals a project folder in the system file manager. */
   openFolder(path: string): Promise<void>

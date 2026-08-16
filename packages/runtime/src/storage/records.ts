@@ -4,9 +4,12 @@ import {
   type Activity,
   type Approval,
   type Message,
+  type PackKind,
+  type PackReceipt,
   type Thread,
   type Project,
   type Workspace,
+  packReceiptSchema,
 } from "@deskto/protocol"
 
 export type WorkspaceRow = {
@@ -108,6 +111,9 @@ export type PackRow = {
   id: string
   name: string
   path: string
+  kind: PackKind
+  content_digest: string | null
+  receipt_json: string | null
   created_at: string
   updated_at: string
 }
@@ -118,8 +124,21 @@ export function toPackRecord(row: PackRow) {
     id: row.id,
     name: row.name,
     path: row.path,
+    kind: row.kind,
+    contentDigest: row.content_digest,
+    receipt: parsePackReceipt(row.receipt_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  }
+}
+
+function parsePackReceipt(value: string | null): PackReceipt | null {
+  if (!value) return null
+  try {
+    const parsed = packReceiptSchema.safeParse(JSON.parse(value))
+    return parsed.success ? parsed.data : null
+  } catch {
+    return null
   }
 }
 

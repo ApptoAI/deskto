@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 
 import {
   harnessFailure,
@@ -1074,14 +1074,15 @@ describe("Runtime", () => {
         params: { name: "Press tools" },
       })
     )
-    expect(created.path).toBe(join(directory, "packs", "press-tools"))
+    expect(basename(created.path).startsWith("press-tools-")).toBe(true)
+    expect(created.kind).toBe("managed")
     expect(created.skills).toEqual([])
 
     const malformedPackPath = join(directory, "malformed-pack")
     await mkdir(malformedPackPath)
     await writeFile(join(malformedPackPath, "skills"), "not a directory")
     const malformedPack = await runtime.request({
-      method: "pack.import",
+      method: "pack.link",
       params: { path: malformedPackPath },
     })
     expect(malformedPack.ok).toBe(false)
@@ -1192,8 +1193,12 @@ describe("Runtime", () => {
         },
       })
     )
-    expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
-      { path: join(created.path, "skills"), name: "Press tools" },
+    expect(harness.runs[0]?.input.customization.skillRoots).toMatchObject([
+      {
+        id: created.id,
+        path: join(created.path, "skills"),
+        name: "Press tools",
+      },
     ])
     expect(harness.runs[0]?.input.references).toEqual([
       {

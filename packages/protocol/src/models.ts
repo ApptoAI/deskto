@@ -71,6 +71,24 @@ export const packSkillSchema = z.object({
 
 export type PackSkill = z.infer<typeof packSkillSchema>
 
+export const packKindSchema = z.enum(["managed", "linked"])
+export type PackKind = z.infer<typeof packKindSchema>
+
+export const packReceiptSchema = z.object({
+  schemaVersion: z.literal(1),
+  installedAt: z.iso.datetime(),
+  source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("created") }),
+    z.object({ kind: z.literal("folder"), name: z.string().min(1) }),
+    z.object({ kind: z.literal("zip"), name: z.string().min(1) }),
+  ]),
+  contentDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  fileCount: z.number().int().nonnegative(),
+  totalBytes: z.number().int().nonnegative(),
+})
+
+export type PackReceipt = z.infer<typeof packReceiptSchema>
+
 /**
  * A Pack is a directory of skills the user manages in the app. Its layout is
  * provider-neutral (a manifest plus a skills/ directory of SKILL.md folders);
@@ -80,6 +98,12 @@ export const packSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
+  kind: packKindSchema,
+  contentDigest: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .nullable(),
+  receipt: packReceiptSchema.nullable(),
   skills: z.array(packSkillSchema),
   workspaceIds: z.array(z.string()),
   createdAt: z.string(),

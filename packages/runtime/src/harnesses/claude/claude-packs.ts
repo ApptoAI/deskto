@@ -9,9 +9,24 @@ import {
 import { tmpdir } from "node:os"
 import { isAbsolute, join, relative, sep } from "node:path"
 
-import type { HarnessPromptReference, SkillRoot } from "@deskto/harness-sdk"
+import type {
+  HarnessPromptReference,
+  SkillProvisioningResult,
+  SkillRoot,
+} from "@deskto/harness-sdk"
 
 import { slugify } from "../../packs/pack-files.js"
+
+type ClaudeLocalPlugin = {
+  type: "local"
+  path: string
+  skipMcpDiscovery: true
+}
+
+type ClaudePluginProvisioning = {
+  plugins: ClaudeLocalPlugin[]
+  results: SkillProvisioningResult[]
+}
 
 /**
  * The Claude Agent SDK loads extra skills only through local plugins, so each
@@ -22,22 +37,31 @@ import { slugify } from "../../packs/pack-files.js"
 export function claudePluginsFor(
   skillRoots: SkillRoot[],
   shimsRoot: string = defaultShimsRoot
-): { type: "local"; path: string; skipMcpDiscovery: true }[] {
-  const plugins = []
+): ClaudeLocalPlugin[] {
+  return provisionClaudePlugins(skillRoots, shimsRoot).plugins
+}
+
+export function provisionClaudePlugins(
+  skillRoots: SkillRoot[],
+  shimsRoot: string = defaultShimsRoot
+): ClaudePluginProvisioning {
+  const plugins: ClaudeLocalPlugin[] = []
+  const results: SkillProvisioningResult[] = []
   for (const root of skillRoots) {
     try {
       plugins.push({
-        type: "local" as const,
+        type: "local",
         path: ensurePluginShim(root, shimsRoot),
         // Packs deliver skills only for now; their MCP config stays inert.
-        skipMcpDiscovery: true as const,
+        skipMcpDiscovery: true,
       })
+      results.push(claudeProvisioning(root, "configured"))
     } catch (error) {
-      console.warn(`Could not wrap pack "${root.name}" for Claude:`, error)
-      continue
+      const message = error instanceof Error ? error.message : String(error)
+      results.push(claudeProvisioning(root, "failed", message))
     }
   }
-  return plugins
+  return { plugins, results }
 }
 
 const defaultShimsRoot = join(tmpdir(), "deskto-claude-packs")
@@ -114,4 +138,20 @@ function currentTarget(link: string): string | null {
 
 function fingerprint(path: string): string {
   return createHash("sha256").update(path).digest("hex").slice(0, 8)
+}
+
+function claudeProvisioning(
+  root: SkillRoot,
+  status: SkillProvisioningResult["status"],
+  message?: string
+): SkillProvisioningResult {
+  const result: SkillProvisioningResult = {
+    rootId: root.id ?? root.path,
+    rootPath: root.path,
+    status,
+    method: "plugin-shim",
+  }
+  if (root.contentDigest) result.contentDigest = root.contentDigest
+  if (message) result.message = message
+  return result
 }

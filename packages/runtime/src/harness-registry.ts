@@ -3,6 +3,7 @@ import type {
   HarnessAdapterFactory,
   HarnessAvailability,
   HarnessModelOption,
+  NativeSkillRoot,
 } from "@deskto/harness-sdk"
 import type { Harness } from "@deskto/protocol"
 import { z } from "zod"
@@ -83,6 +84,27 @@ export class HarnessRegistry {
 
   get(id: string): HarnessAdapterFactory {
     return this.#entry(id).factory
+  }
+
+  harnessIds(): string[] {
+    return [...this.#entries.keys()]
+  }
+
+  /** Reads adapter-owned filesystem conventions without probing or starting a CLI. */
+  async discoverSkillRoots(
+    projectPath: string | null
+  ): Promise<Array<{ harnessId: string; root: NativeSkillRoot }>> {
+    const discovered = await Promise.all(
+      [...this.#entries.values()].map(async ({ factory }) => {
+        if (!factory.discoverSkillRoots) return []
+        const roots = await factory.discoverSkillRoots({ projectPath })
+        return roots.map((root) => ({
+          harnessId: factory.descriptor.id,
+          root,
+        }))
+      })
+    )
+    return discovered.flat()
   }
 
   /** Health snapshot of every harness, re-checking the ones gone stale. */

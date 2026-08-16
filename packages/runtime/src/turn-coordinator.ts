@@ -134,9 +134,7 @@ export class TurnCoordinator {
         executionProfile: turn.executionProfile,
         customization: {
           skillRoots: existingSkillRoots(
-            this.store.packs
-              .attachedToWorkspace(turn.workspaceId)
-              .map(({ path, name }) => ({ path, name }))
+            this.store.packs.attachedToWorkspace(turn.workspaceId)
           ),
         },
       }
@@ -144,6 +142,11 @@ export class TurnCoordinator {
         runInput.providerSessionId = turn.providerSessionId
       }
       const session = await harness.start(runInput, starting.controller.signal)
+      this.store.skillProvisioning.record(
+        turn.turnId,
+        turn.harnessId,
+        session.skillProvisioning ?? []
+      )
       if (starting.cancelled || this.#runs.get(threadId) !== starting) {
         await session.cancel().catch(() => undefined)
         return this.store.threads.view(threadId)

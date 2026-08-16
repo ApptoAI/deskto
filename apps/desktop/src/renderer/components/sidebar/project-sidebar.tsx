@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Project, Workspace } from "@deskto/protocol"
@@ -37,6 +38,8 @@ export function ProjectSidebar({
   onOpenThread,
   onNewTask,
   onRetryThreads,
+  onOpenSkills,
+  skillsActive,
   onOpenSettings,
   focusSettings,
   inboxActions,
@@ -60,6 +63,8 @@ export function ProjectSidebar({
   onOpenThread: (threadId: string) => void
   onNewTask: () => void
   onRetryThreads: () => void
+  onOpenSkills: () => void
+  skillsActive: boolean
   onOpenSettings: () => void
   /** True when Settings just closed, so the button that opened it takes focus
       back instead of leaving the caret on the body. */
@@ -160,6 +165,16 @@ export function ProjectSidebar({
       </ScrollArea>
 
       <div className="no-drag border-t border-border p-2">
+        <Button
+          variant={skillsActive ? "secondary" : "ghost"}
+          size="sm"
+          className="mb-1 w-full justify-start text-muted-foreground"
+          onClick={onOpenSkills}
+          aria-current={skillsActive ? "page" : undefined}
+        >
+          <PuzzleIcon data-icon="inline-start" />
+          Skills
+        </Button>
         <Button
           ref={settingsButton}
           variant="ghost"

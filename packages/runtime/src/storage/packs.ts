@@ -1,12 +1,24 @@
 import { randomUUID } from "node:crypto"
+import { dirname, resolve } from "node:path"
 import type { DatabaseSync } from "node:sqlite"
 
+import type { PackKind, PackReceipt } from "@deskto/protocol"
+
 import { RuntimeError } from "../errors.js"
+import { transaction } from "./database.js"
 import type { PackRow } from "./records.js"
 import type { Workspaces } from "./workspaces.js"
 
-/** Registration only; a Pack's content lives in its directory on disk. */
+export type PackMetadata = {
+  kind: PackKind
+  contentDigest?: string | null
+  receipt?: PackReceipt | null
+}
+
+/** Stores Pack ownership and Workspace attachment; content stays on disk. */
 export class Packs {
+  #managedRoot: string | null = null
+
   constructor(
     private readonly database: DatabaseSync,
     private readonly workspaces: Workspaces
@@ -30,8 +42,45 @@ export class Packs {
     return row
   }
 
+  findByPath(path: string): PackRow | null {
+    // SAFETY: packs.path is unique and SELECT * matches PackRow after the
+    // ownership migration runs; SQLite returns undefined when absent.
+    return (
+      (this.database.prepare("SELECT * FROM packs WHERE path = ?").get(path) as
+        | PackRow
+        | undefined) ?? null
+    )
+  }
+
+  /**
+   * Finishes the ownership migration that SQL cannot perform because the
+   * managed Pack root is supplied by the host rather than stored in SQLite.
+   */
+  initializeOwnership(managedRoot: string): void {
+    this.#managedRoot = resolve(managedRoot)
+    // SAFETY: the migration adds the PackRow columns before this query runs;
+    // kind is the only temporarily-null field and is not read below.
+    const legacy = this.database
+      .prepare("SELECT * FROM packs WHERE kind IS NULL")
+      .all() as PackRow[]
+    if (legacy.length === 0) return
+
+    transaction(this.database, () => {
+      const update = this.database.prepare(
+        "UPDATE packs SET kind = ?, updated_at = ? WHERE id = ? AND kind IS NULL"
+      )
+      const now = new Date().toISOString()
+      for (const row of legacy) {
+        const kind: PackKind = this.#isManagedPath(row.path)
+          ? "managed"
+          : "linked"
+        update.run(kind, now, row.id)
+      }
+    })
+  }
+
   /** Registering a path twice returns the existing pack. */
-  add(name: string, path: string): PackRow {
+  add(name: string, path: string, metadata?: PackMetadata): PackRow {
     // SAFETY: packs.path is unique and SELECT * matches PackRow; an unmatched
     // path produces undefined.
     const existing = this.database
@@ -40,25 +89,48 @@ export class Packs {
     if (existing) return existing
 
     const now = new Date().toISOString()
+    const kind =
+      metadata?.kind ?? (this.#isManagedPath(path) ? "managed" : "linked")
     const row: PackRow = {
       id: randomUUID(),
       name,
       path,
+      kind,
+      content_digest: metadata?.contentDigest ?? null,
+      receipt_json: metadata?.receipt ? JSON.stringify(metadata.receipt) : null,
       created_at: now,
       updated_at: now,
     }
     this.database
       .prepare(
-        "INSERT INTO packs (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO packs (id, name, path, kind, content_digest, receipt_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(row.id, row.name, row.path, row.created_at, row.updated_at)
+      .run(
+        row.id,
+        row.name,
+        row.path,
+        row.kind,
+        row.content_digest,
+        row.receipt_json,
+        row.created_at,
+        row.updated_at
+      )
     return row
   }
 
-  /** Unregisters the pack everywhere; its directory stays on disk. */
-  remove(id: string): void {
+  /** Deletes the record and lets the foreign key cascade remove attachments. */
+  deleteRecord(id: string): void {
     this.get(id)
     this.database.prepare("DELETE FROM packs WHERE id = ?").run(id)
+  }
+
+  updateContentDigest(id: string, contentDigest: string): void {
+    this.get(id)
+    this.database
+      .prepare(
+        "UPDATE packs SET content_digest = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(contentDigest, new Date().toISOString(), id)
   }
 
   /** All attachments in one query, for list views over every pack. */
@@ -116,5 +188,11 @@ export class Packs {
         "SELECT p.* FROM packs p JOIN workspace_packs wp ON wp.pack_id = p.id WHERE wp.workspace_id = ? ORDER BY p.name"
       )
       .all(workspaceId) as PackRow[]
+  }
+
+  #isManagedPath(path: string): boolean {
+    return (
+      this.#managedRoot !== null && dirname(resolve(path)) === this.#managedRoot
+    )
   }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Pack, Workspace } from "@deskto/protocol"
+import type { Workspace } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -11,7 +11,6 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
-import { Switch } from "@workspace/ui/components/switch"
 import { cn } from "@workspace/ui/lib/utils"
 
 import {
@@ -23,21 +22,12 @@ import {
 
 export type WorkspaceDraft = { name: string; color: string; icon: string }
 
-export type PackActions = {
-  onToggle: (packId: string, attached: boolean) => Promise<void>
-  onCreate: (name: string) => Promise<void>
-  onImport: () => Promise<void>
-  onRemove: (packId: string) => Promise<void>
-}
-
 /** Creates a workspace when `workspace` is null, edits it otherwise. */
 export function WorkspaceDialog({
   open,
   onOpenChange,
   workspace,
   canDelete,
-  packs,
-  packActions,
   onSubmit,
   onDelete,
 }: {
@@ -45,8 +35,6 @@ export function WorkspaceDialog({
   onOpenChange: (open: boolean) => void
   workspace: Workspace | null
   canDelete: boolean
-  packs: Pack[]
-  packActions: PackActions
   onSubmit: (draft: WorkspaceDraft) => Promise<void>
   onDelete: () => Promise<void>
 }) {
@@ -58,8 +46,6 @@ export function WorkspaceDialog({
             key={workspace?.id ?? "create"}
             workspace={workspace}
             canDelete={canDelete}
-            packs={packs}
-            packActions={packActions}
             onSubmit={onSubmit}
             onDelete={onDelete}
             onClose={() => onOpenChange(false)}
@@ -73,16 +59,12 @@ export function WorkspaceDialog({
 function WorkspaceForm({
   workspace,
   canDelete,
-  packs,
-  packActions,
   onSubmit,
   onDelete,
   onClose,
 }: {
   workspace: Workspace | null
   canDelete: boolean
-  packs: Pack[]
-  packActions: PackActions
   onSubmit: (draft: WorkspaceDraft) => Promise<void>
   onDelete: () => Promise<void>
   onClose: () => void
@@ -191,10 +173,6 @@ function WorkspaceForm({
           </div>
         </div>
 
-        {workspace ? (
-          <PackSection workspace={workspace} packs={packs} {...packActions} />
-        ) : null}
-
         <DialogFooter className="items-center">
           {workspace && canDelete ? (
             <Button
@@ -227,123 +205,5 @@ function WorkspaceForm({
         </DialogFooter>
       </form>
     </>
-  )
-}
-
-/** Attach and detach skill Packs; content is edited on disk, previewed here. */
-function PackSection({
-  workspace,
-  packs,
-  onToggle,
-  onCreate,
-  onImport,
-  onRemove,
-}: { workspace: Workspace; packs: Pack[] } & PackActions) {
-  const [newPackName, setNewPackName] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(
-    null
-  )
-
-  async function run(action: () => Promise<void>) {
-    setBusy(true)
-    try {
-      await action()
-    } catch {
-      // The host surfaces failures.
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function createNewPack() {
-    const name = newPackName.trim()
-    if (!name || busy) return
-    void run(async () => {
-      await onCreate(name)
-      setNewPackName("")
-    })
-  }
-
-  return (
-    <div className="space-y-2 border-t border-border pt-3">
-      <Label>Packs</Label>
-      {packs.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Packs are folders of skills you can share between workspaces.
-        </p>
-      ) : (
-        <ul className="max-h-40 space-y-1 overflow-y-auto">
-          {packs.map((pack) => (
-            <li key={pack.id} className="flex items-start gap-2 py-1">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{pack.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {pack.skills.length === 0
-                    ? "No skills yet"
-                    : pack.skills.map((skill) => skill.name).join(", ")}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground"
-                disabled={busy}
-                onClick={() => {
-                  if (confirmingRemoval === pack.id) {
-                    setConfirmingRemoval(null)
-                    void run(() => onRemove(pack.id))
-                  } else {
-                    setConfirmingRemoval(pack.id)
-                  }
-                }}
-              >
-                {confirmingRemoval === pack.id ? "Remove for all?" : "Remove"}
-              </Button>
-              <Switch
-                checked={pack.workspaceIds.includes(workspace.id)}
-                disabled={busy}
-                onCheckedChange={(checked) =>
-                  void run(() => onToggle(pack.id, checked === true))
-                }
-                aria-label={`Use ${pack.name} in this workspace`}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex items-center gap-2">
-        <Input
-          value={newPackName}
-          onChange={(event) => setNewPackName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return
-            event.preventDefault()
-            createNewPack()
-          }}
-          placeholder="New pack name"
-          className="h-7 flex-1 text-sm"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy || !newPackName.trim()}
-          onClick={createNewPack}
-        >
-          Create
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => void run(onImport)}
-        >
-          Import…
-        </Button>
-      </div>
-    </div>
   )
 }
