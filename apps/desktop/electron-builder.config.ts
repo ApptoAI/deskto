@@ -1,8 +1,8 @@
 import type { Configuration } from "electron-builder"
 
 export default {
-  appId: "to.appto.desktop",
-  productName: "Appto",
+  appId: "to.deskto.desktop",
+  productName: "Deskto",
   asar: true,
   asarUnpack: [
     "node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/claude",

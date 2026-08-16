@@ -3,7 +3,7 @@ import { readdir, stat } from "node:fs/promises"
 import { relative, resolve, sep } from "node:path"
 import { promisify } from "node:util"
 
-import type { ProjectEntry } from "@openappto/protocol"
+import type { ProjectEntry } from "@deskto/protocol"
 
 const execFileAsync = promisify(execFile)
 const cacheTtlMs = 15_000

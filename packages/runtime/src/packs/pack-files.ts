@@ -9,8 +9,8 @@ import {
 } from "node:fs/promises"
 import { basename, join } from "node:path"
 
-import type { SkillRoot } from "@openappto/harness-sdk"
-import type { PackSkill } from "@openappto/protocol"
+import type { SkillRoot } from "@deskto/harness-sdk"
+import type { PackSkill } from "@deskto/protocol"
 import { z } from "zod"
 
 import type { PackRow } from "../storage/records.js"

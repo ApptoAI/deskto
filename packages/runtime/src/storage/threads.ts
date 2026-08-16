@@ -8,7 +8,7 @@ import {
   type ExecutionProfile,
   type Thread,
   type ThreadView,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import type { ThreadSequences } from "../thread-sequences.js"

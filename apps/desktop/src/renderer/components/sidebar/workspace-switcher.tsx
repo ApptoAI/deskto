@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import ChevronsUpDownIcon from "lucide-react/dist/esm/icons/chevrons-up-down"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
-import type { Workspace } from "@openappto/protocol"
+import type { Workspace } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

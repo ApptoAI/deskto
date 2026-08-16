@@ -3,7 +3,7 @@ import type {
   RuntimeEvent,
   RuntimeMethod,
   RuntimeResponse,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 export type PickedProject = {
   path: string

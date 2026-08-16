@@ -1,5 +1,5 @@
-import type { HarnessSession } from "@openappto/harness-sdk"
-import { ScriptedHarness } from "@openappto/harness-sdk/testing"
+import type { HarnessSession } from "@deskto/harness-sdk"
+import { ScriptedHarness } from "@deskto/harness-sdk/testing"
 import { describe, expect, it } from "vitest"
 
 import { generateTextWithSession } from "./generate-text.js"

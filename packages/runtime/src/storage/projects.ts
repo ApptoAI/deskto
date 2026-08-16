@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
-import type { Project } from "@openappto/protocol"
+import type { Project } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { toProject, type ProjectRow } from "./records.js"

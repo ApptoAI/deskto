@@ -4,7 +4,7 @@ import type {
   Harness,
   Project,
   TurnInput,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 
 import {
   defaultExecutionProfile,
@@ -101,7 +101,7 @@ export function NewTaskView({
             aria-hidden
             className="font-heading text-6xl leading-none font-semibold tracking-tight text-foreground/8 select-none sm:text-7xl"
           >
-            appto
+            deskto
           </div>
 
           <p className="text-center text-lg font-medium text-foreground/90">

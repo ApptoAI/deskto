@@ -16,13 +16,13 @@ import {
   type HarnessSession,
   type PlanStep,
   type TextGenerationInput,
-} from "@openappto/harness-sdk"
+} from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
   jsonValueSchema,
   type JsonObject,
   type JsonValue,
-} from "@openappto/protocol"
+} from "@deskto/protocol"
 import { z } from "zod"
 
 import { normalizePlanStepStatus } from "../plan-status.js"
@@ -651,7 +651,7 @@ async function initialize(client: CodexClient): Promise<void> {
   await client.request(
     "initialize",
     {
-      clientInfo: { name: "appto", title: "Appto", version: "0.0.1" },
+      clientInfo: { name: "deskto", title: "Deskto", version: "0.0.1" },
       capabilities: { experimentalApi: false, requestAttestation: false },
     },
     jsonValueSchema

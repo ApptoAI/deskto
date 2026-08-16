@@ -1,4 +1,4 @@
-import type { ContextUsage } from "@openappto/protocol"
+import type { ContextUsage } from "@deskto/protocol"
 
 import {
   Tooltip,

@@ -14,7 +14,7 @@ import FileTextIcon from "lucide-react/dist/esm/icons/file-text"
 import PanelsTopLeftIcon from "lucide-react/dist/esm/icons/panels-top-left"
 import TableIcon from "lucide-react/dist/esm/icons/table"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type { Artifact, ArtifactPreview } from "@openappto/protocol"
+import type { Artifact, ArtifactPreview } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { Markdown } from "@workspace/ui/components/chat/markdown"

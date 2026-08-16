@@ -1,5 +1,5 @@
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
-import type { Harness } from "@openappto/protocol"
+import type { Harness } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {

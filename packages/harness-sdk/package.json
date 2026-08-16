@@ -1,5 +1,5 @@
 {
-  "name": "@openappto/harness-sdk",
+  "name": "@deskto/harness-sdk",
   "version": "0.0.0",
   "private": true,
   "type": "module",

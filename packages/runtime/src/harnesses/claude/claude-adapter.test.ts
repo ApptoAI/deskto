@@ -1,6 +1,6 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
-import type { HarnessEvent } from "@openappto/harness-sdk"
-import type { JsonValue } from "@openappto/protocol"
+import type { HarnessEvent } from "@deskto/harness-sdk"
+import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
