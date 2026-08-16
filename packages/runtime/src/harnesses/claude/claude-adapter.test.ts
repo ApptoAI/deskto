@@ -509,7 +509,7 @@ describe("ClaudeAdapter", () => {
     ])
   })
 
-  it("tracks a background Agent until its task notification", async () => {
+  it("keeps a Turn open when its first result precedes the background notification", async () => {
     queryMock.mockReturnValue(
       fakeQuery([
         sdkMessage({
@@ -540,6 +540,17 @@ describe("ClaudeAdapter", () => {
           subagent_type: "Explore",
         }),
         sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "task-1",
+              task_type: "agent",
+              description: "Research the repo",
+            },
+          ],
+        }),
+        sdkMessage({
           type: "user",
           parent_tool_use_id: null,
           message: {
@@ -551,6 +562,13 @@ describe("ClaudeAdapter", () => {
               },
             ],
           },
+        }),
+        // Claude reports the main response boundary while the agent is still
+        // running. This must not become the Harness terminal event.
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
         }),
         sdkMessage({
           type: "assistant",
@@ -587,6 +605,13 @@ describe("ClaudeAdapter", () => {
           status: "completed",
           summary: "Research complete",
         }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [],
+        }),
+        // A completed background task can cause Claude to produce a final
+        // response. Only this result closes the product Turn.
         sdkMessage({
           type: "result",
           subtype: "success",
@@ -638,6 +663,422 @@ describe("ClaudeAdapter", () => {
         type: "activity.completed",
         id: "child-tool",
         outcome: "completed",
+      },
+      {
+        type: "activity.completed",
+        id: "agent-1",
+        outcome: "completed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("uses the background task level when the start edge is missing", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "task-1",
+              task_type: "agent",
+              description: "Write the report",
+            },
+          ],
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "verify-1",
+                name: "Bash",
+                input: { command: "test -f report.pdf" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          parent_tool_use_id: null,
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "verify-1",
+                content: "Report exists",
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [],
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "verify-1",
+          name: "Run command",
+          detail: "test -f report.pdf",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "verify-1",
+        outcome: "completed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("uses an empty background task level when the notification is missing", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "agent-1",
+                name: "Agent",
+                input: { description: "Write the report" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          description: "Write the report",
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "task-1",
+              task_type: "agent",
+              description: "Write the report",
+            },
+          ],
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [],
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "agent-1",
+          name: "Write the report",
+          payload: { kind: "subagent" },
+        },
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("does not let an ambient background task hold the Turn open", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "ambient-1",
+              task_type: "housekeeping",
+              description: "Refresh project metadata",
+            },
+          ],
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "ambient-1",
+          description: "Refresh project metadata",
+          skip_transcript: true,
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([{ type: "turn.completed" }])
+  })
+
+  it("holds success when a start edge follows an earlier empty level", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [],
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "agent-1",
+                name: "Agent",
+                input: { description: "Write the report" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          description: "Write the report",
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "task-1",
+              task_type: "agent",
+              description: "Write the report",
+            },
+          ],
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_notification",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          status: "completed",
+          summary: "Report written",
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [],
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "agent-1",
+          name: "Write the report",
+          payload: { kind: "subagent" },
+        },
+      },
+      {
+        type: "activity.completed",
+        id: "agent-1",
+        outcome: "completed",
+      },
+      { type: "turn.completed" },
+    ])
+  })
+
+  it("releases a pending success when the query ends after the notification", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "agent-1",
+                name: "Agent",
+                input: { description: "Write the report" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_started",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          description: "Write the report",
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+        sdkMessage({
+          type: "system",
+          subtype: "task_notification",
+          task_id: "task-1",
+          tool_use_id: "agent-1",
+          status: "completed",
+          summary: "Report written",
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "agent-1",
+          name: "Write the report",
+          payload: { kind: "subagent" },
+        },
       },
       {
         type: "activity.completed",

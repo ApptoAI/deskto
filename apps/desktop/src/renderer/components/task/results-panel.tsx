@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState } from "react"
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react"
 import DownloadIcon from "lucide-react/dist/esm/icons/download"
 import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
@@ -14,12 +21,14 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
+import { z } from "zod"
 
 import {
   openResultFile,
   revealResultFile,
   saveResultCopy,
 } from "../../lib/desktop.js"
+import { useLocalStorage } from "../../lib/use-local-storage.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import {
@@ -34,7 +43,21 @@ import {
   isEditableArtifactKind,
 } from "./artifact-views.js"
 import { PreviewFailure, PreviewLoading } from "./preview-states.js"
+import { ResultPreviewBoundary } from "./result-preview-boundary.js"
 import { closeResultTab, openResultTab, useResultTabs } from "./result-tabs.js"
+import {
+  clampResultsPanelWidth,
+  defaultResultsPanelWidth,
+  maximumResultsPanelWidth,
+  minimumConversationWidth,
+  minimumResultsPanelWidth,
+} from "./results-panel-size.js"
+
+const resultsPanelWidthSchema = z
+  .number()
+  .int()
+  .min(minimumResultsPanelWidth)
+  .max(maximumResultsPanelWidth)
 
 /**
  * The results of one task, opened as tabs beside the conversation. Every tab
@@ -58,9 +81,116 @@ export function ResultsPanel({
     [outputs]
   )
   const active = tabs.activeId ? byId.get(tabs.activeId) : undefined
+  const [panelWidth, setPanelWidth] = useLocalStorage(
+    "deskto.results-panel-width:v1",
+    defaultResultsPanelWidth,
+    resultsPanelWidthSchema
+  )
+  const asideRef = useRef<HTMLElement>(null)
+  const separatorRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startWidth: number
+    width: number
+  } | null>(null)
+
+  const resizeTo = useCallback((width: number) => {
+    const aside = asideRef.current
+    const containerWidth =
+      aside?.parentElement?.clientWidth ?? window.innerWidth
+    const next = clampResultsPanelWidth(width, containerWidth)
+    if (aside) aside.style.width = `${next}px`
+    separatorRef.current?.setAttribute("aria-valuenow", String(next))
+    return next
+  }, [])
+
+  const handleResizeStart = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const aside = asideRef.current
+      if (!aside) return
+      event.preventDefault()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      const width = aside.getBoundingClientRect().width
+      dragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: width,
+        width,
+      }
+    },
+    []
+  )
+
+  const handleResizeMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      drag.width = resizeTo(drag.startWidth + drag.startX - event.clientX)
+    },
+    [resizeTo]
+  )
+
+  const handleResizeEnd = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      dragRef.current = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      setPanelWidth(drag.width)
+    },
+    [setPanelWidth]
+  )
+
+  const handleResizeKey = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      let next: number | undefined
+      const width =
+        asideRef.current?.getBoundingClientRect().width ?? panelWidth
+      const step = event.shiftKey ? 64 : 16
+      if (event.key === "ArrowLeft") next = width + step
+      if (event.key === "ArrowRight") next = width - step
+      if (event.key === "Home") next = minimumResultsPanelWidth
+      if (event.key === "End") next = maximumResultsPanelWidth
+      if (next === undefined) return
+      event.preventDefault()
+      setPanelWidth(resizeTo(next))
+    },
+    [panelWidth, resizeTo, setPanelWidth]
+  )
 
   return (
-    <aside className="flex h-full w-[min(46vw,40rem)] min-w-80 shrink-0 flex-col border-l border-border bg-background">
+    <aside
+      ref={asideRef}
+      style={{
+        width: panelWidth,
+        minWidth: minimumResultsPanelWidth,
+        maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
+      }}
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+    >
+      <div
+        ref={separatorRef}
+        role="separator"
+        aria-label="Resize results panel"
+        aria-orientation="vertical"
+        aria-valuemin={minimumResultsPanelWidth}
+        aria-valuemax={maximumResultsPanelWidth}
+        aria-valuenow={Math.round(panelWidth)}
+        tabIndex={0}
+        title="Drag to resize results"
+        onDoubleClick={() => setPanelWidth(resizeTo(defaultResultsPanelWidth))}
+        onPointerDown={handleResizeStart}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        onPointerCancel={handleResizeEnd}
+        onKeyDown={handleResizeKey}
+        className="group/resize absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize touch-none outline-none"
+      >
+        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring group-focus-visible/resize:bg-ring" />
+      </div>
       <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-border pr-2 pl-1">
         <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
           {tabs.open.map((id) => {
@@ -97,11 +227,13 @@ export function ResultsPanel({
           <InlineError message={results.message} />
         </div>
       ) : active ? (
-        <ResultTabContent
-          key={active.artifact.id}
-          threadId={threadId}
-          output={active}
-        />
+        <ResultPreviewBoundary key={active.artifact.id}>
+          <ResultTabContent
+            key={active.artifact.id}
+            threadId={threadId}
+            output={active}
+          />
+        </ResultPreviewBoundary>
       ) : (
         <EmptyResults
           loading={results.status !== "ready"}

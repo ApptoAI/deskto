@@ -61,6 +61,14 @@ const textPreviewLimit = 1_000_000
 const binaryPreviewLimit = 10_000_000
 const officePreviewLimit = 20_000_000
 const capturedFilesLimit = 200
+const workingDirectoryNames: ReadonlySet<string> = new Set([
+  ".cache",
+  ".temp",
+  ".tmp",
+  "node_modules",
+  "temp",
+  "tmp",
+])
 
 type ArtifactFormat = Pick<Artifact, "mediaType" | "previewKind">
 
@@ -182,7 +190,12 @@ export class Artifacts {
     const seen = new Set<string>()
     const files = paths.slice(0, capturedFilesLimit).flatMap((path) => {
       const resolved = safeProjectFile(turn.project_path, path)
-      if (!resolved || seen.has(resolved.relativePath)) return []
+      if (
+        !resolved ||
+        isWorkingFile(resolved.relativePath) ||
+        seen.has(resolved.relativePath)
+      )
+        return []
       seen.add(resolved.relativePath)
       return [resolved]
     })
@@ -226,6 +239,9 @@ export class Artifacts {
       .all(threadId) as OutputRow[]
 
     return rows.flatMap((row) => {
+      // Apply the rule while listing too, so working files captured by an
+      // older build disappear from Results without rewriting user data.
+      if (isWorkingFile(row.relative_path)) return []
       const file = safeProjectFile(row.project_path, row.relative_path)
       if (!file) return []
       return [
@@ -494,6 +510,14 @@ function formatFor(path: string): ArtifactFormat {
       mediaType: "application/octet-stream",
       previewKind: "unsupported",
     }
+  )
+}
+
+/** Agent scratch space is useful work, but it is not a user-facing result. */
+function isWorkingFile(path: string): boolean {
+  const directories = path.split("/").slice(0, -1)
+  return directories.some((part) =>
+    workingDirectoryNames.has(part.toLowerCase())
   )
 }
 
