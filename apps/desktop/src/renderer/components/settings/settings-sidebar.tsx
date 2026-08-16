@@ -31,7 +31,9 @@ export function SettingsSidebar({
   // Opening Settings unmounts the button that had focus, which would otherwise
   // drop the caret on the body and restart tabbing at the top of the document.
   const goBack = useRef<HTMLButtonElement>(null)
-  useEffect(() => goBack.current?.focus(), [])
+  useEffect(() => {
+    goBack.current?.focus()
+  }, [])
 
   return (
     <SidebarFrame>
