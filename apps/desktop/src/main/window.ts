@@ -26,6 +26,10 @@ export function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Chromium's built-in PDF viewer is a plugin. Without this a PDF result
+      // renders as a blank frame; with it, paging, zoom, search, and printing
+      // come for free instead of shipping a PDF renderer of our own.
+      plugins: true,
     },
   })
 

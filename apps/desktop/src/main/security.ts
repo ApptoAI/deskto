@@ -16,12 +16,23 @@ export function installContentSecurityPolicy(): void {
     ? developmentContentSecurityPolicy(new URL(rendererUrl).origin)
     : packagedContentSecurityPolicy()
 
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [policy],
-      },
-    })
-  })
+  // Scoped to the app's own documents. An unfiltered listener also stamps the
+  // policy onto Chromium's internal pages — the built-in PDF viewer among
+  // them — and `frame-ancestors` then stops that viewer from being embedded
+  // in a result preview.
+  const urls = rendererUrl
+    ? [`${new URL(rendererUrl).origin}/*`]
+    : ["file://*/*"]
+
+  session.defaultSession.webRequest.onHeadersReceived(
+    { urls },
+    (details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [policy],
+        },
+      })
+    }
+  )
 }

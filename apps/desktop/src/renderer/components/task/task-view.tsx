@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
 import { hasUnreadCompletion, threadCameBack } from "@openappto/client"
@@ -10,7 +10,11 @@ import { openFolder } from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
-import { type QueryState } from "../../runtime/use-runtime-query.js"
+import { useRuntimeEvent } from "../../runtime/use-runtime-event.js"
+import {
+  useRuntimeQuery,
+  type QueryState,
+} from "../../runtime/use-runtime-query.js"
 import { useThreadView } from "../../runtime/use-thread-view.js"
 import { Composer } from "../composer.js"
 import { ContextUsageMeter } from "../context-usage-meter.js"
@@ -19,6 +23,12 @@ import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ApprovalPanel } from "./approval-panel.js"
 import { MessageStream } from "./message-stream.js"
+import {
+  openResultTab,
+  retainResultTabs,
+  useOpenNewestResult,
+} from "./result-tabs.js"
+import { ResultsProvider } from "./results-context.js"
 import { ResultsPanel } from "./results-panel.js"
 
 export function TaskView({
@@ -51,6 +61,45 @@ export function TaskView({
   useEffect(() => {
     if (needsVisitStamp) client.markThreadVisited(threadId).catch(() => {})
   }, [client, threadId, needsVisitStamp])
+
+  // The results live here rather than inside the panel: the conversation
+  // needs them to turn a reported file into a link, and the header needs
+  // their count whether the panel is open or not.
+  const loadResults = useCallback(
+    () => client.listResults(threadId),
+    [client, threadId]
+  )
+  const results = useRuntimeQuery(loadResults)
+  const revalidateResults = results.revalidate
+  useRuntimeEvent(
+    "artifact.changed",
+    useCallback(
+      (event) => {
+        if (event.threadId === threadId) revalidateResults()
+      },
+      [revalidateResults, threadId]
+    )
+  )
+  const resultList =
+    results.state.status === "ready" ? results.state.data : undefined
+  useEffect(() => {
+    if (resultList) {
+      retainResultTabs(
+        threadId,
+        resultList.map((output) => output.artifact.id)
+      )
+    }
+  }, [resultList, threadId])
+  useOpenNewestResult(threadId, resultList?.[0]?.artifact.id, resultsOpen)
+
+  const openResult = useCallback(
+    (artifactId: string) => {
+      setResultsOpen(true)
+      openResultTab(threadId, artifactId)
+    },
+    [threadId]
+  )
+
   if (state.status === "loading" || state.status === "idle") {
     return <StatusPanel title="Opening the task…" />
   }
@@ -136,6 +185,11 @@ export function TaskView({
           >
             <PanelRightIcon data-icon="inline-start" />
             Results
+            {resultList && resultList.length > 0 ? (
+              <span className="text-muted-foreground tabular-nums">
+                {resultList.length}
+              </span>
+            ) : null}
           </Button>
         </header>
 
@@ -145,11 +199,17 @@ export function TaskView({
             description="Write the first message to start this task."
           />
         ) : (
-          <MessageStream
-            messages={messages}
-            activities={activities}
-            running={active}
-          />
+          <ResultsProvider
+            outputs={resultList ?? []}
+            projectPath={projectPath}
+            onOpen={openResult}
+          >
+            <MessageStream
+              messages={messages}
+              activities={activities}
+              running={active}
+            />
+          </ResultsProvider>
         )}
 
         <div className="shrink-0 px-6 pb-6">
@@ -215,6 +275,7 @@ export function TaskView({
       {resultsOpen ? (
         <ResultsPanel
           threadId={threadId}
+          results={results.state}
           onClose={() => setResultsOpen(false)}
         />
       ) : null}

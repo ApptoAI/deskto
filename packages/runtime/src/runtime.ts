@@ -84,6 +84,8 @@ export class Runtime implements RuntimeTransport {
           this.#emit({ type: "thread.changed", threadId }),
         threadDeleted: (threadId) =>
           this.#emit({ type: "thread.deleted", threadId }),
+        artifactsChanged: (threadId) =>
+          this.#emit({ type: "artifact.changed", threadId }),
       }
     )
   }

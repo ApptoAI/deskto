@@ -41,6 +41,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.
 - Tool activity shown in a Thread is a bounded summary, not a transcript or an audit log.
 - Artifact contents are read on demand through Runtime queries. They do not live in Activities, Thread views, or Runtime events.
+- A Surface may write an Artifact back only for formats a simplified editor cannot damage, and only against the version it loaded. The Runtime, not the Surface, decides both.
 - The Client rebuilds current state from Runtime queries. Runtime events only make an open view current: high-frequency changes arrive as sequenced thread deltas, and any gap falls back to a query.
 - Local use never requires a Hub or an account.
 - Provider-specific types stay inside their Harness Adapter.

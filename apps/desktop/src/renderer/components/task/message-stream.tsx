@@ -31,6 +31,8 @@ import { minimapPreviewText } from "@workspace/ui/lib/timeline-minimap"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
+import { ArtifactIcon } from "./artifact-views.js"
+import { useResultAt } from "./results-context.js"
 import { TurnFailureNotice } from "./turn-failure-notice.js"
 import { WorkingIndicator } from "./working-indicator.js"
 
@@ -728,7 +730,9 @@ function fileName(path: string): string {
 }
 
 /** The edits summarized as diff chips: file name plus added and removed
-    line counts, wrapping as needed. */
+    line counts, wrapping as needed. A chip whose file was captured as a
+    result opens it in the panel, so the conversation is a way into the work
+    rather than a report about it. */
 function FileChips({
   files,
 }: {
@@ -737,26 +741,61 @@ function FileChips({
   return (
     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-0.5">
       {files.map((file) => (
-        <span
-          key={file.path}
-          title={file.path}
-          className="inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted/60 px-1.5 font-mono text-[11px] ring-1 ring-border/40"
-        >
-          <span className="min-w-0 truncate text-foreground/90">
-            {fileName(file.path)}
-          </span>
-          {file.additions ? (
-            <span className="shrink-0 text-emerald-600 tabular-nums dark:text-emerald-400">
-              +{file.additions}
-            </span>
-          ) : null}
-          {file.deletions ? (
-            <span className="shrink-0 text-red-500 tabular-nums dark:text-red-400">
-              −{file.deletions}
-            </span>
-          ) : null}
-        </span>
+        <FileChip key={file.path} file={file} />
       ))}
     </span>
+  )
+}
+
+function FileChip({
+  file,
+}: {
+  file: { path: string; additions?: number; deletions?: number }
+}) {
+  const result = useResultAt(file.path)
+  const body = (
+    <>
+      <span className="min-w-0 truncate text-foreground/90">
+        {fileName(file.path)}
+      </span>
+      {file.additions ? (
+        <span className="shrink-0 text-emerald-600 tabular-nums dark:text-emerald-400">
+          +{file.additions}
+        </span>
+      ) : null}
+      {file.deletions ? (
+        <span className="shrink-0 text-red-500 tabular-nums dark:text-red-400">
+          −{file.deletions}
+        </span>
+      ) : null}
+    </>
+  )
+  const className =
+    "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted/60 px-1.5 font-mono text-[11px] ring-1 ring-border/40"
+
+  if (!result) {
+    return (
+      <span title={file.path} className={className}>
+        {body}
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={result.open}
+      title={`Open ${result.artifact.relativePath}`}
+      className={cn(
+        className,
+        "cursor-pointer transition-colors outline-none hover:bg-muted hover:ring-border focus-visible:ring-2 focus-visible:ring-ring/50"
+      )}
+    >
+      <ArtifactIcon
+        kind={result.artifact.previewKind}
+        className="size-3 shrink-0 text-muted-foreground"
+      />
+      {body}
+    </button>
   )
 }

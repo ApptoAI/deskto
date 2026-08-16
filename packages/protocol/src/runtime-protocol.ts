@@ -2,7 +2,9 @@ import { z } from "zod"
 
 import {
   activitySchema,
+  artifactLocationSchema,
   artifactPreviewSchema,
+  artifactSchema,
   approvalSchema,
   harnessSchema,
   jsonObjectSchema,
@@ -174,6 +176,22 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string(), artifactId: z.string() }),
   }),
   z.object({
+    method: z.literal("artifact.locate"),
+    params: z.object({ threadId: z.string(), artifactId: z.string() }),
+  }),
+  z.object({
+    method: z.literal("artifact.write"),
+    // `baseUpdatedAt` is the artifact version the editor loaded. The Runtime
+    // refuses the write when the file moved on since then, so an agent edit
+    // that lands mid-session cannot be overwritten silently.
+    params: z.object({
+      threadId: z.string(),
+      artifactId: z.string(),
+      content: z.string(),
+      baseUpdatedAt: z.string(),
+    }),
+  }),
+  z.object({
     method: z.literal("turn.start"),
     params: z
       .object({
@@ -245,6 +263,8 @@ export interface RuntimeResponses {
   "thread.delete": null
   "artifact.list": z.infer<typeof turnOutputSchema>[]
   "artifact.preview": z.infer<typeof artifactPreviewSchema>
+  "artifact.locate": z.infer<typeof artifactLocationSchema>
+  "artifact.write": z.infer<typeof artifactSchema>
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
   "approval.resolve": z.infer<typeof threadViewSchema>

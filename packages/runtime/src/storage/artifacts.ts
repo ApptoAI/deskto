@@ -6,7 +6,10 @@ import {
   openSync,
   readSync,
   realpathSync,
+  renameSync,
+  rmSync,
   statSync,
+  writeSync,
   type Stats,
 } from "node:fs"
 import type { DatabaseSync } from "node:sqlite"
@@ -19,7 +22,13 @@ import {
   sep,
 } from "node:path"
 
-import type { Artifact, ArtifactPreview, TurnOutput } from "@openappto/protocol"
+import {
+  isEditableArtifactPreviewKind,
+  type Artifact,
+  type ArtifactLocation,
+  type ArtifactPreview,
+  type TurnOutput,
+} from "@openappto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
@@ -99,6 +108,55 @@ const formats = new Map<string, ArtifactFormat>([
   [".avif", { mediaType: "image/avif", previewKind: "image" }],
 ])
 
+/**
+ * Extensions the Surface may hand to the operating system. Handing a path to
+ * the shell means "launch whatever claims this type", and an agent chooses
+ * both the name and the contents of every file it writes, so this list is
+ * spelled out rather than derived from the formats above: a preview format is
+ * not automatically safe to launch.
+ *
+ * Excluded on purpose, and each for a reason:
+ *   - `.sh`, `.py`, `.js`, `.ts`, `.sql` run as programs on at least one
+ *     platform;
+ *   - `.html`, `.svg`, `.xml` open in a browser from a local origin and can
+ *     script and phone home;
+ *   - `.xlsm`, `.doc`, `.xls`, `.ppt`, `.rtf` carry macros, and a file written
+ *     locally has no mark of the web, so Office skips Protected View.
+ */
+const openableExtensions: ReadonlySet<string> = new Set([
+  ".pdf",
+  ".txt",
+  ".log",
+  ".md",
+  ".markdown",
+  ".csv",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".docx",
+  ".xlsx",
+  ".pptx",
+  ".odt",
+  ".ods",
+  ".odp",
+  ".pages",
+  ".numbers",
+  ".key",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".tiff",
+  ".heic",
+])
+
+function isOpenableArtifactPath(path: string): boolean {
+  return openableExtensions.has(extname(path).toLowerCase())
+}
+
 export class Artifacts {
   constructor(private readonly database: DatabaseSync) {}
 
@@ -169,42 +227,33 @@ export class Artifacts {
     return rows.flatMap((row) => {
       const file = safeProjectFile(row.project_path, row.relative_path)
       if (!file) return []
-      const artifact = toArtifact({
-        ...row,
-        size_bytes: file.stats.size,
-      })
-      return [{ turnId: row.turn_id, producedAt: row.produced_at, artifact }]
+      return [
+        {
+          turnId: row.turn_id,
+          producedAt: row.produced_at,
+          artifact: toArtifact(row, file.stats),
+        },
+      ]
     })
   }
 
-  preview(threadId: string, artifactId: string): ArtifactPreview {
-    // SAFETY: the query selects every ArtifactRow column plus a non-null
-    // project_path, and artifacts.id permits at most one row.
-    const row = this.database
-      .prepare(
-        `SELECT artifacts.*, projects.path AS project_path
-         FROM artifacts
-         JOIN projects ON projects.id = artifacts.project_id
-         WHERE artifacts.id = ?
-           AND EXISTS (
-             SELECT 1
-             FROM turn_outputs
-             JOIN turns ON turns.id = turn_outputs.turn_id
-             WHERE turn_outputs.artifact_id = artifacts.id
-               AND turns.thread_id = ?
-           )`
-      )
-      .get(artifactId, threadId) as
-      | (ArtifactRow & { project_path: string })
-      | undefined
-    if (!row) throw new RuntimeError("artifact-not-found", "Result not found")
+  /**
+   * The validated absolute path, so the Surface can hand the file to the
+   * operating system without ever resolving a path of its own.
+   */
+  locate(threadId: string, artifactId: string): ArtifactLocation {
+    const { file } = this.#openArtifact(threadId, artifactId)
+    return {
+      artifactId,
+      absolutePath: file.absolutePath,
+      // Read from the resolved file: a symlink inside the Project could point
+      // a harmless-looking name at a different extension.
+      openable: isOpenableArtifactPath(file.relativePath),
+    }
+  }
 
-    const file = safeProjectFile(row.project_path, row.relative_path)
-    if (!file)
-      throw new RuntimeError(
-        "artifact-unavailable",
-        "This result is no longer available in the project folder"
-      )
+  preview(threadId: string, artifactId: string): ArtifactPreview {
+    const { row, file } = this.#openArtifact(threadId, artifactId)
 
     if (row.preview_kind === "unsupported") {
       return { kind: "unsupported", artifactId }
@@ -246,6 +295,82 @@ export class Artifacts {
       }
     }
     return { kind: "pdf", artifactId, dataBase64: data.toString("base64") }
+  }
+
+  /**
+   * Replaces the file behind an editable Artifact. The write is refused when
+   * the file changed after the editor loaded it, so an agent edit that lands
+   * mid-session survives instead of being clobbered by a stale draft.
+   */
+  write(
+    threadId: string,
+    artifactId: string,
+    content: string,
+    baseUpdatedAt: string
+  ): Artifact {
+    const { row, file } = this.#openArtifact(threadId, artifactId)
+    if (!isEditableArtifactPreviewKind(row.preview_kind)) {
+      throw new RuntimeError(
+        "artifact-read-only",
+        "This result cannot be edited here"
+      )
+    }
+    if (modifiedAt(file.stats) !== baseUpdatedAt) {
+      throw new RuntimeError(
+        "artifact-conflict",
+        "This file changed after it was opened. Reload the result before saving again."
+      )
+    }
+    const data = Buffer.from(content, "utf8")
+    if (data.byteLength > textPreviewLimit) {
+      throw new RuntimeError(
+        "artifact-too-large",
+        `This result is too large to save (${formatBytes(data.byteLength)})`
+      )
+    }
+
+    const stats = writeSafeProjectFile(file, data)
+    // The row keeps the file's own timestamp rather than a wall clock, so the
+    // stored version and the one an editor compares against never disagree.
+    this.database
+      .prepare(
+        "UPDATE artifacts SET size_bytes = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(stats.size, modifiedAt(stats), artifactId)
+
+    return toArtifact(row, stats)
+  }
+
+  /** Thread-scoped lookup shared by every read and write of one Artifact. */
+  #openArtifact(threadId: string, artifactId: string) {
+    // SAFETY: the query selects every ArtifactRow column plus a non-null
+    // project_path, and artifacts.id permits at most one row.
+    const row = this.database
+      .prepare(
+        `SELECT artifacts.*, projects.path AS project_path
+         FROM artifacts
+         JOIN projects ON projects.id = artifacts.project_id
+         WHERE artifacts.id = ?
+           AND EXISTS (
+             SELECT 1
+             FROM turn_outputs
+             JOIN turns ON turns.id = turn_outputs.turn_id
+             WHERE turn_outputs.artifact_id = artifacts.id
+               AND turns.thread_id = ?
+           )`
+      )
+      .get(artifactId, threadId) as
+      | (ArtifactRow & { project_path: string })
+      | undefined
+    if (!row) throw new RuntimeError("artifact-not-found", "Result not found")
+
+    const file = safeProjectFile(row.project_path, row.relative_path)
+    if (!file)
+      throw new RuntimeError(
+        "artifact-unavailable",
+        "This result is no longer available in the project folder"
+      )
+    return { row, file }
   }
 
   #captureFile(
@@ -308,9 +433,10 @@ export class Artifacts {
       relativePath: file.relativePath,
       mediaType: format.mediaType,
       previewKind: format.previewKind,
+      openable: isOpenableArtifactPath(file.relativePath),
       sizeBytes: file.stats.size,
       createdAt: existing?.created_at ?? now,
-      updatedAt: now,
+      updatedAt: modifiedAt(file.stats),
     }
   }
 }
@@ -426,7 +552,80 @@ function readSafeProjectFile(file: SafeProjectFile, limit: number): Buffer {
   }
 }
 
-function toArtifact(row: ArtifactRow): Artifact {
+/**
+ * Writes the whole file or none of it. The data lands in a sibling temp file
+ * that is renamed over the target, so a disk filling up or a process dying
+ * mid-write leaves the user's original untouched rather than truncated.
+ *
+ * The target is confirmed to be the same inode the containment check
+ * resolved, so a symlink or a swap arriving in between cannot redirect the
+ * rename onto another file.
+ */
+function writeSafeProjectFile(file: SafeProjectFile, data: Buffer): Stats {
+  const temporaryPath = `${file.absolutePath}.appto-${randomUUID().slice(0, 8)}`
+  let descriptor: number | undefined
+  try {
+    const target = statSync(file.absolutePath)
+    if (
+      !target.isFile() ||
+      target.dev !== file.stats.dev ||
+      target.ino !== file.stats.ino
+    ) {
+      throw new RuntimeError(
+        "artifact-unavailable",
+        "This result changed while it was being saved"
+      )
+    }
+
+    // O_EXCL: never write through a name something else already created.
+    descriptor = openSync(
+      temporaryPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      target.mode
+    )
+    let offset = 0
+    while (offset < data.byteLength) {
+      offset += writeSync(
+        descriptor,
+        data,
+        offset,
+        data.byteLength - offset,
+        offset
+      )
+    }
+    closeSync(descriptor)
+    descriptor = undefined
+
+    renameSync(temporaryPath, file.absolutePath)
+    return statSync(file.absolutePath)
+  } catch (error) {
+    if (descriptor !== undefined) {
+      closeSync(descriptor)
+      descriptor = undefined
+    }
+    rmSync(temporaryPath, { force: true })
+    if (error instanceof RuntimeError) throw error
+    // The operating system's own reason is what makes a save failure
+    // actionable: a full disk and a read-only folder need different answers.
+    const reason =
+      error instanceof Error && "code" in error
+        ? String(error.code)
+        : String(error)
+    throw new RuntimeError(
+      "artifact-unavailable",
+      `This result could not be saved to the project folder. ${reason}`
+    )
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor)
+  }
+}
+
+/**
+ * Size and `updatedAt` come from the file rather than the captured row: the
+ * Project folder is the source of truth, and an editor needs the on-disk
+ * version to detect a conflicting write.
+ */
+function toArtifact(row: ArtifactRow, stats: Stats): Artifact {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -434,10 +633,15 @@ function toArtifact(row: ArtifactRow): Artifact {
     relativePath: row.relative_path,
     mediaType: row.media_type,
     previewKind: row.preview_kind,
-    sizeBytes: row.size_bytes,
+    openable: isOpenableArtifactPath(row.relative_path),
+    sizeBytes: stats.size,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: modifiedAt(stats),
   }
+}
+
+function modifiedAt(stats: Stats): string {
+  return new Date(stats.mtimeMs).toISOString()
 }
 
 function formatBytes(bytes: number): string {

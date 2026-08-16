@@ -1,6 +1,7 @@
 import {
   mkdir,
   mkdtemp,
+  readFile,
   realpath,
   rm,
   symlink,
@@ -1685,6 +1686,139 @@ describe("Runtime", () => {
         })
       )
     ).toMatchObject({ kind: "text", content: "Revise it" })
+    await runtime.close()
+  })
+
+  it("locates a result and writes back only editable formats", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "openappto-runtime-"))
+    directories.push(directory)
+    const projectPath = await realpath(directory)
+    await writeFile(join(projectPath, "customers.csv"), "name\nAva\n")
+    await writeFile(join(projectPath, "forecast.xlsx"), "xlsx-bytes")
+
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(tmpdir(), `openappto-${Date.now()}.sqlite`),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Build the list" },
+      })
+    )
+    const run = harness.runs[0]!
+    run.emit({
+      type: "activity.started",
+      activity: {
+        id: "files",
+        name: "Write files",
+        payload: {
+          kind: "file-change",
+          files: [{ path: "customers.csv" }, { path: "forecast.xlsx" }],
+        },
+      },
+    })
+    run.emit({ type: "activity.completed", id: "files", outcome: "completed" })
+    await waitFor(async () => {
+      const outputs = unwrap(
+        await runtime.request({
+          method: "artifact.list",
+          params: { threadId: thread.id },
+        })
+      )
+      return outputs.length === 2
+    })
+
+    const outputs = unwrap(
+      await runtime.request({
+        method: "artifact.list",
+        params: { threadId: thread.id },
+      })
+    )
+    const csv = outputs.find(
+      (output) => output.artifact.relativePath === "customers.csv"
+    )!.artifact
+    const workbook = outputs.find(
+      (output) => output.artifact.relativePath === "forecast.xlsx"
+    )!.artifact
+
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.locate",
+          params: { threadId: thread.id, artifactId: csv.id },
+        })
+      )
+    ).toEqual({
+      artifactId: csv.id,
+      absolutePath: join(projectPath, "customers.csv"),
+      openable: true,
+    })
+
+    // A stale base version means the file moved on since the editor read it.
+    expect(
+      await runtime.request({
+        method: "artifact.write",
+        params: {
+          threadId: thread.id,
+          artifactId: csv.id,
+          content: "name\nAva\nLiam\n",
+          baseUpdatedAt: "1999-01-01T00:00:00.000Z",
+        },
+      })
+    ).toMatchObject({ ok: false, error: { code: "artifact-conflict" } })
+
+    expect(
+      await runtime.request({
+        method: "artifact.write",
+        params: {
+          threadId: thread.id,
+          artifactId: workbook.id,
+          content: "rewritten",
+          baseUpdatedAt: workbook.updatedAt,
+        },
+      })
+    ).toMatchObject({ ok: false, error: { code: "artifact-read-only" } })
+
+    const saved = unwrap(
+      await runtime.request({
+        method: "artifact.write",
+        params: {
+          threadId: thread.id,
+          artifactId: csv.id,
+          content: "name\nAva\nLiam\n",
+          baseUpdatedAt: csv.updatedAt,
+        },
+      })
+    )
+    expect(saved.sizeBytes).toBe("name\nAva\nLiam\n".length)
+    expect(await readFile(join(projectPath, "customers.csv"), "utf8")).toBe(
+      "name\nAva\nLiam\n"
+    )
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "artifact.preview",
+          params: { threadId: thread.id, artifactId: csv.id },
+        })
+      )
+    ).toMatchObject({ kind: "csv", content: "name\nAva\nLiam\n" })
+
+    run.emit({ type: "turn.completed" })
+    run.finish()
     await runtime.close()
   })
 

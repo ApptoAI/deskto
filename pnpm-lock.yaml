@@ -117,6 +117,9 @@ importers:
       vite:
         specifier: ^7.3.1
         version: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
 
   packages/client:
     dependencies:

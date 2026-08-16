@@ -42,6 +42,8 @@ export type RouterEvents = {
   threadChanged: (threadId: string) => void
   /** A thread was deleted; views holding it have nothing to reload. */
   threadDeleted: (threadId: string) => void
+  /** A result was written from the Surface; result lists are stale. */
+  artifactsChanged: (threadId: string) => void
 }
 
 export class RequestRouter {
@@ -315,6 +317,21 @@ export class RequestRouter {
           request.params.threadId,
           request.params.artifactId
         )
+      case "artifact.locate":
+        return this.store.artifacts.locate(
+          request.params.threadId,
+          request.params.artifactId
+        )
+      case "artifact.write": {
+        const artifact = this.store.artifacts.write(
+          request.params.threadId,
+          request.params.artifactId,
+          request.params.content,
+          request.params.baseUpdatedAt
+        )
+        this.events.artifactsChanged(request.params.threadId)
+        return artifact
+      }
       case "turn.start":
         return this.turns.start(
           request.params.threadId,
