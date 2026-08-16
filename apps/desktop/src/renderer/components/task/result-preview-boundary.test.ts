@@ -1,11 +1,15 @@
-import { createElement } from "react"
-import TestRenderer, { act, type ReactTestRenderer } from "react-test-renderer"
-import { describe, expect, it, vi } from "vitest"
+// @vitest-environment jsdom
+
+import { act, createElement } from "react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   ResultPreviewBoundary,
   resultPreviewErrorMessage,
 } from "./result-preview-boundary.js"
+
+afterEach(cleanup)
 
 describe("ResultPreviewBoundary", () => {
   it("keeps a useful Error message", () => {
@@ -37,35 +41,29 @@ describe("ResultPreviewBoundary", () => {
     }
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    let renderer: ReactTestRenderer | undefined
 
     try {
-      await act(async () => {
-        renderer = TestRenderer.create(
-          createElement(
-            "section",
-            { "data-testid": "task-shell" },
-            createElement(ResultPreviewBoundary, null, createElement(Preview))
-          )
+      render(
+        createElement(
+          "section",
+          { "data-testid": "task-shell" },
+          createElement(ResultPreviewBoundary, null, createElement(Preview))
         )
-      })
-
-      expect(
-        renderer?.root.findByProps({ "data-testid": "task-shell" })
-      ).toBeDefined()
-      expect(JSON.stringify(renderer?.toJSON())).toContain(
-        "Deskto could not show this preview"
       )
 
+      expect(screen.getByTestId("task-shell")).toBeDefined()
+      expect(
+        screen.getByText(/Deskto could not show this preview/)
+      ).toBeDefined()
+
       broken = false
-      const retry = renderer?.root.findByType("button")
-      expect(retry).toBeDefined()
       await act(async () => {
-        retry?.props.onClick()
+        fireEvent.click(
+          screen.getByRole("button", { name: "Try preview again" })
+        )
       })
-      expect(JSON.stringify(renderer?.toJSON())).toContain("Preview ready")
+      expect(screen.getByText("Preview ready")).toBeDefined()
     } finally {
-      if (renderer) await act(async () => renderer?.unmount())
       consoleError.mockRestore()
     }
   })

@@ -274,11 +274,9 @@ class ClaudeSession implements HarnessSession {
       for await (const message of this.#query) this.#mapMessage(message)
       // A single-shot Claude query can close after background work settles
       // without producing a second result frame. Release the earlier success
-      // from the SDK's level signal, or from Activity edges on older versions.
-      if (
-        this.#successfulResultPending &&
-        this.#backgroundWorkSettledAtQueryEnd()
-      ) {
+      // even if the last task-level signal is stale: a clean stream end cannot
+      // deliver another notification, and every Turn needs a terminal event.
+      if (this.#successfulResultPending) {
         this.#emitTerminal({ type: "turn.completed" })
       }
     } catch (error) {
@@ -534,16 +532,6 @@ class ClaudeSession implements HarnessSession {
           (this.#backgroundActivityStartedAfterLevel &&
             this.#backgroundActivities.size > 0)
       : this.#backgroundActivities.size > 0
-  }
-
-  /**
-   * At process end the level signal wins over stale edge state. Older Claude
-   * versions without that signal keep using paired Activity edges.
-   */
-  #backgroundWorkSettledAtQueryEnd(): boolean {
-    return this.#backgroundTaskLevelSeen
-      ? this.#liveBackgroundTaskIds.size === 0
-      : this.#backgroundActivities.size === 0
   }
 
   #emitUsageLimit(failure: HarnessFailure): void {

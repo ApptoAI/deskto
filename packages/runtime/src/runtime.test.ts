@@ -1531,6 +1531,23 @@ describe("Runtime", () => {
       })
     )
     expect(outputsWithLegacyRow).toEqual(outputs)
+    const verificationDatabase = new DatabaseSync(databasePath)
+    try {
+      expect(
+        verificationDatabase
+          .prepare("SELECT id FROM artifacts WHERE id = ?")
+          .get("legacy-working-artifact")
+      ).toBeTruthy()
+      expect(
+        verificationDatabase
+          .prepare(
+            "SELECT turn_id FROM turn_outputs WHERE turn_id = ? AND artifact_id = ?"
+          )
+          .get(run.input.turnId, "legacy-working-artifact")
+      ).toBeTruthy()
+    } finally {
+      verificationDatabase.close()
+    }
     expect(
       await readFile(
         join(projectPath, "tmp", "pdfs", "build-report.py"),
@@ -1875,7 +1892,7 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
-  it("applies the output limit to each completed file-change Activity", async () => {
+  it("applies the output limit after filtering each file-change Activity", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const paths = Array.from(
@@ -1885,6 +1902,8 @@ describe("Runtime", () => {
     await Promise.all(
       paths.map((path) => writeFile(join(directory, path), path))
     )
+    await mkdir(join(directory, "tmp"))
+    await writeFile(join(directory, "tmp", "working.txt"), "working")
     const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
     const runtime = createRuntime({
       databasePath: join(directory, "runtime.sqlite"),
@@ -1911,7 +1930,12 @@ describe("Runtime", () => {
 
     const run = harness.runs[0]!
     for (const [index, activityPaths] of [
-      paths.slice(0, 201),
+      [
+        ...Array.from({ length: 200 }, () => "tmp/working.txt"),
+        paths[0]!,
+        paths[0]!,
+        ...paths.slice(1, 201),
+      ],
       paths.slice(201),
     ].entries()) {
       run.emit({

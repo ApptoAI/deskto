@@ -854,6 +854,50 @@ describe("ClaudeAdapter", () => {
     ])
   })
 
+  it("ends with a terminal event when the last background task level is stale", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "system",
+          subtype: "background_tasks_changed",
+          tasks: [
+            {
+              task_id: "task-1",
+              task_type: "agent",
+              description: "Write the report",
+            },
+          ],
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events.at(-1)).toEqual({ type: "turn.completed" })
+  })
+
   it("does not let an ambient background task hold the Turn open", async () => {
     queryMock.mockReturnValue(
       fakeQuery([

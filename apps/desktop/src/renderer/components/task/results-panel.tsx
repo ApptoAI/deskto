@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -49,6 +50,7 @@ import {
   clampResultsPanelWidth,
   defaultResultsPanelWidth,
   maximumResultsPanelWidth,
+  maximumResultsPanelWidthForContainer,
   minimumConversationWidth,
   minimumResultsPanelWidth,
 } from "./results-panel-size.js"
@@ -86,6 +88,9 @@ export function ResultsPanel({
     defaultResultsPanelWidth,
     resultsPanelWidthSchema
   )
+  const [containerWidth, setContainerWidth] = useState(
+    maximumResultsPanelWidth + minimumConversationWidth
+  )
   const asideRef = useRef<HTMLElement>(null)
   const separatorRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
@@ -95,12 +100,30 @@ export function ResultsPanel({
     width: number
   } | null>(null)
 
+  useLayoutEffect(() => {
+    const container = asideRef.current?.parentElement
+    if (!container) return
+    const updateContainerWidth = () => setContainerWidth(container.clientWidth)
+    updateContainerWidth()
+    const observer = new ResizeObserver(updateContainerWidth)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
+  const effectiveMaximumWidth =
+    maximumResultsPanelWidthForContainer(containerWidth)
+  const effectivePanelWidth = clampResultsPanelWidth(panelWidth, containerWidth)
+
   const resizeTo = useCallback((width: number) => {
     const aside = asideRef.current
     const containerWidth =
       aside?.parentElement?.clientWidth ?? window.innerWidth
     const next = clampResultsPanelWidth(width, containerWidth)
     if (aside) aside.style.width = `${next}px`
+    separatorRef.current?.setAttribute(
+      "aria-valuemax",
+      String(maximumResultsPanelWidthForContainer(containerWidth))
+    )
     separatorRef.current?.setAttribute("aria-valuenow", String(next))
     return next
   }, [])
@@ -165,7 +188,7 @@ export function ResultsPanel({
     <aside
       ref={asideRef}
       style={{
-        width: panelWidth,
+        width: effectivePanelWidth,
         minWidth: minimumResultsPanelWidth,
         maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
       }}
@@ -177,8 +200,8 @@ export function ResultsPanel({
         aria-label="Resize results panel"
         aria-orientation="vertical"
         aria-valuemin={minimumResultsPanelWidth}
-        aria-valuemax={maximumResultsPanelWidth}
-        aria-valuenow={Math.round(panelWidth)}
+        aria-valuemax={effectiveMaximumWidth}
+        aria-valuenow={effectivePanelWidth}
         tabIndex={0}
         title="Drag to resize results"
         onDoubleClick={() => setPanelWidth(resizeTo(defaultResultsPanelWidth))}

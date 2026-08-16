@@ -188,17 +188,19 @@ export class Artifacts {
     if (!turn) return undefined
 
     const seen = new Set<string>()
-    const files = paths.slice(0, capturedFilesLimit).flatMap((path) => {
+    const files: SafeProjectFile[] = []
+    for (const path of paths) {
       const resolved = safeProjectFile(turn.project_path, path)
       if (
         !resolved ||
         isWorkingFile(resolved.relativePath) ||
         seen.has(resolved.relativePath)
       )
-        return []
+        continue
       seen.add(resolved.relativePath)
-      return [resolved]
-    })
+      files.push(resolved)
+      if (files.length === capturedFilesLimit) break
+    }
 
     return { projectId: turn.project_id, turnId, files }
   }
