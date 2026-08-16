@@ -63,6 +63,7 @@ function TimelineMinimap({
   const [activeIndex, setActiveIndex] = React.useState<number | null>(null)
   const [gutter, setGutter] = React.useState({ persistent: false, strip: 0 })
   const ticksRef = React.useRef(new Map<string, HTMLSpanElement>())
+  const trackRef = React.useRef<HTMLSpanElement>(null)
 
   React.useEffect(() => {
     if (!viewport) return
@@ -117,9 +118,14 @@ function TimelineMinimap({
     return () => observer.disconnect()
   }, [anchorKey, viewport])
 
+  // Measured off the ticks, not the strip around them: the strip is padded out
+  // for the pointer and centered on the track, so its top is short of the first
+  // tick. Anything past either end clamps to the nearest stop.
   const resolveIndexFromPointer = React.useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      const rail = event.currentTarget.getBoundingClientRect()
+      const rail = (
+        trackRef.current ?? event.currentTarget
+      ).getBoundingClientRect()
       return minimapIndexFromPointer({
         itemCount: items.length,
         railTop: rail.top,
@@ -210,6 +216,7 @@ function TimelineMinimap({
           {/* The stops keep their own spacing, centered in a strip that may be
               taller than they are. */}
           <span
+            ref={trackRef}
             aria-hidden
             className="absolute top-1/2 left-0 block w-full -translate-y-1/2"
             style={{ height: minimapTrackHeightStyle(items.length) }}
