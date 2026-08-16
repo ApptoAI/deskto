@@ -4,7 +4,7 @@ Appto is a local desktop app for giving folder-based work to Claude Code or Code
 
 ## Requirements
 
-- Node.js 22.12 or newer
+- Node.js 22.18 or newer
 - pnpm 10.33.4
 - A Claude account already available to Claude Code
 - Codex installed and signed in if you want to use the Codex harness
