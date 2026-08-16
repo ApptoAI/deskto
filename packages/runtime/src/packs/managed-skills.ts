@@ -6,11 +6,11 @@ import type { ManagedSkillDraft, PackSkill } from "@deskto/protocol"
 import { stringify } from "yaml"
 
 import { RuntimeError } from "../errors.js"
+import { pathIsDirectChild } from "../path-boundaries.js"
 import type { PackRow } from "../storage/records.js"
 import type { Packs } from "../storage/packs.js"
 import { digestPackDirectory } from "./pack-digest.js"
 import { packSkillId, skillsDirectory, slugify } from "./pack-files.js"
-import { isManagedDirectChild } from "./pack-installer.js"
 import { canEditManagedSkills } from "./pack-capabilities.js"
 
 export class ManagedSkills {
@@ -78,7 +78,7 @@ export class ManagedSkills {
     const pack = this.packs.get(packId)
     if (
       !canEditManagedSkills(pack) ||
-      !isManagedDirectChild(this.#managedRoot, pack.path)
+      !pathIsDirectChild(this.#managedRoot, pack.path)
     ) {
       throw new RuntimeError(
         "invalid-pack-operation",

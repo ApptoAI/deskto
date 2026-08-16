@@ -76,6 +76,15 @@ describe("PackManager", () => {
     })
   })
 
+  it("does not treat an existing managed directory as a local link", async () => {
+    const context = await testContext()
+    const managed = await context.manager.create("Managed")
+
+    await expect(context.manager.link(managed.path)).rejects.toMatchObject({
+      code: "invalid-pack-operation",
+    })
+  })
+
   it("registers the receipt before committing the staged directory", async () => {
     const context = await testContext()
     const source = join(context.root, "source")

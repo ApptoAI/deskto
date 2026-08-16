@@ -44,7 +44,7 @@ export type SkillProvisioningReport = z.infer<
 export const skillSourceSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["native", "pack"]),
-  scope: z.enum(["project", "user", "admin", "workspace"]),
+  scopes: z.array(z.enum(["project", "user", "admin", "workspace"])).min(1),
   label: z.string().min(1),
   path: z.string().min(1),
   harnessIds: z.array(z.string().min(1)),

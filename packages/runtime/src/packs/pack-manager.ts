@@ -9,13 +9,12 @@ import type {
 } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
-import { pathIsWithin } from "../path-boundaries.js"
+import { pathIsDirectChild, pathIsWithin } from "../path-boundaries.js"
 import type { PackRow } from "../storage/records.js"
 import type { Packs } from "../storage/packs.js"
 import { readPackName, validatePackDirectory } from "./pack-files.js"
 import { ManagedSkills } from "./managed-skills.js"
 import {
-  isManagedDirectChild,
   sourceLabel,
   stageManagedPack,
   stagePackFolder,
@@ -82,13 +81,13 @@ export class PackManager {
 
   async link(sourcePath: string): Promise<PackRow> {
     const path = await validatePackDirectory(sourcePath)
-    const existing = this.packs.findByPath(path)
-    if (existing) return existing
     if (pathIsWithin(this.#managedRoot, path))
       throw new RuntimeError(
         "invalid-pack-operation",
         "A folder inside the managed Pack directory cannot be linked"
       )
+    const existing = this.packs.findByPath(path)
+    if (existing) return existing
     return this.packs.add(await readPackName(path), path, { kind: "linked" })
   }
 
@@ -109,7 +108,7 @@ export class PackManager {
         "invalid-pack-operation",
         "Linked Packs must be unlinked, not uninstalled"
       )
-    if (!isManagedDirectChild(this.#managedRoot, pack.path))
+    if (!pathIsDirectChild(this.#managedRoot, pack.path))
       throw new RuntimeError(
         "invalid-pack-path",
         "Managed Pack path is outside the managed Pack directory"

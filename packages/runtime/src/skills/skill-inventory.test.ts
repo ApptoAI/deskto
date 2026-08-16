@@ -105,11 +105,9 @@ describe("skill inventory", () => {
     )
 
     expect(skillInventorySchema.safeParse(inventory).success).toBe(true)
-    expect(inventory.sources.map(({ scope }) => scope).sort()).toEqual([
-      "project",
-      "user",
-      "workspace",
-    ])
+    expect(
+      inventory.sources.flatMap(({ scopes }) => scopes).sort()
+    ).toEqual(["project", "user", "workspace"])
     expect(
       inventory.occurrences.filter(({ name }) => name === "duplicate")
     ).toHaveLength(3)
@@ -220,10 +218,11 @@ describe("skill inventory", () => {
 
   it("merges Harness exposure for the same physical skill source", async () => {
     const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
     const userSkills = join(root, "shared-skills")
-    await mkdir(userSkills)
+    await Promise.all([mkdir(projectPath), mkdir(userSkills)])
     await writeSkill(userSkills, "review", "review", "Review changes")
-    const declaredRoot: NativeSkillRoot = {
+    const userRoot: NativeSkillRoot = {
       path: userSkills,
       scope: "user",
       label: "Personal skills",
@@ -231,17 +230,33 @@ describe("skill inventory", () => {
     const runtime = createRuntime({
       databasePath: join(root, "runtime.sqlite"),
       harnesses: [
-        inventoryHarness("first", [declaredRoot]),
-        inventoryHarness("second", [declaredRoot]),
+        inventoryHarness("first", [userRoot]),
+        inventoryHarness("second", [
+          { ...userRoot, scope: "project", label: "Project skills" },
+        ]),
       ],
     })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: {
+          path: projectPath,
+          name: "Project",
+          workspaceId: "personal",
+        },
+      })
+    )
 
     const inventory = unwrap(
-      await runtime.request({ method: "skill.listOnComputer", params: {} })
+      await runtime.request({
+        method: "skill.listForProject",
+        params: { projectId: project.id },
+      })
     )
 
     expect(inventory.sources).toHaveLength(1)
     expect(inventory.sources[0]?.harnessIds).toEqual(["first", "second"])
+    expect(inventory.sources[0]?.scopes).toEqual(["project", "user"])
     expect(inventory.occurrences).toHaveLength(1)
     await runtime.close()
   })

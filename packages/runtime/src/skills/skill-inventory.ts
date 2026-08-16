@@ -74,7 +74,7 @@ export class SkillInventory {
           source: {
             id: pack.id,
             kind: "pack",
-            scope: "workspace",
+            scopes: ["workspace"],
             label: pack.name,
             path,
             harnessIds: this.harnesses.harnessIds(),
@@ -107,9 +107,9 @@ export class SkillInventory {
           )
           return {
             source: {
-              id: skillSourceId(["native", root.scope, physicalPath]),
+              id: skillSourceId(["native", physicalPath]),
               kind: "native" as const,
-              scope: root.scope,
+              scopes: [root.scope],
               label: root.label,
               path: root.path,
               harnessIds: [harnessId],
@@ -160,14 +160,18 @@ function uniqueById(sources: SourceToScan[]): SourceToScan[] {
     const harnessIds = [
       ...new Set([...existing.source.harnessIds, ...entry.source.harnessIds]),
     ].sort()
+    const scopes = [
+      ...new Set([...existing.source.scopes, ...entry.source.scopes]),
+    ].sort()
     unique.set(entry.source.id, {
       source: {
         ...existing.source,
         label:
           existing.source.label === entry.source.label
             ? existing.source.label
-            : sharedSourceLabel(existing.source.scope),
+            : sharedSourceLabel(scopes),
         harnessIds,
+        scopes,
       },
       missingIsDiagnostic:
         existing.missingIsDiagnostic || entry.missingIsDiagnostic,
@@ -176,16 +180,17 @@ function uniqueById(sources: SourceToScan[]): SourceToScan[] {
   return [...unique.values()]
 }
 
-function sharedSourceLabel(scope: SkillSource["scope"]): string {
-  if (scope === "project") return "Shared project skills"
-  if (scope === "user") return "Shared personal skills"
-  if (scope === "admin") return "Shared administrator skills"
+function sharedSourceLabel(scopes: SkillSource["scopes"]): string {
+  if (scopes.length > 1) return "Skills with multiple scopes"
+  if (scopes[0] === "project") return "Shared project skills"
+  if (scopes[0] === "user") return "Shared personal skills"
+  if (scopes[0] === "admin") return "Shared administrator skills"
   return "Shared workspace skills"
 }
 
 function compareSources(left: SkillSource, right: SkillSource): number {
   return (
-    left.scope.localeCompare(right.scope) ||
+    left.scopes.join(",").localeCompare(right.scopes.join(",")) ||
     left.label.localeCompare(right.label) ||
     left.path.localeCompare(right.path)
   )

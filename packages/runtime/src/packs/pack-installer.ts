@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { constants } from "node:fs"
 import {
-  copyFile,
   lstat,
   mkdir,
   mkdtemp,
@@ -19,7 +18,7 @@ import type { Readable } from "node:stream"
 import yauzl, { type Entry, type ZipFile } from "yauzl"
 
 import { RuntimeError } from "../errors.js"
-import { pathIsDirectChild, pathIsWithin } from "../path-boundaries.js"
+import { pathIsWithin } from "../path-boundaries.js"
 import { readPackName, slugify, validatePackDirectory } from "./pack-files.js"
 import {
   defaultPackContentLimits,
@@ -36,16 +35,6 @@ export type MaterializedPack = PackDigest & {
 export type StagedManagedPack = MaterializedPack & {
   commit(): Promise<void>
   discard(): Promise<void>
-}
-
-export async function installPackFolder(
-  sourcePath: string,
-  managedRootPath: string,
-  limits: PackContentLimits = defaultPackContentLimits
-): Promise<MaterializedPack> {
-  return commitStagedPack(
-    await stagePackFolder(sourcePath, managedRootPath, limits)
-  )
 }
 
 export async function stagePackFolder(
@@ -91,16 +80,6 @@ export async function stagePackFolder(
   }
 }
 
-export async function installPackZip(
-  archivePath: string,
-  managedRootPath: string,
-  limits: PackContentLimits = defaultPackContentLimits
-): Promise<MaterializedPack> {
-  return commitStagedPack(
-    await stagePackZip(archivePath, managedRootPath, limits)
-  )
-}
-
 export async function stagePackZip(
   archivePath: string,
   managedRootPath: string,
@@ -125,13 +104,6 @@ export async function stagePackZip(
     )
     throw error
   }
-}
-
-export async function createManagedPack(
-  name: string,
-  managedRootPath: string
-): Promise<MaterializedPack> {
-  return commitStagedPack(await stageManagedPack(name, managedRootPath))
 }
 
 export async function stageManagedPack(
@@ -159,13 +131,6 @@ export async function stageManagedPack(
   }
 }
 
-export function isManagedDirectChild(
-  managedRootPath: string,
-  packPath: string
-): boolean {
-  return pathIsDirectChild(managedRootPath, packPath)
-}
-
 function stagedManagedPack(
   stagingRoot: string,
   stagedPath: string,
@@ -190,24 +155,6 @@ function stagedManagedPack(
   }
 }
 
-async function commitStagedPack(
-  staged: StagedManagedPack
-): Promise<MaterializedPack> {
-  try {
-    await staged.commit()
-    return {
-      name: staged.name,
-      path: staged.path,
-      contentDigest: staged.contentDigest,
-      fileCount: staged.fileCount,
-      totalBytes: staged.totalBytes,
-    }
-  } catch (error) {
-    await staged.discard().catch(() => undefined)
-    throw error
-  }
-}
-
 async function prepareManagedRoot(path: string): Promise<string> {
   await mkdir(path, { recursive: true })
   return realpath(path)
@@ -219,13 +166,41 @@ function managedDirectoryName(name: string): string {
 }
 
 async function copyTree(source: string, destination: string): Promise<void> {
+  const sourceRoot = await realpath(source)
+  await copyTreeWithin(source, destination, sourceRoot)
+}
+
+async function copyTreeWithin(
+  source: string,
+  destination: string,
+  sourceRoot: string
+): Promise<void> {
+  const initialMetadata = await lstat(source)
+  if (!initialMetadata.isDirectory() || initialMetadata.isSymbolicLink())
+    throw new RuntimeError(
+      "invalid-pack",
+      `Pack directory changed while copying: ${source}`
+    )
+  const resolvedSource = await realpath(source)
+  if (!pathIsWithin(sourceRoot, resolvedSource))
+    throw new RuntimeError(
+      "invalid-pack",
+      `Pack directory resolves outside its root: ${source}`
+    )
+  const confirmedMetadata = await lstat(resolvedSource)
+  if (!confirmedMetadata.isDirectory() || confirmedMetadata.isSymbolicLink())
+    throw new RuntimeError(
+      "invalid-pack",
+      `Pack directory changed while copying: ${source}`
+    )
+
   await mkdir(destination, { recursive: false })
-  const entries = await readdir(source, { withFileTypes: true })
+  const entries = await readdir(resolvedSource, { withFileTypes: true })
   entries.sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0
   )
   for (const entry of entries) {
-    const sourceEntry = join(source, entry.name)
+    const sourceEntry = join(resolvedSource, entry.name)
     const destinationEntry = join(destination, entry.name)
     const metadata = await lstat(sourceEntry)
     if (metadata.isSymbolicLink())
@@ -234,7 +209,7 @@ async function copyTree(source: string, destination: string): Promise<void> {
         `Pack contains a symbolic link: ${entry.name}`
       )
     if (metadata.isDirectory()) {
-      await copyTree(sourceEntry, destinationEntry)
+      await copyTreeWithin(sourceEntry, destinationEntry, sourceRoot)
       continue
     }
     if (!metadata.isFile())
@@ -242,7 +217,44 @@ async function copyTree(source: string, destination: string): Promise<void> {
         "invalid-pack",
         `Pack contains a special file: ${entry.name}`
       )
-    await copyFile(sourceEntry, destinationEntry, constants.COPYFILE_EXCL)
+    await copyFileWithoutFollowing(sourceEntry, destinationEntry, entry.name)
+  }
+}
+
+async function copyFileWithoutFollowing(
+  source: string,
+  destination: string,
+  label: string
+): Promise<void> {
+  const noFollow = process.platform === "win32" ? 0 : constants.O_NOFOLLOW
+  let sourceFile
+  try {
+    sourceFile = await open(source, constants.O_RDONLY | noFollow)
+  } catch {
+    throw new RuntimeError(
+      "invalid-pack",
+      `Pack file changed while copying: ${label}`
+    )
+  }
+  try {
+    const metadata = await sourceFile.stat()
+    if (!metadata.isFile())
+      throw new RuntimeError(
+        "invalid-pack",
+        `Pack entry changed while copying: ${label}`
+      )
+    const destinationFile = await open(destination, "wx")
+    try {
+      for await (const chunk of sourceFile.createReadStream({
+        autoClose: false,
+      })) {
+        await destinationFile.writeFile(chunk)
+      }
+    } finally {
+      await destinationFile.close()
+    }
+  } finally {
+    await sourceFile.close()
   }
 }
 

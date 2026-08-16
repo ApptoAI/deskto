@@ -1142,6 +1142,11 @@ describe("Runtime", () => {
         ],
       },
     ])
+    expect(
+      listed[0]?.occurrences.find(
+        (occurrence) => occurrence.directoryName === "fallback"
+      )?.diagnostics
+    ).toContainEqual(expect.objectContaining({ code: "name-missing" }))
     const availableSkills = unwrap(
       await runtime.request({
         method: "workspace.listSkills",

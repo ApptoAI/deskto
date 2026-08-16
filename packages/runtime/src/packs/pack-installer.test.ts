@@ -12,7 +12,13 @@ import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import { installPackFolder, installPackZip } from "./pack-installer.js"
+import type { PackContentLimits } from "./pack-digest.js"
+import {
+  stagePackFolder,
+  stagePackZip,
+  type MaterializedPack,
+  type StagedManagedPack,
+} from "./pack-installer.js"
 import { writeTestZip } from "./zip-test-helpers.js"
 
 const directories: string[] = []
@@ -24,6 +30,37 @@ afterEach(async () => {
       .map((path) => rm(path, { recursive: true, force: true }))
   )
 })
+
+async function installPackFolder(
+  sourcePath: string,
+  managedRootPath: string
+): Promise<MaterializedPack> {
+  return commitForFilesystemTest(
+    await stagePackFolder(sourcePath, managedRootPath)
+  )
+}
+
+async function installPackZip(
+  archivePath: string,
+  managedRootPath: string,
+  limits?: PackContentLimits
+): Promise<MaterializedPack> {
+  return commitForFilesystemTest(
+    await stagePackZip(archivePath, managedRootPath, limits)
+  )
+}
+
+async function commitForFilesystemTest(
+  staged: StagedManagedPack
+): Promise<MaterializedPack> {
+  try {
+    await staged.commit()
+    return staged
+  } catch (error) {
+    await staged.discard().catch(() => undefined)
+    throw error
+  }
+}
 
 describe("installPackFolder", () => {
   it("creates independent managed copies without overwriting the first", async () => {

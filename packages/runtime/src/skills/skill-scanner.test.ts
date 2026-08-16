@@ -146,7 +146,7 @@ function source(path: string): SkillSourceInput {
   return {
     id: "source-1",
     kind: "native",
-    scope: "user",
+    scopes: ["user"],
     label: "Test skills",
     path,
     harnessIds: ["test"],

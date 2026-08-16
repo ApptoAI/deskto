@@ -121,7 +121,7 @@ export async function readPackContents(
     {
       id: pack.id,
       kind: "pack",
-      scope: "workspace",
+      scopes: ["workspace"],
       label: pack.name,
       path: root,
       harnessIds: [],
