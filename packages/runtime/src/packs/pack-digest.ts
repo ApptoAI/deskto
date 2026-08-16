@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto"
-import { constants } from "node:fs"
-import { lstat, open, readdir, realpath } from "node:fs/promises"
+import { lstat, realpath } from "node:fs/promises"
 import { join } from "node:path"
 
 import { RuntimeError } from "../errors.js"
-import { pathIsWithin } from "../path-boundaries.js"
+import {
+  openRegularFileWithinRoot,
+  readDirectoryWithinRoot,
+} from "../safe-file-open.js"
 
 export type PackContentLimits = {
   maxEntries: number
@@ -57,16 +59,13 @@ async function hashDirectory(
   if (depth > limits.maxDepth)
     throw invalidPack(`Pack nesting exceeds ${limits.maxDepth} directories`)
 
-  const resolvedPath = await realpath(absolutePath)
-  if (!pathIsWithin(root, resolvedPath))
-    throw invalidPack(
-      `Pack directory resolves outside its root: ${relativePath}`
-    )
-  const directoryMetadata = await lstat(resolvedPath)
-  if (!directoryMetadata.isDirectory() || directoryMetadata.isSymbolicLink())
+  let entries
+  try {
+    entries = await readDirectoryWithinRoot(absolutePath, root)
+  } catch {
     throw invalidPack(`Pack directory changed while reading: ${relativePath}`)
+  }
 
-  const entries = await readdir(resolvedPath, { withFileTypes: true })
   entries.sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0
   )
@@ -78,7 +77,7 @@ async function hashDirectory(
     const childRelativePath = relativePath
       ? `${relativePath}/${entry.name}`
       : entry.name
-    const childPath = join(resolvedPath, entry.name)
+    const childPath = join(absolutePath, entry.name)
     const metadata = await lstat(childPath)
 
     if (metadata.isSymbolicLink())
@@ -98,14 +97,13 @@ async function hashDirectory(
     }
     if (!metadata.isFile())
       throw invalidPack(`Pack contains a special file: ${childRelativePath}`)
-    const file = await openFileWithoutFollowing(childPath, childRelativePath)
-    const openedMetadata = await file.stat()
-    if (!openedMetadata.isFile()) {
-      await file.close()
-      throw invalidPack(
-        `Pack entry changed while reading: ${childRelativePath}`
-      )
-    }
+    const opened = await openFileWithoutFollowing(
+      childPath,
+      childRelativePath,
+      root
+    )
+    const file = opened.handle
+    const openedMetadata = opened.metadata
     if (openedMetadata.size > limits.maxFileBytes) {
       await file.close()
       throw invalidPack(
@@ -140,10 +138,13 @@ async function hashDirectory(
   }
 }
 
-async function openFileWithoutFollowing(path: string, label: string) {
-  const noFollow = process.platform === "win32" ? 0 : constants.O_NOFOLLOW
+async function openFileWithoutFollowing(
+  path: string,
+  label: string,
+  root: string
+) {
   try {
-    return await open(path, constants.O_RDONLY | noFollow)
+    return await openRegularFileWithinRoot(path, root)
   } catch {
     throw invalidPack(`Pack file changed while reading: ${label}`)
   }

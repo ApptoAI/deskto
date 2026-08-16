@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto"
-import { constants } from "node:fs"
 import {
   lstat,
   mkdir,
   mkdtemp,
   open,
-  readdir,
   realpath,
   rename,
   rm,
@@ -19,6 +17,10 @@ import yauzl, { type Entry, type ZipFile } from "yauzl"
 
 import { RuntimeError } from "../errors.js"
 import { pathIsWithin } from "../path-boundaries.js"
+import {
+  openRegularFileWithinRoot,
+  readDirectoryWithinRoot,
+} from "../safe-file-open.js"
 import { readPackName, slugify, validatePackDirectory } from "./pack-files.js"
 import {
   defaultPackContentLimits,
@@ -175,32 +177,22 @@ async function copyTreeWithin(
   destination: string,
   sourceRoot: string
 ): Promise<void> {
-  const initialMetadata = await lstat(source)
-  if (!initialMetadata.isDirectory() || initialMetadata.isSymbolicLink())
+  let entries
+  try {
+    entries = await readDirectoryWithinRoot(source, sourceRoot)
+  } catch {
     throw new RuntimeError(
       "invalid-pack",
       `Pack directory changed while copying: ${source}`
     )
-  const resolvedSource = await realpath(source)
-  if (!pathIsWithin(sourceRoot, resolvedSource))
-    throw new RuntimeError(
-      "invalid-pack",
-      `Pack directory resolves outside its root: ${source}`
-    )
-  const confirmedMetadata = await lstat(resolvedSource)
-  if (!confirmedMetadata.isDirectory() || confirmedMetadata.isSymbolicLink())
-    throw new RuntimeError(
-      "invalid-pack",
-      `Pack directory changed while copying: ${source}`
-    )
+  }
 
   await mkdir(destination, { recursive: false })
-  const entries = await readdir(resolvedSource, { withFileTypes: true })
   entries.sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0
   )
   for (const entry of entries) {
-    const sourceEntry = join(resolvedSource, entry.name)
+    const sourceEntry = join(source, entry.name)
     const destinationEntry = join(destination, entry.name)
     const metadata = await lstat(sourceEntry)
     if (metadata.isSymbolicLink())
@@ -217,19 +209,24 @@ async function copyTreeWithin(
         "invalid-pack",
         `Pack contains a special file: ${entry.name}`
       )
-    await copyFileWithoutFollowing(sourceEntry, destinationEntry, entry.name)
+    await copyFileWithoutFollowing(
+      sourceEntry,
+      destinationEntry,
+      entry.name,
+      sourceRoot
+    )
   }
 }
 
 async function copyFileWithoutFollowing(
   source: string,
   destination: string,
-  label: string
+  label: string,
+  sourceRoot: string
 ): Promise<void> {
-  const noFollow = process.platform === "win32" ? 0 : constants.O_NOFOLLOW
   let sourceFile
   try {
-    sourceFile = await open(source, constants.O_RDONLY | noFollow)
+    sourceFile = await openRegularFileWithinRoot(source, sourceRoot)
   } catch {
     throw new RuntimeError(
       "invalid-pack",
@@ -237,15 +234,10 @@ async function copyFileWithoutFollowing(
     )
   }
   try {
-    const metadata = await sourceFile.stat()
-    if (!metadata.isFile())
-      throw new RuntimeError(
-        "invalid-pack",
-        `Pack entry changed while copying: ${label}`
-      )
+    const sourceHandle = sourceFile.handle
     const destinationFile = await open(destination, "wx")
     try {
-      for await (const chunk of sourceFile.createReadStream({
+      for await (const chunk of sourceHandle.createReadStream({
         autoClose: false,
       })) {
         await destinationFile.writeFile(chunk)
@@ -254,7 +246,7 @@ async function copyFileWithoutFollowing(
       await destinationFile.close()
     }
   } finally {
-    await sourceFile.close()
+    await sourceFile.handle.close()
   }
 }
 
