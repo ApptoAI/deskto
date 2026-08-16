@@ -183,6 +183,8 @@ class ClaudeSession implements HarnessSession {
   readonly #approvalQueue: PendingApproval[] = []
   readonly #abortController = new AbortController()
   readonly #backgroundActivities = new Set<string>()
+  readonly #ignoredBackgroundTaskIds = new Set<string>()
+  readonly #liveBackgroundTaskIds = new Set<string>()
   readonly #settledActivities = new Set<string>()
   readonly #taskActivities = new Map<string, string>()
   readonly #query: ClaudeQuery
@@ -196,6 +198,9 @@ class ClaudeSession implements HarnessSession {
   #primaryModel?: string
   #usageLimitResetAt?: string
   #terminalEventEmitted = false
+  #successfulResultPending = false
+  #backgroundTaskLevelSeen = false
+  #backgroundActivityStartedAfterLevel = false
   #planStarted = false
 
   constructor(
@@ -302,6 +307,13 @@ class ClaudeSession implements HarnessSession {
   async #consume(): Promise<void> {
     try {
       for await (const message of this.#query) this.#mapMessage(message)
+      // A single-shot Claude query can close after background work settles
+      // without producing a second result frame. Release the earlier success
+      // even if the last task-level signal is stale: a clean stream end cannot
+      // deliver another notification, and every Turn needs a terminal event.
+      if (this.#successfulResultPending) {
+        this.#emitTerminal({ type: "turn.completed" })
+      }
     } catch (error) {
       if (!this.#abortController.signal.aborted) {
         this.#emitTerminal({
@@ -351,8 +363,43 @@ class ClaudeSession implements HarnessSession {
       return
     }
 
+    if (
+      message.type === "system" &&
+      message.subtype === "background_tasks_changed"
+    ) {
+      // The SDK defines this as a replace-semantics liveness signal. Keep its
+      // task IDs separate from Activity IDs because edge ordering is not fixed.
+      this.#backgroundTaskLevelSeen = true
+      this.#backgroundActivityStartedAfterLevel = false
+      this.#liveBackgroundTaskIds.clear()
+      for (const task of message.tasks) {
+        if (!this.#ignoredBackgroundTaskIds.has(task.task_id)) {
+          this.#liveBackgroundTaskIds.add(task.task_id)
+        }
+      }
+      const reportedIds = new Set(message.tasks.map((task) => task.task_id))
+      for (const taskId of this.#ignoredBackgroundTaskIds) {
+        if (!reportedIds.has(taskId)) {
+          this.#ignoredBackgroundTaskIds.delete(taskId)
+        }
+      }
+      return
+    }
+
     if (message.type === "system" && message.subtype === "task_started") {
-      if (message.tool_use_id && !message.skip_transcript) {
+      if (message.skip_transcript) {
+        this.#ignoredBackgroundTaskIds.add(message.task_id)
+        this.#liveBackgroundTaskIds.delete(message.task_id)
+        if (message.tool_use_id) {
+          this.#backgroundActivities.delete(message.tool_use_id)
+        }
+        return
+      }
+      // Bridge the ordering window before the next level update. A later
+      // background_tasks_changed message still replaces this whole set.
+      this.#backgroundActivityStartedAfterLevel = true
+      this.#liveBackgroundTaskIds.add(message.task_id)
+      if (message.tool_use_id) {
         this.#taskActivities.set(message.task_id, message.tool_use_id)
         this.#backgroundActivities.add(message.tool_use_id)
       }
@@ -360,6 +407,8 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.type === "system" && message.subtype === "task_notification") {
+      this.#ignoredBackgroundTaskIds.delete(message.task_id)
+      this.#liveBackgroundTaskIds.delete(message.task_id)
       const activityId =
         message.tool_use_id ?? this.#taskActivities.get(message.task_id)
       this.#taskActivities.delete(message.task_id)
@@ -412,6 +461,7 @@ class ClaudeSession implements HarnessSession {
           subagentRunsInBackground(block.name, input)
         ) {
           this.#backgroundActivities.add(block.id)
+          this.#backgroundActivityStartedAfterLevel = true
         }
         this.#queue.push({
           type: "activity.started",
@@ -458,6 +508,15 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.subtype === "success") {
+      // Claude emits a result at the main response boundary even while
+      // background agents keep working. Ending the product Turn here would
+      // make the Runtime cancel those agents and paint their cards green.
+      // Keep the success pending until the SDK reports no live background work
+      // and either a follow-up result arrives or the query closes.
+      if (this.#backgroundWorkMayStillBeRunning()) {
+        this.#successfulResultPending = true
+        return
+      }
       this.#emitTerminal({ type: "turn.completed" })
     } else {
       this.#emitTerminal({
@@ -501,6 +560,15 @@ class ClaudeSession implements HarnessSession {
     this.#queue.push({ type: "activity.completed", id, outcome })
   }
 
+  /** Prefer the SDK's level signal, with Activity edges for older versions. */
+  #backgroundWorkMayStillBeRunning(): boolean {
+    return this.#backgroundTaskLevelSeen
+      ? this.#liveBackgroundTaskIds.size > 0 ||
+          (this.#backgroundActivityStartedAfterLevel &&
+            this.#backgroundActivities.size > 0)
+      : this.#backgroundActivities.size > 0
+  }
+
   #emitUsageLimit(failure: HarnessFailure): void {
     this.#emitTerminal({ type: "turn.failed", failure })
   }
@@ -530,6 +598,7 @@ class ClaudeSession implements HarnessSession {
     if (this.#terminalEventEmitted) return
     this.#queue.push(event)
     this.#terminalEventEmitted = true
+    this.#successfulResultPending = false
   }
 
   #denyPending(): void {
