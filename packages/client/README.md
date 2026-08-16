@@ -13,7 +13,7 @@ The Client sits on the user-facing side of the Client/Runtime boundary. It knows
 - Harnesses: `listHarnesses()`, `setHarnessEnabled(harnessId, enabled)`, `refreshHarnesses()`
 - Workspaces: `listWorkspaces()`, `createWorkspace(name, color, icon)`, `updateWorkspace(workspaceId, patch)`, `deleteWorkspace(workspaceId)`, `setWorkspacePack(workspaceId, packId, attached)`
 - Selection: `getSelection()`, `setSelection(workspaceId, projectId?)`
-- Packs: `listPacks()`, `createPack(name)`, `importPack(path)`, `removePack(packId)`
+- Packs: `listPacks()`, `createPack(name)`, `installPackFromFolder(path)`, `installPackFromZip(path)`, `linkPack(path)`, `unlinkPack(packId)`, `uninstallPack(packId)`
 - Projects: `listProjects()`, `addProject(path, name, workspaceId)`, `moveProject(projectId, workspaceId)`
 - Threads: `listThreads(projectId)`, `createThread(projectId, harnessId, executionProfile?)`, `configureThread(threadId, executionProfile)`, `getThread(threadId)`
 - Turns and approvals: `startTurn(threadId, prompt)`, `cancelTurn(threadId)`, `resolveApproval(threadId, approvalId, decision)`

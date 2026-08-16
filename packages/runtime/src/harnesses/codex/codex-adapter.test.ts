@@ -56,6 +56,18 @@ class FakeCodexClient implements CodexClient {
   }
 }
 
+class UnsupportedSkillRootsClient extends FakeCodexClient {
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    if (method === "skills/extraRoots/set")
+      return Promise.reject(new Error("Unsupported request"))
+    return super.request(method, params, schema)
+  }
+}
+
 const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
@@ -96,6 +108,64 @@ describe("codexTurnInput", () => {
     ])
   })
 })
+
+describe("Codex skill provisioning", () => {
+  it("reports accepted extra roots", async () => {
+    const session = await new CodexAdapter(clientFactory).start(
+      runInputWithPack(),
+      new AbortController().signal
+    )
+
+    expect(session.skillProvisioning).toEqual([
+      {
+        rootId: "pack-1",
+        rootPath: "/packs/reviews/skills",
+        contentDigest: "sha256:one",
+        status: "configured",
+        method: "extra-root",
+      },
+    ])
+  })
+
+  it("keeps the session running when the installed Codex rejects extra roots", async () => {
+    const factory: CodexClientFactory = () => new UnsupportedSkillRootsClient()
+    const session = await new CodexAdapter(factory).start(
+      runInputWithPack(),
+      new AbortController().signal
+    )
+
+    expect(session.skillProvisioning?.[0]).toMatchObject({
+      rootId: "pack-1",
+      status: "unsupported",
+      method: "extra-root",
+    })
+  })
+})
+
+function runInputWithPack() {
+  return {
+    threadId: "thread-1",
+    turnId: "turn-1",
+    projectPath: "/tmp/project",
+    prompt: "Continue",
+    references: [],
+    executionProfile: {
+      modelId: null,
+      effort: null,
+      permissionMode: "approval-required" as const,
+    },
+    customization: {
+      skillRoots: [
+        {
+          id: "pack-1",
+          name: "Reviews",
+          path: "/packs/reviews/skills",
+          contentDigest: "sha256:one",
+        },
+      ],
+    },
+  }
+}
 
 describe("codexActivity", () => {
   it("classifies app-server items into provider-neutral payloads", () => {

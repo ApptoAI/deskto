@@ -219,6 +219,29 @@ const migrations = [
     CREATE INDEX turn_outputs_artifact_created_idx
       ON turn_outputs(artifact_id, created_at DESC);
   `,
+  `
+    ALTER TABLE packs ADD COLUMN kind TEXT
+      CHECK (kind IS NULL OR kind IN ('managed', 'linked'));
+    ALTER TABLE packs ADD COLUMN content_digest TEXT;
+    ALTER TABLE packs ADD COLUMN receipt_json TEXT;
+  `,
+  `
+    CREATE TABLE skill_provisioning_reports (
+      turn_id TEXT NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+      root_id TEXT NOT NULL,
+      harness_id TEXT NOT NULL,
+      root_path TEXT NOT NULL,
+      content_digest TEXT,
+      status TEXT NOT NULL CHECK (status IN ('configured', 'unsupported', 'failed')),
+      method TEXT NOT NULL,
+      message TEXT,
+      attempted_at TEXT NOT NULL,
+      PRIMARY KEY (turn_id, root_id)
+    );
+
+    CREATE INDEX skill_provisioning_project_latest_idx
+      ON skill_provisioning_reports(root_id, harness_id, attempted_at DESC);
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

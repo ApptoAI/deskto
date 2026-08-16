@@ -1,5 +1,6 @@
 import type {
   JsonObject,
+  ManagedSkillDraft,
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
@@ -107,12 +108,30 @@ export class RuntimeClient {
     return this.request({ method: "pack.create", params: { name } })
   }
 
-  importPack(path: string) {
-    return this.request({ method: "pack.import", params: { path } })
+  installPackFromFolder(path: string) {
+    return this.request({
+      method: "pack.install",
+      params: { source: { kind: "folder", path } },
+    })
   }
 
-  removePack(packId: string) {
-    return this.request({ method: "pack.remove", params: { packId } })
+  installPackFromZip(path: string) {
+    return this.request({
+      method: "pack.install",
+      params: { source: { kind: "zip", path } },
+    })
+  }
+
+  linkPack(path: string) {
+    return this.request({ method: "pack.link", params: { path } })
+  }
+
+  unlinkPack(packId: string) {
+    return this.request({ method: "pack.unlink", params: { packId } })
+  }
+
+  uninstallPack(packId: string) {
+    return this.request({ method: "pack.uninstall", params: { packId } })
   }
 
   setWorkspacePack(workspaceId: string, packId: string, attached: boolean) {
@@ -126,6 +145,42 @@ export class RuntimeClient {
     return this.request({
       method: "workspace.listSkills",
       params: { workspaceId },
+    })
+  }
+
+  listSkillsForProject(projectId: string) {
+    return this.request({
+      method: "skill.listForProject",
+      params: { projectId },
+    })
+  }
+
+  listSkillsOnComputer() {
+    return this.request({ method: "skill.listOnComputer", params: {} })
+  }
+
+  getSkill(occurrenceId: string, projectId?: string) {
+    return this.request({
+      method: "skill.get",
+      params: { occurrenceId, projectId },
+    })
+  }
+
+  createManagedSkill(packId: string, draft: ManagedSkillDraft) {
+    return this.request({
+      method: "skill.createManaged",
+      params: { packId, ...draft },
+    })
+  }
+
+  updateManagedSkill(
+    packId: string,
+    directoryName: string,
+    draft: ManagedSkillDraft
+  ) {
+    return this.request({
+      method: "skill.updateManaged",
+      params: { packId, directoryName, ...draft },
     })
   }
 

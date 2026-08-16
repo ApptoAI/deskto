@@ -16,7 +16,7 @@ An adapter implements `HarnessAdapterFactory`:
 - `start(input, signal)`, which begins a turn and returns a `HarnessSession`
 - optional `generateText(input, signal)`, a stateless call for small app-owned text that must not join a Thread's resumable provider session
 
-`HarnessRunInput` carries the thread, turn, project path, prompt, execution profile, a `customization` value, and an optional `providerSessionId`, the opaque token that lets a provider resume an earlier session. The customization holds `skillRoots`: labeled directories of SKILL.md skill folders (`{ path, name }`) the adapter should make available to the session. Adapters translate it into native mechanisms and silently skip what the installed harness version cannot honor.
+`HarnessRunInput` carries the thread, turn, project path, prompt, execution profile, a `customization` value, and an optional `providerSessionId`, the opaque token that lets a provider resume an earlier session. The customization holds `skillRoots`: labeled directories of `SKILL.md` skill folders. Adapters translate those roots into native mechanisms and expose a per-root provisioning result: `configured`, `unsupported`, or `failed`. The Runtime persists the latest result for diagnostics without blocking the turn.
 
 A `HarnessSession` exposes `events` (an `AsyncIterable<HarnessEvent>`), `cancel()`, and `respondToApproval(approvalId, decision)`. The event union has nine members: `session.started`, `message.delta`, `usage.updated`, `activity.started`, `activity.updated`, `activity.completed`, `approval.requested`, `turn.completed`, and `turn.failed`. A session emits at most one unresolved approval request at a time, and `usage.updated` reports how full the provider's context window is (`ContextUsage`).
 

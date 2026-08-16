@@ -1,3 +1,6 @@
+import { homedir } from "node:os"
+import { join } from "node:path"
+
 import {
   query,
   type CanUseTool,
@@ -17,8 +20,11 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type NativeSkillRoot,
   type PlanStep,
   type TextGenerationInput,
+  type SkillDiscoveryInput,
+  type SkillProvisioningResult,
 } from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
@@ -32,9 +38,10 @@ import { normalizePlanStepStatus } from "../plan-status.js"
 import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
+import { projectSkillRootPaths } from "../../skills/project-skill-roots.js"
 import { createErrorMessageSchema } from "../../errors.js"
 
-import { claudePluginsFor, claudeSkillCommand } from "./claude-packs.js"
+import { claudeSkillCommand, provisionClaudePlugins } from "./claude-packs.js"
 
 export type ClaudeQuery = Pick<
   Query,
@@ -130,6 +137,31 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
     }
   }
 
+  async discoverSkillRoots(
+    input: SkillDiscoveryInput
+  ): Promise<NativeSkillRoot[]> {
+    const roots: NativeSkillRoot[] = []
+    if (input.projectPath) {
+      const projectRoots = await projectSkillRootPaths(
+        input.projectPath,
+        join(".claude", "skills")
+      )
+      roots.push(
+        ...projectRoots.map((path) => ({
+          path,
+          scope: "project" as const,
+          label: "Claude Code project skills",
+        }))
+      )
+    }
+    roots.push({
+      path: join(homedir(), ".claude", "skills"),
+      scope: "user",
+      label: "Claude Code personal skills",
+    })
+    return roots
+  }
+
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return Promise.resolve(new ClaudeSession(input, signal, this.options))
   }
@@ -157,6 +189,7 @@ class ClaudeSession implements HarnessSession {
   readonly #taskActivities = new Map<string, string>()
   readonly #query: ClaudeQuery
   readonly events = this.#queue
+  readonly skillProvisioning: SkillProvisioningResult[]
   #activeApproval?: PendingApproval
   #closed = false
   #drainingApprovals = false
@@ -183,10 +216,12 @@ class ClaudeSession implements HarnessSession {
     signal.addEventListener("abort", () => this.#abortController.abort(), {
       once: true,
     })
-    const pluginShims = claudePluginsFor(
+    const provisionedPlugins = provisionClaudePlugins(
       input.customization.skillRoots,
       packShimsPath
     )
+    const pluginShims = provisionedPlugins.plugins
+    this.skillProvisioning = provisionedPlugins.results
     const canUseTool: CanUseTool = (toolName, toolInput, options) =>
       new Promise((resolve) => {
         const approvalId = options.toolUseID

@@ -9,7 +9,12 @@ import {
 import type { RuntimeClient } from "@deskto/client"
 import { appSettings } from "@deskto/settings"
 
-import { personalWorkspaceId, type Selection } from "@deskto/protocol"
+import {
+  personalWorkspaceId,
+  mySkillsPackName,
+  type ManagedSkillDraft,
+  type Selection,
+} from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 import { z } from "zod"
 
@@ -20,6 +25,11 @@ import {
 } from "../components/settings/settings-pages.js"
 import { SettingsSidebar } from "../components/settings/settings-sidebar.js"
 import { SettingsView } from "../components/settings/settings-view.js"
+import { SkillsView } from "../components/skills/skills-view.js"
+import {
+  firstSkillsTab,
+  type SkillsTab,
+} from "../components/skills/skills-tabs.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
 import { StatusPanel } from "../components/status-panel.js"
@@ -29,7 +39,11 @@ import {
   WorkspaceDialog,
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
-import { pickPackFolder, pickProjectFolder } from "../lib/desktop.js"
+import {
+  pickPackArchive,
+  pickPackFolder,
+  pickProjectFolder,
+} from "../lib/desktop.js"
 import { useLocalStorage } from "../lib/use-local-storage.js"
 import { describedErrorSchema } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
@@ -40,27 +54,7 @@ import { useThreadChanged } from "../runtime/use-thread-changed.js"
 import { useThreadDeleted } from "../runtime/use-thread-deleted.js"
 import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
-
-// One value per possible main pane, so navigation cannot leave a stale
-// combination behind (e.g. a task opening underneath the settings screen).
-type WorkView = { kind: "new-task" } | { kind: "task"; threadId: string }
-
-// Settings takes over the whole window, sidebar included, so it carries the
-// pane it covered: Go back returns there instead of guessing a landing spot.
-type MainView =
-  | WorkView
-  | { kind: "settings"; page: SettingsPageId; returnTo: WorkView }
-
-/**
- * Sends the workbench back to a blank task without closing Settings: only Go
- * back leaves that screen, so a shortcut or a workspace switch underneath it
- * rewrites where Go back lands instead of tearing the screen down.
- */
-function toNewTask(current: MainView): MainView {
-  return current.kind === "settings"
-    ? { ...current, returnTo: { kind: "new-task" } }
-    : { kind: "new-task" }
-}
+import { afterScopeChange, toNewTask, type MainView } from "./work-view.js"
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 type ProjectScope = "all" | "project"
@@ -103,11 +97,13 @@ export function Workbench() {
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
-  // Packs are only visible inside the workspace dialog, so the query (which
-  // scans pack directories on disk) stands down until the dialog opens.
+  // Pack scans stand down until the dedicated Pack view is open.
   const loadPacks = useMemo(
-    () => (workspaceDialog ? () => client.listPacks() : null),
-    [client, workspaceDialog]
+    () =>
+      view.kind === "skills" && view.tab === "packs"
+        ? () => client.listPacks()
+        : null,
+    [client, view]
   )
   const packsQuery = useRuntimeQuery(loadPacks)
 
@@ -132,7 +128,6 @@ export function Workbench() {
     selectionQuery.state.status === "ready" ? selectionQuery.state.data : null
   const projects =
     projectsQuery.state.status === "ready" ? projectsQuery.state.data : []
-  const packs = packsQuery.state.status === "ready" ? packsQuery.state.data : []
 
   // The persisted Selection is the single source of truth for where the user
   // is; selecting updates it optimistically and the runtime write follows.
@@ -307,7 +302,7 @@ export function Workbench() {
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
-      setView(toNewTask)
+      setView(afterScopeChange)
       replaceSelection({
         lastWorkspaceId: workspaceId,
         lastProjectIds: selection?.lastProjectIds ?? {},
@@ -320,7 +315,7 @@ export function Workbench() {
   const selectProject = useCallback(
     (projectId: string) => {
       if (!activeWorkspaceId) return
-      setView(toNewTask)
+      setView(afterScopeChange)
       setProjectScope("project")
       const next: Selection = {
         lastWorkspaceId: activeWorkspaceId,
@@ -369,6 +364,16 @@ export function Workbench() {
 
   function openThread(threadId: string) {
     setView({ kind: "task", threadId })
+  }
+
+  function openSkills() {
+    setView({ kind: "skills", tab: firstSkillsTab })
+  }
+
+  function selectSkillsTab(tab: SkillsTab) {
+    setView((current) =>
+      current.kind === "skills" ? { ...current, tab } : current
+    )
   }
 
   /** Shows failures in the inline error strip and rethrows for callers that care. */
@@ -455,8 +460,8 @@ export function Workbench() {
     })
   }
 
-  // A pack created or imported while editing a workspace is meant for it, so
-  // it attaches right away.
+  // A Pack created, installed, or linked here is meant for the active
+  // Workspace, so it attaches right away.
   const packActions = {
     onToggle: (packId: string, attached: boolean) =>
       reportErrors(async () => {
@@ -469,17 +474,49 @@ export function Workbench() {
         const pack = await client.createPack(name)
         await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
       }),
-    onImport: () =>
+    onInstallFolder: () =>
       reportErrors(async () => {
         if (!activeWorkspaceId) return
         const picked = await pickPackFolder()
         if (!picked) return
-        const pack = await client.importPack(picked.path)
+        const pack = await client.installPackFromFolder(picked.path)
         await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
       }),
-    onRemove: (packId: string) =>
+    onInstallZip: () =>
       reportErrors(async () => {
-        await client.removePack(packId)
+        if (!activeWorkspaceId) return
+        const picked = await pickPackArchive()
+        if (!picked) return
+        const pack = await client.installPackFromZip(picked.path)
+        await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+      }),
+    onLink: () =>
+      reportErrors(async () => {
+        if (!activeWorkspaceId) return
+        const picked = await pickPackFolder()
+        if (!picked) return
+        const pack = await client.linkPack(picked.path)
+        await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+      }),
+    onUnlink: (packId: string) =>
+      reportErrors(async () => {
+        await client.unlinkPack(packId)
+      }),
+    onUninstall: (packId: string) =>
+      reportErrors(async () => {
+        await client.uninstallPack(packId)
+      }),
+    onCreateSkill: (draft: ManagedSkillDraft) =>
+      reportErrors(async () => {
+        if (!activeWorkspaceId) return
+        const currentPacks =
+          packsQuery.state.status === "ready" ? packsQuery.state.data : []
+        const mySkills =
+          currentPacks.find(
+            (pack) => pack.canEditSkills && pack.name === mySkillsPackName
+          ) ?? (await client.createPack(mySkillsPackName))
+        await client.setWorkspacePack(activeWorkspaceId, mySkills.id, true)
+        await client.createManagedSkill(mySkills.id, draft)
       }),
   }
 
@@ -526,6 +563,8 @@ export function Workbench() {
           onOpenThread={openThread}
           onNewTask={() => setView(toNewTask)}
           onRetryThreads={revalidateAllThreads}
+          onOpenSkills={openSkills}
+          skillsActive={view.kind === "skills"}
           onOpenSettings={openSettings}
           focusSettings={focusSettingsButton}
           inboxActions={inboxActions}
@@ -576,6 +615,15 @@ export function Workbench() {
           <Screen>
             <StatusPanel title="Loading your projects…" />
           </Screen>
+        ) : view.kind === "skills" ? (
+          <SkillsView
+            tab={view.tab}
+            project={activeProject}
+            workspace={activeWorkspace}
+            packs={packsQuery}
+            packActions={packActions}
+            onSelectTab={selectSkillsTab}
+          />
         ) : !activeProject ? (
           <Screen>
             <StatusPanel
@@ -612,8 +660,6 @@ export function Workbench() {
         }}
         workspace={workspaceDialog?.mode === "edit" ? activeWorkspace : null}
         canDelete={activeWorkspace?.id !== personalWorkspaceId}
-        packs={packs}
-        packActions={packActions}
         onSubmit={submitWorkspace}
         onDelete={deleteActiveWorkspace}
       />

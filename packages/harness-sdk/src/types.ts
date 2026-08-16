@@ -29,16 +29,47 @@ export type HarnessModelOption = {
 
 /** A directory of SKILL.md skill folders, labeled by whoever owns its metadata. */
 export type SkillRoot = {
+  /** Stable app-owned identity, normally the Pack id. */
+  id?: string
   /** Absolute path to a directory whose children are SKILL.md skill folders. */
   path: string
   /** Human-readable source label, e.g. the pack name. */
   name: string
+  /** Digest recorded when Deskto installed the Pack, when available. */
+  contentDigest?: string
+}
+
+export type SkillProvisioningStatus = "configured" | "unsupported" | "failed"
+
+/** Adapter-owned identifier for the native mechanism it used. */
+export type SkillProvisioningMethod = string
+
+/** What one Adapter did with one app-supplied skill root for this session. */
+export type SkillProvisioningResult = {
+  rootId: string
+  rootPath: string
+  contentDigest?: string
+  status: SkillProvisioningStatus
+  method: SkillProvisioningMethod
+  message?: string
+}
+
+export type SkillDiscoveryInput = {
+  /** Project directory used as the Harness working directory, when relevant. */
+  projectPath: string | null
+}
+
+/** A native filesystem location from which one Harness discovers skills. */
+export type NativeSkillRoot = {
+  path: string
+  scope: "project" | "user" | "admin"
+  label: string
 }
 
 /**
  * Provider-neutral additions to a session, built by the Runtime from the
  * active workspace's Packs. Adapters translate it to native mechanisms and
- * silently skip what the installed harness version cannot honor.
+ * report whether each root was configured, unsupported, or failed.
  */
 export type SessionCustomization = {
   skillRoots: SkillRoot[]
@@ -154,6 +185,8 @@ export type HarnessEvent =
 export interface HarnessSession {
   /** Emits at most one unresolved approval request at a time. */
   readonly events: AsyncIterable<HarnessEvent>
+  /** Root configuration completed before the session was returned. */
+  readonly skillProvisioning?: SkillProvisioningResult[]
   cancel(): Promise<void>
   respondToApproval(
     approvalId: string,
@@ -165,6 +198,8 @@ export interface HarnessAdapterFactory {
   readonly descriptor: HarnessDescriptor
   checkAvailability(): Promise<HarnessAvailability>
   listModels(): Promise<HarnessModelOption[]>
+  /** Filesystem roots the Harness would inspect for this project. */
+  discoverSkillRoots?(input: SkillDiscoveryInput): Promise<NativeSkillRoot[]>
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession>
   /** Optional because not every Harness can safely run stateless generation. */
   generateText?(

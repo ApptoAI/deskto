@@ -5,6 +5,7 @@ import { transaction } from "./database.js"
 import { Activities } from "./activities.js"
 import { Artifacts } from "./artifacts.js"
 import { Settings } from "./settings.js"
+import { SkillProvisioningReports } from "./skill-provisioning.js"
 import { Threads } from "./threads.js"
 import { Turns } from "./turns.js"
 import { Packs } from "./packs.js"
@@ -20,6 +21,7 @@ export class Store {
   readonly threads: Threads
   readonly turns: Turns
   readonly settings: Settings
+  readonly skillProvisioning: SkillProvisioningReports
 
   constructor(
     private readonly database: DatabaseSync,
@@ -33,6 +35,7 @@ export class Store {
     this.threads = new Threads(database, this.projects, sequences)
     this.turns = new Turns(database)
     this.settings = new Settings(database)
+    this.skillProvisioning = new SkillProvisioningReports(database)
   }
 
   close(): void {

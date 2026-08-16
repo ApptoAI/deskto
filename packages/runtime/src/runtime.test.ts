@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
 import {
@@ -17,14 +17,16 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { createRuntime } from "./runtime.js"
+import { Store } from "./storage/store.js"
 
 const directories: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(
     directories
       .splice(0)
@@ -33,6 +35,87 @@ afterEach(async () => {
 })
 
 describe("Runtime", () => {
+  it("closes storage when Pack root preparation fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const packsPath = join(directory, "packs")
+    await writeFile(packsPath, "not a directory")
+    const close = vi.spyOn(Store.prototype, "close")
+
+    expect(() =>
+      createRuntime({
+        databasePath: join(directory, "runtime.sqlite"),
+        packsPath,
+        harnesses: [],
+      })
+    ).toThrow()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("keeps a started Harness session running when provisioning storage fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const scripted = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => ({
+        ...(await scripted.start(input, signal)),
+        skillProvisioning: [
+          {
+            rootId: "pack-1",
+            rootPath: join(directory, "pack-skills"),
+            status: "configured",
+            method: "test",
+          },
+        ],
+      }),
+    }
+    const runtime = createRuntime({ databasePath, harnesses: [harness] })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: {
+          path: directory,
+          name: "Example",
+          workspaceId: "personal",
+        },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    const database = new DatabaseSync(databasePath)
+    database.exec(`
+      CREATE TRIGGER reject_skill_provisioning
+      BEFORE INSERT ON skill_provisioning_reports
+      BEGIN
+        SELECT RAISE(FAIL, 'provisioning storage unavailable');
+      END
+    `)
+    database.close()
+
+    const view = unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          input: { text: "Start the task", references: [] },
+        },
+      })
+    )
+
+    expect(view.thread.status).toBe("running")
+    expect(scripted.runs).toHaveLength(1)
+    expect(scripted.runs[0]?.cancelled).toBe(false)
+    await runtime.close()
+  })
+
   it("generates the first Thread title with the configured model", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
@@ -1075,14 +1158,15 @@ describe("Runtime", () => {
         params: { name: "Press tools" },
       })
     )
-    expect(created.path).toBe(join(directory, "packs", "press-tools"))
+    expect(basename(created.path).startsWith("press-tools-")).toBe(true)
+    expect(created.kind).toBe("managed")
     expect(created.skills).toEqual([])
 
     const malformedPackPath = join(directory, "malformed-pack")
     await mkdir(malformedPackPath)
     await writeFile(join(malformedPackPath, "skills"), "not a directory")
     const malformedPack = await runtime.request({
-      method: "pack.import",
+      method: "pack.link",
       params: { path: malformedPackPath },
     })
     expect(malformedPack.ok).toBe(false)
@@ -1142,6 +1226,11 @@ describe("Runtime", () => {
         ],
       },
     ])
+    expect(
+      listed[0]?.occurrences.find(
+        (occurrence) => occurrence.directoryName === "fallback"
+      )?.diagnostics
+    ).toContainEqual(expect.objectContaining({ code: "name-missing" }))
     const availableSkills = unwrap(
       await runtime.request({
         method: "workspace.listSkills",
@@ -1193,8 +1282,12 @@ describe("Runtime", () => {
         },
       })
     )
-    expect(harness.runs[0]?.input.customization.skillRoots).toEqual([
-      { path: join(created.path, "skills"), name: "Press tools" },
+    expect(harness.runs[0]?.input.customization.skillRoots).toMatchObject([
+      {
+        id: created.id,
+        path: join(created.path, "skills"),
+        name: "Press tools",
+      },
     ])
     expect(harness.runs[0]?.input.references).toEqual([
       {

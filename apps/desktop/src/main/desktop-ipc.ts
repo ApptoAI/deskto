@@ -12,6 +12,7 @@ import {
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
+  pickPackArchiveChannel,
   pickPackChannel,
   pickProjectChannel,
   revealFileChannel,
@@ -42,6 +43,19 @@ function handleFolderPick(channel: string, title: string): void {
 export function registerDesktopIpc(runtime: Runtime): void {
   handleFolderPick(pickProjectChannel, "Open project folder")
   handleFolderPick(pickPackChannel, "Choose a pack folder")
+  ipcMain.handle(
+    pickPackArchiveChannel,
+    async (): Promise<PickedProject | undefined> => {
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        title: "Choose a Pack ZIP",
+        filters: [{ name: "ZIP archives", extensions: ["zip"] }],
+      })
+      const selectedPath = result.filePaths[0]
+      if (result.canceled || !selectedPath) return undefined
+      return { path: selectedPath, name: path.basename(selectedPath) }
+    }
+  )
 
   /**
    * File actions name a result, never a path. The renderer cannot say which

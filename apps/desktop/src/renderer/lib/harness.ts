@@ -47,7 +47,13 @@ export function findHarness(
 }
 
 export function harnessLabel(harnesses: Harness[], harnessId: string): string {
-  return findHarness(harnesses, harnessId)?.name ?? harnessId
+  return findHarness(harnesses, harnessId)?.name ?? knownHarnessLabel(harnessId)
+}
+
+export function knownHarnessLabel(harnessId: string): string {
+  if (harnessId === "codex") return "Codex"
+  if (harnessId === "claude") return "Claude Code"
+  return harnessId
 }
 
 /**

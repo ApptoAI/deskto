@@ -24,7 +24,9 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
 - **Execution Profile**: The model, thinking level, and permission mode used by a Harness. A Thread owns the editable profile; every Turn stores the profile it started with.
-- **Pack**: An app-managed directory of skills that can be created locally or imported and attached to multiple Workspaces. Prompts, MCP configuration, templates, tool requirements, and versioning may follow.
+- **Skill Occurrence**: One skill directory found at one physical location. Occurrences keep their identity even when another skill has the same name or their `SKILL.md` is invalid.
+- **Skill Exposure**: The relationship between a Skill Occurrence and a Harness. It records native discovery or Deskto's latest attempt to configure an app-supplied root. It does not claim the Harness used the skill.
+- **Pack**: A provider-neutral directory of skills attached to multiple Workspaces. A managed Pack lives under Deskto's application data directory. A linked Pack stays at a user-selected external path. Prompts, MCP configuration, templates, tool requirements, and versioning may follow.
 - **Prompt Reference**: A semantic reference selected while composing a Turn, currently a Project entry or a Skill. The Client keeps visible token text while the Runtime validates the reference and a Harness Adapter translates it to its native input.
 - **Catalog**: A future list of Packs available to a person or organization.
 - **Hub**: A future service that publishes Catalogs and Packs. A Hub does not execute Threads.
@@ -45,6 +47,9 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - The Client rebuilds current state from Runtime queries. Runtime events only make an open view current: high-frequency changes arrive as sequenced thread deltas, and any gap falls back to a query.
 - Local use never requires a Hub or an account.
 - Provider-specific types stay inside their Harness Adapter.
+- Project, user, and system skill files remain on disk and are not mirrored in SQLite.
+- A Pack attachment applies to every Project in its Workspace.
+- Unlinking a Pack never deletes files. Uninstalling is limited to managed Packs and moves their directory to trash.
 
 ## Package boundaries
 

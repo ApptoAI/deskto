@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
+import { homedir } from "node:os"
+import { join } from "node:path"
 
 import {
   AsyncQueue,
@@ -14,8 +16,12 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type NativeSkillRoot,
   type PlanStep,
   type TextGenerationInput,
+  type SkillDiscoveryInput,
+  type SkillProvisioningResult,
+  type SkillRoot,
 } from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
@@ -29,6 +35,7 @@ import { normalizePlanStepStatus } from "../plan-status.js"
 import { isoFromEpoch } from "../timestamps.js"
 import { positiveTokens } from "../token-usage.js"
 import { generateTextWithSession } from "../generate-text.js"
+import { projectSkillRootPaths } from "../../skills/project-skill-roots.js"
 
 import type { CodexNotification, CodexServerRequest } from "./codex-protocol.js"
 import {
@@ -139,6 +146,38 @@ export class CodexAdapter implements HarnessAdapterFactory {
     }
   }
 
+  async discoverSkillRoots(
+    input: SkillDiscoveryInput
+  ): Promise<NativeSkillRoot[]> {
+    const roots: NativeSkillRoot[] = []
+    if (input.projectPath) {
+      const projectRoots = await projectSkillRootPaths(
+        input.projectPath,
+        join(".agents", "skills")
+      )
+      roots.push(
+        ...projectRoots.map((path) => ({
+          path,
+          scope: "project" as const,
+          label: "Codex project skills",
+        }))
+      )
+    }
+    roots.push({
+      path: join(homedir(), ".agents", "skills"),
+      scope: "user",
+      label: "Codex personal skills",
+    })
+    if (process.platform !== "win32") {
+      roots.push({
+        path: "/etc/codex/skills",
+        scope: "admin",
+        label: "Codex administrator skills",
+      })
+    }
+    return roots
+  }
+
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return CodexSession.open(input, signal, this.clientFactory)
   }
@@ -165,6 +204,7 @@ class CodexSession implements HarnessSession {
   readonly #startedPlans = new Set<string>()
   readonly #settledActivities = new Set<string>()
   readonly events = this.#queue
+  readonly skillProvisioning: SkillProvisioningResult[] = []
   #activeApproval?: PendingApproval
   #threadId?: string
   #turnId?: string
@@ -292,23 +332,29 @@ class CodexSession implements HarnessSession {
     this.#turnId = turn.turn.id
   }
 
-  /**
-   * Best effort: the app-server RPC surface is experimental and versioned
-   * with the locally installed codex, so a pack the binary cannot accept
-   * degrades silently instead of blocking the turn.
-   */
   async #offerSkillRoots(): Promise<void> {
     const { skillRoots } = this.input.customization
     if (skillRoots.length === 0) return
-    await this.client
-      .request(
+    try {
+      await this.client.request(
         "skills/extraRoots/set",
         {
           extraRoots: skillRoots.map((root) => root.path),
         },
         jsonValueSchema
       )
-      .catch(() => undefined)
+      this.skillProvisioning.push(
+        ...skillRoots.map((root) => codexProvisioning(root, "configured"))
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const status = /unsupported|method not found/i.test(message)
+        ? "unsupported"
+        : "failed"
+      this.skillProvisioning.push(
+        ...skillRoots.map((root) => codexProvisioning(root, status, message))
+      )
+    }
   }
 
   #onNotification(notification: CodexNotification): void {
@@ -1058,6 +1104,22 @@ function approvalKind(method: string): "command" | "file-change" | undefined {
   if (method === "item/commandExecution/requestApproval") return "command"
   if (method === "item/fileChange/requestApproval") return "file-change"
   return undefined
+}
+
+function codexProvisioning(
+  root: SkillRoot,
+  status: SkillProvisioningResult["status"],
+  message?: string
+): SkillProvisioningResult {
+  const result: SkillProvisioningResult = {
+    rootId: root.id ?? root.path,
+    rootPath: root.path,
+    status,
+    method: "extra-root",
+  }
+  if (root.contentDigest) result.contentDigest = root.contentDigest
+  if (message) result.message = message
+  return result
 }
 
 function readVersion(): Promise<string> {

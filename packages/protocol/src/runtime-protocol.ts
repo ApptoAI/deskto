@@ -23,6 +23,11 @@ import {
   projectSchema,
   workspaceSchema,
 } from "./models.js"
+import {
+  managedSkillDraftSchema,
+  skillDetailsSchema,
+  skillInventorySchema,
+} from "./skill-models.js"
 
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("harness.list"), params: z.object({}) }),
@@ -77,11 +82,24 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ name: z.string().min(1) }),
   }),
   z.object({
-    method: z.literal("pack.import"),
+    method: z.literal("pack.install"),
+    params: z.object({
+      source: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("folder"), path: z.string().min(1) }),
+        z.object({ kind: z.literal("zip"), path: z.string().min(1) }),
+      ]),
+    }),
+  }),
+  z.object({
+    method: z.literal("pack.link"),
     params: z.object({ path: z.string().min(1) }),
   }),
   z.object({
-    method: z.literal("pack.remove"),
+    method: z.literal("pack.unlink"),
+    params: z.object({ packId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("pack.uninstall"),
     params: z.object({ packId: z.string().min(1) }),
   }),
   z.object({
@@ -95,6 +113,29 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   z.object({
     method: z.literal("workspace.listSkills"),
     params: z.object({ workspaceId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("skill.listForProject"),
+    params: z.object({ projectId: z.string().min(1) }),
+  }),
+  z.object({ method: z.literal("skill.listOnComputer"), params: z.object({}) }),
+  z.object({
+    method: z.literal("skill.get"),
+    params: z.object({
+      occurrenceId: z.string().min(1),
+      projectId: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({
+    method: z.literal("skill.createManaged"),
+    params: managedSkillDraftSchema.extend({ packId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("skill.updateManaged"),
+    params: managedSkillDraftSchema.extend({
+      packId: z.string().min(1),
+      directoryName: z.string().min(1),
+    }),
   }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),
   z.object({
@@ -243,10 +284,17 @@ export interface RuntimeResponses {
   "selection.set": z.infer<typeof selectionSchema>
   "pack.list": z.infer<typeof packSchema>[]
   "pack.create": z.infer<typeof packSchema>
-  "pack.import": z.infer<typeof packSchema>
-  "pack.remove": null
+  "pack.install": z.infer<typeof packSchema>
+  "pack.link": z.infer<typeof packSchema>
+  "pack.unlink": null
+  "pack.uninstall": null
   "workspace.setPack": null
   "workspace.listSkills": z.infer<typeof packSkillSchema>[]
+  "skill.listForProject": z.infer<typeof skillInventorySchema>
+  "skill.listOnComputer": z.infer<typeof skillInventorySchema>
+  "skill.get": z.infer<typeof skillDetailsSchema>
+  "skill.createManaged": z.infer<typeof packSkillSchema>
+  "skill.updateManaged": z.infer<typeof packSkillSchema>
   "project.list": z.infer<typeof projectSchema>[]
   "project.add": z.infer<typeof projectSchema>
   "project.move": z.infer<typeof projectSchema>

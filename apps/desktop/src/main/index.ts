@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 
-import { app, BrowserWindow, dialog } from "electron"
+import { app, BrowserWindow, dialog, shell } from "electron"
 import { z } from "zod"
 
 import { ClaudeAdapter, CodexAdapter, createRuntime } from "@deskto/runtime"
@@ -63,6 +63,9 @@ async function openApplication(): Promise<void> {
     packsPath: path.join(app.getPath("userData"), "packs"),
     harnesses: [claudeAdapter, new CodexAdapter()],
     probeGate: cliPathConfigured,
+    fileActions: {
+      trashItem: (targetPath) => shell.trashItem(targetPath),
+    },
   })
   // Assigned before the window opens so a failure below still closes the
   // runtime through the before-quit path.

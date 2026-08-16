@@ -17,10 +17,13 @@
     "@deskto/harness-sdk": "workspace:*",
     "@deskto/protocol": "workspace:*",
     "@deskto/settings": "workspace:*",
+    "yaml": "^2.8.1",
+    "yauzl": "^3.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24",
+    "@types/yauzl": "^3.4.0",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "eslint": "^9",

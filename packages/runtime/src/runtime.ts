@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 
 import type { HarnessAdapterFactory } from "@deskto/harness-sdk"
 import type {
@@ -10,6 +10,7 @@ import type {
 } from "@deskto/protocol"
 
 import { HarnessRegistry } from "./harness-registry.js"
+import { PackManager } from "./packs/pack-manager.js"
 import { RequestRouter } from "./request-router.js"
 import { openDatabase } from "./storage/database.js"
 import { Store } from "./storage/store.js"
@@ -26,6 +27,12 @@ export type RuntimeOptions = {
   harnessRefreshMs?: number
   /** Harness probes wait for this, e.g. until the host rebuilt PATH. */
   probeGate?: Promise<void>
+  /** Host-owned recoverable file deletion, implemented by Electron on desktop. */
+  fileActions?: HostFileActions
+}
+
+export type HostFileActions = {
+  trashItem(path: string): Promise<void>
 }
 
 const defaultHarnessRefreshMs = 5 * 60_000
@@ -39,7 +46,25 @@ export class Runtime implements RuntimeTransport {
 
   constructor(options: RuntimeOptions) {
     const sequences = new ThreadSequences()
+    const packsRoot = resolve(
+      options.packsPath ?? join(dirname(options.databasePath), "packs")
+    )
     this.#store = new Store(openDatabase(options.databasePath), sequences)
+    let packManager: PackManager
+    try {
+      packManager = new PackManager(
+        this.#store.packs,
+        packsRoot,
+        options.fileActions
+      )
+    } catch (error) {
+      try {
+        this.#store.close()
+      } catch {
+        // Preserve the Pack root preparation error.
+      }
+      throw error
+    }
     this.#store.recoverInterrupted()
     const userSettings = new UserSettings(this.#store.settings, () =>
       this.#emit({ type: "settings.changed" })
@@ -76,7 +101,7 @@ export class Runtime implements RuntimeTransport {
       this.#harnesses,
       this.#turns,
       userSettings,
-      options.packsPath ?? join(dirname(options.databasePath), "packs"),
+      packManager,
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),

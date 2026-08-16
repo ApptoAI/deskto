@@ -13,13 +13,14 @@ import {
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import {
-  createPackDirectory,
-  readPackName,
+  readPackContents,
   readPackSkills,
   resolvedDirectory,
-  validatePackDirectory,
 } from "./packs/pack-files.js"
+import { canEditManagedSkills } from "./packs/pack-capabilities.js"
+import type { PackManager } from "./packs/pack-manager.js"
 import { ProjectEntries } from "./project-entries.js"
+import { SkillInventory } from "./skills/skill-inventory.js"
 import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
 import type { WorkspacePatch } from "./storage/workspaces.js"
@@ -48,15 +49,18 @@ export type RouterEvents = {
 
 export class RequestRouter {
   readonly #projectEntries = new ProjectEntries()
+  readonly #skillInventory: SkillInventory
 
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
     private readonly turns: TurnCoordinator,
     private readonly userSettings: UserSettings,
-    private readonly packsRoot: string,
+    private readonly packManager: PackManager,
     private readonly events: RouterEvents
-  ) {}
+  ) {
+    this.#skillInventory = new SkillInventory(store, harnesses)
+  }
 
   async request<M extends RuntimeMethod>(
     request: RequestFor<M>
@@ -168,20 +172,30 @@ export class RequestRouter {
       case "pack.list":
         return this.#packViews()
       case "pack.create": {
-        const name = requiredName(request.params.name)
-        const path = await createPackDirectory(this.packsRoot, name)
-        const row = this.store.packs.add(name, path)
+        const row = await this.packManager.create(request.params.name)
         this.events.packChanged()
         return this.#packView(row)
       }
-      case "pack.import": {
-        const path = await validatePackDirectory(request.params.path)
-        const row = this.store.packs.add(await readPackName(path), path)
+      case "pack.install": {
+        const row =
+          request.params.source.kind === "zip"
+            ? await this.packManager.installZip(request.params.source.path)
+            : await this.packManager.installFolder(request.params.source.path)
         this.events.packChanged()
         return this.#packView(row)
       }
-      case "pack.remove": {
-        this.store.packs.remove(request.params.packId)
+      case "pack.link": {
+        const row = await this.packManager.link(request.params.path)
+        this.events.packChanged()
+        return this.#packView(row)
+      }
+      case "pack.unlink": {
+        this.packManager.unlink(request.params.packId)
+        this.events.packChanged()
+        return null
+      }
+      case "pack.uninstall": {
+        await this.packManager.uninstall(request.params.packId)
         this.events.packChanged()
         return null
       }
@@ -202,6 +216,32 @@ export class RequestRouter {
         return (
           await Promise.all(packs.map((pack) => readPackSkills(pack)))
         ).flat()
+      }
+      case "skill.listForProject":
+        return this.#skillInventory.listForProject(request.params.projectId)
+      case "skill.listOnComputer":
+        return this.#skillInventory.listOnComputer()
+      case "skill.get":
+        return this.#skillInventory.get(
+          request.params.occurrenceId,
+          request.params.projectId
+        )
+      case "skill.createManaged": {
+        const skill = await this.packManager.createSkill(
+          request.params.packId,
+          request.params
+        )
+        this.events.packChanged()
+        return skill
+      }
+      case "skill.updateManaged": {
+        const skill = await this.packManager.updateSkill(
+          request.params.packId,
+          request.params.directoryName,
+          request.params
+        )
+        this.events.packChanged()
+        return skill
       }
       case "project.list":
         return this.store.projects.list()
@@ -364,9 +404,12 @@ export class RequestRouter {
   }
 
   async #packView(row: PackRow, workspaceIds?: string[]) {
+    const contents = await readPackContents(row)
     return {
       ...toPackRecord(row),
-      skills: await readPackSkills(row),
+      canEditSkills: canEditManagedSkills(row),
+      skills: contents.resolvedSkills.map(({ skill }) => skill),
+      occurrences: contents.occurrences,
       workspaceIds: workspaceIds ?? this.store.packs.workspaceIdsFor(row.id),
     }
   }
