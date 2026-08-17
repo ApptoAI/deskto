@@ -22,6 +22,7 @@ import {
   type SkillDiscoveryInput,
   type SkillProvisioningResult,
   type SkillRoot,
+  type SessionMcpServer,
 } from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
@@ -44,7 +45,7 @@ import {
   getString,
   parseJsonObject,
 } from "./codex-protocol.js"
-import { JsonlClient } from "./jsonl-client.js"
+import { JsonlClient, type JsonlClientOptions } from "./jsonl-client.js"
 
 const codexModelListSchema = z.object({
   data: z.array(jsonValueSchema),
@@ -78,10 +79,14 @@ export interface CodexClient {
   close(): void
 }
 
-export type CodexClientFactory = (command: string, cwd: string) => CodexClient
+export type CodexClientFactory = (
+  command: string,
+  cwd: string,
+  options?: JsonlClientOptions
+) => CodexClient
 
-const createCodexClient: CodexClientFactory = (command, cwd) =>
-  new JsonlClient(command, cwd)
+const createCodexClient: CodexClientFactory = (command, cwd, options) =>
+  new JsonlClient(command, cwd, options)
 
 type PendingApproval = {
   id: string
@@ -232,7 +237,11 @@ class CodexSession implements HarnessSession {
     signal: AbortSignal,
     clientFactory: CodexClientFactory
   ): Promise<CodexSession> {
-    const client = clientFactory("codex", input.projectPath)
+    const client = clientFactory(
+      "codex",
+      input.projectPath,
+      codexMcpLaunchOptions(input.customization.mcpServers ?? [])
+    )
     const session = new CodexSession(client, input)
     const abort = () => client.close()
     signal.addEventListener("abort", abort, { once: true })
@@ -691,6 +700,33 @@ export function codexTurnInput(
         : { type: "mention", name: reference.name, path: reference.path }
     ),
   ]
+}
+
+export function codexMcpLaunchOptions(
+  servers: readonly SessionMcpServer[]
+): JsonlClientOptions {
+  if (servers.length === 0) return {}
+  const args: string[] = []
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  servers.forEach((server, index) => {
+    if (!/^[A-Za-z0-9_-]+$/.test(server.id)) {
+      throw new Error(`Invalid MCP server id: ${server.id}`)
+    }
+    const prefix = `mcp_servers.${server.id}`
+    args.push("-c", `${prefix}.url=${JSON.stringify(server.url)}`)
+    args.push("-c", `${prefix}.required=true`)
+    if (server.authorization) {
+      const variable = `DESKTO_MCP_${index}_TOKEN`
+      env[variable] = server.authorization.token
+      args.push(
+        "-c",
+        `${prefix}.bearer_token_env_var=${JSON.stringify(variable)}`,
+        "-c",
+        `shell_environment_policy.set.${variable}=""`
+      )
+    }
+  })
+  return { args, env }
 }
 
 async function initialize(client: CodexClient): Promise<void> {

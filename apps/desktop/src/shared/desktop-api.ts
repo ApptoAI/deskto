@@ -19,6 +19,30 @@ export type ResultRef = {
   artifactId: string
 }
 
+export type BrowserBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type BrowserViewState = {
+  threadId: string
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  openRequested: boolean
+  error?: string
+}
+
+export type BrowserEvent =
+  | { type: "state"; state: BrowserViewState }
+  | { type: "open-requested"; threadId: string }
+
+export type BrowserAction = "back" | "forward" | "reload"
+
 export interface DesktopApi {
   runtime: {
     request<M extends RuntimeMethod>(
@@ -38,4 +62,12 @@ export interface DesktopApi {
   revealFile(result: ResultRef): Promise<void>
   /** Saves a result somewhere else; false when the user cancelled. */
   saveFileCopy(result: ResultRef, suggestedName: string): Promise<boolean>
+  browser: {
+    show(threadId: string, bounds: BrowserBounds): Promise<BrowserViewState>
+    hide(threadId: string): Promise<void>
+    state(threadId: string): Promise<BrowserViewState>
+    navigate(threadId: string, url: string): Promise<BrowserViewState>
+    action(threadId: string, action: BrowserAction): Promise<BrowserViewState>
+    subscribe(listener: (event: BrowserEvent) => void): () => void
+  }
 }

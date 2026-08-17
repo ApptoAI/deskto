@@ -306,6 +306,26 @@ class ClaudeSession implements HarnessSession {
       options.effort = claudeEffort(input.executionProfile.effort)
     }
     if (pluginShims.length > 0) options.plugins = pluginShims
+    const mcpServers = input.customization.mcpServers ?? []
+    if (mcpServers.length > 0) {
+      options.mcpServers = Object.fromEntries(
+        mcpServers.map((server) => {
+          if (server.authorization) {
+            return [
+              server.id,
+              {
+                type: "http" as const,
+                url: server.url,
+                headers: {
+                  Authorization: `Bearer ${server.authorization.token}`,
+                },
+              },
+            ]
+          }
+          return [server.id, { type: "http" as const, url: server.url }]
+        })
+      )
+    }
     if (executablePath) options.pathToClaudeCodeExecutable = executablePath
     if (input.providerSessionId) options.resume = input.providerSessionId
     this.#query = queryFactory({ prompt: claudePrompt(input), options })

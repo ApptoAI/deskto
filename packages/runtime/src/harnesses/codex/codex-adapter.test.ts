@@ -7,6 +7,7 @@ import {
   CodexAdapter,
   codexActivity,
   codexLimitResetAt,
+  codexMcpLaunchOptions,
   codexPlanSteps,
   codexTurnInput,
   type CodexClient,
@@ -106,6 +107,30 @@ describe("codexTurnInput", () => {
         path: "/packs/review/SKILL.md",
       },
     ])
+  })
+})
+
+describe("Codex MCP launch options", () => {
+  it("injects private MCP auth without exposing the token to shell commands", () => {
+    const options = codexMcpLaunchOptions([
+      {
+        id: "deskto_browser",
+        url: "http://127.0.0.1:4312/mcp",
+        authorization: { type: "bearer", token: "secret-token" },
+      },
+    ])
+
+    expect(options.args).toEqual([
+      "-c",
+      'mcp_servers.deskto_browser.url="http://127.0.0.1:4312/mcp"',
+      "-c",
+      "mcp_servers.deskto_browser.required=true",
+      "-c",
+      'mcp_servers.deskto_browser.bearer_token_env_var="DESKTO_MCP_0_TOKEN"',
+      "-c",
+      'shell_environment_policy.set.DESKTO_MCP_0_TOKEN=""',
+    ])
+    expect(options.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
   })
 })
 

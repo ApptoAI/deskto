@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 import {
+  browserActionChannel,
+  browserEventChannel,
+  browserHideChannel,
+  browserNavigateChannel,
+  browserShowChannel,
+  browserStateChannel,
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
@@ -37,6 +43,24 @@ const api: DesktopApi = {
   revealFile: (result) => ipcRenderer.invoke(revealFileChannel, result),
   saveFileCopy: (result, suggestedName) =>
     ipcRenderer.invoke(saveFileCopyChannel, result, suggestedName),
+  browser: {
+    show: (threadId, bounds) =>
+      ipcRenderer.invoke(browserShowChannel, threadId, bounds),
+    hide: (threadId) => ipcRenderer.invoke(browserHideChannel, threadId),
+    state: (threadId) => ipcRenderer.invoke(browserStateChannel, threadId),
+    navigate: (threadId, url) =>
+      ipcRenderer.invoke(browserNavigateChannel, threadId, url),
+    action: (threadId, action) =>
+      ipcRenderer.invoke(browserActionChannel, threadId, action),
+    subscribe: (listener) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        value: Parameters<typeof listener>[0]
+      ) => listener(value)
+      ipcRenderer.on(browserEventChannel, handler)
+      return () => ipcRenderer.removeListener(browserEventChannel, handler)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld("deskto", api)

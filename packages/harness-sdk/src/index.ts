@@ -26,6 +26,7 @@ export type {
   PlanStepStatus,
   ReasoningEffort,
   SessionCustomization,
+  SessionMcpServer,
   SkillDiscoveryInput,
   SkillProvisioningMethod,
   SkillProvisioningResult,

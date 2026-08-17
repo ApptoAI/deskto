@@ -12,6 +12,7 @@ import type {
 import { HarnessRegistry } from "./harness-registry.js"
 import { PackManager } from "./packs/pack-manager.js"
 import { RequestRouter } from "./request-router.js"
+import type { SessionToolProvider } from "./session-tools.js"
 import { openDatabase } from "./storage/database.js"
 import { Store } from "./storage/store.js"
 import { ThreadSequences } from "./thread-sequences.js"
@@ -29,6 +30,8 @@ export type RuntimeOptions = {
   probeGate?: Promise<void>
   /** Host-owned recoverable file deletion, implemented by Electron on desktop. */
   fileActions?: HostFileActions
+  /** App-owned MCP tools leased separately for every Turn. */
+  sessionTools?: SessionToolProvider[]
 }
 
 export type HostFileActions = {
@@ -83,6 +86,7 @@ export class Runtime implements RuntimeTransport {
       this.#store,
       this.#harnesses,
       userSettings,
+      options.sessionTools ?? [],
       {
         changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
         delta: (threadId, change) =>

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react"
 
-export type PanelSurface = "files" | "activities"
+export type PanelSurface = "files" | "activities" | "browser"
 
 export type PanelState = {
   surface: PanelSurface
@@ -90,6 +90,12 @@ export function showActivities(threadId: string): void {
   const current = stateFor(threadId)
   if (current.surface === "activities") return
   update(threadId, { ...current, surface: "activities" })
+}
+
+export function showBrowser(threadId: string): void {
+  const current = stateFor(threadId)
+  if (current.surface === "browser") return
+  update(threadId, { ...current, surface: "browser" })
 }
 
 /** Clear only a selection whose file disappeared from the task. */
