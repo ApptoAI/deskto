@@ -2,50 +2,56 @@ import { createContext, useContext, useMemo, type ReactNode } from "react"
 import type { Artifact, TurnOutput } from "@deskto/protocol"
 
 /**
- * Lets the conversation open a result without knowing how the side panel
- * works. A file mentioned in an Activity is the same thing as a row in the
- * results list, so clicking either lands in the same tab.
+ * Lets the conversation open a captured file without knowing how the task
+ * panel works. Activity links and answer buttons both open the Files view.
  */
-type ResultsAccess = {
+type FilesAccess = {
   outputs: TurnOutput[]
   projectPath: string
   open: (artifactId: string) => void
+  openAll: () => void
 }
 
-const ResultsContext = createContext<ResultsAccess | null>(null)
+const FilesContext = createContext<FilesAccess | null>(null)
 
-export function ResultsProvider({
+export function FilesProvider({
   outputs,
   projectPath,
   onOpen,
+  onOpenAll,
   children,
 }: {
   outputs: TurnOutput[]
   projectPath: string
   onOpen: (artifactId: string) => void
+  onOpenAll: () => void
   children: ReactNode
 }) {
   const access = useMemo(
-    () => ({ outputs, projectPath, open: onOpen }),
-    [outputs, projectPath, onOpen]
+    () => ({ outputs, projectPath, open: onOpen, openAll: onOpenAll }),
+    [outputs, projectPath, onOpen, onOpenAll]
   )
   return (
-    <ResultsContext.Provider value={access}>{children}</ResultsContext.Provider>
+    <FilesContext.Provider value={access}>{children}</FilesContext.Provider>
   )
 }
 
+export function useFileActions(): Pick<FilesAccess, "open" | "openAll"> {
+  const access = useContext(FilesContext)
+  return access ?? { open: () => {}, openAll: () => {} }
+}
+
 /**
- * The result behind a path an Activity reported, and the action that opens
- * it. Both are undefined when the path is not a captured result, which is
- * the normal case for a file an agent only read.
+ * The Artifact behind a path an Activity reported, and the action that opens
+ * it. Both are absent when the agent only read the file.
  */
-export function useResultAt(path: string): {
+export function useFileAt(path: string): {
   artifact: Artifact
   open: () => void
 } | null {
-  const access = useContext(ResultsContext)
+  const access = useContext(FilesContext)
   if (!access) return null
-  const artifact = matchResult(access.outputs, path, access.projectPath)
+  const artifact = matchFile(access.outputs, path, access.projectPath)
   if (!artifact) return null
   return { artifact, open: () => access.open(artifact.id) }
 }
@@ -58,12 +64,12 @@ export function useResultAt(path: string): {
  *
  * The looser passes remain for paths the root cannot explain — a Harness
  * reporting through a symlinked or differently-cased root. They are guesses,
- * so they count only when exactly one result fits; otherwise the chip would
+ * so they count only when exactly one Artifact fits; otherwise the chip would
  * open someone else's file. An ambiguous pass ends the search rather than
  * falling through, since a vaguer rule cannot resolve what a sharper one
  * could not.
  */
-export function matchResult(
+export function matchFile(
   outputs: TurnOutput[],
   path: string,
   projectPath: string

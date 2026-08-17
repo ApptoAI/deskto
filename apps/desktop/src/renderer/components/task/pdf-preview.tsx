@@ -40,7 +40,7 @@ export function PdfPreview({ dataBase64 }: { dataBase64: string }) {
     embed.type = "application/pdf"
     embed.src = url
     embed.className = "size-full border-0 bg-white"
-    embed.setAttribute("aria-label", "PDF result preview")
+    embed.setAttribute("aria-label", "PDF file preview")
     host.append(embed)
 
     return () => {

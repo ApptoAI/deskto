@@ -29,16 +29,16 @@ import { StatusPanel } from "../status-panel.js"
 import { ActivityAside } from "./activity-aside.js"
 import { ApprovalPanel } from "./approval-panel.js"
 import { MessageStream } from "./message-stream.js"
-import {
-  openActivityTab,
-  openResultTab,
-  retainResultTabs,
-  useOpenNewestResult,
-} from "./panel-tabs.js"
-import { ResultsProvider } from "./results-context.js"
+import { FilesProvider } from "./files-context.js"
 import { TaskPanel } from "./task-panel.js"
+import {
+  retainSelectedFile,
+  showActivities,
+  showFile,
+  showFilesOverview,
+} from "./task-panel-state.js"
 
-const noResults: TurnOutput[] = []
+const noOutputs: TurnOutput[] = []
 
 export function TaskView({
   threadId,
@@ -71,46 +71,57 @@ export function TaskView({
     if (needsVisitStamp) client.markThreadVisited(threadId).catch(() => {})
   }, [client, threadId, needsVisitStamp])
 
-  // The results live here rather than inside the panel: the conversation
-  // needs them to turn a reported file into a link, and the header needs
-  // their count whether the panel is open or not.
-  const loadResults = useCallback(
-    () => client.listResults(threadId),
+  // Current files feed the Files view and activity links. The complete output
+  // history separately attaches files to the Turn that produced them.
+  const loadFiles = useCallback(
+    () => client.listFiles(threadId),
     [client, threadId]
   )
-  const results = useRuntimeQuery(loadResults)
-  const revalidateResults = results.revalidate
+  const loadTurnOutputs = useCallback(
+    () => client.listTurnOutputs(threadId),
+    [client, threadId]
+  )
+  const files = useRuntimeQuery(loadFiles)
+  const turnOutputs = useRuntimeQuery(loadTurnOutputs)
+  const revalidateFiles = files.revalidate
+  const revalidateTurnOutputs = turnOutputs.revalidate
   useRuntimeEvent(
     "artifact.changed",
     useCallback(
       (event) => {
-        if (event.threadId === threadId) revalidateResults()
+        if (event.threadId !== threadId) return
+        revalidateFiles()
+        revalidateTurnOutputs()
       },
-      [revalidateResults, threadId]
+      [revalidateFiles, revalidateTurnOutputs, threadId]
     )
   )
-  const resultList =
-    results.state.status === "ready" ? results.state.data : undefined
+  const fileList = files.state.status === "ready" ? files.state.data : undefined
   useEffect(() => {
-    if (resultList) {
-      retainResultTabs(
+    if (fileList) {
+      retainSelectedFile(
         threadId,
-        resultList.map((output) => output.artifact.id)
+        fileList.map((output) => output.artifact.id)
       )
     }
-  }, [resultList, threadId])
-  useOpenNewestResult(threadId, resultList?.[0]?.artifact.id, panelOpen)
+  }, [fileList, threadId])
+  const outputHistory =
+    turnOutputs.state.status === "ready" ? turnOutputs.state.data : noOutputs
 
-  const openResult = useCallback(
+  const openFile = useCallback(
     (artifactId: string) => {
       setPanelOpen(true)
-      openResultTab(threadId, artifactId)
+      showFile(threadId, artifactId)
     },
     [threadId]
   )
+  const openFiles = useCallback(() => {
+    setPanelOpen(true)
+    showFilesOverview(threadId)
+  }, [threadId])
   const openActivity = useCallback(() => {
     setPanelOpen(true)
-    openActivityTab(threadId)
+    showActivities(threadId)
   }, [threadId])
 
   if (state.status === "loading" || state.status === "idle") {
@@ -199,12 +210,7 @@ export function TaskView({
             onClick={() => setPanelOpen((open) => !open)}
           >
             <PanelRightIcon data-icon="inline-start" />
-            Results
-            {resultList && resultList.length > 0 ? (
-              <span className="text-muted-foreground tabular-nums">
-                {resultList.length}
-              </span>
-            ) : null}
+            Panel
           </Button>
         </header>
 
@@ -216,22 +222,39 @@ export function TaskView({
                 description="Write the first message to start this task."
               />
             ) : (
-              <ResultsProvider
-                outputs={resultList ?? noResults}
+              <FilesProvider
+                outputs={fileList ?? noOutputs}
                 projectPath={projectPath}
-                onOpen={openResult}
+                onOpen={openFile}
+                onOpenAll={openFiles}
               >
                 <MessageStream
                   messages={messages}
                   activities={activities}
                   running={active}
+                  outputs={outputHistory}
                 />
-              </ResultsProvider>
+              </FilesProvider>
             )}
             <div className="shrink-0 px-6 pb-6">
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
                 {folderError ? <InlineError message={folderError} /> : null}
                 {profileError ? <InlineError message={profileError} /> : null}
+                {turnOutputs.state.status === "error" ? (
+                  <div className="flex items-center gap-2">
+                    <InlineError
+                      className="min-w-0 flex-1"
+                      message={`Files attached to earlier answers could not be loaded. ${turnOutputs.state.message}`}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={revalidateTurnOutputs}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : null}
 
                 {pendingApproval ? (
                   <ApprovalPanel
@@ -302,7 +325,7 @@ export function TaskView({
         <TaskPanel
           threadId={threadId}
           activities={activities}
-          results={results.state}
+          files={files.state}
           onClose={() => setPanelOpen(false)}
         />
       ) : null}

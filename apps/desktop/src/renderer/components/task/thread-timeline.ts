@@ -1,4 +1,4 @@
-import type { Activity, Message } from "@deskto/protocol"
+import type { Activity, Message, TurnOutput } from "@deskto/protocol"
 
 import { activityEndedAt, toActivityTree } from "./activity-tree.js"
 
@@ -34,6 +34,7 @@ export type TimelineRow =
       items: FoldedItem[]
     }
   | { kind: "live"; key: string; items: LiveItem[] }
+  | { kind: "files"; key: string; outputs: TurnOutput[] }
 
 type StreamEntry =
   | { kind: "message"; turnKey: string; order: number; message: Message }
@@ -51,10 +52,12 @@ export function buildTimeline({
   messages,
   activities,
   running,
+  outputs = [],
 }: {
   messages: Message[]
   activities: Activity[]
   running: boolean
+  outputs?: TurnOutput[]
 }): TimelineRow[] {
   // Only tool work reaches the thread. A subagent's own calls belong to that
   // subagent, and a plan and its agents are read beside the conversation.
@@ -70,6 +73,12 @@ export function buildTimeline({
   const segments = toSegments(
     interleaveTurns(messages, roots.filter(isTranscriptActivity))
   )
+  const outputsByTurn = new Map<string, TurnOutput[]>()
+  for (const output of outputs) {
+    const existing = outputsByTurn.get(output.turnId)
+    if (existing) existing.push(output)
+    else outputsByTurn.set(output.turnId, [output])
+  }
 
   return segments.flatMap((segment, index) => {
     const last = index === segments.length - 1
@@ -84,7 +93,8 @@ export function buildTimeline({
         : settledRows(
             segment,
             worked(segment, workingTurns),
-            activityEndFor(segment, activityEnds)
+            activityEndFor(segment, activityEnds),
+            outputsByTurn.get(segmentTurnKey(segment) ?? "") ?? []
           )),
     ]
   })
@@ -217,7 +227,8 @@ function liveRows(segment: Segment): TimelineRow[] {
 function settledRows(
   segment: Segment,
   hadWork: boolean,
-  activityEnd: string | undefined
+  activityEnd: string | undefined,
+  outputs: TurnOutput[]
 ): TimelineRow[] {
   const folded: FoldedItem[] = []
   const tail: TimelineRow[] = []
@@ -270,7 +281,17 @@ function settledRows(
   const answer: TimelineRow[] = reply
     ? [{ kind: "message", key: reply.id, message: reply }]
     : []
-  return [...fold, ...tail, ...answer]
+  const files: TimelineRow[] =
+    reply && outputs.length > 0
+      ? [
+          {
+            kind: "files",
+            key: `files:${segmentTurnKey(segment) ?? reply.id}`,
+            outputs,
+          },
+        ]
+      : []
+  return [...fold, ...tail, ...answer, ...files]
 }
 
 /** The answer a Turn ended on: its last assistant message with something to say. */

@@ -3,6 +3,9 @@
 - Status: accepted
 - Date: 2026-08-16
 
+ADR 0015 supersedes only the dynamic Results tabs described here. The compact
+Activity column and the full Activity surface remain unchanged.
+
 ## Context
 
 A Thread printed everything a Turn did, forever. Twenty tool rows, a plan
@@ -38,7 +41,7 @@ sees.
 **Plans and subagents leave the conversation entirely.** Not as a folded row,
 not as a pointer — they are gone from the transcript. A plan is a document an
 agent rewrites and a subagent is a process that is still running; neither is
-something that *happened at a point in the conversation*, which is the only
+something that _happened at a point in the conversation_, which is the only
 thing a transcript is good at holding. They are the task's current state, and
 state belongs beside the transcript rather than inside it.
 
@@ -62,7 +65,7 @@ working while a spreadsheet is in front of it.
 The conversation column widens from `max-w-3xl` to `max-w-4xl`. It carries
 prose now, not nested cards.
 
-Work a Turn did *inside* a subagent never reaches the conversation either. A
+Work a Turn did _inside_ a subagent never reaches the conversation either. A
 child Activity belongs to its parent, and the parent is in the column.
 
 ## Consequences

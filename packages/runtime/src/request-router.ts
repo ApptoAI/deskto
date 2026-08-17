@@ -352,6 +352,10 @@ export class RequestRouter {
       }
       case "artifact.list":
         return this.store.artifacts.listForThread(request.params.threadId)
+      case "artifact.listOutputs":
+        return this.store.artifacts.listOutputsForThread(
+          request.params.threadId
+        )
       case "artifact.preview":
         return this.store.artifacts.preview(
           request.params.threadId,

@@ -3,7 +3,7 @@ import { EditorToolbar } from "./editor-toolbar.js"
 
 const identity = (content: string) => content
 
-/** Plain and Markdown results are edited as their own source text. */
+/** Plain and Markdown files are edited as their own source text. */
 export function TextEditor({
   content,
   saving,
@@ -28,7 +28,7 @@ export function TextEditor({
         value={draft}
         spellCheck={false}
         onChange={(event) => setDraft(event.target.value)}
-        aria-label="Edit this result"
+        aria-label="Edit this file"
         className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-xs leading-relaxed outline-none"
       />
     </div>

@@ -11,7 +11,7 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
     documentWorkerSuccessSchema,
     sanitizeDocument,
     "Document worker failed",
-    "Document worker returned an unreadable result"
+    "Document preview worker returned unreadable data"
   )
 
   if (state.status === "error") {

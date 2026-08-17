@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 
 /**
- * What every result editor receives. The Surface holds one draft per open
+ * What every file editor receives. The Surface holds one draft per open
  * tab and writes only when the user asks, so an editor never has to know how
  * the file reaches the Project folder.
  */

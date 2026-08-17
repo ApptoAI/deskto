@@ -271,8 +271,15 @@ export class RuntimeClient {
     return this.request({ method: "thread.delete", params: { threadId } })
   }
 
-  listResults(threadId: string) {
+  listFiles(threadId: string) {
     return this.request({ method: "artifact.list", params: { threadId } })
+  }
+
+  listTurnOutputs(threadId: string) {
+    return this.request({
+      method: "artifact.listOutputs",
+      params: { threadId },
+    })
   }
 
   previewArtifact(threadId: string, artifactId: string) {

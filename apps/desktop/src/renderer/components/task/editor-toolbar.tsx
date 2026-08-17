@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { Button } from "@workspace/ui/components/button"
 
 /**
- * Shared by every result editor so saving reads the same way whatever the
+ * Shared by every file editor so saving reads the same way whatever the
  * format is: format-specific controls on the left, discard and save on the
  * right, and no automatic write behind the user's back.
  */

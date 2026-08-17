@@ -3,6 +3,9 @@
 - Status: accepted
 - Date: 2026-08-16
 
+The tab-navigation part of this decision is superseded by ADR 0015. File
+actions, editing, preview safety, and Runtime ownership remain in force.
+
 ## Context
 
 ADR 0010 gave a task a durable record for every file its agents produced and

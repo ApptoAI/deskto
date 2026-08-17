@@ -22,10 +22,10 @@ import {
  */
 export const ActivityPanel = memo(function ActivityPanel({
   summary,
-  onOpenResults,
+  onOpenFiles,
 }: {
   summary: ActivitySummary
-  onOpenResults: () => void
+  onOpenFiles: () => void
 }) {
   const { agents, plan, working } = summary
   const settled = agents.length - working
@@ -40,12 +40,12 @@ export const ActivityPanel = memo(function ActivityPanel({
           with their own tool calls.{" "}
           <button
             type="button"
-            onClick={onOpenResults}
+            onClick={onOpenFiles}
             className="cursor-pointer underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             Files it changed
           </button>{" "}
-          open in their own tabs.
+          are collected in the Files view.
         </p>
       </div>
     )
