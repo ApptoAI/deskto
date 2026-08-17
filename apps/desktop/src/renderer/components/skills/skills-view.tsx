@@ -1,15 +1,36 @@
 import { useCallback, useMemo, useState } from "react"
+import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
+import FileArchiveIcon from "lucide-react/dist/esm/icons/file-archive"
+import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
+import PlusIcon from "lucide-react/dist/esm/icons/plus"
+import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
+import SearchIcon from "lucide-react/dist/esm/icons/search"
 import type {
+  ManagedSkillDraft,
   Pack,
   Project,
   SkillInventory,
-  SkillOccurrence,
   Workspace,
 } from "@deskto/protocol"
-import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
 
 import { Button } from "@workspace/ui/components/button"
-import { cn } from "@workspace/ui/lib/utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
+import { Input } from "@workspace/ui/components/input"
 
 import { InlineError } from "../inline-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -18,255 +39,446 @@ import {
   type RuntimeQuery,
 } from "../../runtime/use-runtime-query.js"
 import { usePackChanged } from "../../runtime/use-pack-changed.js"
-import { PacksPanel, type PackActions } from "./packs-panel.js"
-import { SkillDetailsDialog } from "./skill-details-dialog.js"
+import { CreateSkillDialog } from "./create-skill-dialog.js"
+import {
+  buildSkillCatalog,
+  resolveSkillCatalogItem,
+  type CatalogOccurrence,
+  type SkillCatalogItem,
+  type SkillCatalogSelection,
+} from "./skill-catalog.js"
+import { SkillDetailsPanel } from "./skill-details-panel.js"
 import { SkillList } from "./skill-list.js"
-import { skillsTabOrder, skillsTabs, type SkillsTab } from "./skills-tabs.js"
+import {
+  isSkillsFilter,
+  skillsFilterOrder,
+  skillsFilters,
+  type SkillsFilter,
+} from "./skills-filters.js"
+import { PacksPanel, type PackActions } from "./packs-panel.js"
 
 export function SkillsView({
-  tab,
+  filter,
   project,
   workspace,
   packs,
   packActions,
-  onSelectTab,
+  onCreateSkill,
+  onSelectFilter,
 }: {
-  tab: SkillsTab
+  filter: SkillsFilter
   project: Project | null
   workspace: Workspace | null
   packs: RuntimeQuery<Pack[]>
   packActions: PackActions
-  onSelectTab: (tab: SkillsTab) => void
+  onCreateSkill: (draft: ManagedSkillDraft) => Promise<void>
+  onSelectFilter: (filter: SkillsFilter) => void
 }) {
   const client = useRuntimeClient()
   const projectId = project?.id ?? null
-  const [selection, setSelection] = useState<{
-    occurrence: SkillOccurrence
-    tab: SkillsTab
-    projectId: string | null
-  } | null>(null)
-  const selected =
-    selection?.tab === tab && selection.projectId === projectId
-      ? selection.occurrence
-      : null
+  const workspaceId = workspace?.id ?? null
+  const [query, setQuery] = useState("")
+  const [selection, setSelection] = useState<SkillCatalogSelection | null>(null)
+  const [creatingSkill, setCreatingSkill] = useState(false)
+  const [managingPacks, setManagingPacks] = useState(false)
+  const [runningAction, setRunningAction] = useState<string | null>(null)
 
-  const loadProjectSkills = useMemo(
+  const loadInventory = useMemo(
     () =>
-      tab === "project" && projectId
+      projectId
         ? () => client.listSkillsForProject(projectId)
-        : null,
-    [client, projectId, tab]
+        : workspaceId
+          ? () => client.listSkillsForWorkspace(workspaceId)
+          : () => client.listSkillsOnComputer(),
+    [client, projectId, workspaceId]
   )
-  const projectSkills = useRuntimeQuery(loadProjectSkills)
-
-  const loadComputerSkills = useMemo(
-    () => (tab === "computer" ? () => client.listSkillsOnComputer() : null),
-    [client, tab]
+  const inventory = useRuntimeQuery(loadInventory)
+  const inventoryData =
+    inventory.state.status === "ready" ? inventory.state.data : null
+  const effectiveFilter =
+    filter === "project" && !project
+      ? "computer"
+      : filter === "workspace" && !workspace
+        ? "all"
+        : filter
+  const items = useMemo(
+    () =>
+      inventoryData
+        ? buildSkillCatalog(inventoryData, effectiveFilter, query)
+        : [],
+    [inventoryData, effectiveFilter, query]
   )
-  const computerSkills = useRuntimeQuery(loadComputerSkills)
+  const selectedItem = resolveSkillCatalogItem(items, selection)
+  const selectedOccurrence = selectedItem
+    ? (selectedItem.occurrences.find(
+        ({ occurrence }) => occurrence.id === selection?.occurrenceId
+      ) ?? selectedItem.primary)
+    : null
+  const selectedOccurrenceId = selectedOccurrence?.occurrence.id ?? null
 
-  const detailsProjectId = tab === "project" ? projectId : undefined
   const loadDetails = useMemo(
     () =>
-      selected
-        ? () => client.getSkill(selected.id, detailsProjectId ?? undefined)
+      selectedOccurrenceId
+        ? () =>
+            client.getSkill(
+              selectedOccurrenceId,
+              projectId
+                ? { projectId }
+                : workspaceId
+                  ? { workspaceId }
+                  : undefined
+            )
         : null,
-    [client, detailsProjectId, selected]
+    [client, projectId, selectedOccurrenceId, workspaceId]
   )
   const details = useRuntimeQuery(loadDetails)
 
-  const revalidateProjectSkills = projectSkills.revalidate
-  const revalidateComputerSkills = computerSkills.revalidate
+  const revalidateInventory = inventory.revalidate
   usePackChanged(
-    useCallback(() => {
-      revalidateProjectSkills()
-      revalidateComputerSkills()
-    }, [revalidateComputerSkills, revalidateProjectSkills])
+    useCallback(() => revalidateInventory(), [revalidateInventory])
   )
 
-  const inventory =
-    tab === "project"
-      ? projectSkills
-      : tab === "computer"
-        ? computerSkills
-        : null
-  const readyInventory =
-    inventory?.state.status === "ready" ? inventory.state.data : null
-  const selectedSource = selected
-    ? readyInventory?.sources.find((source) => source.id === selected.sourceId)
-    : undefined
-
-  function selectTab(nextTab: SkillsTab) {
-    setSelection(null)
-    onSelectTab(nextTab)
+  function selectItem(item: SkillCatalogItem) {
+    setSelection({
+      itemKey: item.key,
+      occurrenceId: item.primary.occurrence.id,
+    })
   }
 
-  function selectOccurrence(occurrence: SkillOccurrence) {
-    setSelection({ occurrence, tab, projectId })
+  function selectOccurrence(occurrence: CatalogOccurrence) {
+    if (!selectedItem) return
+    setSelection({
+      itemKey: selectedItem.key,
+      occurrenceId: occurrence.occurrence.id,
+    })
   }
 
-  function moveTabFocus(currentTab: SkillsTab, direction: -1 | 1) {
-    const currentIndex = skillsTabOrder.indexOf(currentTab)
-    const nextIndex =
-      (currentIndex + direction + skillsTabOrder.length) % skillsTabOrder.length
-    const nextTab = skillsTabOrder[nextIndex]!
-    selectTab(nextTab)
-    document.getElementById(`skills-tab-${nextTab}`)?.focus()
+  async function runAction(key: string, action: () => Promise<void>) {
+    setRunningAction(key)
+    try {
+      await action()
+    } catch {
+      // Workbench shows mutation failures in its error strip.
+    } finally {
+      setRunningAction(null)
+    }
   }
 
   return (
     <>
       <header className="drag-region h-10 shrink-0" />
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
-        <div className="mx-auto w-full max-w-4xl">
-          <div className="flex items-start justify-between gap-4">
+      <div className="min-h-0 flex-1 px-5 pb-5">
+        <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
+          <div className="flex shrink-0 items-start justify-between gap-4 pb-5">
             <div>
               <h1 className="font-heading display-sm">Skills</h1>
               <p className="pt-1 text-sm text-muted-foreground">
-                See which instructions your agents can find and manage shared
-                Packs.
+                Instructions your agents can use for repeatable work.
               </p>
             </div>
-            {inventory ? (
+            <div className="no-drag flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
-                onClick={inventory.revalidate}
+                onClick={() => setManagingPacks(true)}
               >
-                <RefreshCwIcon data-icon="inline-start" />
-                Refresh
+                Manage Packs
               </Button>
-            ) : null}
+              <AddSkillMenu
+                disabled={!workspace || runningAction !== null}
+                onCreate={() => setCreatingSkill(true)}
+                onInstallFolder={() =>
+                  void runAction("install-folder", packActions.onInstallFolder)
+                }
+                onInstallZip={() =>
+                  void runAction("install-zip", packActions.onInstallZip)
+                }
+                onLink={() => void runAction("link", packActions.onLink)}
+              />
+            </div>
           </div>
 
-          <div
-            role="tablist"
-            aria-label="Skills"
-            className="mt-6 flex gap-1 border-b border-border"
-          >
-            {skillsTabOrder.map((id) => (
-              <button
-                key={id}
-                id={`skills-tab-${id}`}
-                type="button"
-                role="tab"
-                aria-selected={id === tab}
-                aria-controls={`skills-panel-${id}`}
-                tabIndex={id === tab ? 0 : -1}
-                onClick={() => selectTab(id)}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowLeft") {
-                    event.preventDefault()
-                    moveTabFocus(id, -1)
-                  } else if (event.key === "ArrowRight") {
-                    event.preventDefault()
-                    moveTabFocus(id, 1)
-                  } else if (event.key === "Home") {
-                    event.preventDefault()
-                    selectTab(skillsTabOrder[0]!)
-                    document
-                      .getElementById(`skills-tab-${skillsTabOrder[0]!}`)
-                      ?.focus()
-                  } else if (event.key === "End") {
-                    event.preventDefault()
-                    const lastTab = skillsTabOrder.at(-1)!
-                    selectTab(lastTab)
-                    document.getElementById(`skills-tab-${lastTab}`)?.focus()
-                  }
-                }}
-                className={cn(
-                  "no-drag -mb-px border-b-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:rounded-t-md focus-visible:ring-2 focus-visible:ring-ring",
-                  id === tab
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {skillsTabs[id].label}
-              </button>
-            ))}
-          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-background">
+            <aside className="flex min-h-0 flex-col border-r border-border bg-chrome/45">
+              <div className="space-y-2 border-b border-border p-3">
+                <div className="relative">
+                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search skills..."
+                    aria-label="Search skills"
+                    className="bg-background pl-8"
+                  />
+                </div>
+                <SkillsFilterMenu
+                  value={effectiveFilter}
+                  projectAvailable={project !== null}
+                  workspaceAvailable={workspace !== null}
+                  onChange={onSelectFilter}
+                />
+              </div>
 
-          <section
-            id={`skills-panel-${tab}`}
-            role="tabpanel"
-            aria-labelledby={`skills-tab-${tab}`}
-            className="pt-5"
-          >
-            <p className="mb-4 text-sm text-muted-foreground">
-              {skillsTabs[tab].description}
-            </p>
-            {tab === "packs" ? (
-              <PacksPanel
-                workspace={workspace}
-                packs={packs}
-                actions={packActions}
-              />
-            ) : tab === "project" && !project ? (
-              <InventoryMessage
-                title="Open a project to see its skills"
-                description="You can still browse skills on this computer or manage Packs."
-              />
-            ) : inventory ? (
-              <InventoryPanel query={inventory} onSelect={selectOccurrence} />
-            ) : null}
-          </section>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <CatalogContent
+                  inventory={inventory}
+                  items={items}
+                  selectedKey={selectedItem?.key ?? null}
+                  filter={effectiveFilter}
+                  query={query}
+                  onSelect={selectItem}
+                />
+              </div>
+              <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+                <span>
+                  {items.length === 1 ? "1 skill" : `${items.length} skills`}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Refresh skills"
+                  onClick={() => {
+                    inventory.revalidate()
+                    details.revalidate()
+                  }}
+                >
+                  <RefreshCwIcon />
+                </Button>
+              </div>
+            </aside>
+
+            <section className="min-h-0 overflow-y-auto">
+              {selectedItem && selectedOccurrence ? (
+                <SkillDetailsPanel
+                  key={selectedOccurrence.occurrence.id}
+                  item={selectedItem}
+                  selected={selectedOccurrence}
+                  state={details.state}
+                  onSelectOccurrence={selectOccurrence}
+                  onRetry={details.revalidate}
+                  onUpdateManaged={async (packId, directoryName, draft) => {
+                    await client.updateManagedSkill(
+                      packId,
+                      directoryName,
+                      draft
+                    )
+                    details.revalidate()
+                    inventory.revalidate()
+                  }}
+                />
+              ) : inventory.state.status === "ready" ? (
+                <EmptyDetails />
+              ) : null}
+            </section>
+          </div>
         </div>
       </div>
 
-      <SkillDetailsDialog
-        key={selected?.id ?? "none"}
-        open={selected !== null}
-        state={details.state}
-        source={selectedSource}
-        onClose={() => setSelection(null)}
-        onRetry={details.revalidate}
-        onUpdateManaged={async (packId, directoryName, draft) => {
-          await client.updateManagedSkill(packId, directoryName, draft)
-          details.revalidate()
-          projectSkills.revalidate()
-        }}
+      <CreateSkillDialog
+        open={creatingSkill}
+        onOpenChange={setCreatingSkill}
+        onCreate={onCreateSkill}
+      />
+      <PackSourcesDialog
+        open={managingPacks}
+        onOpenChange={setManagingPacks}
+        workspace={workspace}
+        packs={packs}
+        actions={packActions}
       />
     </>
   )
 }
 
-function InventoryPanel({
+function CatalogContent({
+  inventory,
+  items,
+  selectedKey,
+  filter,
   query,
   onSelect,
 }: {
-  query: RuntimeQuery<SkillInventory>
-  onSelect: (occurrence: SkillOccurrence) => void
+  inventory: RuntimeQuery<SkillInventory>
+  items: SkillCatalogItem[]
+  selectedKey: string | null
+  filter: SkillsFilter
+  query: string
+  onSelect: (item: SkillCatalogItem) => void
 }) {
-  if (query.state.status === "loading" || query.state.status === "idle") {
-    return <InventoryMessage title="Checking skill folders..." />
-  }
-  if (query.state.status === "error") {
+  if (
+    inventory.state.status === "loading" ||
+    inventory.state.status === "idle"
+  ) {
     return (
-      <div className="space-y-3">
-        <InlineError message={query.state.message} />
-        <Button type="button" variant="outline" onClick={query.revalidate}>
+      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+        Checking skill folders...
+      </p>
+    )
+  }
+  if (inventory.state.status === "error") {
+    return (
+      <div className="space-y-3 p-3">
+        <InlineError message={inventory.state.message} />
+        <Button type="button" variant="outline" onClick={inventory.revalidate}>
           Try again
         </Button>
       </div>
     )
   }
-  return <SkillList inventory={query.state.data} onSelect={onSelect} />
+  return (
+    <SkillList
+      inventory={inventory.state.data}
+      items={items}
+      selectedKey={selectedKey}
+      filter={filter}
+      query={query}
+      onSelect={onSelect}
+    />
+  )
 }
 
-function InventoryMessage({
-  title,
-  description,
+function SkillsFilterMenu({
+  value,
+  projectAvailable,
+  workspaceAvailable,
+  onChange,
 }: {
-  title: string
-  description?: string
+  value: SkillsFilter
+  projectAvailable: boolean
+  workspaceAvailable: boolean
+  onChange: (filter: SkillsFilter) => void
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-      <h2 className="font-heading text-base font-medium">{title}</h2>
-      {description ? (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      ) : null}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-between bg-background font-normal"
+          />
+        }
+      >
+        {skillsFilters[value].label}
+        <ChevronDownIcon data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-(--anchor-width)">
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(nextValue) => {
+            const filter = String(nextValue)
+            if (isSkillsFilter(filter)) onChange(filter)
+          }}
+        >
+          {skillsFilterOrder.map((filter) => (
+            <DropdownMenuRadioItem
+              key={filter}
+              value={filter}
+              disabled={
+                (filter === "project" && !projectAvailable) ||
+                (filter === "workspace" && !workspaceAvailable)
+              }
+              closeOnClick
+            >
+              <span className="flex min-w-0 flex-col py-0.5">
+                <span>{skillsFilters[filter].label}</span>
+                <span className="text-xs leading-snug text-muted-foreground">
+                  {skillsFilters[filter].description}
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function AddSkillMenu({
+  disabled,
+  onCreate,
+  onInstallFolder,
+  onInstallZip,
+  onLink,
+}: {
+  disabled: boolean
+  onCreate: () => void
+  onInstallFolder: () => void
+  onInstallZip: () => void
+  onLink: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button type="button" disabled={disabled} />}
+      >
+        <PlusIcon data-icon="inline-start" />
+        Add
+        <ChevronDownIcon data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem onClick={onCreate}>
+          <PlusIcon />
+          Create skill
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onInstallFolder}>
+          <FolderInputIcon />
+          Install Pack from folder
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onInstallZip}>
+          <FileArchiveIcon />
+          Install Pack ZIP
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onLink}>
+          <FolderInputIcon />
+          Link Pack folder
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function PackSourcesDialog({
+  open,
+  onOpenChange,
+  workspace,
+  packs,
+  actions,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  workspace: Workspace | null
+  packs: RuntimeQuery<Pack[]>
+  actions: PackActions
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[min(46rem,calc(100%-2rem))] overflow-hidden sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Manage Packs</DialogTitle>
+          <DialogDescription>
+            Packs are skill folders shared by every project in this workspace.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <PacksPanel workspace={workspace} packs={packs} actions={actions} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EmptyDetails() {
+  return (
+    <div className="flex h-full min-h-80 flex-col items-center justify-center px-8 text-center">
+      <p className="text-sm font-medium">Choose a skill</p>
+      <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
+        Select a skill to read its instructions, see where it came from, and
+        check which agents can find it.
+      </p>
     </div>
   )
 }

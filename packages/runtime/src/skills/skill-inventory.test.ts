@@ -105,9 +105,11 @@ describe("skill inventory", () => {
     )
 
     expect(skillInventorySchema.safeParse(inventory).success).toBe(true)
-    expect(
-      inventory.sources.flatMap(({ scopes }) => scopes).sort()
-    ).toEqual(["project", "user", "workspace"])
+    expect(inventory.sources.flatMap(({ scopes }) => scopes).sort()).toEqual([
+      "project",
+      "user",
+      "workspace",
+    ])
     expect(
       inventory.occurrences.filter(({ name }) => name === "duplicate")
     ).toHaveLength(3)
@@ -126,6 +128,220 @@ describe("skill inventory", () => {
         method: "extra-root",
       },
     ])
+    await runtime.close()
+  })
+
+  it("lists computer skills and only Packs attached to a workspace", async () => {
+    const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
+    const projectSkills = join(root, "project-skills")
+    const userSkills = join(root, "user-skills")
+    await Promise.all([
+      mkdir(projectPath),
+      mkdir(projectSkills),
+      mkdir(userSkills),
+    ])
+    await writeSkill(projectSkills, "project", "project", "Project only")
+    await writeSkill(userSkills, "personal", "personal", "Computer")
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("test", [
+          {
+            path: projectSkills,
+            scope: "project",
+            label: "Project skills",
+          },
+          { path: userSkills, scope: "user", label: "Personal skills" },
+        ]),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: {
+          path: projectPath,
+          name: "Project",
+          workspaceId: "personal",
+        },
+      })
+    )
+    const attached = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Attached" },
+      })
+    )
+    const unattached = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Unattached" },
+      })
+    )
+    await Promise.all([
+      writeSkill(
+        join(attached.path, "skills"),
+        "attached",
+        "attached",
+        "Attached"
+      ),
+      writeSkill(
+        join(unattached.path, "skills"),
+        "unattached",
+        "unattached",
+        "Unattached"
+      ),
+    ])
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: {
+          workspaceId: "personal",
+          packId: attached.id,
+          attached: true,
+        },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "test" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          input: { text: "Configure the attached Pack", references: [] },
+        },
+      })
+    )
+
+    const inventory = unwrap(
+      await runtime.request({
+        method: "skill.listForWorkspace",
+        params: { workspaceId: "personal" },
+      })
+    )
+
+    expect(inventory.projectId).toBeNull()
+    expect(inventory.occurrences.map(({ name }) => name).sort()).toEqual([
+      "attached",
+      "personal",
+    ])
+    expect(inventory.sources.map(({ scopes }) => scopes).sort()).toEqual([
+      ["user"],
+      ["workspace"],
+    ])
+    expect(
+      inventory.sources.find(({ packId }) => packId === attached.id)
+        ?.provisioning
+    ).toEqual([])
+    await runtime.close()
+  })
+
+  it("reads details only from Packs attached to the requested workspace", async () => {
+    const root = await temporaryDirectory()
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [inventoryHarness("test", [])],
+    })
+    const attached = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Attached" },
+      })
+    )
+    const unattached = unwrap(
+      await runtime.request({
+        method: "pack.create",
+        params: { name: "Unattached" },
+      })
+    )
+    await Promise.all([
+      writeSkill(
+        join(attached.path, "skills"),
+        "attached",
+        "attached",
+        "Attached"
+      ),
+      writeSkill(
+        join(unattached.path, "skills"),
+        "unattached",
+        "unattached",
+        "Unattached"
+      ),
+    ])
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: {
+          workspaceId: "personal",
+          packId: attached.id,
+          attached: true,
+        },
+      })
+    )
+    const workspaceInventory = unwrap(
+      await runtime.request({
+        method: "skill.listForWorkspace",
+        params: { workspaceId: "personal" },
+      })
+    )
+    const attachedOccurrence = workspaceInventory.occurrences[0]!
+    const attachedDetails = unwrap(
+      await runtime.request({
+        method: "skill.get",
+        params: {
+          occurrenceId: attachedOccurrence.id,
+          workspaceId: "personal",
+        },
+      })
+    )
+    expect(attachedDetails.content).toContain("Instructions")
+
+    const allPacks = unwrap(
+      await runtime.request({ method: "pack.list", params: {} })
+    )
+    const unattachedOccurrence = allPacks.find(
+      ({ id }) => id === unattached.id
+    )!.occurrences[0]!
+    const outsideContext = await runtime.request({
+      method: "skill.get",
+      params: {
+        occurrenceId: unattachedOccurrence.id,
+        workspaceId: "personal",
+      },
+    })
+    expect(outsideContext.ok).toBe(false)
+    if (!outsideContext.ok)
+      expect(outsideContext.error.code).toBe("skill-not-found")
+    await runtime.close()
+  })
+
+  it("validates the workspace before listing or reading skill details", async () => {
+    const root = await temporaryDirectory()
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      harnesses: [inventoryHarness("test", [])],
+    })
+
+    const inventory = await runtime.request({
+      method: "skill.listForWorkspace",
+      params: { workspaceId: "missing" },
+    })
+    expect(inventory.ok).toBe(false)
+    if (!inventory.ok) expect(inventory.error.code).toBe("workspace-not-found")
+
+    const details = await runtime.request({
+      method: "skill.get",
+      params: { occurrenceId: "missing", workspaceId: "missing" },
+    })
+    expect(details.ok).toBe(false)
+    if (!details.ok) expect(details.error.code).toBe("workspace-not-found")
     await runtime.close()
   })
 

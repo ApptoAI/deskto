@@ -29,6 +29,22 @@ import {
   skillInventorySchema,
 } from "./skill-models.js"
 
+const skillGetParamsSchema = z.union([
+  z
+    .object({
+      occurrenceId: z.string().min(1),
+      projectId: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      occurrenceId: z.string().min(1),
+      workspaceId: z.string().min(1),
+    })
+    .strict(),
+  z.object({ occurrenceId: z.string().min(1) }).strict(),
+])
+
 export const runtimeRequestSchema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("harness.list"), params: z.object({}) }),
   z.object({
@@ -118,13 +134,14 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     method: z.literal("skill.listForProject"),
     params: z.object({ projectId: z.string().min(1) }),
   }),
+  z.object({
+    method: z.literal("skill.listForWorkspace"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
   z.object({ method: z.literal("skill.listOnComputer"), params: z.object({}) }),
   z.object({
     method: z.literal("skill.get"),
-    params: z.object({
-      occurrenceId: z.string().min(1),
-      projectId: z.string().min(1).optional(),
-    }),
+    params: skillGetParamsSchema,
   }),
   z.object({
     method: z.literal("skill.createManaged"),
@@ -295,6 +312,7 @@ export interface RuntimeResponses {
   "workspace.setPack": null
   "workspace.listSkills": z.infer<typeof packSkillSchema>[]
   "skill.listForProject": z.infer<typeof skillInventorySchema>
+  "skill.listForWorkspace": z.infer<typeof skillInventorySchema>
   "skill.listOnComputer": z.infer<typeof skillInventorySchema>
   "skill.get": z.infer<typeof skillDetailsSchema>
   "skill.createManaged": z.infer<typeof packSkillSchema>

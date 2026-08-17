@@ -1,10 +1,10 @@
 import type { SettingsPageId } from "../components/settings/settings-pages.js"
-import type { SkillsTab } from "../components/skills/skills-tabs.js"
+import type { SkillsFilter } from "../components/skills/skills-filters.js"
 
 export type WorkView =
   | { kind: "new-task" }
   | { kind: "task"; threadId: string }
-  | { kind: "skills"; tab: SkillsTab }
+  | { kind: "skills"; filter: SkillsFilter }
 
 export type MainView =
   | WorkView

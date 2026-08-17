@@ -4,7 +4,7 @@ import { afterScopeChange, toNewTask, type MainView } from "./work-view.js"
 
 describe("work view navigation", () => {
   it("keeps Skills open when the project scope changes", () => {
-    const view: MainView = { kind: "skills", tab: "computer" }
+    const view: MainView = { kind: "skills", filter: "computer" }
 
     expect(afterScopeChange(view)).toEqual(view)
   })
@@ -20,7 +20,7 @@ describe("work view navigation", () => {
       toNewTask({
         kind: "settings",
         page: "agents",
-        returnTo: { kind: "skills", tab: "packs" },
+        returnTo: { kind: "skills", filter: "workspace" },
       })
     ).toEqual({
       kind: "settings",
