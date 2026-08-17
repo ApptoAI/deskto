@@ -10,6 +10,7 @@ import {
   selectFiles,
   showActivities,
   showFile,
+  showBrowser,
   showFilesOverview,
   showFolder,
   usePanelState,
@@ -25,6 +26,13 @@ describe("task panel state", () => {
     const { result } = renderHook(() => usePanelState(threadId))
 
     act(() => showFile(threadId, "report"))
+    act(() => showActivities(threadId))
+    act(() => showBrowser(threadId))
+    expect(result.current).toEqual({
+      surface: "browser",
+      selectedArtifactId: "report",
+      folderPath: "",
+    })
     act(() => showActivities(threadId))
     expect(result.current).toEqual({
       surface: "activities",

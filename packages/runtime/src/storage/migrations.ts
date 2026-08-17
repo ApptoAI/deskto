@@ -243,6 +243,21 @@ const migrations = [
       ON skill_provisioning_reports(root_id, harness_id, attempted_at DESC);
   `,
   `
+    CREATE TABLE message_attachments (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      type TEXT NOT NULL CHECK (type = 'image'),
+      name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      data BLOB NOT NULL,
+      sort_order INTEGER NOT NULL
+    );
+
+    CREATE INDEX message_attachments_message_idx
+      ON message_attachments(message_id, sort_order);
+  `,
+  `
     ALTER TABLE threads ADD COLUMN parent_thread_id TEXT
       REFERENCES threads(id) ON DELETE CASCADE;
 

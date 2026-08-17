@@ -2,3 +2,15 @@ export { createRuntime, Runtime } from "./runtime.js"
 export type { RuntimeOptions } from "./runtime.js"
 export { ClaudeAdapter } from "./harnesses/claude/index.js"
 export { CodexAdapter } from "./harnesses/codex/index.js"
+export { BrowserMcpServer } from "./browser/browser-mcp-server.js"
+export type {
+  BrowserAutomationHost,
+  BrowserElement,
+  BrowserSnapshot,
+  BrowserStatus,
+} from "./browser/browser-automation-host.js"
+export type {
+  SessionToolInput,
+  SessionToolLease,
+  SessionToolProvider,
+} from "./session-tools.js"

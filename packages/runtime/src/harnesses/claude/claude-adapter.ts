@@ -306,26 +306,29 @@ class ClaudeSession implements HarnessSession {
       options.effort = claudeEffort(input.executionProfile.effort)
     }
     if (pluginShims.length > 0) options.plugins = pluginShims
-    const sessionMcpServers = input.customization.mcpServers ?? []
-    if (sessionMcpServers.length > 0) {
+    const mcpServers = input.customization.mcpServers ?? []
+    if (mcpServers.length > 0) {
       options.mcpServers = Object.fromEntries(
-        sessionMcpServers.map((server) => [
-          server.id,
-          {
-            type: "http" as const,
-            url: server.url,
-            headers: {
-              Authorization: `Bearer ${server.authorizationToken}`,
-            },
-            timeout: 60_000,
-            alwaysLoad: true,
-          },
-        ])
+        mcpServers.map((server) => {
+          if (server.authorization) {
+            return [
+              server.id,
+              {
+                type: "http" as const,
+                url: server.url,
+                headers: {
+                  Authorization: `Bearer ${server.authorization.token}`,
+                },
+              },
+            ]
+          }
+          return [server.id, { type: "http" as const, url: server.url }]
+        })
       )
     }
     if (executablePath) options.pathToClaudeCodeExecutable = executablePath
     if (input.providerSessionId) options.resume = input.providerSessionId
-    this.#query = queryFactory({ prompt: claudePrompt(input), options })
+    this.#query = queryFactory({ prompt: claudeQueryPrompt(input), options })
 
     void this.#consume()
   }
@@ -716,6 +719,40 @@ export function claudePrompt(input: HarnessRunInput): string {
       claudeSkillCommand(reference, input.customization.skillRoots)
     )
   }
+  return prompt
+}
+
+function claudeQueryPrompt(
+  input: HarnessRunInput
+): string | AsyncIterable<SDKUserMessage> {
+  const text = claudePrompt(input)
+  if (!input.attachments?.length) return text
+
+  const content: Exclude<SDKUserMessage["message"]["content"], string> = []
+  if (text) content.push({ type: "text", text })
+  for (const attachment of input.attachments) {
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: attachment.mimeType,
+        data: attachment.dataUrl.slice(attachment.dataUrl.indexOf(",") + 1),
+      },
+    })
+  }
+
+  const prompt = new AsyncQueue<SDKUserMessage>()
+  const userMessage: SDKUserMessage = {
+    type: "user",
+    session_id: "",
+    parent_tool_use_id: null,
+    message: {
+      role: "user",
+      content,
+    },
+  }
+  prompt.push(userMessage)
+  prompt.close()
   return prompt
 }
 

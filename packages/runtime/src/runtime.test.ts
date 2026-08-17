@@ -17,11 +17,12 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
-import { maximumThreadChildren } from "@deskto/protocol"
+import { maximumThreadChildren, turnInputSchema } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { createRuntime } from "./runtime.js"
+import type { SessionToolProvider } from "./session-tools.js"
 import { Store } from "./storage/store.js"
 
 const directories: string[] = []
@@ -106,7 +107,7 @@ describe("Runtime", () => {
         method: "turn.start",
         params: {
           threadId: thread.id,
-          input: { text: "Start the task", references: [] },
+          input: { text: "Start the task", references: [], attachments: [] },
         },
       })
     )
@@ -115,6 +116,97 @@ describe("Runtime", () => {
     expect(scripted.runs).toHaveLength(1)
     expect(scripted.runs[0]?.cancelled).toBe(false)
     await runtime.close()
+  })
+
+  it("persists image attachments and passes them to the Harness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness()
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "screen.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    const view = unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          input: { text: "", references: [], attachments: [attachment] },
+        },
+      })
+    )
+
+    expect(
+      view.messages.find((message) => message.role === "user")
+    ).toMatchObject({
+      content: "",
+      attachments: [
+        {
+          type: "image",
+          id: attachment.id,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        },
+      ],
+    })
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "attachment.preview",
+          params: { threadId: thread.id, attachmentId: attachment.id },
+        })
+      )
+    ).toEqual({ id: attachment.id, dataUrl: attachment.dataUrl })
+    expect(harness.runs[0]?.input.attachments).toEqual([
+      {
+        type: "image",
+        name: "screen.png",
+        mimeType: "image/png",
+        dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      },
+    ])
+    await runtime.close()
+  })
+
+  it("rejects duplicate attachment IDs before storage", () => {
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "screen.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    expect(
+      turnInputSchema.safeParse({
+        text: "Review this",
+        references: [],
+        attachments: [attachment, attachment],
+      }).success
+    ).toBe(false)
   })
 
   it("generates the first Thread title with the configured model", async () => {
@@ -1279,6 +1371,7 @@ describe("Runtime", () => {
                 name: "summarize",
               },
             ],
+            attachments: [],
           },
         },
       })
@@ -2553,11 +2646,9 @@ describe("Runtime", () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const harness = new ScriptedHarness({ id: "codex", name: "Codex" })
-    const turnSettled = vi.fn()
     const runtime = createRuntime({
       databasePath: join(directory, "runtime.sqlite"),
       harnesses: [harness],
-      turnSettled,
     })
     const project = unwrap(
       await runtime.request({
@@ -2622,8 +2713,6 @@ describe("Runtime", () => {
       )
       return current.thread.status === "idle"
     })
-    await waitFor(() => Promise.resolve(turnSettled.mock.calls.length === 1))
-    expect(turnSettled).toHaveBeenCalledWith(harness.runs[0]?.input.turnId)
     unsubscribe()
 
     const results = unwrap(
@@ -2719,6 +2808,78 @@ describe("Runtime", () => {
       ok: false,
       error: { code: "thread-depth-limit" },
     })
+    await runtime.close()
+  })
+
+  it("revokes Session Tools before waiting for Harness cancellation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness({ id: "slow", name: "Slow harness" })
+    let markCancelStarted: (() => void) | undefined
+    let releaseCancel: (() => void) | undefined
+    const cancelStarted = new Promise<void>((resolve) => {
+      markCancelStarted = resolve
+    })
+    const cancelGate = new Promise<void>((resolve) => {
+      releaseCancel = resolve
+    })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => {
+        const session = await scripted.start(input, signal)
+        return {
+          ...session,
+          cancel: async () => {
+            markCancelStarted?.()
+            await cancelGate
+            await session.cancel()
+          },
+        }
+      },
+    }
+    const closeTools = vi.fn(() => Promise.resolve())
+    const tools: SessionToolProvider = {
+      open: () =>
+        Promise.resolve({
+          mcpServers: [{ id: "browser", url: "http://127.0.0.1/mcp" }],
+          close: closeTools,
+        }),
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+      sessionTools: [tools],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "slow" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Use the browser" },
+      })
+    )
+
+    const cancelling = runtime.request({
+      method: "turn.cancel",
+      params: { threadId: thread.id },
+    })
+    await cancelStarted
+    expect(closeTools).toHaveBeenCalledOnce()
+
+    releaseCancel?.()
+    unwrap(await cancelling)
     await runtime.close()
   })
 })

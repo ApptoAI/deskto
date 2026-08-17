@@ -1,4 +1,4 @@
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import type { SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk"
 import type { HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -43,10 +43,8 @@ describe("Claude MCP provisioning", () => {
           mcpServers: [
             {
               id: "deskto",
-              name: "Deskto",
               url: "http://127.0.0.1:4321/mcp",
-              authorizationToken: "secret-token",
-              required: true,
+              authorization: { type: "bearer", token: "secret-token" },
             },
           ],
         },
@@ -59,8 +57,6 @@ describe("Claude MCP provisioning", () => {
         type: "http",
         url: "http://127.0.0.1:4321/mcp",
         headers: { Authorization: "Bearer secret-token" },
-        timeout: 60_000,
-        alwaysLoad: true,
       },
     })
   })
@@ -212,6 +208,51 @@ describe("claudePrompt", () => {
   })
 })
 
+describe("Claude MCP configuration", () => {
+  it("passes Runtime-provided HTTP tools to the Agent SDK", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Check the app",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [],
+          mcpServers: [
+            {
+              id: "deskto_browser",
+              url: "http://127.0.0.1:4312/mcp",
+              authorization: { type: "bearer", token: "secret-token" },
+            },
+          ],
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          mcpServers: {
+            deskto_browser: {
+              type: "http",
+              url: "http://127.0.0.1:4312/mcp",
+              headers: { Authorization: "Bearer secret-token" },
+            },
+          },
+        }),
+      })
+    )
+  })
+})
+
 describe("claudeActivity", () => {
   it("classifies built-in tools into provider-neutral payloads", () => {
     expect(
@@ -345,6 +386,50 @@ describe("claudeAssistantFailure", () => {
 })
 
 describe("ClaudeAdapter", () => {
+  it("sends text and images as Claude user content", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "What is shown?",
+        references: [],
+        attachments: [
+          {
+            type: "image",
+            name: "screen.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,cG5n",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    const prompt = queryMock.mock.calls[0]?.[0].prompt
+    expect(prompt).not.toBeTypeOf("string")
+    const messages = []
+    // SAFETY: the assertion above proves image inputs select the SDK's async
+    // user-message prompt form rather than its string form.
+    const asyncPrompt = prompt as AsyncIterable<SDKUserMessage>
+    for await (const message of asyncPrompt) messages.push(message)
+    expect(messages[0]?.message.content).toEqual([
+      { type: "text", text: "What is shown?" },
+      {
+        type: "image",
+        source: { type: "base64", media_type: "image/png", data: "cG5n" },
+      },
+    ])
+    await session.cancel()
+  })
+
   it("emits only the usage-limit failure when Claude later reports success", async () => {
     queryMock.mockReturnValue(
       fakeQuery([

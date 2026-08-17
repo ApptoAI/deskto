@@ -16,13 +16,13 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
-  type McpServerConnection,
   type NativeSkillRoot,
   type PlanStep,
   type TextGenerationInput,
   type SkillDiscoveryInput,
   type SkillProvisioningResult,
   type SkillRoot,
+  type SessionMcpServer,
 } from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
@@ -87,31 +87,6 @@ export type CodexClientFactory = (
 
 const createCodexClient: CodexClientFactory = (command, cwd, options) =>
   new JsonlClient(command, cwd, options)
-
-function codexProcessOptions(
-  servers: readonly McpServerConnection[]
-): JsonlClientOptions | undefined {
-  if (servers.length === 0) return undefined
-  const args = ["app-server"]
-  const env: NodeJS.ProcessEnv = { ...process.env }
-  for (const [index, server] of servers.entries()) {
-    const id = server.id.replaceAll(/[^a-zA-Z0-9_-]/g, "_")
-    const tokenVariable = `DESKTO_MCP_TOKEN_${index}`
-    env[tokenVariable] = server.authorizationToken
-    const settings: ReadonlyArray<[string, string | number | boolean]> = [
-      [`mcp_servers.${id}.url`, server.url],
-      [`mcp_servers.${id}.bearer_token_env_var`, tokenVariable],
-      [`mcp_servers.${id}.required`, server.required ?? true],
-      [`mcp_servers.${id}.tool_timeout_sec`, 60],
-      [`mcp_servers.${id}.default_tools_approval_mode`, "auto"],
-    ]
-    for (const [key, value] of settings) {
-      args.push("-c", `${key}=${JSON.stringify(value)}`)
-    }
-  }
-  return { args, env }
-}
-
 type PendingApproval = {
   id: string
   requestId: string | number
@@ -264,7 +239,7 @@ class CodexSession implements HarnessSession {
     const client = clientFactory(
       "codex",
       input.projectPath,
-      codexProcessOptions(input.customization.mcpServers ?? [])
+      codexMcpLaunchOptions(input.customization.mcpServers ?? [])
     )
     const session = new CodexSession(client, input)
     const abort = () => client.close()
@@ -714,16 +689,49 @@ class CodexSession implements HarnessSession {
 }
 
 export function codexTurnInput(
-  input: Pick<HarnessRunInput, "prompt" | "references">
+  input: Pick<HarnessRunInput, "prompt" | "references" | "attachments">
 ): JsonObject[] {
   return [
-    { type: "text", text: input.prompt, text_elements: [] },
+    ...(input.prompt
+      ? [{ type: "text", text: input.prompt, text_elements: [] }]
+      : []),
     ...input.references.map((reference) =>
       reference.kind === "skill"
         ? { type: "skill", name: reference.name, path: reference.path }
         : { type: "mention", name: reference.name, path: reference.path }
     ),
+    ...(input.attachments ?? []).map((attachment) => ({
+      type: "image",
+      url: attachment.dataUrl,
+    })),
   ]
+}
+
+export function codexMcpLaunchOptions(
+  servers: readonly SessionMcpServer[]
+): JsonlClientOptions {
+  if (servers.length === 0) return {}
+  const args: string[] = []
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  servers.forEach((server, index) => {
+    if (!/^[A-Za-z0-9_-]+$/.test(server.id)) {
+      throw new Error(`Invalid MCP server id: ${server.id}`)
+    }
+    const prefix = `mcp_servers.${server.id}`
+    args.push("-c", `${prefix}.url=${JSON.stringify(server.url)}`)
+    args.push("-c", `${prefix}.required=true`)
+    if (server.authorization) {
+      const variable = `DESKTO_MCP_${index}_TOKEN`
+      env[variable] = server.authorization.token
+      args.push(
+        "-c",
+        `${prefix}.bearer_token_env_var=${JSON.stringify(variable)}`,
+        "-c",
+        `shell_environment_policy.set.${variable}=""`
+      )
+    }
+  })
+  return { args, env }
 }
 
 async function initialize(client: CodexClient): Promise<void> {

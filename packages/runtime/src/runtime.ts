@@ -1,9 +1,6 @@
 import { dirname, join, resolve } from "node:path"
 
-import type {
-  HarnessAdapterFactory,
-  McpServerConnection,
-} from "@deskto/harness-sdk"
+import type { HarnessAdapterFactory } from "@deskto/harness-sdk"
 import type {
   RequestFor,
   RuntimeEvent,
@@ -15,6 +12,7 @@ import type {
 import { HarnessRegistry } from "./harness-registry.js"
 import { PackManager } from "./packs/pack-manager.js"
 import { RequestRouter } from "./request-router.js"
+import type { SessionToolProvider } from "./session-tools.js"
 import { openDatabase } from "./storage/database.js"
 import { Store } from "./storage/store.js"
 import { ThreadSequences } from "./thread-sequences.js"
@@ -32,15 +30,8 @@ export type RuntimeOptions = {
   probeGate?: Promise<void>
   /** Host-owned recoverable file deletion, implemented by Electron on desktop. */
   fileActions?: HostFileActions
-  /** Adds app-owned MCP connections to one Harness session. */
-  sessionMcpServers?: (context: {
-    threadId: string
-    turnId: string
-    projectId: string
-    workspaceId: string
-  }) => McpServerConnection[] | Promise<McpServerConnection[]>
-  /** Revokes host-owned resources after a Turn can no longer call them. */
-  turnSettled?: (turnId: string) => void
+  /** App-owned MCP tools leased separately for every Turn. */
+  sessionTools?: SessionToolProvider[]
 }
 
 export type HostFileActions = {
@@ -95,6 +86,7 @@ export class Runtime implements RuntimeTransport {
       this.#store,
       this.#harnesses,
       userSettings,
+      options.sessionTools ?? [],
       {
         changed: (threadId) => this.#emitThreadChanged(threadId),
         delta: (threadId, change) => {
@@ -110,9 +102,7 @@ export class Runtime implements RuntimeTransport {
         },
         artifactsChanged: (threadId) =>
           this.#emit({ type: "artifact.changed", threadId }),
-        settled: (turnId) => options.turnSettled?.(turnId),
-      },
-      options.sessionMcpServers
+      }
     )
     this.#router = new RequestRouter(
       this.#store,

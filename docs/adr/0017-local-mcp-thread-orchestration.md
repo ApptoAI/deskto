@@ -1,4 +1,4 @@
-# ADR 0016: Local MCP thread orchestration
+# ADR 0017: Local MCP thread orchestration
 
 - Status: accepted
 - Date: 2026-08-17

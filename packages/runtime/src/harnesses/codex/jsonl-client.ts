@@ -39,7 +39,7 @@ export class JsonlClient {
   #closed = false
 
   constructor(command: string, cwd: string, options: JsonlClientOptions = {}) {
-    this.#process = spawn(command, options.args ?? ["app-server"], {
+    this.#process = spawn(command, ["app-server", ...(options.args ?? [])], {
       cwd,
       env: options.env ?? process.env,
       stdio: ["pipe", "pipe", "pipe"],

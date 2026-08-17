@@ -18,9 +18,11 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.
 - **Turn**: One user request and one Harness execution in a Thread.
+- **Message Attachment**: An image supplied with a user Message. The Runtime owns its bytes and metadata, deletes it with the Message, exposes only metadata in Thread views, and returns image data on demand for previews.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
 - **Artifact**: A file inside a Project that a Turn produced, either named by a completed file-change Activity or found in the Project folder by a sweep. The UI calls it a file. An Artifact keeps a stable identity for its project-relative path.
 - **Turn Output**: The attribution between a Turn and an Artifact it created or changed. One Artifact can be an output of several Turns.
+- **Browser**: One in-app web tab owned by a Task. A Surface shows it, while a Runtime-provided MCP lease lets the selected Harness inspect and operate the same tab.
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
@@ -42,12 +44,15 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.
+- Message Attachment bytes stay in Runtime storage and are read on demand. Thread views and Runtime events carry metadata only.
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.
 - Tool activity shown in a Thread is a bounded summary, not a transcript or an audit log.
 - A Thread shows prose and the tool calls that produced it; a settled Turn folds that work behind one disclosure. A plan and its subagents are the task's state, not its transcript: they render beside the conversation and never inside it, along with any work done within a subagent.
 - Artifact contents are read on demand through Runtime queries. They do not live in Activities, Thread views, or Runtime events.
-- A task's panel has stable Files and Activities surfaces. Producing a file never opens the panel or replaces what the user is viewing; settled answers link to the files attributed to their Turn.
+- A task's panel has stable Files, Activities, and Browser surfaces. Producing a file never opens the panel or replaces what the user is viewing; settled answers link to the files attributed to their Turn.
+- Browser tools are provider-neutral session customization. Each Harness Adapter translates the same private HTTP MCP connection to its native configuration.
+- Computer Use is a Codex plugin capability, not a shared Harness feature. Deskto does not expose it to Claude or reimplement operating-system control.
 - A Harness that does not report what a tool wrote is not asked to. The Runtime watches the Project folder around work of that kind and applies one set of capture rules to reported and observed files alike.
 - A Surface may write an Artifact back only for formats a simplified editor cannot damage, and only against the version it loaded. The Runtime, not the Surface, decides both.
 - The Client rebuilds current state from Runtime queries. Runtime events only make an open view current: high-frequency changes arrive as sequenced thread deltas, and any gap falls back to a query.
@@ -74,6 +79,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A remotely hosted Runtime
 - Authentication and team administration
 - Hub, Catalog, remote Pack distribution, and policy enforcement
+- User and Pack MCP provisioning, beyond the app-owned Browser server
 - Starter project distribution
 - Automation and usage screens
 - A user-facing global search screen

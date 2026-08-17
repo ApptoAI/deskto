@@ -7,6 +7,7 @@ import {
   CodexAdapter,
   codexActivity,
   codexLimitResetAt,
+  codexMcpLaunchOptions,
   codexPlanSteps,
   codexTurnInput,
   type CodexClient,
@@ -107,6 +108,47 @@ describe("codexTurnInput", () => {
       },
     ])
   })
+
+  it("passes image attachments to app-server turns", () => {
+    expect(
+      codexTurnInput({
+        prompt: "",
+        references: [],
+        attachments: [
+          {
+            type: "image",
+            name: "screen.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,cG5n",
+          },
+        ],
+      })
+    ).toEqual([{ type: "image", url: "data:image/png;base64,cG5n" }])
+  })
+})
+
+describe("Codex MCP launch options", () => {
+  it("injects private MCP auth without exposing the token to shell commands", () => {
+    const options = codexMcpLaunchOptions([
+      {
+        id: "deskto_browser",
+        url: "http://127.0.0.1:4312/mcp",
+        authorization: { type: "bearer", token: "secret-token" },
+      },
+    ])
+
+    expect(options.args).toEqual([
+      "-c",
+      'mcp_servers.deskto_browser.url="http://127.0.0.1:4312/mcp"',
+      "-c",
+      "mcp_servers.deskto_browser.required=true",
+      "-c",
+      'mcp_servers.deskto_browser.bearer_token_env_var="DESKTO_MCP_0_TOKEN"',
+      "-c",
+      'shell_environment_policy.set.DESKTO_MCP_0_TOKEN=""',
+    ])
+    expect(options.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
+  })
 })
 
 describe("Codex skill provisioning", () => {
@@ -157,10 +199,8 @@ describe("Codex MCP provisioning", () => {
           mcpServers: [
             {
               id: "deskto",
-              name: "Deskto",
               url: "http://127.0.0.1:4321/mcp",
-              authorizationToken: "secret-token",
-              required: true,
+              authorization: { type: "bearer", token: "secret-token" },
             },
           ],
         },
@@ -172,9 +212,9 @@ describe("Codex MCP provisioning", () => {
       'mcp_servers.deskto.url="http://127.0.0.1:4321/mcp"'
     )
     expect(processOptions?.args).toContain(
-      'mcp_servers.deskto.default_tools_approval_mode="auto"'
+      'mcp_servers.deskto.bearer_token_env_var="DESKTO_MCP_0_TOKEN"'
     )
-    expect(processOptions?.env?.DESKTO_MCP_TOKEN_0).toBe("secret-token")
+    expect(processOptions?.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
   })
 })
 

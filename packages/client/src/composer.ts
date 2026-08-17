@@ -1,8 +1,4 @@
-import type {
-  PackSkill,
-  PromptReference,
-  ProjectEntry,
-} from "@deskto/protocol"
+import type { PackSkill, PromptReference, ProjectEntry } from "@deskto/protocol"
 
 export type ComposerTriggerKind = "project-entry" | "skill" | "command"
 

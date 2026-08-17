@@ -54,6 +54,14 @@ export type SkillProvisioningResult = {
   message?: string
 }
 
+/** A Runtime-provided Streamable HTTP MCP server for one Harness session. */
+export type SessionMcpServer = {
+  /** Stable server id. Adapters use it as the provider-native MCP name. */
+  id: string
+  url: string
+  authorization?: { type: "bearer"; token: string }
+}
+
 export type SkillDiscoveryInput = {
   /** Project directory used as the Harness working directory, when relevant. */
   projectPath: string | null
@@ -66,15 +74,6 @@ export type NativeSkillRoot = {
   label: string
 }
 
-/** One app-owned HTTP MCP server made available only to this Harness session. */
-export type McpServerConnection = {
-  id: string
-  name: string
-  url: string
-  authorizationToken: string
-  required?: boolean
-}
-
 /**
  * Provider-neutral additions to a session, built by the Runtime from the
  * active workspace's Packs. Adapters translate it to native mechanisms and
@@ -82,7 +81,8 @@ export type McpServerConnection = {
  */
 export type SessionCustomization = {
   skillRoots: SkillRoot[]
-  mcpServers?: McpServerConnection[]
+  /** Host capabilities leased for this run. Omitted by older Runtime hosts. */
+  mcpServers?: SessionMcpServer[]
 }
 
 /** A reference already validated and resolved by the Runtime. */
@@ -95,12 +95,21 @@ export type HarnessPromptReference =
     }
   | { kind: "skill"; name: string; path: string }
 
+export type HarnessImageAttachment = {
+  type: "image"
+  name: string
+  mimeType: "image/gif" | "image/jpeg" | "image/png" | "image/webp"
+  dataUrl: string
+}
+
 export type HarnessRunInput = {
   threadId: string
   turnId: string
   projectPath: string
   prompt: string
   references: HarnessPromptReference[]
+  /** Image inputs already validated by the Runtime. */
+  attachments?: HarnessImageAttachment[]
   executionProfile: ExecutionProfile
   customization: SessionCustomization
   providerSessionId?: string

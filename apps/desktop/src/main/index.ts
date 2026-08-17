@@ -5,13 +5,21 @@ import { app, BrowserWindow, dialog, shell } from "electron"
 import { z } from "zod"
 
 import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
-import { ClaudeAdapter, CodexAdapter, createRuntime } from "@deskto/runtime"
+import {
+  BrowserMcpServer,
+  ClaudeAdapter,
+  CodexAdapter,
+  createRuntime,
+  type SessionToolProvider,
+} from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
+import { BrowserManager } from "./browser/browser-manager.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
 import { installContentSecurityPolicy } from "./security.js"
 import { createMainWindow } from "./window.js"
+import { browserEventChannel } from "../shared/channels.js"
 
 const runtimeCloseTimeoutMs = 5_000
 const fatalStartupDetailSchema = z
@@ -22,6 +30,38 @@ const fatalStartupDetailSchema = z
 let closeRuntime: (() => Promise<void>) | undefined
 
 type McpServerReference = { current: DesktoMcpServer | undefined }
+
+function taskOrchestrationProvider(
+  reference: McpServerReference
+): SessionToolProvider {
+  return {
+    open(input) {
+      const server = reference.current
+      if (!server) return Promise.resolve(undefined)
+      const connection = server.connectionFor(input)
+      let closed = false
+      return Promise.resolve({
+        mcpServers: [
+          {
+            id: connection.id,
+            url: connection.url,
+            authorization: {
+              type: "bearer" as const,
+              token: connection.authorizationToken,
+            },
+          },
+        ],
+        close() {
+          if (!closed) {
+            closed = true
+            server.revokeTurn(input.turnId)
+          }
+          return Promise.resolve()
+        },
+      })
+    },
+  }
+}
 
 function packagedClaudeExecutable(): string | undefined {
   if (!app.isPackaged) return undefined
@@ -52,6 +92,20 @@ async function openApplication(): Promise<void> {
 
   installContentSecurityPolicy()
 
+  const window = createMainWindow()
+  const browser = new BrowserManager(window, (event) => {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send(browserEventChannel, event)
+    }
+  })
+  let browserMcp: BrowserMcpServer
+  try {
+    browserMcp = await BrowserMcpServer.create(browser)
+  } catch (error) {
+    browser.close()
+    throw error
+  }
+
   const claudeExecutable = packagedClaudeExecutable()
   const claudeAdapter = claudeExecutable
     ? new ClaudeAdapter({
@@ -62,34 +116,56 @@ async function openApplication(): Promise<void> {
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
   const mcpServerRef: McpServerReference = { current: undefined }
-  const runtime = createRuntime({
-    databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
-    packsPath: path.join(app.getPath("userData"), "packs"),
-    harnesses: [claudeAdapter, new CodexAdapter()],
-    probeGate: cliPathConfigured,
-    fileActions: {
-      trashItem: (targetPath) => shell.trashItem(targetPath),
-    },
-    sessionMcpServers: (context) =>
-      mcpServerRef.current ? [mcpServerRef.current.connectionFor(context)] : [],
-    turnSettled: (turnId) => mcpServerRef.current?.revokeTurn(turnId),
-  })
-  // Assigned before the window opens so a failure below still closes the
-  // runtime through the before-quit path.
-  closeRuntime = () => runtime.close()
-  const mcpServer = await startDesktoMcpServer({ runtime })
-  mcpServerRef.current = mcpServer
+  let runtime: ReturnType<typeof createRuntime>
+  try {
+    runtime = createRuntime({
+      databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
+      packsPath: path.join(app.getPath("userData"), "packs"),
+      harnesses: [claudeAdapter, new CodexAdapter()],
+      probeGate: cliPathConfigured,
+      sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],
+      fileActions: {
+        trashItem: (targetPath) => shell.trashItem(targetPath),
+      },
+    })
+  } catch (error) {
+    await browserMcp.close()
+    browser.close()
+    throw error
+  }
+  // Install cleanup before the orchestration server starts so a startup
+  // failure still closes the Runtime and Browser resources.
+  closeRuntime = async () => {
+    await Promise.allSettled([runtime.close(), browserMcp.close()])
+    browser.close()
+  }
+  let mcpServer: DesktoMcpServer
+  try {
+    mcpServer = await startDesktoMcpServer({ runtime })
+    mcpServerRef.current = mcpServer
+  } catch (error) {
+    await closeRuntime()
+    throw error
+  }
   const closeApplicationRuntime = async () => {
-    await Promise.allSettled([mcpServer.close(), runtime.close()])
+    mcpServerRef.current = undefined
+    await Promise.allSettled([
+      runtime.close(),
+      mcpServer.close(),
+      browserMcp.close(),
+    ])
+    browser.close()
   }
   closeRuntime = closeApplicationRuntime
   // File actions resolve results through the runtime, so they register once
   // it exists rather than at startup.
-  registerDesktopIpc(runtime)
-
-  const window = createMainWindow()
+  registerDesktopIpc(runtime, browser)
+  const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
+    if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+  })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   closeRuntime = async () => {
+    unsubscribeBrowserRuntime()
     unregisterRuntimeIpc()
     await closeApplicationRuntime()
   }

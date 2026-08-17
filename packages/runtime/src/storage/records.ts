@@ -4,6 +4,7 @@ import {
   type Activity,
   type Approval,
   type Message,
+  type ImageAttachment,
   type PackKind,
   type PackReceipt,
   type Thread,
@@ -70,6 +71,20 @@ export type MessageRow = {
   failure_reset_at: string | null
   ordinal: number | null
   created_at: string
+}
+
+export type MessageAttachmentMetadataRow = {
+  id: string
+  message_id: string
+  type: "image"
+  name: string
+  mime_type: ImageAttachment["mimeType"]
+  size_bytes: number
+  sort_order: number
+}
+
+export type MessageAttachmentRow = MessageAttachmentMetadataRow & {
+  data: Uint8Array
 }
 
 export type ActivityRow = {
@@ -190,7 +205,10 @@ export function toThread(row: ThreadRow): Thread {
   return thread
 }
 
-export function toMessage(row: MessageRow): Message {
+export function toMessage(
+  row: MessageRow,
+  attachments: ImageAttachment[] = []
+): Message {
   let failure: Message["failure"]
   if (row.error) {
     failure = {
@@ -210,10 +228,23 @@ export function toMessage(row: MessageRow): Message {
   if (row.turn_id) message.turnId = row.turn_id
   const references = parsedPromptReferences(row.prompt_references)
   if (references) message.references = references.references
+  if (attachments.length > 0) message.attachments = attachments
   if (failure) message.failure = failure
   if (row.error) message.error = row.error
   if (row.ordinal !== null) message.ordinal = row.ordinal
   return message
+}
+
+export function toImageAttachment(
+  row: MessageAttachmentMetadataRow
+): ImageAttachment {
+  return {
+    type: row.type,
+    id: row.id,
+    name: row.name,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+  }
 }
 
 function parsedPromptReferences(
