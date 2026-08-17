@@ -6,7 +6,10 @@ import {
   formatProjectReference,
   reconcilePromptReferences,
   replaceComposerTrigger,
+  shortlistSkills,
+  skillsForHarness,
 } from "./composer.js"
+import type { PromptSkill } from "@deskto/protocol"
 
 describe("composer grammar", () => {
   it.each([
@@ -69,7 +72,12 @@ describe("composer grammar", () => {
       { name: "abalone", description: "", id: "p/abalone" },
       { name: "ab", description: "", id: "p/ab" },
       { name: "abacus", description: "", id: "p/abacus" },
-    ].map((skill) => ({ ...skill, packId: "p", packName: "Pack" }))
+    ].map((skill) => ({
+      ...skill,
+      origin: "pack" as const,
+      sourceLabel: "Pack",
+      harnessIds: ["claude"],
+    }))
 
     expect(filterSkills(skills, "ab").map((skill) => skill.name)).toEqual([
       "ab",
@@ -115,3 +123,59 @@ describe("composer grammar", () => {
     ).toEqual([{ kind: "skill", skillId: "second/review", name: "review" }])
   })
 })
+
+describe("skill shortlist", () => {
+  const skills: PromptSkill[] = [
+    skill("pack-wide", { origin: "pack", harnessIds: ["claude", "codex"] }),
+    skill("claude-only", { harnessIds: ["claude"] }),
+    skill("codex-only", { harnessIds: ["codex"] }),
+  ]
+
+  it("offers Pack skills to every agent and native skills to their own", () => {
+    expect(
+      skillsForHarness(skills, "codex").map((entry) => entry.name)
+    ).toEqual(["pack-wide", "codex-only"])
+  })
+
+  it("offers only Pack skills when no agent is chosen yet", () => {
+    expect(skillsForHarness(skills, null).map((entry) => entry.name)).toEqual([
+      "pack-wide",
+    ])
+  })
+
+  it("shows four and counts the rest", () => {
+    const many = Array.from({ length: 42 }, (_, index) =>
+      skill(`skill-${index}`)
+    )
+    const { visible, hidden } = shortlistSkills(many)
+    expect(visible.map((entry) => entry.name)).toEqual([
+      "skill-0",
+      "skill-1",
+      "skill-2",
+      "skill-3",
+    ])
+    expect(hidden).toBe(38)
+  })
+
+  it("counts nothing hidden when the list already fits", () => {
+    expect(shortlistSkills([skill("only")])).toEqual({
+      visible: [skill("only")],
+      hidden: 0,
+    })
+  })
+})
+
+function skill(
+  name: string,
+  overrides: Partial<PromptSkill> = {}
+): PromptSkill {
+  return {
+    id: `id:${name}`,
+    name,
+    description: "",
+    origin: "native",
+    sourceLabel: "Claude personal skills",
+    harnessIds: ["claude"],
+    ...overrides,
+  }
+}

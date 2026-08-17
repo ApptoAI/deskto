@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
+import { Sheet, SheetContent } from "@workspace/ui/components/sheet"
 
 import { InlineError } from "../inline-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -165,7 +166,9 @@ export function SkillsView({
   return (
     <>
       <header className="drag-region h-10 shrink-0" />
-      <div className="min-h-0 flex-1 px-5 pb-5">
+      {/* One page, one scroll: the list owns the only scroller on this screen
+          and contains its overscroll, so nothing behind it can move. */}
+      <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
         <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
           <div className="flex shrink-0 items-start justify-between gap-4 pb-5">
             <div>
@@ -196,83 +199,81 @@ export function SkillsView({
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-background">
-            <aside className="flex min-h-0 flex-col border-r border-border bg-chrome/45">
-              <div className="space-y-2 border-b border-border p-3">
-                <div className="relative">
-                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search skills..."
-                    aria-label="Search skills"
-                    className="bg-background pl-8"
-                  />
-                </div>
-                <SkillsFilterMenu
-                  value={effectiveFilter}
-                  projectAvailable={project !== null}
-                  workspaceAvailable={workspace !== null}
-                  onChange={onSelectFilter}
-                />
-              </div>
+          <div className="flex shrink-0 items-center gap-2 border-b border-border pb-3">
+            <div className="relative w-full max-w-72">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search skills..."
+                aria-label="Search skills"
+                className="pl-8"
+              />
+            </div>
+            <SkillsFilterMenu
+              value={effectiveFilter}
+              projectAvailable={project !== null}
+              workspaceAvailable={workspace !== null}
+              onChange={onSelectFilter}
+            />
+            <span className="ml-auto font-mono text-micro text-muted-foreground tabular-nums">
+              {items.length === 1 ? "1 skill" : `${items.length} skills`}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Refresh skills"
+              onClick={() => {
+                inventory.revalidate()
+                details.revalidate()
+              }}
+            >
+              <RefreshCwIcon />
+            </Button>
+          </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <CatalogContent
-                  inventory={inventory}
-                  items={items}
-                  selectedKey={selectedItem?.key ?? null}
-                  filter={effectiveFilter}
-                  query={query}
-                  onSelect={selectItem}
-                />
-              </div>
-              <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2 text-micro text-muted-foreground">
-                <span>
-                  {items.length === 1 ? "1 skill" : `${items.length} skills`}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Refresh skills"
-                  onClick={() => {
-                    inventory.revalidate()
-                    details.revalidate()
-                  }}
-                >
-                  <RefreshCwIcon />
-                </Button>
-              </div>
-            </aside>
-
-            <section className="min-h-0 overflow-y-auto">
-              {selectedItem && selectedOccurrence ? (
-                <SkillDetailsPanel
-                  key={selectedOccurrence.occurrence.id}
-                  item={selectedItem}
-                  selected={selectedOccurrence}
-                  state={details.state}
-                  onSelectOccurrence={selectOccurrence}
-                  onRetry={details.revalidate}
-                  onUpdateManaged={async (packId, directoryName, draft) => {
-                    await client.updateManagedSkill(
-                      packId,
-                      directoryName,
-                      draft
-                    )
-                    details.revalidate()
-                    inventory.revalidate()
-                  }}
-                />
-              ) : inventory.state.status === "ready" ? (
-                <EmptyDetails />
-              ) : null}
-            </section>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <CatalogContent
+              inventory={inventory}
+              items={items}
+              selectedKey={selectedItem?.key ?? null}
+              filter={effectiveFilter}
+              query={query}
+              onSelect={selectItem}
+            />
           </div>
         </div>
       </div>
+
+      <Sheet
+        open={selectedItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelection(null)
+        }}
+      >
+        <SheetContent
+          className="gap-0"
+          aria-label={selectedItem ? `${selectedItem.name} skill` : "Skill"}
+        >
+          {selectedItem && selectedOccurrence ? (
+            <SkillDetailsPanel
+              key={selectedOccurrence.occurrence.id}
+              item={selectedItem}
+              selected={selectedOccurrence}
+              state={details.state}
+              onSelectOccurrence={selectOccurrence}
+              onRetry={details.revalidate}
+              onUpdateManaged={async (packId, directoryName, draft) => {
+                await client.updateManagedSkill(packId, directoryName, draft)
+                details.revalidate()
+                inventory.revalidate()
+              }}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <CreateSkillDialog
         open={creatingSkill}
@@ -352,17 +353,13 @@ function SkillsFilterMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-between bg-background font-normal"
-          />
+          <Button type="button" variant="outline" className="font-normal" />
         }
       >
         {skillsFilters[value].label}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-(--anchor-width)">
+      <DropdownMenuContent className="w-72">
         <DropdownMenuRadioGroup
           value={value}
           onValueChange={(nextValue) => {
@@ -466,17 +463,5 @@ function PackSourcesDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function EmptyDetails() {
-  return (
-    <div className="flex h-full min-h-80 flex-col items-center justify-center px-8 text-center">
-      <p className="text-sm font-medium">Choose a skill</p>
-      <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Select a skill to read its instructions, see where it came from, and
-        check which agents can find it.
-      </p>
-    </div>
   )
 }

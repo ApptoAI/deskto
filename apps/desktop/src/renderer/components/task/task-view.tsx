@@ -318,7 +318,7 @@ export function TaskView({
 
                 <Composer
                   projectId={thread.projectId}
-                  workspaceId={project.workspaceId}
+                  harnessId={thread.harnessId}
                   label={`Message for ${thread.title}`}
                   placeholder={
                     active ? "The agent is working…" : "Ask for the next step"

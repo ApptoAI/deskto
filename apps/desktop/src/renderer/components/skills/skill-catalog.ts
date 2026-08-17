@@ -68,18 +68,24 @@ export function buildSkillCatalog(
     .sort(compareCatalogItems)
 }
 
+/**
+ * The skill a selection still points at after the catalog was rebuilt — an
+ * edit can move an occurrence to a new key, so the occurrence id is tried
+ * first. No selection resolves to nothing: the details open in a sheet, and a
+ * sheet that opens on its own is a sheet nobody asked for.
+ */
 export function resolveSkillCatalogItem(
   items: SkillCatalogItem[],
   selection: SkillCatalogSelection | null
 ): SkillCatalogItem | null {
+  if (!selection) return null
   return (
     items.find((item) =>
       item.occurrences.some(
-        ({ occurrence }) => occurrence.id === selection?.occurrenceId
+        ({ occurrence }) => occurrence.id === selection.occurrenceId
       )
     ) ??
-    items.find((item) => item.key === selection?.itemKey) ??
-    items[0] ??
+    items.find((item) => item.key === selection.itemKey) ??
     null
   )
 }

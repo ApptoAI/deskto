@@ -73,6 +73,22 @@ export const packSkillSchema = z.object({
 
 export type PackSkill = z.infer<typeof packSkillSchema>
 
+/**
+ * A skill the composer can reference with `$name`. Packs reach every agent;
+ * a skill found in an agent's own folder reaches only that agent, so the
+ * composer filters on `harnessIds` before it offers one.
+ */
+export const promptSkillSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  origin: z.enum(["pack", "native"]),
+  sourceLabel: z.string().min(1),
+  harnessIds: z.array(z.string().min(1)),
+})
+
+export type PromptSkill = z.infer<typeof promptSkillSchema>
+
 export const packKindSchema = z.enum(["managed", "linked"])
 export type PackKind = z.infer<typeof packKindSchema>
 

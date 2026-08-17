@@ -27,6 +27,15 @@ export type ScannedSkillSource = {
   skills: ScannedSkill[]
 }
 
+/** What a name-only scan knows about one skill folder. */
+export type ScannedSkillName = {
+  id: string
+  directoryName: string
+  skillFilePath: string
+  name: string
+  description: string
+}
+
 export async function scanSkillSource(
   source: SkillSourceInput,
   options: { missingIsDiagnostic: boolean }
@@ -95,6 +104,58 @@ export async function scanSkillSource(
       .filter((skill): skill is ScannedSkill => skill !== null)
       .sort(compareScannedSkills),
   }
+}
+
+/**
+ * Names and descriptions only, for the composer's `$` menu. A full scan hashes
+ * every skill folder and probes for scripts, references and assets — four
+ * extra filesystem round trips per skill plus a recursive digest. That is the
+ * right price for the Skills screen and the wrong one for a keystroke, so this
+ * reads one SKILL.md per folder and stops.
+ */
+export async function scanSkillNames(source: {
+  id: string
+  path: string
+}): Promise<ScannedSkillName[]> {
+  const resolvedSourcePath = await realpath(source.path).catch(() => null)
+  if (!resolvedSourcePath) return []
+  let entries
+  try {
+    entries = await readdir(source.path, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const scanned = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map(async (entry): Promise<ScannedSkillName | null> => {
+        const directoryPath = join(source.path, entry.name)
+        const directory = await directoryTarget(
+          directoryPath,
+          entry.isSymbolicLink() ? join(resolvedSourcePath, entry.name) : null
+        )
+        if (!directory || !pathIsWithin(resolvedSourcePath, directory)) {
+          return null
+        }
+        const skillFilePath = join(directoryPath, "SKILL.md")
+        const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
+        // A folder with no readable SKILL.md is not a skill anyone can call.
+        // A readable one with no name is still callable by its folder, which
+        // is the name every other view of this skill already shows.
+        if (parsed.content === null) return null
+        return {
+          id: skillOccurrenceId(source.id, entry.name),
+          directoryName: entry.name,
+          skillFilePath,
+          name: parsed.name ?? entry.name,
+          description: parsed.description ?? "",
+        }
+      })
+  )
+  return scanned
+    .filter((skill): skill is ScannedSkillName => skill !== null)
+    .sort((left, right) => left.name.localeCompare(right.name))
 }
 
 async function scanSkillDirectory(

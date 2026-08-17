@@ -18,6 +18,7 @@ function PromptSuggestions({
   activeId,
   loading = false,
   emptyText,
+  footerText,
   onActiveChange,
   onSelect,
   className,
@@ -27,6 +28,7 @@ function PromptSuggestions({
   activeId: string | null
   loading?: boolean
   emptyText: string
+  footerText?: string
   onActiveChange: (id: string) => void
   onSelect: (id: string) => void
   className?: string
@@ -97,6 +99,16 @@ function PromptSuggestions({
           {loading ? "Searching…" : emptyText}
         </p>
       )}
+      {/* Outside the option list on purpose: it counts what is not shown, so
+          it must not be reachable with the arrow keys. */}
+      {footerText && options.length > 0 ? (
+        <p
+          role="presentation"
+          className="px-2.5 pt-1.5 pb-1 text-xs text-muted-foreground"
+        >
+          {footerText}
+        </p>
+      ) : null}
     </div>
   )
 }

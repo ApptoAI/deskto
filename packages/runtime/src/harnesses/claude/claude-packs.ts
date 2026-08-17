@@ -84,11 +84,16 @@ function ensurePluginShim(root: SkillRoot, shimsRoot: string): string {
   return shim
 }
 
-/** Returns Claude's provider-qualified name for one selected Pack Skill. */
+/**
+ * The slash command for one selected Skill. A Pack skill reaches Claude
+ * through a generated plugin, so it carries that plugin's name; a skill that
+ * already lives in Claude's own skills folder is its own command.
+ */
 export function claudeSkillCommand(
   reference: Extract<HarnessPromptReference, { kind: "skill" }>,
   roots: SkillRoot[]
 ): string {
+  if (reference.origin === "native") return `/${reference.name}`
   const root = roots
     .filter((candidate) => containsPath(candidate.path, reference.path))
     .sort((left, right) => right.path.length - left.path.length)[0]

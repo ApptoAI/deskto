@@ -81,43 +81,36 @@ export function SkillDetailsPanel({
   }
 
   return (
-    <article className="mx-auto w-full max-w-3xl px-6 py-6 lg:px-8">
-      <header className="flex items-start gap-4 border-b border-border pb-6">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-          <BoxIcon className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="font-heading text-xl font-medium tracking-tight">
+    <article className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain px-6 py-6">
+      <header>
+        <div className="flex items-start gap-3.5">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground">
+            <BoxIcon className="size-[1.125rem]" />
+          </span>
+          {/* Right padding clears the sheet's close button, which sits over
+              this row. */}
+          <div className="min-w-0 flex-1 pt-0.5 pr-9">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h1 className="truncate font-heading text-lg leading-6 font-medium tracking-tight">
                 {item.name}
               </h1>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {occurrence.description ??
-                  item.description ??
-                  "Description could not be read."}
-              </p>
+              <StatusChip status={status} />
             </div>
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium",
-                status.tone === "destructive"
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-muted text-muted-foreground"
-              )}
-            >
-              {status.label}
-            </span>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {harnesses.length > 0
+                ? `${harnesses.join(" · ")} · ${availabilityText(source)}`
+                : availabilityText(source)}
+            </p>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {harnesses.length > 0
-              ? `${harnesses.join(" · ")} · ${availabilityText(source)}`
-              : availabilityText(source)}
-          </p>
         </div>
+        <p className="mt-4 text-sm leading-relaxed text-body">
+          {occurrence.description ??
+            item.description ??
+            "Description could not be read."}
+        </p>
       </header>
 
-      <div className="flex flex-wrap gap-2 border-b border-border py-4">
+      <div className="flex flex-wrap gap-2 pt-5 pb-6">
         {source.editable && source.packId && state.status === "ready" ? (
           <Button
             type="button"
@@ -143,7 +136,7 @@ export function SkillDetailsPanel({
 
       {editing ? (
         <section
-          className="mt-5 space-y-3 rounded-xl border border-border p-4"
+          className="mb-6 space-y-3 rounded-xl border border-border p-4"
           aria-label="Edit skill"
         >
           <SkillDraftFields
@@ -172,25 +165,28 @@ export function SkillDetailsPanel({
         </section>
       ) : null}
 
-      <dl className="mt-5 grid gap-3 rounded-xl bg-muted/40 p-4 text-xs sm:grid-cols-3">
-        <div>
-          <dt className="text-muted-foreground">Source</dt>
-          <dd className="mt-1 font-medium">{source.label}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Scope</dt>
-          <dd className="mt-1 font-medium">
-            {source.scopes.map(scopeLabel).join(", ")}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Contents</dt>
-          <dd className="mt-1 font-medium">{contentsLabel(occurrence)}</dd>
-        </div>
+      {/* One hairline table rather than a grey well plus a boxed path: the
+          reader is scanning label-to-value, and rules carry that better than
+          a fill does. */}
+      <dl className="border-t border-border">
+        <MetaRow label="Source" value={source.label} />
+        <MetaRow
+          label="Scope"
+          value={source.scopes.map(scopeLabel).join(", ")}
+        />
+        <MetaRow label="Contents" value={contentsLabel(occurrence)} />
+        {item.occurrences.length === 1 ? (
+          <MetaRow
+            label="Location"
+            value={occurrence.directoryPath}
+            title={occurrence.directoryPath}
+            mono
+          />
+        ) : null}
       </dl>
 
       {source.kind === "pack" ? (
-        <section className="mt-6" aria-labelledby="skill-provisioning-heading">
+        <section className="mt-7" aria-labelledby="skill-provisioning-heading">
           <h2 id="skill-provisioning-heading" className="text-sm font-medium">
             Latest agent configuration
           </h2>
@@ -200,27 +196,38 @@ export function SkillDetailsPanel({
               current context.
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3 overflow-hidden rounded-lg border border-border">
               {provisioning.map(({ harnessId, report }) => (
                 <li
                   key={harnessId}
                   className={cn(
-                    "rounded-lg border p-3 text-sm",
-                    report?.status === "failed"
-                      ? "border-destructive/20 bg-destructive/5"
-                      : "border-border"
+                    "flex gap-2.5 border-b border-border px-3 py-2.5 text-ui last:border-b-0",
+                    report?.status === "failed" ? "bg-destructive/5" : null
                   )}
                 >
-                  <p className="font-medium">
-                    {report
-                      ? provisioningLabel(report.harnessId, report.status)
-                      : `${knownHarnessLabel(harnessId)} has not received this Pack yet`}
-                  </p>
-                  {report?.message ? (
-                    <p className="mt-1 text-muted-foreground">
-                      {report.message}
-                    </p>
-                  ) : null}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "mt-[0.4rem] size-1.5 shrink-0 rounded-full",
+                      report?.status === "failed"
+                        ? "bg-destructive"
+                        : report?.status === "configured"
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40"
+                    )}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">
+                      {report
+                        ? provisioningLabel(report.harnessId, report.status)
+                        : `${knownHarnessLabel(harnessId)} has not received this Pack yet`}
+                    </span>
+                    {report?.message ? (
+                      <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                        {report.message}
+                      </span>
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -229,7 +236,7 @@ export function SkillDetailsPanel({
       ) : null}
 
       {item.occurrences.length > 1 ? (
-        <section className="mt-6" aria-labelledby="skill-locations-heading">
+        <section className="mt-7" aria-labelledby="skill-locations-heading">
           <div className="flex items-center gap-2">
             <h2 id="skill-locations-heading" className="text-sm font-medium">
               Copies found
@@ -242,15 +249,15 @@ export function SkillDetailsPanel({
             These folders contain matching copies of this skill. Select a copy
             to inspect its instructions and availability.
           </p>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 overflow-hidden rounded-lg border border-border">
             {item.occurrences.map((entry) => {
               const active = entry.occurrence.id === occurrence.id
               return (
                 <li
                   key={entry.occurrence.id}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border px-3 py-2.5",
-                    active ? "border-ring bg-muted/50" : "border-border"
+                    "flex items-center gap-3 border-b border-border px-3 py-2.5 transition-colors duration-150 ease-out last:border-b-0",
+                    active ? "bg-muted/60" : "hover:bg-muted/30"
                   )}
                 >
                   <button
@@ -258,8 +265,15 @@ export function SkillDetailsPanel({
                     className="min-w-0 flex-1 text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={() => onSelectOccurrence(entry)}
                   >
-                    <span className="block text-xs font-medium">
-                      {entry.source.label}
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-xs font-medium">
+                        {entry.source.label}
+                      </span>
+                      {active ? (
+                        <span className="shrink-0 font-mono text-tiny tracking-wide text-muted-foreground uppercase">
+                          Shown
+                        </span>
+                      ) : null}
                     </span>
                     <span
                       className="mt-0.5 block truncate font-mono text-micro text-muted-foreground"
@@ -267,7 +281,7 @@ export function SkillDetailsPanel({
                     >
                       {entry.occurrence.directoryPath}
                     </span>
-                    <span className="mt-1 block text-micro text-muted-foreground">
+                    <span className="mt-1 block truncate text-micro text-muted-foreground">
                       {copyAvailabilityText(entry)}
                     </span>
                   </button>
@@ -286,22 +300,10 @@ export function SkillDetailsPanel({
             })}
           </ul>
         </section>
-      ) : (
-        <section className="mt-6" aria-labelledby="skill-location-heading">
-          <h2 id="skill-location-heading" className="text-sm font-medium">
-            Location
-          </h2>
-          <p
-            className="mt-2 truncate rounded-lg border border-border px-3 py-2.5 font-mono text-xs text-muted-foreground"
-            title={occurrence.directoryPath}
-          >
-            {occurrence.directoryPath}
-          </p>
-        </section>
-      )}
+      ) : null}
 
       {diagnostics.length > 0 ? (
-        <section className="mt-6" aria-labelledby="skill-diagnostics-heading">
+        <section className="mt-7" aria-labelledby="skill-diagnostics-heading">
           <h2
             id="skill-diagnostics-heading"
             className="flex items-center gap-2 text-sm font-medium text-destructive"
@@ -322,32 +324,93 @@ export function SkillDetailsPanel({
         </section>
       ) : null}
 
-      <section className="mt-7" aria-labelledby="skill-instructions-heading">
-        <h2 id="skill-instructions-heading" className="eyebrow">
-          Instructions
+      {/* The instructions are the longest thing on the page, so they are set
+          as the document they are — named by an eyebrow and a rule, then read
+          flush, rather than boxed inside a card the reader scrolls through. */}
+      <section className="mt-9" aria-labelledby="skill-instructions-heading">
+        <h2
+          id="skill-instructions-heading"
+          className="border-b border-border pb-2 eyebrow text-muted-foreground"
+        >
+          SKILL.md
         </h2>
         {state.status === "error" ? (
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-3">
             <InlineError message={state.message} />
             <Button type="button" variant="outline" onClick={onRetry}>
               Try again
             </Button>
           </div>
         ) : state.status === "loading" || state.status === "idle" ? (
-          <p className="mt-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="py-10 text-center text-sm text-muted-foreground">
             Reading instructions...
           </p>
         ) : details?.content ? (
-          <Markdown className="mt-3 rounded-xl border border-border p-5">
+          <Markdown className="pt-5">
             {instructionsFromSkillContent(details.content)}
           </Markdown>
         ) : (
-          <p className="mt-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="py-10 text-center text-sm text-muted-foreground">
             Instructions could not be read.
           </p>
         )}
       </section>
     </article>
+  )
+}
+
+/** Label left, value right, one hairline under each — the whole metadata block. */
+function MetaRow({
+  label,
+  value,
+  title,
+  mono = false,
+}: {
+  label: string
+  value: string
+  title?: string
+  mono?: boolean
+}) {
+  return (
+    <div className="flex items-baseline gap-4 border-b border-border py-2.5">
+      <dt className="w-24 shrink-0 text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "min-w-0 flex-1 truncate",
+          mono ? "font-mono text-xs text-body" : "text-ui"
+        )}
+        title={title}
+      >
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+/** A dot carries the state; the pill stays quiet so the name keeps the weight. */
+function StatusChip({ status }: { status: SourceStatus }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-micro leading-none",
+        status.tone === "destructive"
+          ? "border-destructive/25 bg-destructive/5 text-destructive"
+          : "border-border text-muted-foreground"
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "size-1.5 rounded-full",
+          status.tone === "destructive"
+            ? "bg-destructive"
+            : status.tone === "positive"
+              ? "bg-emerald-500"
+              : "bg-muted-foreground/40"
+        )}
+      />
+      {status.label}
+    </span>
   )
 }
 
@@ -359,15 +422,15 @@ function availabilityText(source: CatalogOccurrence["source"]): string {
 
 type SourceStatus = {
   label: string
-  tone: "default" | "destructive"
+  tone: "positive" | "neutral" | "destructive"
 }
 
 function sourceStatus(source: CatalogOccurrence["source"]): SourceStatus {
   if (source.kind === "native") {
-    return { label: "Detected", tone: "default" }
+    return { label: "Detected", tone: "positive" }
   }
   if (source.provisioning.length === 0) {
-    return { label: "Not provided yet", tone: "default" }
+    return { label: "Not provided yet", tone: "neutral" }
   }
   if (source.provisioning.some(({ status }) => status === "failed")) {
     return { label: "Delivery failed", tone: "destructive" }
@@ -378,15 +441,15 @@ function sourceStatus(source: CatalogOccurrence["source"]): SourceStatus {
   if (
     source.harnessIds.some((harnessId) => !reportedHarnesses.has(harnessId))
   ) {
-    return { label: "Partially configured", tone: "default" }
+    return { label: "Partially configured", tone: "neutral" }
   }
   if (source.provisioning.every(({ status }) => status === "configured")) {
-    return { label: "Configured", tone: "default" }
+    return { label: "Configured", tone: "positive" }
   }
   if (source.provisioning.every(({ status }) => status === "unsupported")) {
-    return { label: "Unsupported", tone: "default" }
+    return { label: "Unsupported", tone: "neutral" }
   }
-  return { label: "Partially configured", tone: "default" }
+  return { label: "Partially configured", tone: "neutral" }
 }
 
 function provisioningEntries(source: CatalogOccurrence["source"]): Array<{

@@ -5,11 +5,13 @@ import type { HarnessPromptReference } from "@deskto/harness-sdk"
 import type { PromptReference } from "@deskto/protocol"
 
 import { RuntimeError } from "./errors.js"
-import { readResolvedPackSkills } from "./packs/pack-files.js"
+import type { HarnessRegistry } from "./harness-registry.js"
+import { SkillInventory } from "./skills/skill-inventory.js"
 import type { Store } from "./storage/store.js"
 
 export async function resolvePromptReferences(
   store: Store,
+  harnesses: HarnessRegistry,
   threadId: string,
   references: PromptReference[]
 ): Promise<HarnessPromptReference[]> {
@@ -17,10 +19,10 @@ export async function resolvePromptReferences(
   const thread = store.threads.getRow(threadId)
   const project = store.projects.get(thread.project_id)
   const projectRoot = await realpath(project.path)
-  const packs = store.packs.attachedToWorkspace(project.workspaceId)
-  const resolvedSkills = (
-    await Promise.all(packs.map((pack) => readResolvedPackSkills(pack)))
-  ).flat()
+  const resolvedSkills = await new SkillInventory(
+    store,
+    harnesses
+  ).listForPrompt(project.id)
   const skillsById = new Map(
     resolvedSkills.map((entry) => [entry.skill.id, entry] as const)
   )
@@ -34,7 +36,7 @@ export async function resolvePromptReferences(
       if (selectedSkillId && selectedSkillId !== reference.skillId) {
         throw new RuntimeError(
           "invalid-prompt-reference",
-          `Skill '${reference.name}' is selected from more than one Pack`
+          `Skill '${reference.name}' is selected from more than one source`
         )
       }
       skillIdsByName.set(reference.name, reference.skillId)
@@ -42,7 +44,15 @@ export async function resolvePromptReferences(
       if (!entry || entry.skill.name !== reference.name) {
         throw new RuntimeError(
           "invalid-prompt-reference",
-          `Skill '${reference.name}' is not available in this workspace`
+          `Skill '${reference.name}' is not available in this project`
+        )
+      }
+      // A skill in one agent's own folder is invisible to the other, and the
+      // agent can change after the reference was picked.
+      if (!entry.skill.harnessIds.includes(thread.harness_id)) {
+        throw new RuntimeError(
+          "invalid-prompt-reference",
+          `Skill '${reference.name}' is not available to this agent`
         )
       }
       const key = `skill:${entry.skill.id}`
@@ -50,6 +60,7 @@ export async function resolvePromptReferences(
         seen.add(key)
         resolved.push({
           kind: "skill",
+          origin: entry.skill.origin,
           name: entry.skill.name,
           path: entry.path,
         })

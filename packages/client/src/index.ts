@@ -10,9 +10,12 @@ export {
   formatSkillReference,
   reconcilePromptReferences,
   replaceComposerTrigger,
+  shortlistSkills,
+  skillsForHarness,
   type ComposerCandidate,
   type ComposerTrigger,
   type ComposerTriggerKind,
+  type SkillShortlist,
 } from "./composer.js"
 export {
   applyThreadDelta,

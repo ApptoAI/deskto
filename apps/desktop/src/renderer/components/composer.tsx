@@ -22,10 +22,12 @@ import {
   formatSkillReference,
   reconcilePromptReferences,
   replaceComposerTrigger,
+  shortlistSkills,
+  skillsForHarness,
   type ComposerCandidate,
   type ComposerTrigger,
 } from "@deskto/client"
-import type { PackSkill, PromptReference, TurnInput } from "@deskto/protocol"
+import type { PromptReference, PromptSkill, TurnInput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -57,19 +59,20 @@ const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
 ]
 
 type SkillCache = {
-  workspaceId: string
-  skills: PackSkill[]
+  projectId: string
+  skills: PromptSkill[]
 }
 
 type SuggestionResult = {
   key: string
   candidates: ComposerCandidate[]
+  hidden: number
   failed: boolean
 }
 
 export function Composer({
   projectId,
-  workspaceId,
+  harnessId = null,
   label,
   placeholder,
   onSend,
@@ -82,7 +85,7 @@ export function Composer({
   autoFocus = false,
 }: {
   projectId: string
-  workspaceId: string
+  harnessId?: string | null
   label: string
   placeholder: string
   onSend: (input: TurnInput) => Promise<void>
@@ -101,6 +104,7 @@ export function Composer({
   const [suggestionResult, setSuggestionResult] = useState<SuggestionResult>({
     key: "",
     candidates: [],
+    hidden: 0,
     failed: false,
   })
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -133,8 +137,17 @@ export function Composer({
   const triggerQuery = trigger?.query ?? ""
   const menuOpen = trigger !== null && dismissedKey !== triggerKey && !blocked
   const cachedSkills =
-    trigger?.kind === "skill" && skillCache?.workspaceId === workspaceId
+    trigger?.kind === "skill" && skillCache?.projectId === projectId
       ? skillCache.skills
+      : null
+  // Filtering and shortlisting happen here rather than in the Runtime: the
+  // whole list is fetched once per project, so every later keystroke is a
+  // sort over an array in memory and a render of at most four rows.
+  const shortlist =
+    trigger?.kind === "skill" && cachedSkills
+      ? shortlistSkills(
+          filterSkills(skillsForHarness(cachedSkills, harnessId), trigger.query)
+        )
       : null
   const candidates =
     trigger?.kind === "command"
@@ -147,11 +160,12 @@ export function Composer({
         )
       : trigger?.kind === "project-entry" && !trigger.query.trim()
         ? []
-        : cachedSkills
-          ? toSkillCandidates(filterSkills(cachedSkills, trigger?.query ?? ""))
+        : shortlist
+          ? toSkillCandidates(shortlist.visible)
           : suggestionResult.key === triggerKey
             ? suggestionResult.candidates
             : []
+  const hiddenCandidates = shortlist?.hidden ?? 0
   const suggestionsLoading =
     trigger !== null &&
     trigger.kind !== "command" &&
@@ -177,22 +191,19 @@ export function Composer({
     if (!triggerKind || blocked || triggerKind === "command") return
 
     if (triggerKind === "skill") {
-      if (skillCache?.workspaceId === workspaceId) return
-      void client.listWorkspaceSkills(workspaceId).then(
+      // One scan per project, then the cache answers every keystroke.
+      if (skillCache?.projectId === projectId) return
+      void client.listSkillsForPrompt(projectId).then(
         (skills) => {
           if (requestSequence.current !== sequence) return
-          setSkillCache({ workspaceId, skills })
-          setSuggestionResult({
-            key: triggerKey!,
-            candidates: toSkillCandidates(filterSkills(skills, triggerQuery)),
-            failed: false,
-          })
+          setSkillCache({ projectId, skills })
         },
         () => {
           if (requestSequence.current !== sequence) return
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],
+            hidden: 0,
             failed: true,
           })
         }
@@ -212,6 +223,7 @@ export function Composer({
               kind: "project-entry" as const,
               entry,
             })),
+            hidden: 0,
             failed: false,
           })
         },
@@ -220,6 +232,7 @@ export function Composer({
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],
+            hidden: 0,
             failed: true,
           })
         }
@@ -234,7 +247,6 @@ export function Composer({
     triggerKey,
     triggerKind,
     triggerQuery,
-    workspaceId,
   ])
 
   useEffect(() => {
@@ -405,6 +417,11 @@ export function Composer({
               activeId={activeId}
               loading={suggestionsLoading}
               emptyText={suggestionEmptyText(trigger, suggestionsError)}
+              {...(hiddenCandidates > 0
+                ? {
+                    footerText: `${hiddenCandidates} more — keep typing to narrow`,
+                  }
+                : {})}
               onActiveChange={setHighlightedId}
               onSelect={(id) => {
                 const candidate = candidates.find((item) => item.id === id)
@@ -547,7 +564,7 @@ export function Composer({
   )
 }
 
-function toSkillCandidates(skills: PackSkill[]): ComposerCandidate[] {
+function toSkillCandidates(skills: PromptSkill[]): ComposerCandidate[] {
   return skills.map((skill) => ({
     id: `skill:${skill.id}`,
     kind: "skill",
@@ -572,7 +589,7 @@ function toSuggestionOption(
       id: candidate.id,
       label: `$${candidate.skill.name}`,
       description: candidate.skill.description || "Use this skill",
-      meta: candidate.skill.packName,
+      meta: candidate.skill.sourceLabel,
       icon: <BoxIcon className="size-4" />,
     }
   }
@@ -622,6 +639,10 @@ function suggestionEmptyText(
       ? "No matching files or folders."
       : "Type to search project files."
   }
-  if (trigger.kind === "skill") return "No matching skills in this workspace."
+  if (trigger.kind === "skill") {
+    return trigger.query.trim()
+      ? "No matching skills for this agent."
+      : "No skills found for this agent."
+  }
   return "No matching command."
 }

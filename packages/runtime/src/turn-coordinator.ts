@@ -132,6 +132,7 @@ export class TurnCoordinator {
     const harness = await this.harnesses.requireAvailable(thread.harness_id)
     const references = await resolvePromptReferences(
       this.store,
+      this.harnesses,
       threadId,
       input.references
     )

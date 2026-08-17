@@ -1,4 +1,8 @@
-import type { PackSkill, PromptReference, ProjectEntry } from "@deskto/protocol"
+import type {
+  PromptReference,
+  PromptSkill,
+  ProjectEntry,
+} from "@deskto/protocol"
 
 export type ComposerTriggerKind = "project-entry" | "skill" | "command"
 
@@ -16,7 +20,7 @@ type ComposerReplacement = {
 
 export type ComposerCandidate =
   | { id: string; kind: "project-entry"; entry: ProjectEntry }
-  | { id: string; kind: "skill"; skill: PackSkill }
+  | { id: string; kind: "skill"; skill: PromptSkill }
   | {
       id: string
       kind: "app-command"
@@ -135,7 +139,46 @@ export function reconcilePromptReferences(
   return [...byToken.values()]
 }
 
-export function filterSkills(skills: PackSkill[], query: string): PackSkill[] {
+/**
+ * The skills this agent can actually run: Packs reach every agent, while a
+ * skill found in an agent's own folder reaches only that agent.
+ */
+export function skillsForHarness(
+  skills: PromptSkill[],
+  harnessId: string | null
+): PromptSkill[] {
+  if (!harnessId) return skills.filter((skill) => skill.origin === "pack")
+  return skills.filter(
+    (skill) => skill.origin === "pack" || skill.harnessIds.includes(harnessId)
+  )
+}
+
+/** What the `$` menu shows, and how many matches it is holding back. */
+export type SkillShortlist = {
+  visible: PromptSkill[]
+  hidden: number
+}
+
+/**
+ * The menu is a shortlist, not a catalogue: it shows the few best matches and
+ * says how many it is holding back, so typing one more letter is the way to
+ * reach the rest. Keeping the rendered list at four is also what keeps the
+ * menu cheap while someone types.
+ */
+export function shortlistSkills(
+  skills: PromptSkill[],
+  limit = 4
+): SkillShortlist {
+  return {
+    visible: skills.slice(0, limit),
+    hidden: Math.max(0, skills.length - limit),
+  }
+}
+
+export function filterSkills(
+  skills: PromptSkill[],
+  query: string
+): PromptSkill[] {
   const normalized = query.trim().toLocaleLowerCase()
   if (!normalized) return skills
   return skills
@@ -152,7 +195,7 @@ export function filterSkills(skills: PackSkill[], query: string): PackSkill[] {
     .map((entry) => entry.skill)
 }
 
-function skillScore(skill: PackSkill, query: string): number | null {
+function skillScore(skill: PromptSkill, query: string): number | null {
   const name = skill.name.toLocaleLowerCase()
   const description = skill.description.toLocaleLowerCase()
   if (name === query) return 0

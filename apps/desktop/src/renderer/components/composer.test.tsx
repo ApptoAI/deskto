@@ -30,7 +30,6 @@ describe("Composer", () => {
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
         <Composer
           projectId="project-1"
-          workspaceId="personal"
           label="Message"
           placeholder="Describe the task"
           onSend={onSend}
@@ -78,7 +77,6 @@ describe("Composer", () => {
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
         <Composer
           projectId="project-1"
-          workspaceId="personal"
           label="Message"
           placeholder="Describe the task"
           onSend={vi.fn().mockResolvedValue(undefined)}
@@ -109,7 +107,6 @@ describe("Composer", () => {
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
         <Composer
           projectId="project-1"
-          workspaceId="personal"
           label="Message"
           placeholder="Describe the task"
           onSend={onSend}
@@ -147,7 +144,6 @@ describe("Composer", () => {
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
         <Composer
           projectId="project-1"
-          workspaceId="personal"
           label="Message"
           placeholder="Describe the task"
           onSend={vi.fn().mockResolvedValue(undefined)}

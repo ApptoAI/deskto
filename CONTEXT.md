@@ -31,7 +31,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Skill Occurrence**: One skill directory found at one physical location. Occurrences keep their identity even when another skill has the same name or their `SKILL.md` is invalid.
 - **Skill Exposure**: The relationship between a Skill Occurrence and a Harness. It records native discovery or Deskto's latest attempt to configure an app-supplied root. It does not claim the Harness used the skill.
 - **Pack**: A provider-neutral directory of skills attached to multiple Workspaces. A managed Pack lives under Deskto's application data directory. A linked Pack stays at a user-selected external path. Prompts, MCP configuration, templates, tool requirements, and versioning may follow.
-- **Prompt Reference**: A semantic reference selected while composing a Turn, currently a Project entry or a Skill. The Client keeps visible token text while the Runtime validates the reference and a Harness Adapter translates it to its native input.
+- **Prompt Reference**: A semantic reference selected while composing a Turn, currently a Project entry or a Skill. The Client keeps visible token text while the Runtime validates the reference and a Harness Adapter translates it to its native input. A Skill reference may name a Pack skill, which every Harness reaches through Deskto, or a skill found in one Harness's own folder, which only that Harness may reference.
 - **Catalog**: A future list of Packs available to a person or organization.
 - **Hub**: A future service that publishes Catalogs and Packs. A Hub does not execute Threads.
 
