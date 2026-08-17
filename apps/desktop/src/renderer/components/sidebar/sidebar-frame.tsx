@@ -20,8 +20,14 @@ export function SidebarFrame({ children }: { children: ReactNode }) {
   )
 }
 
-/** Selected row in either sidebar: tasks in one, settings pages in the other. */
+/**
+ * Selected row in either sidebar: tasks in one, settings pages in the other.
+ *
+ * The two palettes lift the row in opposite directions, because the sidebar is
+ * the lighter surface in dark and the darker one in light. Dark raises it to
+ * the accent step; light lifts it back to the page colour and outlines it.
+ */
 export const sidebarRowSelected =
-  "bg-background text-foreground shadow-xs ring-1 ring-border/70 dark:bg-accent dark:shadow-none dark:ring-0"
+  "bg-background text-foreground ring-1 ring-border dark:bg-accent dark:ring-0"
 
-export const sidebarRowIdle = "hover:bg-muted/50"
+export const sidebarRowIdle = "hover:bg-accent/60"

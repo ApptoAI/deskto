@@ -10,8 +10,19 @@ export type SettingValue =
 
 export type SettingValues = { [key: string]: SettingValue }
 
+/** One selectable value in a `choice` setting, in the order it is offered. */
+export type SettingChoice = {
+  value: string
+  label: string
+  /** What picking this one means, when the label cannot say it alone. */
+  description?: string
+}
+
 /** How a settings screen edits the value. New editor kinds join this union. */
-export type SettingInput = { kind: "keybinding" } | { kind: "harness-model" }
+export type SettingInput =
+  | { kind: "keybinding" }
+  | { kind: "harness-model" }
+  | { kind: "choice" }
 
 /** One configurable value: a stable key, a validated shape, and a default. */
 export interface SettingDefinition<T extends SettingValue> {

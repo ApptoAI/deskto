@@ -1,7 +1,10 @@
+import { proseClassName } from "@workspace/ui/components/chat/markdown"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import { cn } from "@workspace/ui/lib/utils"
 import { z } from "zod"
 
 import { InlineError } from "../inline-error.js"
+import { documentMeasureClassName } from "./task-panel-size.js"
 import { useWorkerResult } from "./use-worker-result.js"
 
 export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
@@ -32,10 +35,23 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
   }
 
   return (
-    <ScrollArea className="flex-1 bg-muted/20">
-      <article className="mx-auto my-5 min-h-[calc(100%-2.5rem)] w-[min(48rem,calc(100%-2rem))] rounded-sm border border-border bg-background px-8 py-10 shadow-sm">
+    // No paper metaphor: a Word file is read here the same way a Markdown one
+    // is, on the canvas and held to the same measure. A drop-shadowed white
+    // sheet would be the one object in the app pretending to be physical.
+    <ScrollArea className="flex-1">
+      <article
+        className={cn("mx-auto w-full px-8 py-8", documentMeasureClassName)}
+      >
+        {/* The same prose rules the agent's own output is set in, so a Word
+            file and an answer are one voice rather than two. Only the images
+            are added: a converted .docx is the one place here that carries
+            them, and agent markdown never does. */}
         <div
-          className="text-sm leading-relaxed break-words [&_a]:text-muted-foreground [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_h1]:my-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:my-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:text-lg [&_h3]:font-medium [&_img]:my-4 [&_img]:max-w-full [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-3 [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-2 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:p-2 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5"
+          className={cn(
+            proseClassName,
+            "text-reading",
+            "[&_img]:my-[1.2em] [&_img]:max-w-full [&_img]:rounded-lg"
+          )}
           dangerouslySetInnerHTML={{ __html: state.data.html }}
         />
         {state.data.warnings > 0 ? (

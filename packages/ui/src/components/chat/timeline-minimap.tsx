@@ -214,7 +214,7 @@ function TimelineMinimap({
               : "Jump to a message"
           }
           className={cn(
-            "absolute top-1/2 left-3 -translate-y-1/2 cursor-pointer bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            "absolute top-1/2 left-3 -translate-y-1/2 cursor-pointer bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring",
             // Never wider than the gutter, so the rail cannot reach over the
             // message column; with no room to spare it goes inert instead.
             gutter.strip > 0 ? "pointer-events-auto" : "pointer-events-none"

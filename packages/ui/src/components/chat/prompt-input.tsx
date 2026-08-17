@@ -8,7 +8,9 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
     <form
       data-slot="prompt-input"
       className={cn(
-        "flex w-full flex-col rounded-2xl bg-card pb-2 shadow-[0_8px_24px_-20px_rgb(0_0_0/0.4)] ring-1 ring-border transition-shadow duration-200 ease-out focus-within:ring-ring/50",
+        // A hairline and a raised surface, no shadow: a soft drop under a grey
+        // well reads as smudge on a light canvas, and as nothing on a dark one.
+        "flex w-full flex-col rounded-2xl bg-card pb-2 ring-1 ring-border transition-shadow duration-200 ease-out focus-within:ring-ring",
         className
       )}
       {...props}

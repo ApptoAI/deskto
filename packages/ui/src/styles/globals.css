@@ -1,14 +1,34 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+/* The upright axis alone would leave every <em> in agent output faux-slanted. */
+@import "@fontsource-variable/inter/wght-italic.css";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
+/* Two faces carry the whole system. Inter sets everything a person reads;
+   Geist Mono is reserved for text that is machine-shaped — labels, counts,
+   paths, code — so a glance at the shape already says what kind of thing it
+   is. Both ship with the app: an offline desktop client cannot wait on a CDN,
+   and a fallback stack that differs per platform would undo the tuning below. */
+@theme {
+    --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+    --font-mono:
+        "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* One step above the app's 14px body, for the long-form surfaces: an
+       answer, a file preview, a prompt someone wrote. */
+    --text-reading: 0.9375rem;
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
+    --color-body: var(--body);
+    --color-chrome: var(--chrome);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -47,86 +67,173 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
-    --font-sans: var(--font-sans);
     --ease-out-quart: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
     --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/*
+ * The same ladder read the other way up. Dark lifts the frame off a near-black
+ * page; light recesses it under a white one. Either way a region is told from
+ * its neighbour by surface before any border is drawn, the divider is a
+ * hairline that is genuinely visible, and the filled pill is whatever the
+ * canvas is not — near-black here, near-white there.
+ *
+ *   canvas   #ffffff  the page. Conversation, previews, everything read.
+ *   chrome   #f4f4f7  the frame. Sidebar, toolbars, headers, tab strips.
+ *   card     #ebecf0  raised blocks. Cards, code, wells.
+ *   muted    #e5e6ea  the hover fill, one step above whatever it sits on.
+ *   accent   #dcdee3  selection, and the highlighted row in a menu.
+ *   border   #d7d9df  the only divider.
+ */
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --body: oklch(0.332 0.01 260.7);
+    --chrome: oklch(0.968 0.004 286.3);
+    --card: oklch(0.943 0.005 275);
+    --card-foreground: oklch(0.332 0.01 260.7);
+    /* White, not the card grey: a menu floats over every surface here, and
+       only the page colour reads as being in front of all of them. */
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --primary: oklch(0.179 0.004 286);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.9 0.008 271);
+    --secondary-foreground: oklch(0.145 0 0);
+    /* Distinct from --card on purpose: a row inside a card hovers to --muted,
+       and the two being equal is a hover that does nothing. */
+    --muted: oklch(0.925 0.006 274);
+    --muted-foreground: oklch(0.487 0.012 262);
+    --accent: oklch(0.9 0.008 271);
+    --accent-foreground: oklch(0.145 0 0);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --border: oklch(0.885 0.008 271);
+    /* Heavier than the hairline: a control's boundary is what identifies it,
+       so it clears 3:1 against the page rather than whispering like a rule. */
+    --input: oklch(0.6 0.012 262);
+    --ring: oklch(0.6 0.012 262);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --radius: 0.5rem;
+    --sidebar: oklch(0.968 0.004 286.3);
+    --sidebar-foreground: oklch(0.332 0.01 260.7);
+    --sidebar-primary: oklch(0.179 0.004 286);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.9 0.008 271);
+    --sidebar-accent-foreground: oklch(0.145 0 0);
+    --sidebar-border: oklch(0.915 0.008 278.6);
+    --sidebar-ring: oklch(0.6 0.012 262);
 }
 
+/*
+ * A four-step ladder, cool-neutral, no colour anywhere it is not carrying
+ * meaning. Content sits on the true canvas; every frame around it — sidebar,
+ * tab strips, headers, composer — is one step up, so a region reads as a
+ * region before a single border is drawn. Borders are hairlines that are
+ * genuinely visible against the surface they divide, not translucent white
+ * that disappears into whatever is behind it.
+ *
+ *   canvas   #0a0a0a  the page. Conversation, previews, everything read.
+ *   chrome   #131316  the frame. Sidebar, toolbars, headers, tab strips.
+ *   card     #1a1b1f  raised blocks. Cards, code, wells, menus.
+ *   muted    #202126  the hover fill, one step above whatever it sits on.
+ *   accent   #2b2e34  selection, and the highlighted row in a menu.
+ *   hairline #26282d  the only divider.
+ */
 .dark {
     --background: oklch(0.145 0 0);
-    --foreground: oklch(0.93 0 0);
-    --card: oklch(0.19 0 0);
-    --card-foreground: oklch(0.93 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.93 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.19 0 0);
-    --secondary: oklch(0.245 0 0);
-    --secondary-foreground: oklch(0.93 0 0);
-    --muted: oklch(0.245 0 0);
-    --muted-foreground: oklch(0.7 0 0);
-    --accent: oklch(0.245 0 0);
-    --accent-foreground: oklch(0.93 0 0);
+    --foreground: oklch(1 0 0);
+    --body: oklch(0.892 0.006 275);
+    --chrome: oklch(0.188 0.006 285.8);
+    --card: oklch(0.223 0.008 274.6);
+    --card-foreground: oklch(0.892 0.006 275);
+    /* Menus take the card surface so the accent below can highlight a row
+       against them; when the two matched, a hovered menu item was invisible. */
+    --popover: oklch(0.223 0.008 274.6);
+    --popover-foreground: oklch(1 0 0);
+    --primary: oklch(1 0 0);
+    --primary-foreground: oklch(0.145 0 0);
+    --secondary: oklch(0.3 0.011 268);
+    --secondary-foreground: oklch(1 0 0);
+    --muted: oklch(0.248 0.009 272);
+    --muted-foreground: oklch(0.675 0.011 258);
+    --accent: oklch(0.3 0.011 268);
+    --accent-foreground: oklch(1 0 0);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 8%);
-    --input: oklch(1 0 0 / 12%);
-    --ring: oklch(0.556 0 0);
+    --border: oklch(0.277 0.01 268.3);
+    /* See the light block: a control's edge is not a hairline. */
+    --input: oklch(0.55 0.012 265);
+    --ring: oklch(0.55 0.012 265);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.145 0 0);
-    --sidebar-foreground: oklch(0.93 0 0);
-    --sidebar-primary: oklch(0.922 0 0);
-    --sidebar-primary-foreground: oklch(0.19 0 0);
-    --sidebar-accent: oklch(0.245 0 0);
-    --sidebar-accent-foreground: oklch(0.93 0 0);
-    --sidebar-border: oklch(1 0 0 / 8%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar: oklch(0.188 0.006 285.8);
+    --sidebar-foreground: oklch(0.892 0.006 275);
+    --sidebar-primary: oklch(1 0 0);
+    --sidebar-primary-foreground: oklch(0.145 0 0);
+    --sidebar-accent: oklch(0.3 0.011 268);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(0.243 0.008 264.4);
+    --sidebar-ring: oklch(0.55 0.012 265);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
     }
+  /* Inter is drawn for tight setting: a touch of negative tracking is what
+     makes it read as one gathered voice instead of loose default sans. On a
+     near-black canvas, unsmoothed text also renders visibly heavier than it
+     was designed to, so it is antialiased here rather than per component. */
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings:
+      "liga" 1,
+      "calt" 1;
+    letter-spacing: -0.011em;
     }
+  /* The body's negative tracking is tuned for Inter and would otherwise
+     inherit into the mono face, which this system tracks the other way. */
+  code,
+  kbd,
+  samp,
+  pre {
+    letter-spacing: normal;
+    }
+  /* Windows High Contrast paints over the ring, and every control here turns
+     the native outline off. Hand it back one that the mode can draw. */
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: 2px solid CanvasText;
+      outline-offset: 2px;
+      }
+    }
+}
+
+/* The one display step the app has: a page title, or the question on an empty
+   task screen. Weight 400 and tight tracking do the work that bolding would. */
+@utility display-sm {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* The label voice: uppercase mono, tracked open, always muted. It marks the
+   text that names a region rather than saying anything — section headers,
+   column heads, counters — and never competes with the content under it. */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 400;
 }

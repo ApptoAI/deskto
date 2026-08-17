@@ -41,7 +41,7 @@ export const ActivityPanel = memo(function ActivityPanel({
           <button
             type="button"
             onClick={onOpenFiles}
-            className="cursor-pointer underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="cursor-pointer underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             Files it changed
           </button>{" "}
@@ -60,9 +60,7 @@ export const ActivityPanel = memo(function ActivityPanel({
           ) : null}
           {agents.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h3 className="px-0.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Agents
-              </h3>
+              <h3 className="px-0.5 eyebrow text-muted-foreground">Agents</h3>
               {agents.map((node) => (
                 <AgentCard key={node.activity.id} node={node} />
               ))}
@@ -100,12 +98,12 @@ function AgentCard({ node }: { node: ActivityNode }) {
       : undefined
 
   return (
-    <div className="overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-border/60">
+    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setManual(!open)}
-        className="flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 text-left transition-colors duration-100 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 text-left transition-colors duration-100 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
       >
         <SubagentBadge status={activity.status} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
@@ -113,7 +111,9 @@ function AgentCard({ node }: { node: ActivityNode }) {
         </span>
         <AgentElapsed activity={activity} />
         {agentType ? (
-          <span className="inline-flex h-5.5 shrink-0 items-center rounded-md bg-muted/60 px-1.5 font-mono text-[11px] text-muted-foreground ring-1 ring-border/40">
+          // A step above the card it sits on, since a chip filled with the
+          // card's own colour would be an outline and nothing more.
+          <span className="inline-flex h-5.5 shrink-0 items-center rounded-md bg-muted px-1.5 font-mono text-[11px] text-muted-foreground ring-1 ring-border/70">
             {agentType}
           </span>
         ) : null}

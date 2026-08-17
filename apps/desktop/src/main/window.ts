@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { BrowserWindow, screen } from "electron"
+import { BrowserWindow, nativeTheme, screen } from "electron"
 
 /** Opens large on a roomy display without overflowing a small one: most of
     the work area, capped so it never becomes an unwieldy full-screen sheet. */
@@ -12,6 +12,16 @@ function defaultWindowSize() {
   }
 }
 
+/** What `ready-to-show` paints and what fills the gap when a resize outruns
+    the web contents, so it has to be the renderer's canvas rather than a
+    constant. The chosen theme is a Runtime setting and out of reach here, so
+    this follows the operating system: a user who picked the palette their
+    system is not in still gets one wrong frame, which is as close as the main
+    process can get on its own. */
+function canvasColor(): string {
+  return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"
+}
+
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...defaultWindowSize(),
@@ -20,7 +30,7 @@ export function createMainWindow(): BrowserWindow {
     center: true,
     show: false,
     titleBarStyle: "hiddenInset",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: canvasColor(),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -32,6 +42,12 @@ export function createMainWindow(): BrowserWindow {
       plugins: true,
     },
   })
+
+  // The colour is only read at construction, and a window outlives any one
+  // system palette.
+  const followSystemCanvas = () => window.setBackgroundColor(canvasColor())
+  nativeTheme.on("updated", followSystemCanvas)
+  window.once("closed", () => nativeTheme.off("updated", followSystemCanvas))
 
   window.once("ready-to-show", () => window.show())
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))

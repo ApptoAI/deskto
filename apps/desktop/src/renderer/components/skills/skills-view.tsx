@@ -121,7 +121,7 @@ export function SkillsView({
         <div className="mx-auto w-full max-w-4xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="font-heading text-2xl font-medium">Skills</h1>
+              <h1 className="font-heading display-sm">Skills</h1>
               <p className="pt-1 text-sm text-muted-foreground">
                 See which instructions your agents can find and manage shared
                 Packs.
@@ -176,7 +176,7 @@ export function SkillsView({
                   }
                 }}
                 className={cn(
-                  "no-drag -mb-px border-b-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:rounded-t-md focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "no-drag -mb-px border-b-2 px-3 py-2 text-sm transition-colors outline-none focus-visible:rounded-t-md focus-visible:ring-2 focus-visible:ring-ring",
                   id === tab
                     ? "border-foreground text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground"
