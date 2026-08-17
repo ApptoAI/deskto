@@ -154,7 +154,7 @@ function TurnFiles({ outputs }: { outputs: TurnOutput[] }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={openAll}
+            onClick={() => openAll(outputs)}
             className="text-muted-foreground"
           >
             Show all {outputs.length}
