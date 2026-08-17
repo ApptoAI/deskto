@@ -8,7 +8,14 @@ import { z } from "zod"
 
 import type { Runtime } from "@deskto/runtime"
 
+import type { BrowserManager } from "./browser/browser-manager.js"
+
 import {
+  browserActionChannel,
+  browserHideChannel,
+  browserNavigateChannel,
+  browserShowChannel,
+  browserStateChannel,
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
@@ -18,7 +25,12 @@ import {
   revealFileChannel,
   saveFileCopyChannel,
 } from "../shared/channels.js"
-import type { PickedProject, ResultRef } from "../shared/desktop-api.js"
+import type {
+  BrowserAction,
+  BrowserBounds,
+  PickedProject,
+  ResultRef,
+} from "../shared/desktop-api.js"
 
 const allowedExternalProtocols = new Set(["http:", "https:"])
 
@@ -26,6 +38,19 @@ const resultRefSchema: z.ZodType<ResultRef> = z.object({
   threadId: z.string().min(1),
   artifactId: z.string().min(1),
 })
+
+const threadIdSchema = z.string().min(1)
+const browserBoundsSchema: z.ZodType<BrowserBounds> = z.object({
+  x: z.number().int(),
+  y: z.number().int(),
+  width: z.number().int().positive().max(4_096),
+  height: z.number().int().positive().max(4_096),
+})
+const browserActionSchema: z.ZodType<BrowserAction> = z.enum([
+  "back",
+  "forward",
+  "reload",
+])
 
 function handleFolderPick(channel: string, title: string): void {
   ipcMain.handle(channel, async (): Promise<PickedProject | undefined> => {
@@ -40,7 +65,20 @@ function handleFolderPick(channel: string, title: string): void {
   })
 }
 
-export function registerDesktopIpc(runtime: Runtime): void {
+export function registerDesktopIpc(
+  runtime: Runtime,
+  browser: BrowserManager
+): void {
+  async function existingBrowserThread(value: string): Promise<string> {
+    const threadId = threadIdSchema.parse(value)
+    const response = await runtime.request({
+      method: "thread.get",
+      params: { threadId },
+    })
+    if (!response.ok) throw new Error("That task is no longer available.")
+    return threadId
+  }
+
   handleFolderPick(pickProjectChannel, "Open project folder")
   handleFolderPick(pickPackChannel, "Choose a pack folder")
   ipcMain.handle(
@@ -212,5 +250,31 @@ export function registerDesktopIpc(runtime: Runtime): void {
     } catch {
       return
     }
+  })
+
+  ipcMain.handle(browserShowChannel, async (_event, threadId, bounds) =>
+    browser.show(
+      await existingBrowserThread(threadId),
+      browserBoundsSchema.parse(bounds)
+    )
+  )
+  ipcMain.handle(browserHideChannel, (_event, threadId): void => {
+    browser.hide(threadIdSchema.parse(threadId))
+  })
+  ipcMain.handle(browserStateChannel, async (_event, threadId) =>
+    browser.state(await existingBrowserThread(threadId))
+  )
+  ipcMain.handle(browserNavigateChannel, async (_event, threadId, url) =>
+    browser.userNavigate(
+      await existingBrowserThread(threadId),
+      z.string().min(1).max(8_192).parse(url)
+    )
+  )
+  ipcMain.handle(browserActionChannel, async (_event, threadId, action) => {
+    const id = await existingBrowserThread(threadId)
+    const parsed = browserActionSchema.parse(action)
+    if (parsed === "back") return browser.back(id)
+    if (parsed === "forward") return browser.forward(id)
+    return browser.reload(id)
   })
 }

@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { createRuntime } from "./runtime.js"
+import type { SessionToolProvider } from "./session-tools.js"
 import { Store } from "./storage/store.js"
 
 const directories: string[] = []
@@ -2545,6 +2546,78 @@ describe("Runtime", () => {
       "Prepare the report",
     ])
     expect(unwrap(await starting).thread.status).toBe("idle")
+    await runtime.close()
+  })
+
+  it("revokes Session Tools before waiting for Harness cancellation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness({ id: "slow", name: "Slow harness" })
+    let markCancelStarted: (() => void) | undefined
+    let releaseCancel: (() => void) | undefined
+    const cancelStarted = new Promise<void>((resolve) => {
+      markCancelStarted = resolve
+    })
+    const cancelGate = new Promise<void>((resolve) => {
+      releaseCancel = resolve
+    })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => {
+        const session = await scripted.start(input, signal)
+        return {
+          ...session,
+          cancel: async () => {
+            markCancelStarted?.()
+            await cancelGate
+            await session.cancel()
+          },
+        }
+      },
+    }
+    const closeTools = vi.fn(() => Promise.resolve())
+    const tools: SessionToolProvider = {
+      open: () =>
+        Promise.resolve({
+          mcpServers: [{ id: "browser", url: "http://127.0.0.1/mcp" }],
+          close: closeTools,
+        }),
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+      sessionTools: [tools],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "slow" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Use the browser" },
+      })
+    )
+
+    const cancelling = runtime.request({
+      method: "turn.cancel",
+      params: { threadId: thread.id },
+    })
+    await cancelStarted
+    expect(closeTools).toHaveBeenCalledOnce()
+
+    releaseCancel?.()
+    unwrap(await cancelling)
     await runtime.close()
   })
 })

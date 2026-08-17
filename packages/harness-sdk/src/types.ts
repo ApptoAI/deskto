@@ -54,6 +54,14 @@ export type SkillProvisioningResult = {
   message?: string
 }
 
+/** A Runtime-provided Streamable HTTP MCP server for one Harness session. */
+export type SessionMcpServer = {
+  /** Stable server id. Adapters use it as the provider-native MCP name. */
+  id: string
+  url: string
+  authorization?: { type: "bearer"; token: string }
+}
+
 export type SkillDiscoveryInput = {
   /** Project directory used as the Harness working directory, when relevant. */
   projectPath: string | null
@@ -73,6 +81,8 @@ export type NativeSkillRoot = {
  */
 export type SessionCustomization = {
   skillRoots: SkillRoot[]
+  /** Host capabilities leased for this run. Omitted by older Runtime hosts. */
+  mcpServers?: SessionMcpServer[]
 }
 
 /** A reference already validated and resolved by the Runtime. */

@@ -14,6 +14,7 @@ import DownloadIcon from "lucide-react/dist/esm/icons/download"
 import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FilesIcon from "lucide-react/dist/esm/icons/files"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
+import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import XIcon from "lucide-react/dist/esm/icons/x"
 import type { Activity, Artifact, TurnOutput } from "@deskto/protocol"
 
@@ -35,6 +36,7 @@ import {
 } from "../../runtime/use-runtime-query.js"
 import { InlineError } from "../inline-error.js"
 import { ActivityPanel } from "./activity-panel.js"
+import { BrowserPanel } from "./browser-panel.js"
 import { summarizeActivities } from "./activity-tree.js"
 import {
   ArtifactEditorSlot,
@@ -55,6 +57,7 @@ import {
 import {
   selectFiles,
   showActivities,
+  showBrowser,
   showFile,
   showFilesOverview,
   usePanelState,
@@ -240,6 +243,10 @@ export function TaskPanel({
             runningAgents={runningAgents}
             onSelect={() => showActivities(threadId)}
           />
+          <BrowserTab
+            active={panel.surface === "browser"}
+            onSelect={() => showBrowser(threadId)}
+          />
         </div>
         <div className="flex shrink-0 items-center">
           <Button
@@ -253,7 +260,9 @@ export function TaskPanel({
         </div>
       </div>
 
-      {panel.surface === "activities" ? (
+      {panel.surface === "browser" ? (
+        <BrowserPanel threadId={threadId} />
+      ) : panel.surface === "activities" ? (
         <ActivityPanel
           summary={activitySummary}
           onOpenFiles={() => showFilesOverview(threadId)}
@@ -279,6 +288,25 @@ export function TaskPanel({
         />
       )}
     </aside>
+  )
+}
+
+function BrowserTab({
+  active,
+  onSelect,
+}: {
+  active: boolean
+  onSelect: () => void
+}) {
+  return (
+    <PanelTab
+      active={active}
+      onSelect={onSelect}
+      title="Browser shared with the agent"
+    >
+      <GlobeIcon aria-hidden className="size-3.5 shrink-0" />
+      <span>Browser</span>
+    </PanelTab>
   )
 }
 

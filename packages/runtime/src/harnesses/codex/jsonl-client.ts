@@ -22,6 +22,11 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+export type JsonlClientOptions = {
+  args?: string[]
+  env?: NodeJS.ProcessEnv
+}
+
 export class JsonlClient {
   readonly #process: ChildProcessWithoutNullStreams
   readonly #pending = new Map<number, PendingRequest>()
@@ -33,10 +38,10 @@ export class JsonlClient {
   #nextId = 1
   #closed = false
 
-  constructor(command: string, cwd: string) {
-    this.#process = spawn(command, ["app-server"], {
+  constructor(command: string, cwd: string, options: JsonlClientOptions = {}) {
+    this.#process = spawn(command, ["app-server", ...(options.args ?? [])], {
       cwd,
-      env: process.env,
+      env: options.env ?? process.env,
       stdio: ["pipe", "pipe", "pipe"],
     })
 

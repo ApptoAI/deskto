@@ -24,6 +24,7 @@ import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { ProjectOutputSweep } from "./project-outputs.js"
 import { resolvePromptReferences } from "./prompt-references.js"
+import { SessionToolLeases, type SessionToolProvider } from "./session-tools.js"
 import type {
   ActivityStartInput,
   ActivityUpdateInput,
@@ -48,6 +49,7 @@ type StartingRun = ActiveTurnRecord & {
   phase: "starting"
   controller: AbortController
   cancelled: boolean
+  tools?: SessionToolLeases
 }
 
 type ActiveRun = ActiveTurnRecord & {
@@ -68,6 +70,7 @@ type ActiveRun = ActiveTurnRecord & {
   flushTimer?: ReturnType<typeof setTimeout>
   lastUsage?: ContextUsage
   outputs?: ProjectOutputSweep
+  tools: SessionToolLeases
 }
 
 const streamFlushIntervalMs = 50
@@ -91,6 +94,7 @@ export class TurnCoordinator {
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
     settings: UserSettings,
+    private readonly sessionTools: readonly SessionToolProvider[],
     private readonly events: TurnEvents
   ) {
     this.#titles = new ThreadTitleGenerator(
@@ -138,6 +142,17 @@ export class TurnCoordinator {
     this.#changed(threadId)
 
     try {
+      const tools = await SessionToolLeases.open(
+        this.sessionTools,
+        {
+          harnessId: turn.harnessId,
+          threadId,
+          turnId: turn.turnId,
+          projectPath: turn.projectPath,
+        },
+        starting.controller.signal
+      )
+      starting.tools = tools
       const runInput: HarnessRunInput = {
         threadId,
         turnId: turn.turnId,
@@ -149,6 +164,7 @@ export class TurnCoordinator {
           skillRoots: existingSkillRoots(
             this.store.packs.attachedToWorkspace(turn.workspaceId)
           ),
+          mcpServers: tools.mcpServers,
         },
       }
       if (turn.providerSessionId) {
@@ -173,6 +189,7 @@ export class TurnCoordinator {
       if (starting.cancelled || this.#runs.get(threadId) !== starting) {
         outputs?.close()
         await session.cancel().catch(() => undefined)
+        await tools.close()
         return this.store.threads.view(threadId)
       }
       const run: ActiveRun = {
@@ -190,6 +207,7 @@ export class TurnCoordinator {
         // The user message holds 0 and the first assistant segment holds 1.
         ordinal: 2,
         outputs,
+        tools,
       }
       this.#runs.set(threadId, run)
       if (turn.generateTitle) {
@@ -203,6 +221,7 @@ export class TurnCoordinator {
       }
       void this.#consume(threadId, run)
     } catch (error) {
+      await starting.tools?.close()
       if (!starting.cancelled) {
         this.store.turns.fail(
           threadId,
@@ -228,6 +247,7 @@ export class TurnCoordinator {
       run.controller.abort()
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
       this.#runs.delete(threadId)
+      await run.tools?.close()
       this.#changed(threadId)
       return this.store.threads.view(threadId)
     }
@@ -235,6 +255,7 @@ export class TurnCoordinator {
     run.cancelled = true
     this.#flush(run)
     this.#requestSweepForUnreportedWork(run)
+    await run.tools.close()
     try {
       await run.session.cancel()
     } catch (error) {
@@ -323,6 +344,7 @@ export class TurnCoordinator {
       }
       const message = `Could not answer the harness: ${runtimeErrorMessageSchema.parse(error)}`
       this.#fail(threadId, run, harnessFailure(message))
+      await run.tools.close()
       await run.session.cancel().catch(() => undefined)
       throw new RuntimeError("approval-failed", message)
     }
@@ -337,10 +359,12 @@ export class TurnCoordinator {
       if (run.phase === "starting") {
         run.controller.abort()
         this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
+        await run.tools?.close()
         continue
       }
       this.#flush(run)
       run.outputs?.close()
+      await run.tools.close()
       await run.session.cancel().catch(() => undefined)
       if (!run.terminal) {
         run.terminal = true
@@ -373,6 +397,7 @@ export class TurnCoordinator {
       // usage-limit frame, for example). Stop the session so no orphaned
       // process keeps working on a turn the app already settled.
       if (run.terminal && !run.cancelled) {
+        await run.tools.close()
         await run.session.cancel().catch(() => undefined)
       }
     } catch (error) {
@@ -382,12 +407,14 @@ export class TurnCoordinator {
           run,
           harnessFailure(runtimeErrorMessageSchema.parse(error))
         )
+        await run.tools.close()
         await run.session.cancel().catch(() => undefined)
       }
     } finally {
       // The provider is stopped before the final walk. Keeping the run in the
       // map until capture finishes also prevents the next Turn from writing
       // files that this one could claim.
+      await run.tools.close()
       if (!run.cancelled) await run.outputs?.finish()
       if (!run.cancelled && this.#runs.get(threadId) === run) {
         this.#runs.delete(threadId)

@@ -169,6 +169,51 @@ describe("claudePrompt", () => {
   })
 })
 
+describe("Claude MCP configuration", () => {
+  it("passes Runtime-provided HTTP tools to the Agent SDK", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Check the app",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [],
+          mcpServers: [
+            {
+              id: "deskto_browser",
+              url: "http://127.0.0.1:4312/mcp",
+              authorization: { type: "bearer", token: "secret-token" },
+            },
+          ],
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          mcpServers: {
+            deskto_browser: {
+              type: "http",
+              url: "http://127.0.0.1:4312/mcp",
+              headers: { Authorization: "Bearer secret-token" },
+            },
+          },
+        }),
+      })
+    )
+  })
+})
+
 describe("claudeActivity", () => {
   it("classifies built-in tools into provider-neutral payloads", () => {
     expect(

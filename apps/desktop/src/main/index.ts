@@ -4,13 +4,20 @@ import path from "node:path"
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { z } from "zod"
 
-import { ClaudeAdapter, CodexAdapter, createRuntime } from "@deskto/runtime"
+import {
+  BrowserMcpServer,
+  ClaudeAdapter,
+  CodexAdapter,
+  createRuntime,
+} from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
+import { BrowserManager } from "./browser/browser-manager.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
 import { installContentSecurityPolicy } from "./security.js"
 import { createMainWindow } from "./window.js"
+import { browserEventChannel } from "../shared/channels.js"
 
 const runtimeCloseTimeoutMs = 5_000
 const fatalStartupDetailSchema = z
@@ -49,6 +56,14 @@ async function openApplication(): Promise<void> {
 
   installContentSecurityPolicy()
 
+  const window = createMainWindow()
+  const browser = new BrowserManager(window, (event) => {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send(browserEventChannel, event)
+    }
+  })
+  const browserMcp = await BrowserMcpServer.create(browser)
+
   const claudeExecutable = packagedClaudeExecutable()
   const claudeAdapter = claudeExecutable
     ? new ClaudeAdapter({
@@ -58,27 +73,43 @@ async function openApplication(): Promise<void> {
     : new ClaudeAdapter({
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
-  const runtime = createRuntime({
-    databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
-    packsPath: path.join(app.getPath("userData"), "packs"),
-    harnesses: [claudeAdapter, new CodexAdapter()],
-    probeGate: cliPathConfigured,
-    fileActions: {
-      trashItem: (targetPath) => shell.trashItem(targetPath),
-    },
-  })
+  let runtime: ReturnType<typeof createRuntime>
+  try {
+    runtime = createRuntime({
+      databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
+      packsPath: path.join(app.getPath("userData"), "packs"),
+      harnesses: [claudeAdapter, new CodexAdapter()],
+      probeGate: cliPathConfigured,
+      sessionTools: [browserMcp],
+      fileActions: {
+        trashItem: (targetPath) => shell.trashItem(targetPath),
+      },
+    })
+  } catch (error) {
+    await browserMcp.close()
+    browser.close()
+    throw error
+  }
   // Assigned before the window opens so a failure below still closes the
   // runtime through the before-quit path.
-  closeRuntime = () => runtime.close()
+  closeRuntime = async () => {
+    await runtime.close()
+    await browserMcp.close()
+    browser.close()
+  }
   // File actions resolve results through the runtime, so they register once
   // it exists rather than at startup.
-  registerDesktopIpc(runtime)
-
-  const window = createMainWindow()
+  registerDesktopIpc(runtime, browser)
+  const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
+    if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+  })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   closeRuntime = async () => {
+    unsubscribeBrowserRuntime()
     unregisterRuntimeIpc()
     await runtime.close()
+    await browserMcp.close()
+    browser.close()
   }
 }
 

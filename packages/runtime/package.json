@@ -17,6 +17,7 @@
     "@deskto/harness-sdk": "workspace:*",
     "@deskto/protocol": "workspace:*",
     "@deskto/settings": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "yaml": "^2.8.1",
     "yauzl": "^3.4.0",
     "zod": "^4.4.3"

@@ -12,7 +12,11 @@ import type {
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
-import { openFolder } from "../../lib/desktop.js"
+import {
+  browserState,
+  openFolder,
+  subscribeBrowser,
+} from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -37,6 +41,7 @@ import {
   retainSelectedFile,
   showActivities,
   showFile,
+  showBrowser,
   showFilesOverview,
 } from "./task-panel-state.js"
 
@@ -57,6 +62,28 @@ export function TaskView({
   const [profileError, setProfileError] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const openBrowser = () => {
+      setPanelOpen(true)
+      showBrowser(threadId)
+    }
+    void browserState(threadId)
+      .then((state) => {
+        if (active && state.openRequested) openBrowser()
+      })
+      .catch(() => undefined)
+    const unsubscribe = subscribeBrowser((event) => {
+      if (event.type === "open-requested" && event.threadId === threadId) {
+        openBrowser()
+      }
+    })
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [threadId])
 
   // Looking at the task clears its indicators (unread completion, "came
   // back" from Later). The stamp fires only when there is something to
