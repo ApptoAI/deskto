@@ -17,6 +17,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Project**: A folder the user has opened as a project. It belongs to exactly one Workspace. Use "project" in UI copy and `Project` in code.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Turn**: One user request and one Harness execution in a Thread.
+- **Message Attachment**: An image supplied with a user Message. The Runtime owns its bytes and metadata, deletes it with the Message, exposes only metadata in Thread views, and returns image data on demand for previews.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
 - **Artifact**: A file inside a Project that a Turn produced, either named by a completed file-change Activity or found in the Project folder by a sweep. The UI calls it a file. An Artifact keeps a stable identity for its project-relative path.
 - **Turn Output**: The attribution between a Turn and an Artifact it created or changed. One Artifact can be an output of several Turns.
@@ -39,6 +40,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.
+- Message Attachment bytes stay in Runtime storage and are read on demand. Thread views and Runtime events carry metadata only.
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.
 - Tool activity shown in a Thread is a bounded summary, not a transcript or an audit log.

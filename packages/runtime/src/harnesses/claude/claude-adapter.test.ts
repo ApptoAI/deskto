@@ -1,4 +1,4 @@
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import type { SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk"
 import type { HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -302,6 +302,50 @@ describe("claudeAssistantFailure", () => {
 })
 
 describe("ClaudeAdapter", () => {
+  it("sends text and images as Claude user content", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "What is shown?",
+        references: [],
+        attachments: [
+          {
+            type: "image",
+            name: "screen.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,cG5n",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    const prompt = queryMock.mock.calls[0]?.[0].prompt
+    expect(prompt).not.toBeTypeOf("string")
+    const messages = []
+    // SAFETY: the assertion above proves image inputs select the SDK's async
+    // user-message prompt form rather than its string form.
+    const asyncPrompt = prompt as AsyncIterable<SDKUserMessage>
+    for await (const message of asyncPrompt) messages.push(message)
+    expect(messages[0]?.message.content).toEqual([
+      { type: "text", text: "What is shown?" },
+      {
+        type: "image",
+        source: { type: "base64", media_type: "image/png", data: "cG5n" },
+      },
+    ])
+    await session.cancel()
+  })
+
   it("emits only the usage-limit failure when Claude later reports success", async () => {
     queryMock.mockReturnValue(
       fakeQuery([

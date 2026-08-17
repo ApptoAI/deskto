@@ -11,6 +11,7 @@ import type {
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
+import { decodeImageAttachment } from "./image-attachment-data.js"
 import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
 import { newThreadTitle } from "./threads.js"
 
@@ -33,6 +34,10 @@ export class Turns {
     const prompt = input.text
     const promptReferences =
       input.references.length > 0 ? JSON.stringify(input.references) : null
+    const attachments = input.attachments.map((attachment) => ({
+      attachment,
+      data: decodeImageAttachment(attachment),
+    }))
     // SAFETY: the query selects a complete ThreadRow plus the three named
     // project and EXISTS fields declared in this intersection.
     const context = this.database
@@ -82,6 +87,20 @@ export class Turns {
           "INSERT INTO messages (id, thread_id, turn_id, role, content, prompt_references, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, ?, 'complete', 0, ?)"
         )
         .run(userMessageId, threadId, turnId, prompt, promptReferences, now)
+      const insertAttachment = this.database.prepare(
+        "INSERT INTO message_attachments (id, message_id, type, name, mime_type, size_bytes, data, sort_order) VALUES (?, ?, 'image', ?, ?, ?, ?, ?)"
+      )
+      attachments.forEach(({ attachment, data }, index) => {
+        insertAttachment.run(
+          attachment.id,
+          userMessageId,
+          attachment.name,
+          attachment.mimeType,
+          attachment.sizeBytes,
+          data,
+          index
+        )
+      })
       this.database
         .prepare(
           "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"

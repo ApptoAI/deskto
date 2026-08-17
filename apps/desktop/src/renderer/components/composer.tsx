@@ -13,6 +13,7 @@ import BoxIcon from "lucide-react/dist/esm/icons/box"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import FileIcon from "lucide-react/dist/esm/icons/file"
 import FolderIcon from "lucide-react/dist/esm/icons/folder"
+import PaperclipIcon from "lucide-react/dist/esm/icons/paperclip"
 import SquareIcon from "lucide-react/dist/esm/icons/square"
 import {
   detectComposerTrigger,
@@ -38,9 +39,12 @@ import {
 } from "@workspace/ui/components/chat/prompt-suggestions"
 
 import { describedErrorSchema } from "../runtime/describe-error.js"
+import { imageFileInputAccept } from "../lib/image-attachments.js"
+import { useImageAttachments } from "../lib/use-image-attachments.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { InlineError } from "./inline-error.js"
+import { ComposerAttachments } from "./composer-attachments.js"
 
 const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
   {
@@ -103,14 +107,25 @@ export function Composer({
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   const [skillCache, setSkillCache] = useState<SkillCache | null>(null)
   const [sending, setSending] = useState(false)
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const {
+    attachments,
+    preparingCount,
+    addFiles,
+    removeAttachment,
+    discardAttachments,
+  } = useImageAttachments({ disabled: sending, onError: setError })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const requestSequence = useRef(0)
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
   const blocked = blockedReason !== undefined
-  const canSend = prompt.trim().length > 0 && !sending && !running && !blocked
+  const hasContent = prompt.trim().length > 0 || attachments.length > 0
+  const canSend =
+    hasContent && preparingCount === 0 && !sending && !running && !blocked
   const triggerKey = trigger
     ? `${trigger.kind}:${trigger.rangeStart}:${trigger.query}`
     : null
@@ -222,13 +237,29 @@ export function Composer({
     workspaceId,
   ])
 
+  useEffect(() => {
+    if (!draggingFiles) return
+    const resetDragState = () => setDraggingFiles(false)
+    const resetOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") resetDragState()
+    }
+    window.addEventListener("dragend", resetDragState)
+    window.addEventListener("drop", resetDragState)
+    window.addEventListener("keydown", resetOnEscape)
+    return () => {
+      window.removeEventListener("dragend", resetDragState)
+      window.removeEventListener("drop", resetDragState)
+      window.removeEventListener("keydown", resetOnEscape)
+    }
+  }, [draggingFiles])
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSend) return
 
     const text = prompt.trim()
     const currentReferences = reconcilePromptReferences(text, references)
-    if (/^\/model(?:\s|$)/.test(text)) {
+    if (attachments.length === 0 && /^\/model(?:\s|$)/.test(text)) {
       setError(null)
       if (onOpenModelPicker) {
         setPrompt("")
@@ -240,12 +271,16 @@ export function Composer({
       }
       return
     }
+    const submittedAttachmentIds = new Set(
+      attachments.map((attachment) => attachment.id)
+    )
     setSending(true)
     setError(null)
     try {
-      await onSend({ text, references: currentReferences })
+      await onSend({ text, references: currentReferences, attachments })
       setPrompt("")
       setReferences([])
+      discardAttachments(submittedAttachmentIds)
       setTrigger(null)
     } catch (sendError) {
       setError(describedErrorSchema.parse(sendError))
@@ -271,6 +306,11 @@ export function Composer({
     setTrigger(detectComposerTrigger(nextPrompt, cursor))
     setHighlightedId(null)
     setDismissedKey(null)
+  }
+
+  function removeImage(id: string) {
+    removeAttachment(id)
+    textareaRef.current?.focus()
   }
 
   function selectCandidate(candidate: ComposerCandidate) {
@@ -337,7 +377,7 @@ export function Composer({
       return
     }
     if (
-      (event.key === "Enter" || event.key === "Tab") &&
+      (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) &&
       !event.nativeEvent.isComposing
     ) {
       event.preventDefault()
@@ -374,7 +414,39 @@ export function Composer({
           </div>
         ) : null}
 
-        <PromptInput onSubmit={handleSubmit}>
+        <PromptInput
+          onSubmit={handleSubmit}
+          className={draggingFiles ? "ring-2 ring-primary" : undefined}
+          onDragEnter={(event) => {
+            if (!sending && event.dataTransfer.types.includes("Files"))
+              setDraggingFiles(true)
+          }}
+          onDragOver={(event) => {
+            if (sending || !event.dataTransfer.types.includes("Files")) return
+            event.preventDefault()
+            event.dataTransfer.dropEffect = "copy"
+          }}
+          onDragLeave={(event) => {
+            const nextTarget = event.relatedTarget
+            if (
+              nextTarget instanceof Node &&
+              event.currentTarget.contains(nextTarget)
+            )
+              return
+            setDraggingFiles(false)
+          }}
+          onDrop={(event) => {
+            setDraggingFiles(false)
+            if (sending || event.dataTransfer.files.length === 0) return
+            event.preventDefault()
+            void addFiles(Array.from(event.dataTransfer.files))
+          }}
+        >
+          <ComposerAttachments
+            attachments={attachments}
+            preparingCount={preparingCount}
+            onRemove={removeImage}
+          />
           <PromptInputTextarea
             ref={textareaRef}
             value={prompt}
@@ -390,6 +462,15 @@ export function Composer({
               )
             }
             onKeyDown={handleKeyDown}
+            onPaste={(event) => {
+              if (sending) return
+              const images = Array.from(event.clipboardData.files).filter(
+                (file) => file.type.startsWith("image/")
+              )
+              if (images.length === 0) return
+              event.preventDefault()
+              void addFiles(images)
+            }}
             placeholder={placeholder}
             aria-label={label}
             aria-describedby={hintId}
@@ -401,7 +482,34 @@ export function Composer({
             rows={2}
           />
           <PromptInputToolbar>
+            <input
+              ref={fileInputRef}
+              className="sr-only"
+              type="file"
+              accept={imageFileInputAccept}
+              multiple
+              disabled={sending}
+              tabIndex={-1}
+              onChange={(event) => {
+                void addFiles(Array.from(event.currentTarget.files ?? []))
+                event.currentTarget.value = ""
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={blocked || sending}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach images"
+              title="Attach images, or paste with Ctrl/Cmd+V"
+            >
+              <PaperclipIcon />
+            </Button>
             {toolbar}
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              Enter to send · Shift+Enter for a new line
+            </span>
             <div className="ml-auto flex items-center gap-2">
               {trailing}
               {running && onCancel ? (
@@ -430,8 +538,8 @@ export function Composer({
       </div>
 
       <p id={hintId} className="sr-only">
-        Press Enter to send. Shift and Enter start a new line. Type at, slash,
-        or dollar for suggestions.
+        Press Enter to send. Shift and Enter start a new line. Paste or attach
+        images. Type at, slash, or dollar for suggestions.
       </p>
     </div>
   )

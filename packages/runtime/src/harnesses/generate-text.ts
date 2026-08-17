@@ -25,6 +25,7 @@ export async function generateTextWithSession(
       projectPath: input.projectPath,
       prompt: input.prompt,
       references: [],
+      attachments: [],
       executionProfile: input.executionProfile,
       customization: { skillRoots: [] },
     },

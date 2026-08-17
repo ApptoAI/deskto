@@ -144,6 +144,14 @@ export class TurnCoordinator {
         projectPath: turn.projectPath,
         prompt: input.text,
         references,
+        attachments: input.attachments.map(
+          ({ type, name, mimeType, dataUrl }) => ({
+            type,
+            name,
+            mimeType,
+            dataUrl,
+          })
+        ),
         executionProfile: turn.executionProfile,
         customization: {
           skillRoots: existingSkillRoots(
@@ -196,7 +204,9 @@ export class TurnCoordinator {
         this.#titles.start({
           threadId,
           projectPath: turn.projectPath,
-          prompt: input.text,
+          prompt:
+            input.text ||
+            `Attached ${input.attachments.map((attachment) => attachment.name).join(", ")}`,
           harnessId: turn.harnessId,
           executionProfile: turn.executionProfile,
         })

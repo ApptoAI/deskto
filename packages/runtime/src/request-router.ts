@@ -361,6 +361,11 @@ export class RequestRouter {
           request.params.threadId,
           request.params.artifactId
         )
+      case "attachment.preview":
+        return this.store.threads.previewAttachment(
+          request.params.threadId,
+          request.params.attachmentId
+        )
       case "artifact.locate":
         return this.store.artifacts.locate(
           request.params.threadId,
@@ -382,6 +387,7 @@ export class RequestRouter {
           request.params.input ?? {
             text: request.params.prompt!,
             references: [],
+            attachments: [],
           }
         )
       case "turn.cancel":
