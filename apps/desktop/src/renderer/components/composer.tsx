@@ -208,14 +208,15 @@ export function Composer({
       skillRequest.current = skillSession
       void client.listSkillsForPrompt(projectId).then(
         (skills) => {
-          if (requestSequence.current !== sequence) return
+          if (skillRequest.current !== skillSession) return
+          skillRequest.current = null
           setSkillCache({ session: skillSession, skills })
         },
         () => {
-          if (requestSequence.current !== sequence) return
+          if (skillRequest.current !== skillSession) return
+          skillRequest.current = null
           // The next `$` tries again: a failed read is about this moment, not
           // about this project.
-          skillRequest.current = null
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],

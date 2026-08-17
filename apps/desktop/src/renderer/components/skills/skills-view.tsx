@@ -156,20 +156,23 @@ export function SkillsView({
   // skill stays around: without it the panel empties a frame before it has
   // finished sliding out, and the reader watches a bare box leave.
   const [lastShown, setLastShown] = useState<ShownSkill | null>(null)
-  const shownSkill =
+  const currentShown =
     selectedItem && selectedOccurrence
       ? {
           item: selectedItem,
           occurrence: selectedOccurrence,
           state: details.state,
         }
-      : lastShown
-  if (selectedItem && selectedOccurrence && lastShown?.item !== selectedItem) {
-    setLastShown({
-      item: selectedItem,
-      occurrence: selectedOccurrence,
-      state: details.state,
-    })
+      : null
+  const shownSkill = currentShown ?? lastShown
+  if (
+    currentShown &&
+    (lastShown?.item !== currentShown.item ||
+      lastShown.occurrence.occurrence.id !==
+        currentShown.occurrence.occurrence.id ||
+      lastShown.state !== currentShown.state)
+  ) {
+    setLastShown(currentShown)
   }
 
   function selectItem(item: SkillCatalogItem) {

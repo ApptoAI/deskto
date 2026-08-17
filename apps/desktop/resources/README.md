@@ -13,10 +13,10 @@ not the conventional `build/`, which the repo's `.gitignore` drops).
 
 ## Artwork
 
-The mark on a 824×824 rounded rect centred in a 1024 canvas, corner radius
-185.4 — the macOS Big Sur icon grid, which Windows and Linux crop to taste. The
-mark spans 58% of the body width and carries no wordmark, because at dock size
-the lettering would not resolve.
+The mark sits on an 824×824 rounded rect centred in a 1024 canvas, with a corner
+radius of 185.4. This follows the macOS Big Sur icon grid, which Windows and
+Linux crop to taste. The mark spans 58% of the body width and carries no
+wordmark, because at dock size the lettering would not resolve.
 
 Background is `#0a0a0a` to match the window's `backgroundColor`. Swapping to
 `icon-light.svg` inverts it to a black mark on white.

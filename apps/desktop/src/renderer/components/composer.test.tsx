@@ -202,6 +202,67 @@ describe("Composer", () => {
     await waitFor(() => expect(listings()).toBe(2))
   })
 
+  it("keeps an in-flight skill read when the query changes", async () => {
+    vi.stubGlobal("CSS", { escape: (value: string) => value })
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const response = {
+      ok: true as const,
+      data: [
+        {
+          id: "skill:animate",
+          name: "animate",
+          description: "Build an animation",
+          origin: "native" as const,
+          sourceLabel: "Claude personal skills",
+          harnessIds: ["claude"],
+        },
+      ],
+    }
+    let finishRequest!: (value: typeof response) => void
+    const pendingRequest = new Promise<typeof response>((resolve) => {
+      finishRequest = resolve
+    })
+    const request = vi.fn((body: { method: string }) =>
+      body.method === "skill.listForPrompt"
+        ? pendingRequest
+        : Promise.resolve({ ok: true as const, data: [] })
+    )
+    render(
+      <RuntimeClientProvider
+        client={
+          new RuntimeClient({
+            // SAFETY: the composer calls only skill.listForPrompt and
+            // project.searchEntries, and this fake answers both with the shape
+            // their RuntimeResponses entry declares.
+            request: request as RuntimeTransport["request"],
+            subscribe: () => () => {},
+          })
+        }
+      >
+        <Composer
+          projectId="project-1"
+          harnessId="claude"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole("textbox", { name: "Message" })
+
+    fireEvent.change(textarea, { target: { value: "$", selectionStart: 1 } })
+    fireEvent.change(textarea, {
+      target: { value: "$an", selectionStart: 3 },
+    })
+    finishRequest(response)
+
+    expect(await screen.findByText("$animate")).toBeTruthy()
+    expect(request).toHaveBeenCalledOnce()
+  })
+
   it("describes the cross-platform paste shortcut", () => {
     render(
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>

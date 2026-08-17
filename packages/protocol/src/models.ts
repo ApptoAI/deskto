@@ -84,7 +84,7 @@ export const promptSkillSchema = z.object({
   description: z.string(),
   origin: z.enum(["pack", "native"]),
   sourceLabel: z.string().min(1),
-  harnessIds: z.array(z.string().min(1)),
+  harnessIds: z.array(z.string().min(1)).min(1),
 })
 
 export type PromptSkill = z.infer<typeof promptSkillSchema>

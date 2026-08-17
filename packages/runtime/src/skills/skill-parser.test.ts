@@ -1,14 +1,22 @@
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import {
+  appendFile,
+  mkdtemp,
+  open,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { maxSkillFileBytes, parseSkillFile } from "./skill-parser.js"
 
 const directories: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(
     directories
       .splice(0)
@@ -80,6 +88,44 @@ describe("parseSkillFile", () => {
 
     expect(parsed.content).toBeNull()
     expect(parsed.diagnostics[0]?.code).toBe("skill-file-too-large")
+  })
+
+  it("reads content appended after the file is opened", async () => {
+    const initial = "---\nname: grow\ndescription: Growing skill\n---\nStart"
+    const appended = " and finish"
+    const path = await skillFile(initial)
+    const probe = await open(path, "r")
+    type Read = (
+      buffer: Buffer,
+      offset: number,
+      length: number,
+      position: number
+    ) => Promise<{ bytesRead: number; buffer: Buffer }>
+    // SAFETY: Node FileHandle instances share this read prototype, and this
+    // test calls the same overload that parseSkillFile uses below.
+    const prototype = Object.getPrototypeOf(probe) as { read: Read }
+    const read = prototype.read
+    await probe.close()
+    let grew = false
+    vi.spyOn(prototype, "read").mockImplementation(async function (
+      this: { read: Read },
+      buffer,
+      offset,
+      length,
+      position
+    ) {
+      const result = await read.call(this, buffer, offset, length, position)
+      if (!grew && result.bytesRead > 0) {
+        grew = true
+        await appendFile(path, appended)
+      }
+      return result
+    })
+
+    const parsed = await parseSkillFile(path, dirname(path))
+
+    expect(parsed.content).toBe(initial + appended)
+    expect(parsed.diagnostics).toEqual([])
   })
 
   it.runIf(process.platform !== "win32")(
