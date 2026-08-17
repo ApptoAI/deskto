@@ -20,9 +20,18 @@
     --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
     --font-mono:
         "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* Keep layout geometry stable while the Appearance setting scales type. */
+    --text-tiny: calc(0.625rem * var(--app-font-scale));
+    --text-micro: calc(0.6875rem * var(--app-font-scale));
+    --text-xs: calc(0.75rem * var(--app-font-scale));
+    --text-ui: calc(0.8125rem * var(--app-font-scale));
+    --text-sm: calc(0.875rem * var(--app-font-scale));
     /* One step above the app's 14px body, for the long-form surfaces: an
        answer, a file preview, a prompt someone wrote. */
-    --text-reading: 0.9375rem;
+    --text-reading: calc(0.9375rem * var(--app-font-scale));
+    --text-base: calc(1rem * var(--app-font-scale));
+    --text-lg: calc(1.125rem * var(--app-font-scale));
+    --text-display-sm: calc(1.75rem * var(--app-font-scale));
 }
 
 @theme inline {
@@ -87,6 +96,7 @@
  *   border   #d7d9df  the only divider.
  */
 :root {
+    --app-font-scale: 1;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --body: oklch(0.332 0.01 260.7);
@@ -193,6 +203,7 @@
      was designed to, so it is antialiased here rather than per component. */
   body {
     @apply bg-background text-foreground;
+    font-size: var(--text-base);
     -webkit-font-smoothing: antialiased;
     font-feature-settings:
       "liga" 1,
@@ -220,7 +231,7 @@
 /* The one display step the app has: a page title, or the question on an empty
    task screen. Weight 400 and tight tracking do the work that bolding would. */
 @utility display-sm {
-  font-size: 1.75rem;
+  font-size: var(--text-display-sm);
   line-height: 1.2;
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -231,8 +242,8 @@
    column heads, counters — and never competes with the content under it. */
 @utility eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1rem;
+  font-size: var(--text-micro);
+  line-height: 1.45;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 400;

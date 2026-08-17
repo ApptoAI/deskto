@@ -36,7 +36,7 @@ export function WorkingIndicator({
           />
         ))}
       </span>
-      <span aria-hidden className="shimmer-label text-[13px] font-medium">
+      <span aria-hidden className="shimmer-label text-ui font-medium">
         {label}
       </span>
       <span

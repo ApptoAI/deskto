@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
+import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Project, Workspace } from "@deskto/protocol"
-import { appSettings } from "@deskto/settings"
+import { appSettings, type WorkspaceLayout } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -15,7 +16,7 @@ import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { ProjectSwitcher } from "./project-switcher.js"
 import { SidebarFrame } from "./sidebar-frame.js"
 import { TaskList, type InboxActions } from "./task-list.js"
-import { WorkspaceSwitcher } from "./workspace-switcher.js"
+import { WorkspaceSwitcher, WorkspaceTile } from "./workspace-switcher.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
 
 export function ProjectSidebar({
@@ -43,6 +44,7 @@ export function ProjectSidebar({
   onOpenSettings,
   focusSettings,
   inboxActions,
+  workspaceLayout,
 }: {
   workspace: Workspace | null
   workspaces: Workspace[]
@@ -70,6 +72,7 @@ export function ProjectSidebar({
       back instead of leaving the caret on the body. */
   focusSettings: boolean
   inboxActions: InboxActions
+  workspaceLayout: WorkspaceLayout
 }) {
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
@@ -78,15 +81,35 @@ export function ProjectSidebar({
   }, [focusSettings])
 
   return (
-    <SidebarFrame>
+    <SidebarFrame compact={workspaceLayout === "slack"}>
       <div className="no-drag px-2 pb-3">
-        <WorkspaceSwitcher
-          workspace={workspace}
-          workspaces={workspaces}
-          onSelect={onSelectWorkspace}
-          onCreate={onCreateWorkspace}
-          onEdit={onEditWorkspace}
-        />
+        {workspaceLayout === "slack" ? (
+          <Button
+            variant="ghost"
+            size="lg"
+            className="w-full justify-start gap-2"
+            onClick={onEditWorkspace}
+            disabled={!workspace}
+            aria-label={`Workspace settings for ${workspace?.name ?? "workspace"}`}
+          >
+            {workspace ? <WorkspaceTile workspace={workspace} /> : null}
+            <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
+              {workspace?.name ?? "Workspace"}
+            </span>
+            <PencilIcon
+              data-icon="inline-end"
+              className="text-muted-foreground"
+            />
+          </Button>
+        ) : (
+          <WorkspaceSwitcher
+            workspace={workspace}
+            workspaces={workspaces}
+            onSelect={onSelectWorkspace}
+            onCreate={onCreateWorkspace}
+            onEdit={onEditWorkspace}
+          />
+        )}
       </div>
 
       <div className="no-drag space-y-1.5 px-2 pb-2">

@@ -19,7 +19,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { WorkspaceIcon, workspaceSwatch } from "../workspace/workspace-theme.js"
 
 /** The colored workspace tile, at header size or menu size. */
-function WorkspaceTile({
+export function WorkspaceTile({
   workspace,
   small,
 }: {
@@ -86,7 +86,7 @@ export function WorkspaceSwitcher({
         }
       >
         {workspace ? <WorkspaceTile workspace={workspace} /> : null}
-        <span className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold tracking-tight">
+        <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
           {workspace?.name ?? "Workspace"}
         </span>
         <ChevronsUpDownIcon

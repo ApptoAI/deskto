@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest"
 
-import { appSettings, harnessModelSettings } from "./app-settings.js"
+import {
+  appSettings,
+  harnessModelSettings,
+  interfaceFontSizeSchema,
+} from "./app-settings.js"
 import { isOverridden, resolveSettings, settingValue } from "./resolve.js"
 
 const newTask = appSettings.newTaskKeybinding
 const threadTitleModel = appSettings.threadTitleModel
+const workspaceLayout = appSettings.workspaceLayout
+const interfaceFontSize = appSettings.interfaceFontSize
 
 describe("resolveSettings", () => {
   it("serves defaults when nothing is stored", () => {
@@ -14,11 +20,21 @@ describe("resolveSettings", () => {
       harnessId: null,
       modelId: null,
     })
+    expect(settingValue(snapshot, workspaceLayout)).toBe("workspace")
+    expect(settingValue(snapshot, interfaceFontSize)).toBe(16)
     expect(snapshot.overrides).toEqual({})
   })
 
   it("derives Harness model editors from the registry", () => {
     expect(harnessModelSettings).toEqual([threadTitleModel])
+  })
+
+  it("keeps the interface scale inside its layout-safe range", () => {
+    expect(interfaceFontSizeSchema.safeParse(12).success).toBe(true)
+    expect(interfaceFontSizeSchema.safeParse(20).success).toBe(true)
+    expect(interfaceFontSizeSchema.safeParse(11).success).toBe(false)
+    expect(interfaceFontSizeSchema.safeParse(21).success).toBe(false)
+    expect(interfaceFontSizeSchema.safeParse(16.5).success).toBe(false)
   })
 
   it("applies a valid override and reports it", () => {
@@ -30,6 +46,8 @@ describe("resolveSettings", () => {
   it("drops overrides that are invalid or unknown", () => {
     const snapshot = resolveSettings({
       [newTask.key]: 7,
+      [workspaceLayout.key]: "columns",
+      [interfaceFontSize.key]: 21,
       "no-such-setting": true,
     })
     expect(settingValue(snapshot, newTask)).toBe(newTask.defaultValue)

@@ -1,14 +1,23 @@
 export {
   appSettings,
+  defaultInterfaceFontSize,
+  defaultWorkspaceLayout,
   harnessModelSettings,
   harnessModelSelectionSchema,
+  interfaceFontSizeSchema,
   keybindingSettings,
+  maxInterfaceFontSize,
+  minInterfaceFontSize,
   settingDefinition,
   settingDefinitions,
   themeOptions,
   themePreferenceSchema,
+  workspaceLayoutOptions,
+  workspaceLayoutSchema,
   type HarnessModelSelection,
+  type InterfaceFontSize,
   type ThemePreference,
+  type WorkspaceLayout,
 } from "./app-settings.js"
 export {
   defineSetting,

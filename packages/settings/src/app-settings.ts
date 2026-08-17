@@ -27,8 +27,41 @@ export const themePreferenceSchema = z.enum(["system", "light", "dark"])
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>
 
+/** How workspaces are arranged in the main window. */
+export const workspaceLayoutSchema = z.enum(["workspace", "slack"])
+
+export type WorkspaceLayout = z.infer<typeof workspaceLayoutSchema>
+
+export const defaultWorkspaceLayout: WorkspaceLayout = "workspace"
+
+export const workspaceLayoutOptions: readonly SettingChoice<WorkspaceLayout>[] =
+  [
+    {
+      value: "workspace",
+      label: "Workspace",
+      description: "Switch workspaces from the project sidebar.",
+    },
+    {
+      value: "slack",
+      label: "Slack-like",
+      description: "Keep every workspace in a separate rail on the left.",
+    },
+  ]
+
+/** The requested text size in CSS pixels at the app's base type step. */
+export const minInterfaceFontSize = 12
+export const maxInterfaceFontSize = 20
+export const defaultInterfaceFontSize = 16
+export const interfaceFontSizeSchema = z
+  .number()
+  .int()
+  .min(minInterfaceFontSize)
+  .max(maxInterfaceFontSize)
+
+export type InterfaceFontSize = z.infer<typeof interfaceFontSizeSchema>
+
 /** Offered in this order, which is the order the settings screen renders. */
-export const themeOptions: readonly SettingChoice[] = [
+export const themeOptions: readonly SettingChoice<ThemePreference>[] = [
   {
     value: "system",
     label: "System",
@@ -51,6 +84,28 @@ export const appSettings = {
     input: { kind: "choice" },
     schema: themePreferenceSchema,
     defaultValue: "system",
+  }),
+  workspaceLayout: defineSetting({
+    key: "appearance.workspace-layout",
+    label: "Workspace layout",
+    description: "How workspaces and projects are arranged in the sidebar.",
+    input: { kind: "choice" },
+    schema: workspaceLayoutSchema,
+    defaultValue: defaultWorkspaceLayout,
+  }),
+  interfaceFontSize: defineSetting({
+    key: "appearance.interface-font-size",
+    label: "Text size",
+    description: "Scale text across Deskto without resizing panels.",
+    input: {
+      kind: "range",
+      min: minInterfaceFontSize,
+      max: maxInterfaceFontSize,
+      step: 1,
+      unit: "px",
+    },
+    schema: interfaceFontSizeSchema,
+    defaultValue: defaultInterfaceFontSize,
   }),
   threadTitleModel: defineSetting({
     key: "models.thread-title",

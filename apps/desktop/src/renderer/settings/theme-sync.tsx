@@ -2,6 +2,11 @@ import { useEffect } from "react"
 import { appSettings, settingValue } from "@deskto/settings"
 
 import { applyTheme, rememberTheme } from "../lib/theme.js"
+import {
+  applyInterfaceFontSize,
+  rememberInterfaceFontSize,
+} from "../lib/interface-size.js"
+import { rememberWorkspaceLayout } from "../lib/workspace-layout.js"
 import { useSettings } from "./settings-context.js"
 
 /**
@@ -28,6 +33,33 @@ export function ThemeSync() {
     media.addEventListener("change", followSystem)
     return () => media.removeEventListener("change", followSystem)
   }, [snapshot, theme])
+
+  return null
+}
+
+/** Keeps the shared type scale aligned with the persisted text size. */
+export function InterfaceSizeSync() {
+  const { snapshot } = useSettings()
+  const size = settingValue(snapshot, appSettings.interfaceFontSize)
+
+  useEffect(() => {
+    if (!snapshot) return
+    rememberInterfaceFontSize(size)
+    applyInterfaceFontSize(size)
+  }, [snapshot, size])
+
+  return null
+}
+
+/** Refreshes the startup cache after the Runtime supplies its answer. */
+export function WorkspaceLayoutSync() {
+  const { snapshot } = useSettings()
+  const layout = settingValue(snapshot, appSettings.workspaceLayout)
+
+  useEffect(() => {
+    if (!snapshot) return
+    rememberWorkspaceLayout(layout)
+  }, [snapshot, layout])
 
   return null
 }

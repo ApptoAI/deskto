@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react"
 import type { RuntimeClient } from "@deskto/client"
-import { appSettings } from "@deskto/settings"
+import { appSettings, settingValue } from "@deskto/settings"
 
 import {
   personalWorkspaceId,
@@ -32,6 +32,7 @@ import {
 } from "../components/skills/skills-filters.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
+import { WorkspaceRail } from "../components/sidebar/workspace-rail.js"
 import { StatusPanel } from "../components/status-panel.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
 import { TaskView } from "../components/task/task-view.js"
@@ -45,6 +46,7 @@ import {
   pickProjectFolder,
 } from "../lib/desktop.js"
 import { useLocalStorage } from "../lib/use-local-storage.js"
+import { readRememberedWorkspaceLayout } from "../lib/workspace-layout.js"
 import { describedErrorSchema } from "../runtime/describe-error.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
@@ -54,6 +56,7 @@ import { useThreadChanged } from "../runtime/use-thread-changed.js"
 import { useThreadDeleted } from "../runtime/use-thread-deleted.js"
 import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
+import { useSettings } from "../settings/settings-context.js"
 import { afterScopeChange, toNewTask, type MainView } from "./work-view.js"
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
@@ -75,6 +78,10 @@ function useProjectThreadLoader(
 
 export function Workbench() {
   const client = useRuntimeClient()
+  const { snapshot: settingsSnapshot } = useSettings()
+  const workspaceLayout = settingsSnapshot
+    ? settingValue(settingsSnapshot, appSettings.workspaceLayout)
+    : readRememberedWorkspaceLayout()
 
   const loadHarnesses = useCallback(() => client.listHarnesses(), [client])
   const harnesses = useRuntimeQuery(loadHarnesses)
@@ -544,32 +551,43 @@ export function Workbench() {
           onGoBack={leaveSettings}
         />
       ) : (
-        <ProjectSidebar
-          workspace={activeWorkspace}
-          workspaces={workspaces}
-          projects={workspaceProjects}
-          activeProject={activeProject}
-          allProjects={allProjects}
-          onSelectProject={selectProject}
-          onSelectAllProjects={selectAllProjects}
-          onAddProject={addProject}
-          onMoveProject={moveProject}
-          addingProject={addingProject}
-          onSelectWorkspace={selectWorkspace}
-          onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
-          onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
-          threads={threads.state}
-          workspaceThreads={workspaceThreads.state}
-          openThreadId={openThreadId}
-          onOpenThread={openThread}
-          onNewTask={() => setView(toNewTask)}
-          onRetryThreads={revalidateAllThreads}
-          onOpenSkills={openSkills}
-          skillsActive={view.kind === "skills"}
-          onOpenSettings={openSettings}
-          focusSettings={focusSettingsButton}
-          inboxActions={inboxActions}
-        />
+        <>
+          {workspaceLayout === "slack" ? (
+            <WorkspaceRail
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              onSelect={selectWorkspace}
+              onCreate={() => setWorkspaceDialog({ mode: "create" })}
+            />
+          ) : null}
+          <ProjectSidebar
+            workspace={activeWorkspace}
+            workspaces={workspaces}
+            projects={workspaceProjects}
+            activeProject={activeProject}
+            allProjects={allProjects}
+            onSelectProject={selectProject}
+            onSelectAllProjects={selectAllProjects}
+            onAddProject={addProject}
+            onMoveProject={moveProject}
+            addingProject={addingProject}
+            onSelectWorkspace={selectWorkspace}
+            onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
+            onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
+            threads={threads.state}
+            workspaceThreads={workspaceThreads.state}
+            openThreadId={openThreadId}
+            onOpenThread={openThread}
+            onNewTask={() => setView(toNewTask)}
+            onRetryThreads={revalidateAllThreads}
+            onOpenSkills={openSkills}
+            skillsActive={view.kind === "skills"}
+            onOpenSettings={openSettings}
+            focusSettings={focusSettingsButton}
+            inboxActions={inboxActions}
+            workspaceLayout={workspaceLayout}
+          />
+        </>
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">

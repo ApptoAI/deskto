@@ -8,7 +8,11 @@ import { extendTailwindMerge } from "tailwind-merge"
  * so every theme size this project adds has to be declared here too.
  */
 const twMerge = extendTailwindMerge({
-  extend: { classGroups: { "font-size": [{ text: ["reading"] }] } },
+  extend: {
+    classGroups: {
+      "font-size": [{ text: ["tiny", "micro", "ui", "reading"] }],
+    },
+  },
 })
 
 export function cn(...inputs: ClassValue[]) {

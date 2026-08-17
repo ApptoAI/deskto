@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Deskto</title>
     <!--
-      The palette has to be on the document before the first paint, which is
-      earlier than any bundled module runs — hence a copy of the boot logic
-      inline. `dark` on <html> above is only what this runs against; it is
-      corrected below, and again from the Runtime's answer once React mounts.
-      Keep the storage key in step with lib/theme.ts.
+      The palette and text size have to be on the document before the
+      first paint, which is earlier than any bundled module runs — hence a copy
+      of the boot logic inline. `dark` on <html> above is only what this runs
+      against; Runtime settings correct both values once React mounts. Keep
+      these storage keys in step with lib/theme.ts and lib/interface-size.ts.
     -->
     <script>
       ;(function () {
@@ -21,6 +21,20 @@
               matchMedia("(prefers-color-scheme: dark)").matches)
           document.documentElement.classList.toggle("dark", dark)
           document.documentElement.style.colorScheme = dark ? "dark" : "light"
+
+          var storedSize = Number(
+            localStorage.getItem("deskto.appearance.interface-font-size")
+          )
+          if (
+            Number.isInteger(storedSize) &&
+            storedSize >= 12 &&
+            storedSize <= 20
+          ) {
+            document.documentElement.style.setProperty(
+              "--app-font-scale",
+              String(storedSize / 16)
+            )
+          }
         } catch (error) {
           // No storage, no preference to honour: the markup's `dark` stands,
           // and `color-scheme` has to be said out loud to match it now that

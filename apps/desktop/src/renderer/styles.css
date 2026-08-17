@@ -68,6 +68,55 @@
   -webkit-app-region: no-drag;
 }
 
+/* Compact range control used by Appearance. Chromium's native track is too
+   heavy for the rest of the settings chrome, but keeping an input preserves
+   keyboard and accessibility behaviour. */
+.settings-range {
+  height: 1.25rem;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-range::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--foreground) 0 var(--range-progress),
+    var(--border) var(--range-progress) 100%
+  );
+}
+
+.settings-range::-webkit-slider-thumb {
+  width: 1rem;
+  height: 1rem;
+  margin-top: -0.375rem;
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.settings-range:focus-visible {
+  outline: none;
+}
+
+.settings-range:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px var(--ring),
+    0 1px 3px rgb(0 0 0 / 18%);
+}
+
+@media (forced-colors: active) {
+  .appearance-choice-input:focus-visible + .appearance-choice-preview,
+  .settings-range:focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+}
+
 /* Shimmering label for in-progress work: a highlight sweeps through the
    text while the run is alive. Reduced motion falls back to static muted. */
 @utility shimmer-label {
