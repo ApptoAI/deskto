@@ -1,4 +1,5 @@
 import BotIcon from "lucide-react/dist/esm/icons/bot"
+import ContrastIcon from "lucide-react/dist/esm/icons/contrast"
 import KeyboardIcon from "lucide-react/dist/esm/icons/keyboard"
 import SparklesIcon from "lucide-react/dist/esm/icons/sparkles"
 import type { ComponentType, SVGProps } from "react"
@@ -6,7 +7,12 @@ import type { ComponentType, SVGProps } from "react"
 // Settings is its own screen with one topic per page. The tuple is the sidebar
 // order and the source of the id union, so a page cannot exist in one and be
 // missing from the other.
-export const settingsPageOrder = ["agents", "models", "shortcuts"] as const
+export const settingsPageOrder = [
+  "agents",
+  "models",
+  "appearance",
+  "shortcuts",
+] as const
 
 export type SettingsPageId = (typeof settingsPageOrder)[number]
 
@@ -27,6 +33,11 @@ export const settingsPages = {
     label: "Generated text",
     description: "Choose models for short text Deskto creates automatically.",
     icon: SparklesIcon,
+  },
+  appearance: {
+    label: "Appearance",
+    description: "Choose the palette Deskto wears.",
+    icon: ContrastIcon,
   },
   shortcuts: {
     label: "Keyboard shortcuts",

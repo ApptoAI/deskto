@@ -102,7 +102,7 @@ export function CsvEditor({
                         setCell(rowIndex, columnIndex, event.target.value)
                       }
                       className={cn(
-                        "h-8 w-44 bg-transparent px-2 outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset",
+                        "h-8 w-44 bg-transparent px-2 outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                         // The first row reads as the header in every viewer
                         // that opens this file, so it looks like one here too.
                         rowIndex === 0 && "bg-muted/40 font-medium"

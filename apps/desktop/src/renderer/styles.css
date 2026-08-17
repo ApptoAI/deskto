@@ -1,11 +1,12 @@
 @import "@workspace/ui/globals.css";
 
 @layer base {
+  /* `color-scheme` is set on the document element by lib/theme.ts rather than
+     pinned here: it has to follow the chosen palette, not a build-time guess. */
   :root {
-    color-scheme: dark;
     --app-scrollbar-width: 6px;
-    --app-scrollbar-thumb: rgb(217 217 217);
-    --app-scrollbar-thumb-hover: rgb(191 191 191);
+    --app-scrollbar-thumb: rgb(0 0 0 / 14%);
+    --app-scrollbar-thumb-hover: rgb(0 0 0 / 22%);
   }
 
   .dark {

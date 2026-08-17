@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import {
   defineSetting,
+  type SettingChoice,
   type SettingDefinition,
   type SettingValue,
 } from "./definition.js"
@@ -19,11 +20,38 @@ export const harnessModelSelectionSchema = z
 export type HarnessModelSelection = z.infer<typeof harnessModelSelectionSchema>
 
 /**
+ * Which palette the window wears. "system" is not a third palette: it defers
+ * to the operating system and follows it while the app is open.
+ */
+export const themePreferenceSchema = z.enum(["system", "light", "dark"])
+
+export type ThemePreference = z.infer<typeof themePreferenceSchema>
+
+/** Offered in this order, which is the order the settings screen renders. */
+export const themeOptions: readonly SettingChoice[] = [
+  {
+    value: "system",
+    label: "System",
+    description: "Follow the operating system.",
+  },
+  { value: "light", label: "Light", description: "Always light." },
+  { value: "dark", label: "Dark", description: "Always dark." },
+]
+
+/**
  * Every configurable setting in the product. Add a setting here and each
  * layer picks it up: the Runtime validates and stores overrides by `key`,
  * and settings screens render an editor from `input`.
  */
 export const appSettings = {
+  theme: defineSetting({
+    key: "appearance.theme",
+    label: "Theme",
+    description: "Which palette Deskto wears.",
+    input: { kind: "choice" },
+    schema: themePreferenceSchema,
+    defaultValue: "system",
+  }),
   threadTitleModel: defineSetting({
     key: "models.thread-title",
     label: "Task title model",

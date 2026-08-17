@@ -203,7 +203,7 @@ export function TaskList({
     <div id={taskListFocusTargetId} tabIndex={-1} className="px-2">
       {partition.pinned.length > 0 ? (
         <section>
-          <div className="flex items-center px-2 pt-4 pb-1.5 text-xs font-medium text-muted-foreground/80">
+          <div className="flex items-center px-2 pt-5 pb-2 eyebrow text-muted-foreground">
             <span>Pinned</span>
             <span className="ml-auto tabular-nums opacity-60">
               {partition.pinned.length}
@@ -217,7 +217,7 @@ export function TaskList({
 
       {partition.active.length > 0 ? (
         <section>
-          <div className="flex items-center px-2 pt-4 pb-1.5 text-xs font-medium text-muted-foreground/80">
+          <div className="flex items-center px-2 pt-5 pb-2 eyebrow text-muted-foreground">
             <span>Inbox</span>
             <span className="ml-auto tabular-nums opacity-60">
               {partition.active.length}
@@ -261,7 +261,7 @@ export function TaskList({
                   onClick={() =>
                     setDoneVisibleCount((count) => count + DONE_PAGE_COUNT)
                   }
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground/70 transition-colors duration-150 hover:bg-muted/50 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted/50 hover:text-foreground"
                 >
                   <PlusIcon aria-hidden className="size-3.5 shrink-0" />
                   Show {Math.min(hiddenDoneCount, DONE_PAGE_COUNT)} more
@@ -320,8 +320,8 @@ function Shelf({
         onClick={onToggle}
         aria-expanded={expanded}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-4 pb-1.5 text-left text-xs font-medium transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-          accentClassName ?? "text-muted-foreground/80 hover:text-foreground"
+          "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-5 pb-2 text-left eyebrow transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          accentClassName ?? "text-muted-foreground hover:text-foreground"
         )}
       >
         <span>{label}</span>
@@ -424,7 +424,7 @@ function TaskRow({
           className={cn(
             "flex w-full items-start gap-2.5 rounded-lg py-2 pr-7 pl-2 text-left text-sm",
             "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
-            "focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]",
+            "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",
             isOpen ? sidebarRowSelected : sidebarRowIdle
           )}
@@ -717,13 +717,13 @@ function RowActionButton({
       aria-label={`${action}: ${subject}`}
       title={action}
       className={cn(
-        "pointer-events-none flex size-6 scale-90 items-center justify-center rounded-full border border-border/70 bg-sidebar text-muted-foreground opacity-0 shadow-xs",
+        "pointer-events-none flex size-6 scale-90 items-center justify-center rounded-full border border-border/70 bg-sidebar text-muted-foreground opacity-0",
         "transition-[opacity,scale,background-color,border-color,color] duration-150 ease-(--ease-out-quart) outline-none active:scale-95",
         "group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100",
         // Keyboard focus anywhere in the row shows the cluster too: the
         // timestamp fades on focus-within, and nothing should replace it.
         "group-focus-within:pointer-events-auto group-focus-within:scale-100 group-focus-within:opacity-100",
-        "focus-visible:ring-2 focus-visible:ring-ring/50",
+        "focus-visible:ring-2 focus-visible:ring-ring",
         popupOpen && "pointer-events-auto scale-100 opacity-100",
         tone === "done"
           ? "hover:border-emerald-500/50 hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400"

@@ -3,6 +3,7 @@ import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import FilesIcon from "lucide-react/dist/esm/icons/files"
 import type { Activity, Message, TurnOutput } from "@deskto/protocol"
 
+import { Button } from "@workspace/ui/components/button"
 import { Markdown } from "@workspace/ui/components/chat/markdown"
 import {
   Message as MessageRow,
@@ -25,6 +26,7 @@ import { ActivityLine, Collapse, activityIcon } from "./activity-rows.js"
 import { ArtifactIcon } from "./artifact-views.js"
 import { elapsedBetween, formatElapsed } from "./elapsed.js"
 import { useFileActions } from "./files-context.js"
+import { conversationMeasureClassName } from "./task-panel-size.js"
 import {
   buildTimeline,
   capLiveItems,
@@ -75,7 +77,15 @@ export function MessageStream({
         className="px-6"
         aria-label="Task conversation"
       >
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 py-8">
+        {/* The column is the reading measure: everything in it — prose,
+            tables, rules, code — shares one right edge, and the width is set
+            once here rather than per element. */}
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-col gap-5 py-8",
+            conversationMeasureClassName
+          )}
+        >
           {rows.map((row) => {
             switch (row.kind) {
               case "message":
@@ -115,34 +125,40 @@ function TurnFiles({ outputs }: { outputs: TurnOutput[] }) {
 
   return (
     <section className="enter-rise -mt-2 max-w-full self-start">
-      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      {/* The same label voice the Files view uses, so the two read as one
+          feature seen from two places. */}
+      <div className="mb-2 flex items-center gap-1.5 eyebrow text-muted-foreground">
         <FilesIcon aria-hidden className="size-3.5" />
         <span>{outputs.length === 1 ? "File" : "Files"}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {visible.map(({ artifact }) => (
-          <button
+          <Button
             key={artifact.id}
-            type="button"
+            variant="outline"
+            size="sm"
             title={artifact.relativePath}
             onClick={() => open(artifact.id)}
-            className="flex max-w-full min-w-0 items-center gap-1.5 rounded-md bg-background px-2.5 py-1.5 text-xs shadow-xs ring-1 ring-border/70 transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="max-w-full min-w-0 gap-1.5"
           >
             <ArtifactIcon
               kind={artifact.previewKind}
-              className="size-3.5 shrink-0 text-muted-foreground"
+              className="size-3.5 text-muted-foreground"
             />
             <span className="truncate">{artifact.name}</span>
-          </button>
+          </Button>
         ))}
         {outputs.length > visible.length ? (
-          <button
-            type="button"
+          // The way out of the fold, not a fourth file: it drops the hairline
+          // so the three named files stay the only pills with an edge.
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={openAll}
-            className="rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="text-muted-foreground"
           >
             Show all {outputs.length}
-          </button>
+          </Button>
         ) : null}
       </div>
     </section>
@@ -194,6 +210,10 @@ function lastUserMessageAt(messages: Message[]): string | undefined {
 const turnHeaderClassName =
   "-ml-0.5 flex items-center gap-1.5 pb-2 text-xs text-muted-foreground"
 
+/** The answer is the longest thing anyone reads here, so it sets a step above
+    the chrome around it rather than at the app's default body size. */
+const answerClassName = "text-reading"
+
 /**
  * Everything a settled Turn did, behind one toggle. Closed by default: the
  * answer under it is what the user asked for, and the working out is there
@@ -232,7 +252,7 @@ function WorkedDisclosure({
         onClick={() => setOpen((value) => !value)}
         className={cn(
           turnHeaderClassName,
-          "cursor-pointer rounded-md transition-colors duration-100 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          "cursor-pointer rounded-md transition-colors duration-100 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         )}
       >
         <span>{label}</span>
@@ -250,8 +270,13 @@ function WorkedDisclosure({
             item.kind === "tools" ? (
               <ToolCluster key={item.key} items={item.items} />
             ) : (
-              <div key={item.key} className="text-xs text-muted-foreground">
-                <Markdown onLinkActivate={openExternal}>
+              <div key={item.key}>
+                {/* Working-out, not the answer: it stays a size down so
+                    unfolding a turn never reads like a second reply. */}
+                <Markdown
+                  className="text-xs text-muted-foreground"
+                  onLinkActivate={openExternal}
+                >
                   {item.message.content}
                 </Markdown>
               </div>
@@ -295,7 +320,7 @@ function LiveTurn({ items }: { items: LiveItem[] }) {
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
-          className="-mx-1.5 mt-0.5 flex w-fit cursor-pointer items-center rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors duration-100 outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="-mx-1.5 mt-0.5 flex w-fit cursor-pointer items-center rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors duration-100 outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           {expanded ? "Show less" : `+${hidden} more tool calls`}
         </button>
@@ -361,7 +386,10 @@ const MessageEntry = memo(function MessageEntry({
         {message.state === "error" ? (
           <div className="space-y-3">
             {message.content ? (
-              <Markdown onLinkActivate={openExternal}>
+              <Markdown
+                className={answerClassName}
+                onLinkActivate={openExternal}
+              >
                 {message.content}
               </Markdown>
             ) : null}
@@ -375,7 +403,9 @@ const MessageEntry = memo(function MessageEntry({
             />
           </div>
         ) : message.content ? (
-          <Markdown onLinkActivate={openExternal}>{message.content}</Markdown>
+          <Markdown className={answerClassName} onLinkActivate={openExternal}>
+            {message.content}
+          </Markdown>
         ) : (
           <WorkingIndicator since={message.createdAt} />
         )}

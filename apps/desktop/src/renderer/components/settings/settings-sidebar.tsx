@@ -55,10 +55,8 @@ export function SettingsSidebar({
 
       {/* The nav below is already labelled "Settings" for screen readers; this
           is the same word drawn for everyone else. */}
-      <div aria-hidden className="no-drag px-4 pb-2">
-        <span className="text-xs font-medium text-muted-foreground">
-          Settings
-        </span>
+      <div aria-hidden className="no-drag px-4 pt-1 pb-2">
+        <span className="eyebrow text-muted-foreground">Settings</span>
       </div>
 
       <nav aria-label="Settings" className="no-drag min-h-0 flex-1 px-2">
@@ -76,7 +74,7 @@ export function SettingsSidebar({
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm",
                     "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
-                    "focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.99]",
+                    "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
                     selected
                       ? sidebarRowSelected
                       : cn("text-foreground/90", sidebarRowIdle)

@@ -2,6 +2,7 @@ import type { ReactElement } from "react"
 import type { Harness } from "@deskto/protocol"
 
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
+import { AppearanceSettings } from "./appearance-settings.js"
 import { HarnessModelSettings } from "./harness-model-settings.js"
 import { HarnessSettings } from "./harness-settings.js"
 import { settingsPages, type SettingsPageId } from "./settings-pages.js"
@@ -24,7 +25,7 @@ export function SettingsView({
           the previous page happened to be scrolled to. */}
       <div key={page} className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
         <div className="mx-auto w-full max-w-2xl">
-          <h1 className="font-heading text-2xl font-medium">{current.label}</h1>
+          <h1 className="font-heading display-sm">{current.label}</h1>
           <p className="pt-1 pb-6 text-sm text-muted-foreground">
             {current.description}
           </p>
@@ -50,6 +51,8 @@ function SettingsPane({
       return <HarnessSettings harnesses={harnesses} />
     case "models":
       return <HarnessModelSettings harnesses={harnesses} />
+    case "appearance":
+      return <AppearanceSettings />
     case "shortcuts":
       return <ShortcutSettings />
   }

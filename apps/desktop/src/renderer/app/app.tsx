@@ -4,6 +4,7 @@ import { StatusPanel } from "../components/status-panel.js"
 import { IpcRuntimeTransport } from "../runtime/ipc-runtime-transport.js"
 import { RuntimeClientProvider } from "../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../settings/settings-context.js"
+import { ThemeSync } from "../settings/theme-sync.js"
 import { Workbench } from "./workbench.js"
 
 const bridge: typeof window.deskto | undefined = window.deskto
@@ -28,6 +29,7 @@ export function App() {
   return (
     <RuntimeClientProvider client={client}>
       <SettingsProvider>
+        <ThemeSync />
         <Workbench />
       </SettingsProvider>
     </RuntimeClientProvider>

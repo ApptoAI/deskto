@@ -12,11 +12,13 @@ import type { ArtifactEditorProps } from "./artifact-editor.js"
 
 import { Markdown } from "@workspace/ui/components/chat/markdown"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { CsvEditor } from "./csv-editor.js"
 import { CsvPreview } from "./csv-preview.js"
 import { PdfPreview } from "./pdf-preview.js"
 import { PreviewLoading, PreviewUnavailable } from "./preview-states.js"
+import { documentMeasureClassName } from "./task-panel-size.js"
 import { TextEditor } from "./text-editor.js"
 
 const SpreadsheetPreview = lazy(() =>
@@ -71,7 +73,17 @@ const artifactViews = {
     editor: TextEditor,
     render: (preview) => (
       <ScrollArea className="flex-1">
-        <Markdown className="p-5">{preview.content}</Markdown>
+        {/* A document, not a chat bubble: one step up in size, and wide
+            enough to use a panel the user has dragged out, with a ceiling so
+            a full-screen panel does not turn lines into a scan. */}
+        <Markdown
+          className={cn(
+            "mx-auto w-full px-8 py-8 text-reading",
+            documentMeasureClassName
+          )}
+        >
+          {preview.content}
+        </Markdown>
       </ScrollArea>
     ),
   },
@@ -109,7 +121,7 @@ const artifactViews = {
           <img
             src={preview.dataUrl}
             alt="File preview"
-            className="max-h-full max-w-full rounded border border-border object-contain shadow-sm"
+            className="max-h-full max-w-full rounded-lg border border-border object-contain"
           />
         </div>
       </ScrollArea>

@@ -99,12 +99,14 @@ export function NewTaskView({
         <div className="enter-rise -mt-10 flex w-full max-w-3xl flex-col items-center gap-4">
           <div
             aria-hidden
-            className="font-heading text-6xl leading-none font-semibold tracking-tight text-foreground/8 select-none sm:text-7xl"
+            className="font-heading text-6xl leading-none font-normal tracking-[-0.04em] text-foreground/8 select-none sm:text-7xl"
           >
             deskto
           </div>
 
-          <p className="text-center text-lg font-medium text-foreground/90">
+          {/* The one display moment in the app. Size and tight tracking carry
+              it; there is nothing to bold against on an empty screen. */}
+          <p className="text-center display-sm text-body">
             What should we do next in{" "}
             <span className="text-foreground">{project.name}</span>?
           </p>

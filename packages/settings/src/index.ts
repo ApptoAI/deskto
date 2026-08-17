@@ -5,10 +5,14 @@ export {
   keybindingSettings,
   settingDefinition,
   settingDefinitions,
+  themeOptions,
+  themePreferenceSchema,
   type HarnessModelSelection,
+  type ThemePreference,
 } from "./app-settings.js"
 export {
   defineSetting,
+  type SettingChoice,
   type SettingDefinition,
   type SettingInput,
   type SettingValue,

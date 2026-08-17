@@ -195,6 +195,9 @@ export function TaskPanel({
     [panelWidth, resizeTo, setPanelWidth]
   )
 
+  // The panel sits a step above the canvas the conversation is on. A hairline
+  // alone could not tell two full-height columns apart when both were the
+  // same near-black.
   return (
     <aside
       ref={asideRef}
@@ -203,7 +206,7 @@ export function TaskPanel({
         minWidth: minimumTaskPanelWidth,
         maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
       }}
-      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-chrome"
     >
       <div
         ref={separatorRef}
@@ -338,21 +341,24 @@ function PanelTab({
   title?: string
   children: ReactNode
 }) {
+  // The selected tab is the one filled pill in the header, so the fill has to
+  // survive the pointer: a hover that changed it would read as a second state.
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="sm"
       aria-pressed={active}
       onClick={onSelect}
       title={title}
       className={cn(
-        "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "gap-1.5",
         active
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          ? "bg-accent text-foreground hover:bg-accent"
+          : "text-muted-foreground"
       )}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 
@@ -377,9 +383,12 @@ function FilesOverview({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      {/* The tab above already says Files, so this is a section label rather
+          than a second title: mono eyebrow, and the sentence under it carries
+          what the list actually holds. */}
       <div className="mb-3 px-1">
-        <h2 className="text-sm font-medium">Files</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <h2 className="eyebrow text-muted-foreground">Files</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           Created or changed during this task
         </p>
       </div>
@@ -392,9 +401,11 @@ function FilesOverview({
                 type="button"
                 onClick={() => onSelect(artifact.id)}
                 title={artifact.relativePath}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                {/* Outlined rather than filled: the row fills on hover, and a
+                    filled tile would vanish into it. */}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/70">
                   <ArtifactIcon
                     kind={artifact.previewKind}
                     className="size-4 text-muted-foreground"
@@ -404,7 +415,9 @@ function FilesOverview({
                   <span className="block truncate text-sm font-medium">
                     {artifact.name}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
+                  {/* Same mono line the preview header carries, so a file
+                      reads the same in the list and once it is open. */}
+                  <span className="mt-0.5 block truncate eyebrow text-muted-foreground">
                     {describeFile(artifact, output.producedAt)}
                   </span>
                 </span>
@@ -512,7 +525,9 @@ function FilePreview({
           >
             {artifact.name}
           </p>
-          <p className="truncate text-[11px] text-muted-foreground">
+          {/* Size, age, folder — machine facts about the file, so they take
+              the mono voice and sit under its human-readable name. */}
+          <p className="truncate eyebrow text-muted-foreground">
             {describeFile(artifact, output.producedAt)}
           </p>
         </div>

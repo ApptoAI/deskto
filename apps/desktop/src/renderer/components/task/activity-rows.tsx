@@ -134,8 +134,11 @@ export function ActivityLine({
       ) : activity.detail ? (
         <span
           className={cn(
-            "inline-flex h-5.5 min-w-0 items-center rounded-md bg-muted/60 px-1.5 text-[11px] text-muted-foreground ring-1 ring-border/40",
-            mono && "font-mono"
+            "inline-flex h-5.5 min-w-0 items-center rounded-md bg-muted px-1.5 text-[11px] text-muted-foreground ring-1 ring-border/70",
+            // The base layer only untracks `code` and friends, and this is a
+            // plain span, so the body's negative tracking would follow the
+            // mono face in here where the system tracks it the other way.
+            mono && "font-mono tracking-normal"
           )}
         >
           <span className="truncate">{activity.detail}</span>
@@ -147,7 +150,7 @@ export function ActivityLine({
   const rowClassName = cn(
     "group/row -mx-1.5 flex min-h-7 w-[calc(100%+12px)] min-w-0 items-center gap-2 rounded-md px-1.5 text-left transition-colors duration-100",
     expandable &&
-      "cursor-pointer outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+      "cursor-pointer outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
   )
 
   if (!expandable) return <div className={rowClassName}>{row}</div>
@@ -350,8 +353,12 @@ function FileChip({
       ) : null}
     </>
   )
+  // Filled with `--muted`, like the detail chip it stands in for: these rows
+  // also run inside an agent card, and a chip wearing the surface it sits on
+  // has no fill at all there. `tracking-normal` undoes the body's tracking,
+  // which is tuned for Inter and would otherwise follow the mono face in.
   const className =
-    "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted/60 px-1.5 font-mono text-[11px] ring-1 ring-border/40"
+    "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted px-1.5 font-mono text-[11px] tracking-normal ring-1 ring-border/70"
 
   if (!matchedFile) {
     return (
@@ -368,7 +375,7 @@ function FileChip({
       title={`Open ${matchedFile.artifact.relativePath}`}
       className={cn(
         className,
-        "cursor-pointer transition-colors outline-none hover:bg-muted hover:ring-border focus-visible:ring-2 focus-visible:ring-ring/50"
+        "cursor-pointer transition-colors outline-none hover:bg-accent hover:ring-border focus-visible:ring-2 focus-visible:ring-ring"
       )}
     >
       <ArtifactIcon

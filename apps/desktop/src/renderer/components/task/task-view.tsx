@@ -10,6 +10,7 @@ import type {
 } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { openFolder } from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
@@ -31,6 +32,7 @@ import { ApprovalPanel } from "./approval-panel.js"
 import { MessageStream } from "./message-stream.js"
 import { FilesProvider } from "./files-context.js"
 import { TaskPanel } from "./task-panel.js"
+import { conversationMeasureClassName } from "./task-panel-size.js"
 import {
   retainSelectedFile,
   showActivities,
@@ -237,7 +239,14 @@ export function TaskView({
               </FilesProvider>
             )}
             <div className="shrink-0 px-6 pb-6">
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+              {/* The composer takes the conversation's measure so it lines up
+                  with the answers rather than out-reaching them. */}
+              <div
+                className={cn(
+                  "mx-auto flex w-full flex-col gap-3",
+                  conversationMeasureClassName
+                )}
+              >
                 {folderError ? <InlineError message={folderError} /> : null}
                 {profileError ? <InlineError message={profileError} /> : null}
                 {turnOutputs.state.status === "error" ? (
