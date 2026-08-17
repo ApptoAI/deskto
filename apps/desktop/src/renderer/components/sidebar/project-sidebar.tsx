@@ -16,7 +16,10 @@ import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { ProjectSwitcher } from "./project-switcher.js"
 import { SidebarFrame } from "./sidebar-frame.js"
 import { TaskList, type InboxActions } from "./task-list.js"
-import { WorkspaceSwitcher, WorkspaceTile } from "./workspace-switcher.js"
+import {
+  WorkspaceHeaderLabel,
+  WorkspaceSwitcher,
+} from "./workspace-switcher.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
 
 export function ProjectSidebar({
@@ -81,7 +84,7 @@ export function ProjectSidebar({
   }, [focusSettings])
 
   return (
-    <SidebarFrame compact={workspaceLayout === "slack"}>
+    <SidebarFrame width={workspaceLayout === "slack" ? "compact" : "default"}>
       <div className="no-drag px-2 pb-3">
         {workspaceLayout === "slack" ? (
           <Button
@@ -92,10 +95,7 @@ export function ProjectSidebar({
             disabled={!workspace}
             aria-label={`Workspace settings for ${workspace?.name ?? "workspace"}`}
           >
-            {workspace ? <WorkspaceTile workspace={workspace} /> : null}
-            <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
-              {workspace?.name ?? "Workspace"}
-            </span>
+            <WorkspaceHeaderLabel workspace={workspace} />
             <PencilIcon
               data-icon="inline-end"
               className="text-muted-foreground"

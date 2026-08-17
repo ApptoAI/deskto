@@ -4,23 +4,29 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { DesktoLockup } from "../deskto-logo.js"
 
+const sidebarWidthClass = {
+  default: "w-72 xl:w-80",
+  compact: "w-64",
+  "rail-stack": "w-82",
+} as const
+
 /**
- * The chrome both sidebars share: fixed width, the window drag strip, and the
- * lockup. Settings swaps one sidebar for the other, so the two have to line up
- * pixel for pixel across the swap.
+ * The chrome both sidebars share: width, the window drag strip, and the lockup.
+ * Settings replaces the workspace chrome, so rail-stack reserves the combined
+ * width of the rail and compact project sidebar.
  */
 export function SidebarFrame({
   children,
-  compact = false,
+  width = "default",
 }: {
   children: ReactNode
-  compact?: boolean
+  width?: keyof typeof sidebarWidthClass
 }) {
   return (
     <aside
       className={cn(
         "flex shrink-0 flex-col border-r border-border bg-sidebar",
-        compact ? "w-64" : "w-72 xl:w-80"
+        sidebarWidthClass[width]
       )}
     >
       {/* Traffic lights sit at the left of this strip, so the logo takes the

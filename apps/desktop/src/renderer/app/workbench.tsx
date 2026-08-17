@@ -79,9 +79,10 @@ function useProjectThreadLoader(
 export function Workbench() {
   const client = useRuntimeClient()
   const { snapshot: settingsSnapshot } = useSettings()
+  const [rememberedWorkspaceLayout] = useState(readRememberedWorkspaceLayout)
   const workspaceLayout = settingsSnapshot
     ? settingValue(settingsSnapshot, appSettings.workspaceLayout)
-    : readRememberedWorkspaceLayout()
+    : rememberedWorkspaceLayout
 
   const loadHarnesses = useCallback(() => client.listHarnesses(), [client])
   const harnesses = useRuntimeQuery(loadHarnesses)
@@ -547,6 +548,7 @@ export function Workbench() {
       {view.kind === "settings" ? (
         <SettingsSidebar
           page={view.page}
+          workspaceLayout={workspaceLayout}
           onSelectPage={selectSettingsPage}
           onGoBack={leaveSettings}
         />

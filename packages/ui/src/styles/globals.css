@@ -203,6 +203,7 @@
      was designed to, so it is antialiased here rather than per component. */
   body {
     @apply bg-background text-foreground;
+
     font-size: var(--text-base);
     -webkit-font-smoothing: antialiased;
     font-feature-settings:

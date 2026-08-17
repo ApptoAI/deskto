@@ -35,7 +35,7 @@ export function WorkspaceRail({
               aria-current={selected ? "page" : undefined}
               onClick={() => onSelect(workspace.id)}
               className={cn(
-                "group/rail relative flex size-10 shrink-0 items-center justify-center rounded-xl transition-[background-color,box-shadow,transform] duration-150 outline-none",
+                "group/rail relative flex size-10 shrink-0 items-center justify-center rounded-xl outline-hidden transition-[background-color,box-shadow,transform] duration-150",
                 "focus-visible:ring-2 focus-visible:ring-ring active:scale-95",
                 selected ? "bg-background shadow-sm" : "hover:bg-muted"
               )}
@@ -63,7 +63,7 @@ export function WorkspaceRail({
           title="New workspace"
           aria-label="New workspace"
           onClick={onCreate}
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground transition-[background-color,border-color,color,transform] duration-150 outline-none hover:border-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground outline-hidden transition-[background-color,border-color,color,transform] duration-150 hover:border-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
         >
           <PlusIcon className="size-4" />
         </button>

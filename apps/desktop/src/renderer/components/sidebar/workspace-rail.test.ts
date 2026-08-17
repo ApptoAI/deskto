@@ -36,7 +36,20 @@ describe("WorkspaceRail", () => {
 
     expect(html).toContain('aria-label="Workspaces"')
     expect(html).toContain('aria-label="Personal"')
-    expect(html).toContain('aria-label="Studio" aria-current="page"')
+    expect(html).toContain('aria-label="Studio"')
     expect(html).toContain('aria-label="New workspace"')
+
+    const buttons = html.match(/<button[^>]*>/g) ?? []
+    const activeButton = buttons.find((button) =>
+      button.includes('aria-current="page"')
+    )
+    const inactiveButton = buttons.find((button) =>
+      button.includes('aria-label="Personal"')
+    )
+    expect(activeButton).toContain('aria-label="Studio"')
+    expect(inactiveButton).not.toContain('aria-current="page"')
+    expect(
+      buttons.filter((button) => button.includes('aria-current="page"'))
+    ).toHaveLength(1)
   })
 })

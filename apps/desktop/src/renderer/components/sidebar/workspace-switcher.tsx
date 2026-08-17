@@ -42,6 +42,22 @@ export function WorkspaceTile({
   )
 }
 
+/** The workspace tile and name shared by both sidebar layouts. */
+export function WorkspaceHeaderLabel({
+  workspace,
+}: {
+  workspace: Workspace | null
+}) {
+  return (
+    <>
+      {workspace ? <WorkspaceTile workspace={workspace} /> : null}
+      <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
+        {workspace?.name ?? "Workspace"}
+      </span>
+    </>
+  )
+}
+
 /** Icon rows sit in a tile-sized box so their labels line up with the workspaces above. */
 function MenuIcon({ children }: { children: ReactNode }) {
   return (
@@ -85,10 +101,7 @@ export function WorkspaceSwitcher({
           />
         }
       >
-        {workspace ? <WorkspaceTile workspace={workspace} /> : null}
-        <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
-          {workspace?.name ?? "Workspace"}
-        </span>
+        <WorkspaceHeaderLabel workspace={workspace} />
         <ChevronsUpDownIcon
           data-icon="inline-end"
           className="text-muted-foreground"

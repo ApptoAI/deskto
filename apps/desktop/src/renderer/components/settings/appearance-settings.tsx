@@ -367,7 +367,7 @@ function PreviewPane({ dark }: { dark?: boolean }) {
   )
 }
 
-function LayoutPreview({ value }: { value: string }) {
+function LayoutPreview({ value }: { value: WorkspaceLayout }) {
   return (
     <span aria-hidden className="flex h-20 bg-background">
       {value === "slack" ? (
