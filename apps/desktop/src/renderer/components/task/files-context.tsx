@@ -9,7 +9,12 @@ type FilesAccess = {
   outputs: TurnOutput[]
   projectPath: string
   open: (artifactId: string) => void
-  openAll: () => void
+  /**
+   * Show these files together. The caller names the files rather than a
+   * place: the Files view knows where it has to stand for all of them to be
+   * in view, and the answer moves as the task writes into more folders.
+   */
+  openAll: (outputs: TurnOutput[]) => void
 }
 
 const FilesContext = createContext<FilesAccess | null>(null)
@@ -24,7 +29,7 @@ export function FilesProvider({
   outputs: TurnOutput[]
   projectPath: string
   onOpen: (artifactId: string) => void
-  onOpenAll: () => void
+  onOpenAll: (outputs: TurnOutput[]) => void
   children: ReactNode
 }) {
   const access = useMemo(

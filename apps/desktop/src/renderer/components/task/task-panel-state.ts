@@ -5,9 +5,15 @@ export type PanelSurface = "files" | "activities"
 export type PanelState = {
   surface: PanelSurface
   selectedArtifactId?: string
+  /**
+   * The folder the Files list stands in. The root of the Project is the empty
+   * string — a real place the list can be, so it is a value rather than the
+   * absence of one.
+   */
+  folderPath: string
 }
 
-const defaultState: PanelState = { surface: "files" }
+const defaultState: PanelState = { surface: "files", folderPath: "" }
 const byThread = new Map<string, PanelState>()
 const listeners = new Set<() => void>()
 
@@ -39,17 +45,45 @@ export function selectFiles(threadId: string): void {
   update(threadId, { ...current, surface: "files" })
 }
 
+/** The whole of a task's files, from the top. */
 export function showFilesOverview(threadId: string): void {
+  showFolder(threadId, "")
+}
+
+/** One folder of a task's files, with nothing open inside it. */
+export function showFolder(threadId: string, folderPath: string): void {
   const current = stateFor(threadId)
-  if (current.surface === "files" && !current.selectedArtifactId) return
-  update(threadId, { surface: "files" })
+  if (
+    current.surface === "files" &&
+    !current.selectedArtifactId &&
+    current.folderPath === folderPath
+  )
+    return
+  update(threadId, { surface: "files", folderPath })
 }
 
 export function showFile(threadId: string, artifactId: string): void {
   const current = stateFor(threadId)
   if (current.surface === "files" && current.selectedArtifactId === artifactId)
     return
-  update(threadId, { surface: "files", selectedArtifactId: artifactId })
+  update(threadId, {
+    ...current,
+    surface: "files",
+    selectedArtifactId: artifactId,
+  })
+}
+
+/**
+ * Move the list to where the panel is standing without disturbing anything
+ * open in it: the folder of the file being read, or the folder a vanished one
+ * gave way to. Remembered rather than worked out again on each render — a
+ * folder the task refills would otherwise pull the panel back down into it
+ * with no click from the user.
+ */
+export function keepFolder(threadId: string, folderPath: string): void {
+  const current = stateFor(threadId)
+  if (current.folderPath === folderPath) return
+  update(threadId, { ...current, folderPath })
 }
 
 export function showActivities(threadId: string): void {
@@ -69,5 +103,8 @@ export function retainSelectedFile(
     availableIds.includes(current.selectedArtifactId)
   )
     return
-  update(threadId, { surface: current.surface })
+  update(threadId, {
+    surface: current.surface,
+    folderPath: current.folderPath,
+  })
 }
