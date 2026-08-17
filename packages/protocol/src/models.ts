@@ -216,9 +216,15 @@ export const doneOverrideSchema = z.enum(["done", "active"])
 
 export type DoneOverride = z.infer<typeof doneOverrideSchema>
 
+/** Fixed orchestration guardrails shared by Runtime and MCP tools. */
+export const maximumThreadChildren = 8
+export const maximumThreadDepth = 2
+
 export const threadSchema = z.object({
   id: z.string(),
   projectId: z.string(),
+  /** The Deskto task that created this background task. */
+  parentThreadId: z.string().nullable(),
   title: z.string(),
   harnessId: z.string(),
   status: threadStatusSchema,
@@ -245,6 +251,15 @@ export const threadSchema = z.object({
 })
 
 export type Thread = z.infer<typeof threadSchema>
+
+export const threadSearchResultSchema = z.object({
+  thread: threadSchema,
+  projectName: z.string(),
+  workspaceName: z.string(),
+  excerpt: z.string(),
+})
+
+export type ThreadSearchResult = z.infer<typeof threadSearchResultSchema>
 
 export const harnessFailureSchema = z.object({
   kind: z.enum(["usage-limit", "error"]),
@@ -447,6 +462,7 @@ export type Approval = z.infer<typeof approvalSchema>
 
 export const threadViewSchema = z.object({
   thread: threadSchema,
+  childThreads: z.array(threadSchema),
   messages: z.array(messageSchema),
   activities: z.array(activitySchema),
   pendingApproval: approvalSchema.optional(),

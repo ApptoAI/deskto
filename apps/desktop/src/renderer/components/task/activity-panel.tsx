@@ -1,6 +1,7 @@
 import { memo, useState } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
+import type { Thread } from "@deskto/protocol"
 
 import { Plan } from "@workspace/ui/components/chat/plan"
 import { cn } from "@workspace/ui/lib/utils"
@@ -13,6 +14,7 @@ import {
   SubagentBadge,
   activityIcon,
 } from "./activity-rows.js"
+import { BackgroundThreadList } from "./background-thread-list.js"
 
 /**
  * The task's work, out of the conversation. A Turn's plan and the agents it
@@ -22,15 +24,19 @@ import {
  */
 export const ActivityPanel = memo(function ActivityPanel({
   summary,
+  childThreads,
+  onOpenThread,
   onOpenFiles,
 }: {
   summary: ActivitySummary
+  childThreads: Thread[]
+  onOpenThread: (threadId: string) => void
   onOpenFiles: () => void
 }) {
   const { agents, plan, working } = summary
   const settled = agents.length - working
 
-  if (!plan && agents.length === 0) {
+  if (!plan && agents.length === 0 && childThreads.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
         <BotIcon aria-hidden className="size-6 text-muted-foreground/60" />
@@ -66,6 +72,10 @@ export const ActivityPanel = memo(function ActivityPanel({
               ))}
             </section>
           ) : null}
+          <BackgroundThreadList
+            threads={childThreads}
+            onOpenThread={onOpenThread}
+          />
         </div>
       </div>
       {agents.length > 0 ? (

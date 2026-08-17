@@ -17,6 +17,7 @@ import {
   selectionSchema,
   settingsSnapshotSchema,
   threadSchema,
+  threadSearchResultSchema,
   threadViewSchema,
   turnInputSchema,
   turnOutputSchema,
@@ -188,6 +189,17 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
       projectId: z.string(),
       harnessId: z.string(),
       executionProfile: executionProfileSchema.optional(),
+      parentThreadId: z.string().optional(),
+      title: z.string().trim().min(1).max(160).optional(),
+    }),
+  }),
+  z.object({
+    method: z.literal("thread.search"),
+    params: z.object({
+      originThreadId: z.string().min(1),
+      query: z.string().trim().min(1).max(300),
+      scope: z.enum(["project", "workspace", "all"]).default("project"),
+      limit: z.number().int().min(1).max(50).default(10),
     }),
   }),
   z.object({
@@ -323,6 +335,7 @@ export interface RuntimeResponses {
   "project.searchEntries": z.infer<typeof projectEntrySchema>[]
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
+  "thread.search": z.infer<typeof threadSearchResultSchema>[]
   "thread.configure": z.infer<typeof threadViewSchema>
   "thread.get": z.infer<typeof threadViewSchema>
   "thread.setDone": z.infer<typeof threadSchema>

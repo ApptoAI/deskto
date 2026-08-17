@@ -242,6 +242,82 @@ const migrations = [
     CREATE INDEX skill_provisioning_project_latest_idx
       ON skill_provisioning_reports(root_id, harness_id, attempted_at DESC);
   `,
+  `
+    ALTER TABLE threads ADD COLUMN parent_thread_id TEXT
+      REFERENCES threads(id) ON DELETE CASCADE;
+
+    CREATE INDEX threads_parent_updated_idx
+      ON threads(parent_thread_id, updated_at DESC);
+
+    CREATE VIRTUAL TABLE thread_search USING fts5(
+      thread_id UNINDEXED,
+      project_id UNINDEXED,
+      title,
+      content,
+      tokenize = 'unicode61'
+    );
+
+    INSERT INTO thread_search (thread_id, project_id, title, content)
+    SELECT
+      threads.id,
+      threads.project_id,
+      threads.title,
+      COALESCE((
+        SELECT group_concat(messages.content, char(10))
+        FROM messages
+        WHERE messages.thread_id = threads.id
+      ), '')
+    FROM threads;
+
+    CREATE TRIGGER thread_search_after_thread_insert
+    AFTER INSERT ON threads BEGIN
+      INSERT INTO thread_search (thread_id, project_id, title, content)
+      VALUES (new.id, new.project_id, new.title, '');
+    END;
+
+    CREATE TRIGGER thread_search_after_thread_update
+    AFTER UPDATE OF title, project_id ON threads BEGIN
+      UPDATE thread_search
+      SET title = new.title, project_id = new.project_id
+      WHERE thread_id = new.id;
+    END;
+
+    CREATE TRIGGER thread_search_after_thread_delete
+    AFTER DELETE ON threads BEGIN
+      DELETE FROM thread_search WHERE thread_id = old.id;
+    END;
+
+    CREATE TRIGGER thread_search_after_message_insert
+    AFTER INSERT ON messages BEGIN
+      UPDATE thread_search
+      SET content = content || char(10) ||
+        CASE WHEN new.state = 'streaming' THEN '' ELSE new.content END
+      WHERE thread_id = new.thread_id;
+    END;
+
+    CREATE TRIGGER thread_search_after_message_update
+    AFTER UPDATE OF content, state ON messages
+    WHEN new.state <> 'streaming' BEGIN
+      UPDATE thread_search
+      SET content = COALESCE((
+        SELECT group_concat(messages.content, char(10))
+        FROM messages
+        WHERE messages.thread_id = new.thread_id
+      ), '')
+      WHERE thread_id = new.thread_id;
+    END;
+
+    CREATE TRIGGER thread_search_after_message_delete
+    AFTER DELETE ON messages BEGIN
+      UPDATE thread_search
+      SET content = COALESCE((
+        SELECT group_concat(messages.content, char(10))
+        FROM messages
+        WHERE messages.thread_id = old.thread_id
+      ), '')
+      WHERE thread_id = old.thread_id;
+    END;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

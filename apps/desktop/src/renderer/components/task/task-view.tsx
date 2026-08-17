@@ -47,10 +47,12 @@ export function TaskView({
   threadId,
   harnesses,
   projects,
+  onOpenThread,
 }: {
   threadId: string
   harnesses: QueryState<Harness[]>
   projects: Project[]
+  onOpenThread: (threadId: string) => void
 }) {
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(threadId)
@@ -150,7 +152,8 @@ export function TaskView({
     )
   }
 
-  const { thread, messages, activities, pendingApproval } = state.data
+  const { thread, childThreads, messages, activities, pendingApproval } =
+    state.data
   const options = harnesses.status === "ready" ? harnesses.data : []
   // Resolved from the thread rather than the sidebar selection: in the
   // all-projects view the open task can belong to a different project.
@@ -332,7 +335,12 @@ export function TaskView({
             repeating it. It folds away entirely on a narrow window, where
             the conversation needs the room more. */}
           {!panelOpen ? (
-            <ActivityAside activities={activities} onOpen={openActivity} />
+            <ActivityAside
+              activities={activities}
+              childThreads={childThreads}
+              onOpen={openActivity}
+              onOpenThread={onOpenThread}
+            />
           ) : null}
         </div>
       </div>
@@ -340,7 +348,9 @@ export function TaskView({
         <TaskPanel
           threadId={threadId}
           activities={activities}
+          childThreads={childThreads}
           files={files.state}
+          onOpenThread={onOpenThread}
           onClose={() => setPanelOpen(false)}
         />
       ) : null}

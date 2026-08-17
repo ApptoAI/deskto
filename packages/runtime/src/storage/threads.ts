@@ -4,14 +4,18 @@ import type { DatabaseSync } from "node:sqlite"
 import {
   canMarkDone,
   canSnooze,
+  maximumThreadChildren,
+  maximumThreadDepth,
   type ContextUsage,
   type ExecutionProfile,
   type Thread,
+  type ThreadSearchResult,
   type ThreadView,
 } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import type { ThreadSequences } from "../thread-sequences.js"
+import { transaction } from "./database.js"
 import {
   toApproval,
   toActivity,
@@ -25,6 +29,12 @@ import {
 import type { Projects } from "./projects.js"
 
 export const newThreadTitle = "New task"
+
+type ThreadSearchRow = ThreadRow & {
+  search_project_name: string
+  search_workspace_name: string
+  search_excerpt: string
+}
 
 export class Threads {
   constructor(
@@ -48,14 +58,16 @@ export class Threads {
   create(
     projectId: string,
     harnessId: string,
-    executionProfile: ExecutionProfile
+    executionProfile: ExecutionProfile,
+    options: { parentThreadId?: string; title?: string } = {}
   ): Thread {
     this.projects.get(projectId)
     const now = new Date().toISOString()
     const thread: Thread = {
       id: randomUUID(),
       projectId,
-      title: newThreadTitle,
+      parentThreadId: options.parentThreadId ?? null,
+      title: options.title?.trim() || newThreadTitle,
       harnessId,
       status: "idle",
       executionProfile,
@@ -71,23 +83,144 @@ export class Threads {
       createdAt: now,
       updatedAt: now,
     }
-    this.database
-      .prepare(
-        "INSERT INTO threads (id, project_id, title, harness_id, status, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      )
-      .run(
-        thread.id,
-        thread.projectId,
-        thread.title,
-        thread.harnessId,
-        thread.status,
-        executionProfile.modelId,
-        executionProfile.effort,
-        executionProfile.permissionMode,
-        thread.createdAt,
-        thread.updatedAt
-      )
+    transaction(this.database, () => {
+      if (options.parentThreadId) {
+        const parent = this.getRow(options.parentThreadId)
+        if (parent.project_id !== projectId) {
+          throw new RuntimeError(
+            "invalid-parent-thread",
+            "A background task must stay in its parent's project"
+          )
+        }
+        let depth = 1
+        let ancestorId = parent.parent_thread_id
+        while (ancestorId) {
+          depth += 1
+          if (depth > maximumThreadDepth) {
+            throw new RuntimeError(
+              "thread-depth-limit",
+              `Background tasks are limited to ${maximumThreadDepth} levels`
+            )
+          }
+          ancestorId = this.getRow(ancestorId).parent_thread_id
+        }
+        // SAFETY: COUNT(*) always returns one numeric count column.
+        const count = this.database
+          .prepare(
+            "SELECT COUNT(*) AS child_count FROM threads WHERE parent_thread_id = ?"
+          )
+          .get(options.parentThreadId) as { child_count: number }
+        if (count.child_count >= maximumThreadChildren) {
+          throw new RuntimeError(
+            "thread-child-limit",
+            `A task can have at most ${maximumThreadChildren} direct background tasks`
+          )
+        }
+      }
+      this.database
+        .prepare(
+          "INSERT INTO threads (id, project_id, parent_thread_id, title, harness_id, status, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run(
+          thread.id,
+          thread.projectId,
+          thread.parentThreadId,
+          thread.title,
+          thread.harnessId,
+          thread.status,
+          executionProfile.modelId,
+          executionProfile.effort,
+          executionProfile.permissionMode,
+          thread.createdAt,
+          thread.updatedAt
+        )
+    })
     return thread
+  }
+
+  search(
+    originThreadId: string,
+    query: string,
+    scope: "project" | "workspace" | "all",
+    limit: number
+  ): ThreadSearchResult[] {
+    const origin = this.getRow(originThreadId)
+    const project = this.projects.get(origin.project_id)
+    const terms = query.match(/[\p{L}\p{N}_-]+/gu) ?? []
+    if (terms.length === 0) return []
+    const match = terms.map((term) => `"${term}"*`).join(" AND ")
+    const scopeSql =
+      scope === "project"
+        ? "AND threads.project_id = ?"
+        : scope === "workspace"
+          ? "AND projects.workspace_id = ?"
+          : ""
+    const scopeParams =
+      scope === "project"
+        ? [origin.project_id]
+        : scope === "workspace"
+          ? [project.workspaceId]
+          : []
+    // SAFETY: the query selects every ThreadRow column plus the three named
+    // search projection columns. scopeSql is chosen from fixed strings.
+    const rows = this.database
+      .prepare(
+        `SELECT
+          threads.*,
+          projects.name AS search_project_name,
+          workspaces.name AS search_workspace_name,
+          snippet(thread_search, 3, '', '', ' … ', 24) AS search_excerpt
+        FROM thread_search
+        JOIN threads ON threads.id = thread_search.thread_id
+        JOIN projects ON projects.id = threads.project_id
+        JOIN workspaces ON workspaces.id = projects.workspace_id
+        WHERE thread_search MATCH ?
+          AND threads.id <> ?
+          ${scopeSql}
+        ORDER BY bm25(thread_search), threads.updated_at DESC
+        LIMIT ?`
+      )
+      .all(match, originThreadId, ...scopeParams, limit) as ThreadSearchRow[]
+    return rows.map((row) => ({
+      thread: toThread(row),
+      projectName: row.search_project_name,
+      workspaceName: row.search_workspace_name,
+      excerpt: row.search_excerpt,
+    }))
+  }
+
+  parentId(id: string): string | null {
+    return this.getRow(id).parent_thread_id
+  }
+
+  children(id: string): Thread[] {
+    this.getRow(id)
+    // SAFETY: migrations define every threads column in ThreadRow, and this
+    // query selects complete rows.
+    const rows = this.database
+      .prepare(
+        "SELECT * FROM threads WHERE parent_thread_id = ? ORDER BY created_at, rowid"
+      )
+      .all(id) as ThreadRow[]
+    return rows.map(toThread)
+  }
+
+  descendantIds(id: string): string[] {
+    this.getRow(id)
+    // SAFETY: the recursive projection returns one string id column.
+    const rows = this.database
+      .prepare(
+        `WITH RECURSIVE descendants(id, depth) AS (
+          SELECT id, 1 FROM threads WHERE parent_thread_id = ?
+          UNION ALL
+          SELECT threads.id, descendants.depth + 1
+          FROM threads
+          JOIN descendants ON threads.parent_thread_id = descendants.id
+        )
+        SELECT id FROM descendants ORDER BY depth DESC`
+      )
+      .all(id) as Array<{ id: string }>
+    return rows.map((row) => row.id)
   }
 
   configure(id: string, executionProfile: ExecutionProfile): ThreadView {
@@ -227,11 +360,15 @@ export class Threads {
   /** Removes the task for good. Turns, messages, activities and approvals go
       with it through the foreign-key cascade; the project folder is untouched. */
   delete(id: string): void {
+    const descendantIds = this.descendantIds(id)
     const result = this.database
       .prepare("DELETE FROM threads WHERE id = ?")
       .run(id)
     if (result.changes === 0)
       throw new RuntimeError("thread-not-found", "Task not found")
+    for (const descendantId of descendantIds) {
+      this.sequences.forget(descendantId)
+    }
     this.sequences.forget(id)
   }
 
@@ -271,6 +408,7 @@ export class Threads {
 
     const view: ThreadView = {
       thread,
+      childThreads: this.children(id),
       messages: messages.map(toMessage),
       activities: activities.map(toActivity),
       seq: this.sequences.current(id),

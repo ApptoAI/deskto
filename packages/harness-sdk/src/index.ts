@@ -17,6 +17,7 @@ export type {
   HarnessFailure,
   HarnessFailureKind,
   HarnessModelOption,
+  McpServerConnection,
   HarnessPromptReference,
   HarnessRunInput,
   HarnessSession,

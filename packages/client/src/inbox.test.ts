@@ -19,6 +19,7 @@ function thread(overrides: Partial<Thread> & { id?: string } = {}): Thread {
   return {
     id: "thread-1",
     projectId: "project-1",
+    parentThreadId: null,
     title: "Task",
     harnessId: "claude",
     status: "idle",
@@ -135,9 +136,9 @@ describe("effectiveSnoozed", () => {
       snoozedAt: "2026-08-14T11:00:00.000Z",
     })
     expect(effectiveSnoozed(shell, { now })).toBe(true)
-    expect(
-      effectiveSnoozed(shell, { now: "2026-08-14T13:00:00.000Z" })
-    ).toBe(false)
+    expect(effectiveSnoozed(shell, { now: "2026-08-14T13:00:00.000Z" })).toBe(
+      false
+    )
   })
 
   it("wakes early when the agent is blocked on the user", () => {

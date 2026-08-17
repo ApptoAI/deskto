@@ -16,6 +16,7 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type McpServerConnection,
   type NativeSkillRoot,
   type PlanStep,
   type TextGenerationInput,
@@ -44,7 +45,7 @@ import {
   getString,
   parseJsonObject,
 } from "./codex-protocol.js"
-import { JsonlClient } from "./jsonl-client.js"
+import { JsonlClient, type JsonlClientOptions } from "./jsonl-client.js"
 
 const codexModelListSchema = z.object({
   data: z.array(jsonValueSchema),
@@ -78,10 +79,38 @@ export interface CodexClient {
   close(): void
 }
 
-export type CodexClientFactory = (command: string, cwd: string) => CodexClient
+export type CodexClientFactory = (
+  command: string,
+  cwd: string,
+  options?: JsonlClientOptions
+) => CodexClient
 
-const createCodexClient: CodexClientFactory = (command, cwd) =>
-  new JsonlClient(command, cwd)
+const createCodexClient: CodexClientFactory = (command, cwd, options) =>
+  new JsonlClient(command, cwd, options)
+
+function codexProcessOptions(
+  servers: readonly McpServerConnection[]
+): JsonlClientOptions | undefined {
+  if (servers.length === 0) return undefined
+  const args = ["app-server"]
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const [index, server] of servers.entries()) {
+    const id = server.id.replaceAll(/[^a-zA-Z0-9_-]/g, "_")
+    const tokenVariable = `DESKTO_MCP_TOKEN_${index}`
+    env[tokenVariable] = server.authorizationToken
+    const settings: ReadonlyArray<[string, string | number | boolean]> = [
+      [`mcp_servers.${id}.url`, server.url],
+      [`mcp_servers.${id}.bearer_token_env_var`, tokenVariable],
+      [`mcp_servers.${id}.required`, server.required ?? true],
+      [`mcp_servers.${id}.tool_timeout_sec`, 60],
+      [`mcp_servers.${id}.default_tools_approval_mode`, "auto"],
+    ]
+    for (const [key, value] of settings) {
+      args.push("-c", `${key}=${JSON.stringify(value)}`)
+    }
+  }
+  return { args, env }
+}
 
 type PendingApproval = {
   id: string
@@ -232,7 +261,11 @@ class CodexSession implements HarnessSession {
     signal: AbortSignal,
     clientFactory: CodexClientFactory
   ): Promise<CodexSession> {
-    const client = clientFactory("codex", input.projectPath)
+    const client = clientFactory(
+      "codex",
+      input.projectPath,
+      codexProcessOptions(input.customization.mcpServers ?? [])
+    )
     const session = new CodexSession(client, input)
     const abort = () => client.close()
     signal.addEventListener("abort", abort, { once: true })

@@ -66,6 +66,15 @@ export type NativeSkillRoot = {
   label: string
 }
 
+/** One app-owned HTTP MCP server made available only to this Harness session. */
+export type McpServerConnection = {
+  id: string
+  name: string
+  url: string
+  authorizationToken: string
+  required?: boolean
+}
+
 /**
  * Provider-neutral additions to a session, built by the Runtime from the
  * active workspace's Packs. Adapters translate it to native mechanisms and
@@ -73,6 +82,7 @@ export type NativeSkillRoot = {
  */
 export type SessionCustomization = {
   skillRoots: SkillRoot[]
+  mcpServers?: McpServerConnection[]
 }
 
 /** A reference already validated and resolved by the Runtime. */

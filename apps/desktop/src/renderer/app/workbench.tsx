@@ -643,6 +643,7 @@ export function Workbench() {
             threadId={openThreadId}
             harnesses={harnesses.state}
             projects={projects}
+            onOpenThread={openThread}
           />
         ) : (
           <NewTaskView

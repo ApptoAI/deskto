@@ -1,6 +1,9 @@
 import { dirname, join, resolve } from "node:path"
 
-import type { HarnessAdapterFactory } from "@deskto/harness-sdk"
+import type {
+  HarnessAdapterFactory,
+  McpServerConnection,
+} from "@deskto/harness-sdk"
 import type {
   RequestFor,
   RuntimeEvent,
@@ -29,6 +32,15 @@ export type RuntimeOptions = {
   probeGate?: Promise<void>
   /** Host-owned recoverable file deletion, implemented by Electron on desktop. */
   fileActions?: HostFileActions
+  /** Adds app-owned MCP connections to one Harness session. */
+  sessionMcpServers?: (context: {
+    threadId: string
+    turnId: string
+    projectId: string
+    workspaceId: string
+  }) => McpServerConnection[] | Promise<McpServerConnection[]>
+  /** Revokes host-owned resources after a Turn can no longer call them. */
+  turnSettled?: (turnId: string) => void
 }
 
 export type HostFileActions = {
@@ -84,17 +96,23 @@ export class Runtime implements RuntimeTransport {
       this.#harnesses,
       userSettings,
       {
-        changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
-        delta: (threadId, change) =>
+        changed: (threadId) => this.#emitThreadChanged(threadId),
+        delta: (threadId, change) => {
           this.#emit({
             type: "thread.delta",
             threadId,
             seq: sequences.next(threadId),
             change,
-          }),
+          })
+          if (change.type === "thread.updated") {
+            this.#emitParentThreadChanged(threadId)
+          }
+        },
         artifactsChanged: (threadId) =>
           this.#emit({ type: "artifact.changed", threadId }),
-      }
+        settled: (turnId) => options.turnSettled?.(turnId),
+      },
+      options.sessionMcpServers
     )
     this.#router = new RequestRouter(
       this.#store,
@@ -105,8 +123,7 @@ export class Runtime implements RuntimeTransport {
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),
-        threadChanged: (threadId) =>
-          this.#emit({ type: "thread.changed", threadId }),
+        threadChanged: (threadId) => this.#emitThreadChanged(threadId),
         threadDeleted: (threadId) =>
           this.#emit({ type: "thread.deleted", threadId }),
         artifactsChanged: (threadId) =>
@@ -140,6 +157,22 @@ export class Runtime implements RuntimeTransport {
       } catch {
         continue
       }
+    }
+  }
+
+  #emitThreadChanged(threadId: string): void {
+    this.#emit({ type: "thread.changed", threadId })
+    this.#emitParentThreadChanged(threadId)
+  }
+
+  #emitParentThreadChanged(threadId: string): void {
+    try {
+      const parentThreadId = this.#store.threads.parentId(threadId)
+      if (parentThreadId) {
+        this.#emit({ type: "thread.changed", threadId: parentThreadId })
+      }
+    } catch {
+      // A delete announces its own lifecycle and resolves the parent first.
     }
   }
 }

@@ -10,6 +10,7 @@ import {
   type HarnessFailure,
   type HarnessRunInput,
   type HarnessSession,
+  type McpServerConnection,
 } from "@deskto/harness-sdk"
 import type {
   Activity,
@@ -41,6 +42,8 @@ export type TurnEvents = {
   delta: (threadId: string, change: ThreadDeltaChange) => void
   /** A completed file change produced one or more project results. */
   artifactsChanged: (threadId: string) => void
+  /** A Turn can no longer use its session-scoped host resources. */
+  settled?: (turnId: string) => void
 }
 
 type StartingRun = ActiveTurnRecord & {
@@ -91,7 +94,15 @@ export class TurnCoordinator {
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
     settings: UserSettings,
-    private readonly events: TurnEvents
+    private readonly events: TurnEvents,
+    private readonly sessionMcpServers:
+      | ((context: {
+          threadId: string
+          turnId: string
+          projectId: string
+          workspaceId: string
+        }) => McpServerConnection[] | Promise<McpServerConnection[]>)
+      | undefined = undefined
   ) {
     this.#titles = new ThreadTitleGenerator(
       store,
@@ -109,6 +120,16 @@ export class TurnCoordinator {
   #changed(threadId: string): void {
     if (this.#discarding.has(threadId)) return
     this.events.changed(threadId)
+  }
+
+  #settleRun(threadId: string, run: StartingRun | ActiveRun): void {
+    if (this.#runs.get(threadId) !== run) return
+    this.#runs.delete(threadId)
+    try {
+      this.events.settled?.(run.turnId)
+    } catch {
+      // A host cleanup hook cannot change the result of a settled Turn.
+    }
   }
 
   async start(threadId: string, input: TurnInput): Promise<ThreadView> {
@@ -138,6 +159,13 @@ export class TurnCoordinator {
     this.#changed(threadId)
 
     try {
+      const mcpServers =
+        (await this.sessionMcpServers?.({
+          threadId,
+          turnId: turn.turnId,
+          projectId: thread.project_id,
+          workspaceId: turn.workspaceId,
+        })) ?? []
       const runInput: HarnessRunInput = {
         threadId,
         turnId: turn.turnId,
@@ -149,6 +177,7 @@ export class TurnCoordinator {
           skillRoots: existingSkillRoots(
             this.store.packs.attachedToWorkspace(turn.workspaceId)
           ),
+          mcpServers,
         },
       }
       if (turn.providerSessionId) {
@@ -212,7 +241,7 @@ export class TurnCoordinator {
         )
         this.#changed(threadId)
       }
-      if (this.#runs.get(threadId) === starting) this.#runs.delete(threadId)
+      this.#settleRun(threadId, starting)
     }
 
     return this.store.threads.view(threadId)
@@ -227,7 +256,7 @@ export class TurnCoordinator {
       run.cancelled = true
       run.controller.abort()
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
-      this.#runs.delete(threadId)
+      this.#settleRun(threadId, run)
       this.#changed(threadId)
       return this.store.threads.view(threadId)
     }
@@ -249,7 +278,7 @@ export class TurnCoordinator {
       )
       this.#changed(threadId)
       await run.outputs?.finish()
-      this.#runs.delete(threadId)
+      this.#settleRun(threadId, run)
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -263,7 +292,7 @@ export class TurnCoordinator {
       this.#changed(threadId)
     }
     await run.outputs?.finish()
-    this.#runs.delete(threadId)
+    this.#settleRun(threadId, run)
     return this.store.threads.view(threadId)
   }
 
@@ -337,6 +366,7 @@ export class TurnCoordinator {
       if (run.phase === "starting") {
         run.controller.abort()
         this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
+        this.#settleRun(threadId, run)
         continue
       }
       this.#flush(run)
@@ -351,6 +381,7 @@ export class TurnCoordinator {
           this.#terminalMessageId(run)
         )
       }
+      this.#settleRun(threadId, run)
     }
     this.#runs.clear()
   }
@@ -389,9 +420,7 @@ export class TurnCoordinator {
       // map until capture finishes also prevents the next Turn from writing
       // files that this one could claim.
       if (!run.cancelled) await run.outputs?.finish()
-      if (!run.cancelled && this.#runs.get(threadId) === run) {
-        this.#runs.delete(threadId)
-      }
+      if (!run.cancelled) this.#settleRun(threadId, run)
     }
   }
 

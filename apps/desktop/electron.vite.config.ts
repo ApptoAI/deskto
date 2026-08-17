@@ -36,6 +36,7 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: [
           "@deskto/protocol",
+          "@deskto/mcp-server",
           "@deskto/runtime",
           "@deskto/settings",
         ],

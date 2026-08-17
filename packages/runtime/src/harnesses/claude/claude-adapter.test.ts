@@ -23,6 +23,49 @@ const emptyAssistantUsage = {
 
 beforeEach(() => queryMock.mockReset())
 
+describe("Claude MCP provisioning", () => {
+  it("passes a turn-scoped HTTP server directly to the SDK", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [],
+          mcpServers: [
+            {
+              id: "deskto",
+              name: "Deskto",
+              url: "http://127.0.0.1:4321/mcp",
+              authorizationToken: "secret-token",
+              required: true,
+            },
+          ],
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(queryMock.mock.calls[0]?.[0]?.options?.mcpServers).toEqual({
+      deskto: {
+        type: "http",
+        url: "http://127.0.0.1:4321/mcp",
+        headers: { Authorization: "Bearer secret-token" },
+        timeout: 60_000,
+        alwaysLoad: true,
+      },
+    })
+  })
+})
+
 describe("claudePrompt", () => {
   it("translates selected skills to Claude plugin commands", () => {
     expect(

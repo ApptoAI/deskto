@@ -16,6 +16,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Workspace**: A container of Projects for one area of life or work, modeled on Arc browser Spaces. It owns a name, color, icon, its attached Packs, and the last active Project. Every install has a non-deletable Personal Workspace.
 - **Project**: A folder the user has opened as a project. It belongs to exactly one Workspace. Use "project" in UI copy and `Project` in code.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
+- **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.
 - **Turn**: One user request and one Harness execution in a Thread.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
 - **Artifact**: A file inside a Project that a Turn produced, either named by a completed file-change Activity or found in the Project folder by a sweep. The UI calls it a file. An Artifact keeps a stable identity for its project-relative path.
@@ -23,6 +24,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
+- **MCP Server**: The local `@deskto/mcp-server` process surface that lets a Harness create, inspect, search, wait for, and continue Runtime Threads. Desktop starts and configures it without user setup.
 - **Execution Profile**: The model, thinking level, and permission mode used by a Harness. A Thread owns the editable profile; every Turn stores the profile it started with.
 - **Skill Occurrence**: One skill directory found at one physical location. Occurrences keep their identity even when another skill has the same name or their `SKILL.md` is invalid.
 - **Skill Exposure**: The relationship between a Skill Occurrence and a Harness. It records native discovery or Deskto's latest attempt to configure an app-supplied root. It does not claim the Harness used the skill.
@@ -36,6 +38,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A Project points to one folder, belongs to one Workspace, and owns its Threads.
 - Deleting a Workspace moves its Projects to the Personal Workspace. Nothing on disk is touched.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
+- A Background task is a normal durable Thread. Write access through MCP stays inside the current Thread tree; read-only search may span all local Threads.
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.
@@ -61,6 +64,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - `packages/settings` defines every user-configurable setting: its key, schema, default value, and editor kind. The Runtime stores only overrides; defaults stay in the registry.
 - `packages/client` wraps a transport with task-oriented methods for any Surface.
 - `packages/runtime` implements use cases, SQLite persistence, and built-in Harness Adapters.
+- `packages/mcp-server` exposes bounded thread orchestration and local full-text search to Harnesses through MCP. It calls the Runtime protocol and never owns persistence.
 - `packages/ui` contains reusable DOM components. It does not call Electron or the Runtime.
 - `apps/desktop` hosts the Runtime in Electron main, exposes a narrow preload bridge, and composes the React Surface.
 
@@ -70,8 +74,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A remotely hosted Runtime
 - Authentication and team administration
 - Hub, Catalog, remote Pack distribution, and policy enforcement
-- MCP and CLI provisioning
 - Starter project distribution
-- Search, automation, and usage screens
+- Automation and usage screens
+- A user-facing global search screen
 
 The boundaries above reserve a place for these features. They do not justify placeholder services or UI in the MVP.

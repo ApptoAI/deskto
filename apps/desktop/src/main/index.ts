@@ -4,6 +4,7 @@ import path from "node:path"
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { z } from "zod"
 
+import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
 import { ClaudeAdapter, CodexAdapter, createRuntime } from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
@@ -19,6 +20,8 @@ const fatalStartupDetailSchema = z
   .catch("The application failed to start")
 
 let closeRuntime: (() => Promise<void>) | undefined
+
+type McpServerReference = { current: DesktoMcpServer | undefined }
 
 function packagedClaudeExecutable(): string | undefined {
   if (!app.isPackaged) return undefined
@@ -58,6 +61,7 @@ async function openApplication(): Promise<void> {
     : new ClaudeAdapter({
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
+  const mcpServerRef: McpServerReference = { current: undefined }
   const runtime = createRuntime({
     databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
     packsPath: path.join(app.getPath("userData"), "packs"),
@@ -66,10 +70,19 @@ async function openApplication(): Promise<void> {
     fileActions: {
       trashItem: (targetPath) => shell.trashItem(targetPath),
     },
+    sessionMcpServers: (context) =>
+      mcpServerRef.current ? [mcpServerRef.current.connectionFor(context)] : [],
+    turnSettled: (turnId) => mcpServerRef.current?.revokeTurn(turnId),
   })
   // Assigned before the window opens so a failure below still closes the
   // runtime through the before-quit path.
   closeRuntime = () => runtime.close()
+  const mcpServer = await startDesktoMcpServer({ runtime })
+  mcpServerRef.current = mcpServer
+  const closeApplicationRuntime = async () => {
+    await Promise.allSettled([mcpServer.close(), runtime.close()])
+  }
+  closeRuntime = closeApplicationRuntime
   // File actions resolve results through the runtime, so they register once
   // it exists rather than at startup.
   registerDesktopIpc(runtime)
@@ -78,7 +91,7 @@ async function openApplication(): Promise<void> {
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   closeRuntime = async () => {
     unregisterRuntimeIpc()
-    await runtime.close()
+    await closeApplicationRuntime()
   }
 }
 
