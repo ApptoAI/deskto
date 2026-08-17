@@ -292,7 +292,10 @@ describe("Composer", () => {
           ? new Promise<Response>((resolve) => finishRequests.push(resolve))
           : Promise.resolve({ ok: true, data: [] })
     )
-    let listener: ((event: RuntimeEvent) => void) | null = null
+    type ListenerHolder = {
+      current: ((event: RuntimeEvent) => void) | null
+    }
+    const listener: ListenerHolder = { current: null }
     render(
       <RuntimeClientProvider
         client={
@@ -302,9 +305,9 @@ describe("Composer", () => {
             // their RuntimeResponses entry declares.
             request: request as RuntimeTransport["request"],
             subscribe: (next) => {
-              listener = next
+              listener.current = next
               return () => {
-                listener = null
+                if (listener.current === next) listener.current = null
               }
             },
           })
@@ -323,7 +326,7 @@ describe("Composer", () => {
 
     fireEvent.change(textarea, { target: { value: "$", selectionStart: 1 } })
     await waitFor(() => expect(finishRequests).toHaveLength(1))
-    act(() => listener?.({ type: "pack.changed" }))
+    act(() => listener.current?.({ type: "pack.changed" }))
     fireEvent.change(textarea, {
       target: { value: "$n", selectionStart: 2 },
     })
