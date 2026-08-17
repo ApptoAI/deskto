@@ -64,6 +64,10 @@ type SkillCache = {
   skills: PromptSkill[]
 }
 
+type SkillRequest = {
+  session: string
+}
+
 type SuggestionResult = {
   key: string
   candidates: ComposerCandidate[]
@@ -124,7 +128,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const requestSequence = useRef(0)
-  const skillRequest = useRef<string | null>(null)
+  const skillRequest = useRef<SkillRequest | null>(null)
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
@@ -204,16 +208,17 @@ export function Composer({
       // same folders, all but the last discarded.
       if (!skillSession) return
       if (skillCache?.session === skillSession) return
-      if (skillRequest.current === skillSession) return
-      skillRequest.current = skillSession
+      if (skillRequest.current?.session === skillSession) return
+      const request = { session: skillSession }
+      skillRequest.current = request
       void client.listSkillsForPrompt(projectId).then(
         (skills) => {
-          if (skillRequest.current !== skillSession) return
+          if (skillRequest.current !== request) return
           skillRequest.current = null
           setSkillCache({ session: skillSession, skills })
         },
         () => {
-          if (skillRequest.current !== skillSession) return
+          if (skillRequest.current !== request) return
           skillRequest.current = null
           // The next `$` tries again: a failed read is about this moment, not
           // about this project.

@@ -1,4 +1,5 @@
 import { readdir, realpath, stat } from "node:fs/promises"
+import { availableParallelism } from "node:os"
 import { join } from "node:path"
 
 import type {
@@ -14,6 +15,7 @@ import { skillOccurrenceId } from "./skill-identifiers.js"
 import { parseSkillFile } from "./skill-parser.js"
 
 const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
+const skillNameScanWorkers = Math.max(1, availableParallelism())
 
 export type SkillSourceInput = Omit<SkillSource, "diagnostics">
 
@@ -119,6 +121,7 @@ export async function scanSkillNames(source: {
 }): Promise<ScannedSkillName[]> {
   const resolvedSourcePath = await realpath(source.path).catch(() => null)
   if (!resolvedSourcePath) return []
+  const sourcePath = resolvedSourcePath
   let entries
   try {
     entries = await readdir(source.path, { withFileTypes: true })
@@ -126,33 +129,56 @@ export async function scanSkillNames(source: {
     return []
   }
 
-  const scanned = await Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-      .map(async (entry): Promise<ScannedSkillName | null> => {
-        const directoryPath = join(source.path, entry.name)
-        const directory = await skillDirectoryTarget(
-          resolvedSourcePath,
-          directoryPath,
-          entry.isSymbolicLink() ? join(resolvedSourcePath, entry.name) : null
-        )
-        // A folder that leaves its source is a skill the Skills screen reports
-        // and nothing offers; there is nothing to say about it in a menu.
-        if (directory?.within !== true) return null
-        const skillFilePath = join(directoryPath, "SKILL.md")
-        const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
-        // A folder with no readable SKILL.md is not a skill anyone can call.
-        if (parsed.content === null) return null
-        const name = referenceableName(parsed.name, entry.name)
-        if (!name) return null
-        return {
-          id: skillOccurrenceId(source.id, entry.name),
-          directoryName: entry.name,
-          skillFilePath,
-          name,
-          description: parsed.description ?? "",
-        }
-      })
+  const candidates = entries.filter(
+    (entry) => entry.isDirectory() || entry.isSymbolicLink()
+  )
+  const scanned: Array<ScannedSkillName | null> = Array.from(
+    { length: candidates.length },
+    () => null
+  )
+  let nextIndex = 0
+  async function scanNext(): Promise<void> {
+    for (;;) {
+      const index = nextIndex
+      nextIndex += 1
+      const entry = candidates[index]
+      if (!entry) return
+      const directoryPath = join(source.path, entry.name)
+      const directory = await skillDirectoryTarget(
+        sourcePath,
+        directoryPath,
+        entry.isSymbolicLink() ? join(sourcePath, entry.name) : null
+      )
+      // A folder that leaves its source is a skill the Skills screen reports
+      // and nothing offers; there is nothing to say about it in a menu.
+      if (directory?.within !== true) {
+        scanned[index] = null
+        continue
+      }
+      const skillFilePath = join(directoryPath, "SKILL.md")
+      const parsed = await parseSkillFile(skillFilePath, sourcePath)
+      // A folder with no readable SKILL.md is not a skill anyone can call.
+      if (parsed.content === null) {
+        scanned[index] = null
+        continue
+      }
+      const name = referenceableName(parsed.name, entry.name)
+      scanned[index] = name
+        ? {
+            id: skillOccurrenceId(source.id, entry.name),
+            directoryName: entry.name,
+            skillFilePath,
+            name,
+            description: parsed.description ?? "",
+          }
+        : null
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(candidates.length, skillNameScanWorkers) },
+      scanNext
+    )
   )
   return scanned
     .filter((skill): skill is ScannedSkillName => skill !== null)

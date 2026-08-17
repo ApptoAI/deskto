@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -6,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react"
 import { RuntimeClient } from "@deskto/client"
-import type { RuntimeTransport } from "@deskto/protocol"
+import type { RuntimeEvent, RuntimeTransport } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { RuntimeClientProvider } from "../runtime/runtime-client-context.js"
@@ -261,6 +262,76 @@ describe("Composer", () => {
 
     expect(await screen.findByText("$animate")).toBeTruthy()
     expect(request).toHaveBeenCalledOnce()
+  })
+
+  it("ignores an invalidated skill read after its replacement starts", async () => {
+    vi.stubGlobal("CSS", { escape: (value: string) => value })
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const response = (name: string) => ({
+      ok: true as const,
+      data: [
+        {
+          id: `skill:${name}`,
+          name,
+          description: `${name} skill`,
+          origin: "native" as const,
+          sourceLabel: "Claude personal skills",
+          harnessIds: ["claude"],
+        },
+      ],
+    })
+    type Response = ReturnType<typeof response>
+    const finishRequests: Array<(value: Response) => void> = []
+    const request = vi.fn(
+      (body: { method: string }): Promise<Response | { ok: true; data: [] }> =>
+        body.method === "skill.listForPrompt"
+          ? new Promise<Response>((resolve) => finishRequests.push(resolve))
+          : Promise.resolve({ ok: true, data: [] })
+    )
+    let listener: ((event: RuntimeEvent) => void) | null = null
+    render(
+      <RuntimeClientProvider
+        client={
+          new RuntimeClient({
+            // SAFETY: the composer calls only skill.listForPrompt and
+            // project.searchEntries, and this fake answers both with the shape
+            // their RuntimeResponses entry declares.
+            request: request as RuntimeTransport["request"],
+            subscribe: (next) => {
+              listener = next
+              return () => {
+                listener = null
+              }
+            },
+          })
+        }
+      >
+        <Composer
+          projectId="project-1"
+          harnessId="claude"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole("textbox", { name: "Message" })
+
+    fireEvent.change(textarea, { target: { value: "$", selectionStart: 1 } })
+    await waitFor(() => expect(finishRequests).toHaveLength(1))
+    act(() => listener?.({ type: "pack.changed" }))
+    fireEvent.change(textarea, {
+      target: { value: "$n", selectionStart: 2 },
+    })
+    await waitFor(() => expect(finishRequests).toHaveLength(2))
+
+    await act(async () => finishRequests[0]?.(response("old")))
+    expect(screen.queryByText("$old")).toBeNull()
+    await act(async () => finishRequests[1]?.(response("new")))
+    expect(await screen.findByText("$new")).toBeTruthy()
   })
 
   it("describes the cross-platform paste shortcut", () => {
