@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   minimapHasPersistentGutter,
   minimapHeightStyle,
+  minimapHighlightedIndexes,
   minimapHitStripWidth,
   minimapIndexFromPointer,
   minimapPreviewText,
@@ -74,6 +75,68 @@ describe("minimapIndexFromPointer", () => {
     expect(
       minimapIndexFromPointer({ ...rail, itemCount: 1, pointerY: 0 })
     ).toBe(0)
+  })
+})
+
+describe("minimapHighlightedIndexes", () => {
+  const viewport = { top: 100, bottom: 500 }
+  const highlighted = (anchors: Array<{ top: number; bottom: number }>) =>
+    minimapHighlightedIndexes({
+      anchorCount: anchors.length,
+      anchorAt: (index) => anchors[index]!,
+      viewport,
+    })
+
+  it("highlights every prompt visible in the viewport", () => {
+    expect(
+      highlighted([
+        { top: 120, bottom: 160 },
+        { top: 420, bottom: 460 },
+        { top: 700, bottom: 740 },
+      ])
+    ).toEqual([0, 1])
+  })
+
+  it("keeps the preceding prompt highlighted through a long reply", () => {
+    expect(
+      highlighted([
+        { top: -600, bottom: -560 },
+        { top: 700, bottom: 740 },
+      ])
+    ).toEqual([0])
+  })
+
+  it("hands highlighting to a prompt as soon as it enters the viewport", () => {
+    expect(
+      highlighted([
+        { top: -600, bottom: -560 },
+        { top: 500, bottom: 540 },
+      ])
+    ).toEqual([1])
+  })
+
+  it("leaves every stop dim before the first prompt", () => {
+    expect(highlighted([{ top: 700, bottom: 740 }])).toEqual([])
+  })
+
+  it("reads logarithmically many off-screen prompts", () => {
+    const anchors = Array.from({ length: 64 }, (_, index) => ({
+      top: index * 100,
+      bottom: index * 100 + 40,
+    }))
+    let reads = 0
+
+    expect(
+      minimapHighlightedIndexes({
+        anchorCount: anchors.length,
+        anchorAt: (index) => {
+          reads++
+          return anchors[index]!
+        },
+        viewport: { top: 3150, bottom: 3190 },
+      })
+    ).toEqual([31])
+    expect(reads).toBeLessThanOrEqual(8)
   })
 })
 

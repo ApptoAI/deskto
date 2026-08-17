@@ -83,6 +83,57 @@ export function minimapIndexFromPointer(input: {
   return Math.round(progress * (input.itemCount - 1))
 }
 
+type MinimapVerticalBounds = {
+  top: number
+  bottom: number
+}
+
+/**
+ * Stops whose prompt is visible, or the prompt that opened the Turn currently
+ * crossing the viewport when a long reply has pushed every prompt off screen.
+ */
+export function minimapHighlightedIndexes(input: {
+  anchorCount: number
+  anchorAt: (index: number) => MinimapVerticalBounds
+  viewport: MinimapVerticalBounds
+}): number[] {
+  if (input.anchorCount <= 0) return []
+
+  const measured = new Map<number, MinimapVerticalBounds>()
+  const anchorAt = (index: number) => {
+    const cached = measured.get(index)
+    if (cached) return cached
+    const anchor = input.anchorAt(index)
+    measured.set(index, anchor)
+    return anchor
+  }
+
+  // Prompt positions follow conversation order. Find the first one that has
+  // not passed the viewport, then inspect only the prompts that can be seen.
+  let low = 0
+  let high = input.anchorCount
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (anchorAt(middle).bottom < input.viewport.top) low = middle + 1
+    else high = middle
+  }
+
+  const visible: number[] = []
+  for (let index = low; index < input.anchorCount; index++) {
+    const anchor = anchorAt(index)
+    if (anchor.top > input.viewport.bottom) break
+    if (
+      anchor.bottom >= input.viewport.top &&
+      anchor.top <= input.viewport.bottom
+    ) {
+      visible.push(index)
+    }
+  }
+
+  if (visible.length > 0) return visible
+  return low > 0 ? [low - 1] : []
+}
+
 /** Free space between the viewport edge and the centered message column. */
 function minimapGutter(viewportWidth: number): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0
