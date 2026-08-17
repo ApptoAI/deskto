@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,9 +11,11 @@ import {
 } from "react"
 import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
+import ChevronRightIcon from "lucide-react/dist/esm/icons/chevron-right"
 import DownloadIcon from "lucide-react/dist/esm/icons/download"
 import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FilesIcon from "lucide-react/dist/esm/icons/files"
+import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import XIcon from "lucide-react/dist/esm/icons/x"
@@ -44,6 +47,12 @@ import {
   ArtifactPreviewBody,
   isEditableArtifactKind,
 } from "./artifact-views.js"
+import {
+  folderCrumbs,
+  listFolder,
+  parentFolder,
+  resolveFolder,
+} from "./file-listing.js"
 import { PreviewFailure, PreviewLoading } from "./preview-states.js"
 import { ResultPreviewBoundary } from "./result-preview-boundary.js"
 import {
@@ -55,11 +64,13 @@ import {
   minimumTaskPanelWidth,
 } from "./task-panel-size.js"
 import {
+  keepFolder,
   selectFiles,
   showActivities,
   showBrowser,
   showFile,
   showFilesOverview,
+  showFolder,
   usePanelState,
 } from "./task-panel-state.js"
 
@@ -90,6 +101,18 @@ export function TaskPanel({
   const active = panel.selectedArtifactId
     ? byId.get(panel.selectedArtifactId)
     : undefined
+  // Where the panel is standing: the folder holding the open file, or the one
+  // the user browsed to — with a folder the task has since emptied giving way
+  // to its nearest surviving ancestor, so the list never opens on nothing.
+  // One rule, so leaving a file and refreshing the list agree on the answer.
+  const folder = active
+    ? parentFolder(active.artifact.relativePath)
+    : outputs
+      ? resolveFolder(outputs, panel.folderPath)
+      : panel.folderPath
+  useEffect(() => {
+    if (outputs) keepFolder(threadId, folder)
+  }, [outputs, threadId, folder])
   const activitySummary = useMemo(
     () => summarizeActivities(activities),
     [activities]
@@ -277,13 +300,17 @@ export function TaskPanel({
             key={active.artifact.id}
             threadId={threadId}
             output={active}
-            onBack={() => showFilesOverview(threadId)}
+            // Back to where the file lives, not to the top: a file opened
+            // from the conversation lands the user in its folder.
+            onBack={() => showFolder(threadId, folder)}
           />
         </ResultPreviewBoundary>
       ) : (
         <FilesOverview
           loading={files.status !== "ready"}
           outputs={outputs ?? []}
+          folder={folder}
+          onOpenFolder={(path) => showFolder(threadId, path)}
           onSelect={(artifactId) => showFile(threadId, artifactId)}
         />
       )}
@@ -393,10 +420,14 @@ function PanelTab({
 function FilesOverview({
   loading,
   outputs,
+  folder,
+  onOpenFolder,
   onSelect,
 }: {
   loading: boolean
   outputs: TurnOutput[]
+  folder: string
+  onOpenFolder: (folderPath: string) => void
   onSelect: (artifactId: string) => void
 }) {
   if (loading || outputs.length === 0) {
@@ -415,46 +446,138 @@ function FilesOverview({
           than a second title: mono eyebrow, and the sentence under it carries
           what the list actually holds. */}
       <div className="mb-3 px-1">
-        <h2 className="eyebrow text-muted-foreground">Files</h2>
+        <FolderCrumbs folder={folder} onOpenFolder={onOpenFolder} />
         <p className="mt-1 text-xs text-muted-foreground">
           Created or changed during this task
         </p>
       </div>
       <ul className="flex flex-col gap-1">
-        {outputs.map((output) => {
-          const artifact = output.artifact
-          return (
-            <li key={artifact.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(artifact.id)}
-                title={artifact.relativePath}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {/* Outlined rather than filled: the row fills on hover, and a
-                    filled tile would vanish into it. */}
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/70">
+        {listFolder(outputs, folder).map((row) =>
+          row.kind === "folder" ? (
+            <li key={`folder:${row.path}`}>
+              <FileTreeRowButton
+                title={row.path}
+                onClick={() => onOpenFolder(row.path)}
+                icon={<FolderIcon className="size-4 text-muted-foreground" />}
+                name={row.name}
+                meta={row.fileCount === 1 ? "1 file" : `${row.fileCount} files`}
+                opensFolder
+              />
+            </li>
+          ) : (
+            <li key={row.output.artifact.id}>
+              <FileTreeRowButton
+                title={row.output.artifact.relativePath}
+                onClick={() => onSelect(row.output.artifact.id)}
+                icon={
                   <ArtifactIcon
-                    kind={artifact.previewKind}
+                    kind={row.output.artifact.previewKind}
                     className="size-4 text-muted-foreground"
                   />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {artifact.name}
-                  </span>
-                  {/* Same mono line the preview header carries, so a file
-                      reads the same in the list and once it is open. */}
-                  <span className="mt-0.5 block truncate eyebrow text-muted-foreground">
-                    {describeFile(artifact, output.producedAt)}
-                  </span>
-                </span>
-              </button>
+                }
+                name={row.output.artifact.name}
+                meta={describeFile(row.output.artifact, row.output.producedAt)}
+              />
             </li>
           )
-        })}
+        )}
       </ul>
     </div>
+  )
+}
+
+function FileTreeRowButton({
+  title,
+  onClick,
+  icon,
+  name,
+  meta,
+  opensFolder = false,
+}: {
+  title: string
+  onClick: () => void
+  icon: ReactNode
+  name: string
+  meta: string
+  /** Whether the row goes further into the list rather than opening a file. */
+  opensFolder?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {/* Outlined rather than filled: the row fills on hover, and a filled
+          tile would vanish into it. */}
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/70">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{name}</span>
+        {/* Same mono line the preview header carries, so a file reads the
+            same in the list and once it is open. */}
+        <span className="mt-0.5 block truncate eyebrow text-muted-foreground">
+          {meta}
+        </span>
+      </span>
+      {/* A folder row and a file row are otherwise the same object; the
+          chevron is what says one of them goes somewhere. */}
+      {opensFolder ? (
+        <ChevronRightIcon
+          aria-hidden
+          className="size-4 shrink-0 text-muted-foreground"
+        />
+      ) : null}
+    </button>
+  )
+}
+
+/**
+ * The path back out. Every ancestor is a target, so a user who opened four
+ * folders deep leaves in one click rather than four.
+ */
+function FolderCrumbs({
+  folder,
+  onOpenFolder,
+}: {
+  folder: string
+  onOpenFolder: (folderPath: string) => void
+}) {
+  const crumbs = folderCrumbs(folder)
+  return (
+    <h2 className="flex flex-wrap items-center gap-x-1 eyebrow text-muted-foreground">
+      {crumbs.length === 0 ? (
+        "Files"
+      ) : (
+        <button
+          type="button"
+          onClick={() => onOpenFolder("")}
+          className="rounded-sm transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Files
+        </button>
+      )}
+      {crumbs.map((crumb, index) => (
+        <span key={crumb.path} className="flex items-center gap-x-1">
+          <span aria-hidden className="opacity-50">
+            /
+          </span>
+          {index === crumbs.length - 1 ? (
+            <span className="text-foreground">{crumb.name}</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onOpenFolder(crumb.path)}
+              className="rounded-sm transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {crumb.name}
+            </button>
+          )}
+        </span>
+      ))}
+    </h2>
   )
 }
 
@@ -556,7 +679,7 @@ function FilePreview({
           {/* Size, age, folder — machine facts about the file, so they take
               the mono voice and sit under its human-readable name. */}
           <p className="truncate eyebrow text-muted-foreground">
-            {describeFile(artifact, output.producedAt)}
+            {describeFileWithFolder(artifact, output.producedAt)}
           </p>
         </div>
         {canEdit ? (
@@ -671,15 +794,22 @@ function FilePreview({
  * Size, when the task last wrote it, and the folder when there is one. A file
  * at the top of the Project would otherwise read its own name back twice.
  */
-function describeFile(artifact: Artifact, producedAt: string): string {
-  const end = artifact.relativePath.lastIndexOf("/")
-  return [
-    formatBytes(artifact.sizeBytes),
-    `changed ${describeAge(producedAt)}`,
-    end > 0 ? artifact.relativePath.slice(0, end) : undefined,
-  ]
+function describeFileWithFolder(
+  artifact: Artifact,
+  producedAt: string
+): string {
+  const folder = parentFolder(artifact.relativePath)
+  return [describeFile(artifact, producedAt), folder]
     .filter(Boolean)
     .join(" · ")
+}
+
+/**
+ * The same line without the folder, for a list that is already standing in
+ * that folder.
+ */
+function describeFile(artifact: Artifact, producedAt: string): string {
+  return `${formatBytes(artifact.sizeBytes)} · changed ${describeAge(producedAt)}`
 }
 
 function describeAge(timestamp: string): string {

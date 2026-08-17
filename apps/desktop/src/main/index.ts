@@ -62,7 +62,13 @@ async function openApplication(): Promise<void> {
       window.webContents.send(browserEventChannel, event)
     }
   })
-  const browserMcp = await BrowserMcpServer.create(browser)
+  let browserMcp: BrowserMcpServer
+  try {
+    browserMcp = await BrowserMcpServer.create(browser)
+  } catch (error) {
+    browser.close()
+    throw error
+  }
 
   const claudeExecutable = packagedClaudeExecutable()
   const claudeAdapter = claudeExecutable
@@ -90,8 +96,8 @@ async function openApplication(): Promise<void> {
     browser.close()
     throw error
   }
-  // Assigned before the window opens so a failure below still closes the
-  // runtime through the before-quit path.
+  // Install the cleanup path before IPC subscriptions so a later startup
+  // failure still closes the runtime and Browser resources.
   closeRuntime = async () => {
     await runtime.close()
     await browserMcp.close()

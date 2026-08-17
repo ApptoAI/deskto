@@ -1,15 +1,18 @@
+export const maximumBrowserUrlLength = 8_192
+
 export function normalizeBrowserUrl(value: string): string {
   const input = value.trim()
   if (!input) throw new Error("Enter a URL")
-  if (input.length > 8_192) throw new Error("Browser URL is too long")
+  if (input.length > maximumBrowserUrlLength)
+    throw new Error("Browser URL is too long")
   if (/\s/.test(input)) {
     return `https://www.google.com/search?q=${encodeURIComponent(input)}`
   }
-  const withProtocol = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(
-    input
-  )
+  const localHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(input)
+  const hostWithPort = /^[a-z0-9.-]+:\d+(?:[/?#]|$)/i.test(input)
+  const withProtocol = localHost
     ? `http://${input}`
-    : /^[a-z][a-z0-9+.-]*:/i.test(input)
+    : !hostWithPort && /^[a-z][a-z0-9+.-]*:/i.test(input)
       ? input
       : `https://${input}`
   const url = new URL(withProtocol)

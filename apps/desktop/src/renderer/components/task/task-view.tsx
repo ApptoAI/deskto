@@ -33,6 +33,7 @@ import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ActivityAside } from "./activity-aside.js"
 import { ApprovalPanel } from "./approval-panel.js"
+import { sharedFolder } from "./file-listing.js"
 import { MessageStream } from "./message-stream.js"
 import { FilesProvider } from "./files-context.js"
 import { TaskPanel } from "./task-panel.js"
@@ -42,7 +43,7 @@ import {
   showActivities,
   showFile,
   showBrowser,
-  showFilesOverview,
+  showFolder,
 } from "./task-panel-state.js"
 
 const noOutputs: TurnOutput[] = []
@@ -144,10 +145,15 @@ export function TaskView({
     },
     [threadId]
   )
-  const openFiles = useCallback(() => {
-    setPanelOpen(true)
-    showFilesOverview(threadId)
-  }, [threadId])
+  // An answer's overflow opens the folder its files share, so "Show all 5"
+  // shows five files rather than the one folder row they hide behind.
+  const openFiles = useCallback(
+    (outputs: TurnOutput[]) => {
+      setPanelOpen(true)
+      showFolder(threadId, sharedFolder(outputs))
+    },
+    [threadId]
+  )
   const openActivity = useCallback(() => {
     setPanelOpen(true)
     showActivities(threadId)

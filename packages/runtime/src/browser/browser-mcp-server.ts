@@ -39,12 +39,15 @@ export class BrowserMcpServer implements SessionToolProvider {
 
   private constructor(
     private readonly host: BrowserAutomationHost,
-    private readonly server: ReturnType<typeof createServer>,
-    private readonly url: string
+    private readonly server: ReturnType<typeof createServer>
   ) {}
 
+  private url = ""
+
   static async create(host: BrowserAutomationHost): Promise<BrowserMcpServer> {
-    const server = createServer((request, response) => {
+    const server = createServer()
+    const gateway = new BrowserMcpServer(host, server)
+    server.on("request", (request, response) => {
       void gateway.#handle(request, response)
     })
     await new Promise<void>((resolve, reject) => {
@@ -61,11 +64,7 @@ export class BrowserMcpServer implements SessionToolProvider {
       server.close()
       throw new Error("Browser MCP server did not get a loopback port")
     }
-    const gateway = new BrowserMcpServer(
-      host,
-      server,
-      `http://127.0.0.1:${address.data.port}/mcp`
-    )
+    gateway.url = `http://127.0.0.1:${address.data.port}/mcp`
     return gateway
   }
 
@@ -167,6 +166,8 @@ export class BrowserMcpServer implements SessionToolProvider {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => generatedSessionId,
         enableJsonResponse: true,
+        enableDnsRebindingProtection: true,
+        allowedHosts: [new URL(this.url).host],
         onsessioninitialized: (initializedSessionId) => {
           if (!bootstrap.lease.active) {
             throw new Error(
@@ -182,9 +183,22 @@ export class BrowserMcpServer implements SessionToolProvider {
         mcp,
         transport,
       }
-      await mcp.connect(transport)
-      await transport.handleRequest(request, response, body)
+      try {
+        await mcp.connect(transport)
+        await transport.handleRequest(request, response, body)
+      } catch (error) {
+        this.#transports.delete(generatedSessionId)
+        bootstrap.lease.sessionIds.delete(generatedSessionId)
+        if (bootstrap.lease.active) {
+          this.#tokens.set(bootstrap.token, bootstrap.lease)
+        }
+        await Promise.allSettled([mcp.close(), transport.close()])
+        throw error
+      }
       if (!this.#transports.has(generatedSessionId)) {
+        if (bootstrap.lease.active) {
+          this.#tokens.set(bootstrap.token, bootstrap.lease)
+        }
         await Promise.allSettled([mcp.close(), transport.close()])
       }
     } catch (error) {

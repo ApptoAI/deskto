@@ -8,6 +8,12 @@ describe("browser URL policy", () => {
     expect(normalizeBrowserUrl("localhost:3000/app")).toBe(
       "http://localhost:3000/app"
     )
+    expect(normalizeBrowserUrl("example.com:8080/app")).toBe(
+      "https://example.com:8080/app"
+    )
+    expect(normalizeBrowserUrl("192.168.1.5:8080/app")).toBe(
+      "https://192.168.1.5:8080/app"
+    )
   })
 
   it("turns text into a search without allowing active URL schemes", () => {

@@ -76,7 +76,12 @@ export function browserElementBoundsScript(
     if (rect.width <= 0 || rect.height <= 0 || style.display === "none" || style.visibility === "hidden") return null;
     element.scrollIntoView({ block: "center", inline: "center" });
     const next = element.getBoundingClientRect();
-    return { x: next.x + next.width / 2, y: next.y + next.height / 2 };
+    const x = next.x + next.width / 2;
+    const y = next.y + next.height / 2;
+    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return null;
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || (hit !== element && !element.contains(hit))) return null;
+    return { x, y };
   })()`
 }
 

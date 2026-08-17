@@ -65,7 +65,10 @@ export function BrowserPanel({ threadId }: { threadId: string }) {
       width: Math.round(bounds.width),
       height: Math.round(bounds.height),
     })
-      .then(setState)
+      .then((next) => {
+        setError(undefined)
+        setState(next)
+      })
       .catch((reason) => setError(describedErrorSchema.parse(reason)))
   }, [threadId])
 

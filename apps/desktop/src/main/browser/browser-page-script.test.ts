@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import {
   browserElementBoundsScript,
+  browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
 
@@ -48,6 +49,7 @@ describe("browser snapshot page script", () => {
     })
 
     const snapshot = snapshotSchema.parse(
+      // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
       window.eval(browserSnapshotScript("__deskto_test_registry"))
     )
 
@@ -78,11 +80,103 @@ describe("browser snapshot page script", () => {
       toJSON: () => ({}),
     })
     const registryKey = "__deskto_identity_registry"
+    // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
     window.eval(browserSnapshotScript(registryKey))
     document.body.innerHTML = "<button>Delete account</button>"
 
     expect(
+      // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
       window.eval(browserElementBoundsScript(registryKey, "e1"))
     ).toBeNull()
+  })
+
+  it("drops the previous element registry after a new snapshot", () => {
+    const first = "__deskto_first_registry"
+    const second = "__deskto_second_registry"
+
+    // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
+    window.eval(browserSnapshotScript(first))
+    expect(Object.hasOwn(window, first)).toBe(true)
+
+    // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
+    window.eval(browserSnapshotScript(second, first))
+    expect(Object.hasOwn(window, first)).toBe(false)
+    expect(Object.hasOwn(window, second)).toBe(true)
+  })
+
+  it("uses the native value setter and dispatches input events", () => {
+    const input = document.createElement("input")
+    document.body.append(input)
+    const ownSetter = vi.fn()
+    Object.defineProperty(input, "value", {
+      configurable: true,
+      get: () => "tracked",
+      set: ownSetter,
+    })
+    const events: string[] = []
+    input.addEventListener("input", (event) => events.push(event.type))
+    input.addEventListener("change", (event) => events.push(event.type))
+    const registryKey = "__deskto_value_registry"
+    Object.defineProperty(window, registryKey, {
+      configurable: true,
+      value: { e1: input },
+    })
+
+    // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
+    expect(window.eval(browserSetValueScript(registryKey, "e1", "next"))).toBe(
+      true
+    )
+    expect(ownSetter).not.toHaveBeenCalled()
+    expect(events).toEqual(["input", "change"])
+    Reflect.deleteProperty(input, "value")
+    expect(input.value).toBe("next")
+  })
+
+  it("rejects a click point covered by another element", () => {
+    const button = document.createElement("button")
+    const overlay = document.createElement("div")
+    document.body.append(button, overlay)
+    button.scrollIntoView = vi.fn()
+    vi.spyOn(button, "getBoundingClientRect").mockReturnValue({
+      x: 10,
+      y: 10,
+      width: 120,
+      height: 24,
+      top: 10,
+      right: 130,
+      bottom: 34,
+      left: 10,
+      toJSON: () => ({}),
+    })
+    const registryKey = "__deskto_click_registry"
+    Object.defineProperty(window, registryKey, {
+      configurable: true,
+      value: { e1: button },
+    })
+    const originalElementFromPoint = Object.getOwnPropertyDescriptor(
+      document,
+      "elementFromPoint"
+    )
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: vi.fn(() => overlay),
+    })
+
+    try {
+      // biome-ignore lint/security/noGlobalEval: generated page code must run in the jsdom Window
+      expect(
+        window.eval(browserElementBoundsScript(registryKey, "e1"))
+      ).toBeNull()
+    } finally {
+      if (originalElementFromPoint) {
+        Object.defineProperty(
+          document,
+          "elementFromPoint",
+          originalElementFromPoint
+        )
+      } else {
+        Reflect.deleteProperty(document, "elementFromPoint")
+      }
+    }
   })
 })

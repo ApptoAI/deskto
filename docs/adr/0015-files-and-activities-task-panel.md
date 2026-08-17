@@ -25,14 +25,28 @@ its existing preview, editing, copy, reveal, and external-open actions inside
 that surface; it does not create a peer tab. The file view has a direct route
 back to the overview.
 
+The overview groups those Artifacts by the folders they sit in inside the
+Project rather than flattening every path into one list. It shows one folder
+at a time, starting at the Project root, and a folder row opens that folder. A
+folder counts the Artifacts anywhere beneath it, and a chain of folders holding
+nothing but the next folder collapses into a single row, so depth the task did
+not choose costs no clicks. A crumb line names every folder above the one open
+and leads back to any of them. The panel stands in one folder at a time: the
+folder holding the open file, or the last one browsed, so leaving a file view
+lands beside that file. The Runtime's order is what each group keeps, with a
+folder taking the place of the newest Artifact beneath it.
+
 The compact Activity column from ADR 0014 remains. Opening it selects the
-large `Activities` surface. The large panel remembers its surface and selected
-file for the app session, but producing a new Artifact never opens the panel,
-changes the surface, or replaces the selected file.
+large `Activities` surface. The large panel remembers its surface, its folder,
+and its selected file for the app session, but producing a new Artifact never
+opens the panel, changes the surface, replaces the selected file, or moves the
+folder the user is standing in — including a folder that empties and later
+fills again.
 
 Each settled Turn renders its Turn Outputs after the final assistant answer as
 file buttons. A button opens that Artifact inside `Files`; an overflow action
-opens the Files overview. Running Turns do not show the buttons, even when the
+opens the folder that answer's files share, which is the Project root when
+they are spread across it. Running Turns do not show the buttons, even when the
 Runtime has already captured a file.
 
 The Client reads two provider-neutral Runtime projections:
@@ -57,6 +71,11 @@ placeholder ships before that surface has behavior.
 - A task has predictable navigation instead of a tab strip that grows with
   its output.
 - New work updates the Files overview without stealing focus.
+- A task that writes into folders reads as the folders it wrote, and a long
+  flat list of paths stops being the only way to see them.
+- A file deep in the Project costs clicks to reach that a flat list did not
+  charge. Collapsed chains, folder counts, and an answer opening its own
+  folder are what keep that price down.
 - A finished answer points directly to its deliverables, including a file
   changed again by a later Turn.
 - The Files overview shows one current entry per Artifact, while answer links

@@ -9,6 +9,7 @@ import { z } from "zod"
 import type { Runtime } from "@deskto/runtime"
 
 import type { BrowserManager } from "./browser/browser-manager.js"
+import { maximumBrowserUrlLength } from "./browser/browser-url.js"
 
 import {
   browserActionChannel,
@@ -267,7 +268,7 @@ export function registerDesktopIpc(
   ipcMain.handle(browserNavigateChannel, async (_event, threadId, url) =>
     browser.userNavigate(
       await existingBrowserThread(threadId),
-      z.string().min(1).max(8_192).parse(url)
+      z.string().min(1).max(maximumBrowserUrlLength).parse(url)
     )
   )
   ipcMain.handle(browserActionChannel, async (_event, threadId, action) => {

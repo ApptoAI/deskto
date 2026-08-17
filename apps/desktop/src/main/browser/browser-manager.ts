@@ -5,6 +5,7 @@ import {
   session,
   WebContentsView,
   type Rectangle,
+  type WebContents,
 } from "electron"
 import type {
   BrowserAutomationHost,
@@ -28,6 +29,7 @@ import { isBrowserWebUrl, normalizeBrowserUrl } from "./browser-url.js"
 const browserPartition = "persist:deskto-browser"
 const browserAutomationWorldId = 1_001
 const maximumScreenshotBytes = 8 * 1024 * 1024
+const navigationTimeoutMs = 30_000
 const backgroundBounds: Rectangle = {
   x: -10_000,
   y: 0,
@@ -129,7 +131,9 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.refs.clear()
     tab.registryKey = undefined
     tab.error = undefined
-    await tab.view.webContents.loadURL(normalizeBrowserUrl(value))
+    await withNavigationTimeout(tab.view.webContents, () =>
+      tab.view.webContents.loadURL(normalizeBrowserUrl(value))
+    )
     return this.#status(tab)
   }
 
@@ -222,7 +226,9 @@ export class BrowserManager implements BrowserAutomationHost {
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
     if (tab.view.webContents.navigationHistory.canGoBack()) {
-      await tab.view.webContents.navigationHistory.goBack()
+      await waitForNavigation(tab.view.webContents, () =>
+        tab.view.webContents.navigationHistory.goBack()
+      )
     }
     return this.#status(tab)
   }
@@ -231,7 +237,9 @@ export class BrowserManager implements BrowserAutomationHost {
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
     if (tab.view.webContents.navigationHistory.canGoForward()) {
-      await tab.view.webContents.navigationHistory.goForward()
+      await waitForNavigation(tab.view.webContents, () =>
+        tab.view.webContents.navigationHistory.goForward()
+      )
     }
     return this.#status(tab)
   }
@@ -239,8 +247,11 @@ export class BrowserManager implements BrowserAutomationHost {
   async reload(threadId: string): Promise<BrowserStatus> {
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
+    if (!this.#status(tab).url) return this.#status(tab)
     tab.refs.clear()
-    tab.view.webContents.reload()
+    await waitForNavigation(tab.view.webContents, () =>
+      tab.view.webContents.reload()
+    )
     return this.#status(tab)
   }
 
@@ -265,7 +276,7 @@ export class BrowserManager implements BrowserAutomationHost {
     if (this.#visibleThreadId === threadId) this.#visibleThreadId = undefined
     this.#openRequests.delete(threadId)
     this.window.contentView.removeChildView(tab.view)
-    tab.view.webContents.close()
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
     this.#tabs.delete(threadId)
   }
 
@@ -275,7 +286,8 @@ export class BrowserManager implements BrowserAutomationHost {
 
   #ensureTab(threadId: string): BrowserTab {
     const current = this.#tabs.get(threadId)
-    if (current) return current
+    if (current && !current.view.webContents.isDestroyed()) return current
+    if (current) this.closeThread(threadId)
     const view = new WebContentsView({
       webPreferences: {
         partition: browserPartition,
@@ -322,6 +334,17 @@ export class BrowserManager implements BrowserAutomationHost {
     view.webContents.on("did-navigate", publish)
     view.webContents.on("did-navigate-in-page", publish)
     view.webContents.on("page-title-updated", publish)
+    view.webContents.on("render-process-gone", () => {
+      if (this.#tabs.get(threadId) !== tab) return
+      this.closeThread(threadId)
+      this.publish({
+        type: "state",
+        state: {
+          ...this.state(threadId),
+          error: "The Browser page stopped responding.",
+        },
+      })
+    })
     view.webContents.on(
       "did-fail-load",
       (_event, errorCode, errorDescription, _url, isMainFrame) => {
@@ -385,6 +408,8 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   #publishState(threadId: string, tab: BrowserTab): void {
+    if (this.#tabs.get(threadId) !== tab || tab.view.webContents.isDestroyed())
+      return
     if (this.#visibleThreadId === threadId) {
       tab.view.setBounds(
         this.#status(tab).url ? this.#visibleBounds : backgroundBounds
@@ -402,4 +427,60 @@ export class BrowserManager implements BrowserAutomationHost {
 
 function settleInput(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 120))
+}
+
+async function withNavigationTimeout<T>(
+  webContents: WebContents,
+  navigate: () => Promise<T>
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      navigate(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Browser navigation timed out"))
+          if (!webContents.isDestroyed()) webContents.stop()
+        }, navigationTimeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+function waitForNavigation(
+  webContents: WebContents,
+  navigate: () => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer)
+      webContents.removeListener("did-stop-loading", finish)
+      webContents.removeListener("did-navigate-in-page", finish)
+      webContents.removeListener("render-process-gone", crashed)
+    }
+    const finish = () => {
+      cleanup()
+      resolve()
+    }
+    const crashed = () => {
+      cleanup()
+      reject(new Error("The Browser page stopped responding"))
+    }
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error("Browser navigation timed out"))
+      if (!webContents.isDestroyed()) webContents.stop()
+    }, navigationTimeoutMs)
+    webContents.once("did-stop-loading", finish)
+    webContents.once("did-navigate-in-page", finish)
+    webContents.once("render-process-gone", crashed)
+    try {
+      navigate()
+    } catch (error) {
+      cleanup()
+      reject(error)
+    }
+  })
 }

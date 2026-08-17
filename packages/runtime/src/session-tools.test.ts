@@ -49,6 +49,21 @@ describe("SessionToolLeases", () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
+  it("rejects duplicate server ids and closes both leases", async () => {
+    const firstClose = vi.fn(() => Promise.resolve())
+    const secondClose = vi.fn(() => Promise.resolve())
+
+    await expect(
+      SessionToolLeases.open(
+        [provider("browser", firstClose), provider("browser", secondClose)],
+        input,
+        new AbortController().signal
+      )
+    ).rejects.toThrow("duplicated")
+    expect(firstClose).toHaveBeenCalledOnce()
+    expect(secondClose).toHaveBeenCalledOnce()
+  })
+
   it("closes a lease that resolves after setup is cancelled", async () => {
     const controller = new AbortController()
     const close = vi.fn(() => Promise.resolve())
