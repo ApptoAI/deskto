@@ -1680,7 +1680,7 @@ describe("Runtime", () => {
       })
     ).toEqual({
       ok: false,
-      error: { code: "artifact-not-found", message: "Result not found" },
+      error: { code: "artifact-not-found", message: "File not found" },
     })
 
     const csv = outputs.find(
@@ -1768,7 +1768,7 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
-  it("keeps one Artifact when later Turns change the same result", async () => {
+  it("keeps one current Artifact and every Turn attribution", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     await writeFile(join(directory, "report.txt"), "first")
@@ -1836,6 +1836,20 @@ describe("Runtime", () => {
     )
     expect(outputs).toHaveLength(1)
     expect(outputs[0]?.turnId).toBe(harness.runs[1]?.input.turnId)
+    const outputHistory = unwrap(
+      await runtime.request({
+        method: "artifact.listOutputs",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(outputHistory).toHaveLength(2)
+    expect(outputHistory.map((output) => output.turnId)).toEqual(
+      harness.runs.map((run) => run.input.turnId)
+    )
+    expect(
+      new Set(outputHistory.map((output) => output.artifact.id)).size
+    ).toBe(1)
+    expect(outputHistory[0]?.artifact).toBe(outputHistory[1]?.artifact)
     expect(
       unwrap(
         await runtime.request({
@@ -2149,7 +2163,7 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
-  it("locates a result and writes back only editable formats", async () => {
+  it("locates a file and writes back only editable formats", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const projectPath = await realpath(directory)

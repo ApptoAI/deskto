@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef, useState } from "react"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
-import type { Activity, Message } from "@deskto/protocol"
+import FilesIcon from "lucide-react/dist/esm/icons/files"
+import type { Activity, Message, TurnOutput } from "@deskto/protocol"
 
 import { Markdown } from "@workspace/ui/components/chat/markdown"
 import {
@@ -21,7 +22,9 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
 import { ActivityLine, Collapse, activityIcon } from "./activity-rows.js"
+import { ArtifactIcon } from "./artifact-views.js"
 import { elapsedBetween, formatElapsed } from "./elapsed.js"
+import { useFileActions } from "./files-context.js"
 import {
   buildTimeline,
   capLiveItems,
@@ -42,10 +45,12 @@ export function MessageStream({
   messages,
   activities,
   running,
+  outputs,
 }: {
   messages: Message[]
   activities: Activity[]
   running: boolean
+  outputs: TurnOutput[]
 }) {
   const lastMessage = messages.at(-1)
   // The tail indicator holds the floor whenever nothing else is visibly
@@ -55,8 +60,8 @@ export function MessageStream({
     lastMessage?.role === "assistant" && lastMessage.state === "streaming"
   const sinceTail = lastUserMessageAt(messages)
   const rows = useMemo(
-    () => buildTimeline({ messages, activities, running }),
-    [messages, activities, running]
+    () => buildTimeline({ messages, activities, running, outputs }),
+    [messages, activities, running, outputs]
   )
   const listRef = useRef<MessageListHandle>(null)
   const [viewport, setViewport] = useState<HTMLElement | null>(null)
@@ -86,6 +91,8 @@ export function MessageStream({
                 )
               case "live":
                 return <LiveTurn key={row.key} items={row.items} />
+              case "files":
+                return <TurnFiles key={row.key} outputs={row.outputs} />
             }
           })}
           {running && !streamingTail ? (
@@ -99,6 +106,46 @@ export function MessageStream({
         onSelect={(anchor) => listRef.current?.scrollToElement(anchor)}
       />
     </div>
+  )
+}
+
+function TurnFiles({ outputs }: { outputs: TurnOutput[] }) {
+  const { open, openAll } = useFileActions()
+  const visible = outputs.slice(0, 3)
+
+  return (
+    <section className="enter-rise -mt-2 max-w-full self-start">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <FilesIcon aria-hidden className="size-3.5" />
+        <span>{outputs.length === 1 ? "File" : "Files"}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {visible.map(({ artifact }) => (
+          <button
+            key={artifact.id}
+            type="button"
+            title={artifact.relativePath}
+            onClick={() => open(artifact.id)}
+            className="flex max-w-full min-w-0 items-center gap-1.5 rounded-md bg-background px-2.5 py-1.5 text-xs shadow-xs ring-1 ring-border/70 transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <ArtifactIcon
+              kind={artifact.previewKind}
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+            <span className="truncate">{artifact.name}</span>
+          </button>
+        ))}
+        {outputs.length > visible.length ? (
+          <button
+            type="button"
+            onClick={openAll}
+            className="rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            Show all {outputs.length}
+          </button>
+        ) : null}
+      </div>
+    </section>
   )
 }
 

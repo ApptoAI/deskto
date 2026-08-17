@@ -16,6 +16,7 @@ The Client sits on the user-facing side of the Client/Runtime boundary. It knows
 - Packs: `listPacks()`, `createPack(name)`, `installPackFromFolder(path)`, `installPackFromZip(path)`, `linkPack(path)`, `unlinkPack(packId)`, `uninstallPack(packId)`
 - Projects: `listProjects()`, `addProject(path, name, workspaceId)`, `moveProject(projectId, workspaceId)`
 - Threads: `listThreads(projectId)`, `createThread(projectId, harnessId, executionProfile?)`, `configureThread(threadId, executionProfile)`, `getThread(threadId)`
+- Files: `listFiles(threadId)`, `listTurnOutputs(threadId)`, `previewArtifact(threadId, artifactId)`, and `writeArtifact(threadId, artifactId, content, baseUpdatedAt)`
 - Turns and approvals: `startTurn(threadId, prompt)`, `cancelTurn(threadId)`, `resolveApproval(threadId, approvalId, decision)`
 - Preferences: `getPreferences(workspaceId)`
 - Settings: `getSettings()`, `updateSettings(entries)` — a null entry clears that override back to its default

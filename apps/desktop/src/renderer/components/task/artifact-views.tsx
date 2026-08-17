@@ -52,7 +52,7 @@ type Icon = ComponentType<{ className?: string }>
 
 /**
  * One entry per format the Surface knows how to show. Loading, size limits,
- * and containment stay in the Runtime; an entry only decides how the result
+ * and containment stay in the Runtime; an entry only decides how the file
  * looks, which icon stands for it, and which editor opens for it.
  *
  * `editor` is the one place that decides whether a format can be edited here.
@@ -108,7 +108,7 @@ const artifactViews = {
         <div className="flex min-h-full items-start justify-center bg-muted/20 p-4">
           <img
             src={preview.dataUrl}
-            alt="Result preview"
+            alt="File preview"
             className="max-h-full max-w-full rounded border border-border object-contain shadow-sm"
           />
         </div>

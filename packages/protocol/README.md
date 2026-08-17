@@ -20,7 +20,7 @@ Domain records, defined as zod schemas with types inferred from them:
 - `ExecutionProfile`, `Preferences`, and `Selection` (the last active workspace and project, so a restart reopens them)
 - `SettingsSnapshot`, the effective user settings: every value in effect plus the subset the user overrode. Values are opaque JSON here; both sides read them through `@deskto/settings`
 
-Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`. The groups are `harness.*` (list, setEnabled, refresh), `preferences.get`, `settings.*` (get, update), `workspace.*` (list, create, update, delete, setPack), `selection.*` (get, set), `pack.*` (list, create, import, remove), `project.*` (list, add, move), `thread.*` (list, create, configure, get), `turn.*` (start, cancel), and `approval.resolve`. The Runtime validates incoming requests with this schema at the IPC boundary.
+Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`. The groups are `harness.*` (list, setEnabled, refresh), `preferences.get`, `settings.*` (get, update), `workspace.*` (list, create, update, delete, setPack), `selection.*` (get, set), `pack.*` (list, create, import, remove), `project.*` (list, add, move), `thread.*` (list, create, configure, get), `artifact.*` (list, listOutputs, preview, locate, write), `turn.*` (start, cancel), and `approval.resolve`. The Runtime validates incoming requests with this schema at the IPC boundary.
 
 Responses are typed through the `RuntimeResponses` map. Every call resolves to `{ ok: true, data }` or `{ ok: false, error: { code, message } }`, so transport code never throws domain errors.
 

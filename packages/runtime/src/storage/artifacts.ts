@@ -241,20 +241,28 @@ export class Artifacts {
       )
       .all(threadId) as OutputRow[]
 
-    return rows.flatMap((row) => {
-      // Apply the rule while listing too, so working files captured by an
-      // older build disappear from Results without rewriting user data.
-      if (isWorkingFile(row.relative_path)) return []
-      const file = safeProjectFile(row.project_path, row.relative_path)
-      if (!file) return []
-      return [
-        {
-          turnId: row.turn_id,
-          producedAt: row.produced_at,
-          artifact: toArtifact(row, file.stats),
-        },
-      ]
-    })
+    return toAvailableOutputs(rows)
+  }
+
+  /** Every available attribution, including files changed by later Turns. */
+  listOutputsForThread(threadId: string): TurnOutput[] {
+    // SAFETY: the query selects every ArtifactRow column plus all non-null
+    // OutputRow fields from inner joins.
+    const rows = this.database
+      .prepare(
+        `SELECT artifacts.*, turn_outputs.turn_id,
+                turn_outputs.created_at AS produced_at,
+                projects.path AS project_path
+         FROM turn_outputs
+         JOIN turns ON turns.id = turn_outputs.turn_id
+         JOIN artifacts ON artifacts.id = turn_outputs.artifact_id
+         JOIN projects ON projects.id = artifacts.project_id
+         WHERE turns.thread_id = ?
+         ORDER BY turn_outputs.created_at ASC, turn_outputs.rowid ASC`
+      )
+      .all(threadId) as OutputRow[]
+
+    return toAvailableOutputs(rows)
   }
 
   /**
@@ -334,20 +342,20 @@ export class Artifacts {
     if (!isEditableArtifactPreviewKind(row.preview_kind)) {
       throw new RuntimeError(
         "artifact-read-only",
-        "This result cannot be edited here"
+        "This file cannot be edited here"
       )
     }
     if (modifiedAt(file.stats) !== baseUpdatedAt) {
       throw new RuntimeError(
         "artifact-conflict",
-        "This file changed after it was opened. Reload the result before saving again."
+        "This file changed after it was opened. Reload it before saving again."
       )
     }
     const data = Buffer.from(content, "utf8")
     if (data.byteLength > textPreviewLimit) {
       throw new RuntimeError(
         "artifact-too-large",
-        `This result is too large to save (${formatBytes(data.byteLength)})`
+        `This file is too large to save (${formatBytes(data.byteLength)})`
       )
     }
 
@@ -384,13 +392,13 @@ export class Artifacts {
       .get(artifactId, threadId) as
       | (ArtifactRow & { project_path: string })
       | undefined
-    if (!row) throw new RuntimeError("artifact-not-found", "Result not found")
+    if (!row) throw new RuntimeError("artifact-not-found", "File not found")
 
     const file = safeProjectFile(row.project_path, row.relative_path)
     if (!file)
       throw new RuntimeError(
         "artifact-unavailable",
-        "This result is no longer available in the project folder"
+        "This file is no longer available in the project folder"
       )
     return { row, file }
   }
@@ -516,7 +524,7 @@ function formatFor(path: string): ArtifactFormat {
   )
 }
 
-/** Agent scratch space is useful work, but it is not a user-facing result. */
+/** Agent scratch space is useful work, but it is not a user-facing file. */
 function isWorkingFile(path: string): boolean {
   const directories = path.split("/").slice(0, -1)
   return directories.some((part) =>
@@ -539,13 +547,13 @@ function readSafeProjectFile(file: SafeProjectFile, limit: number): Buffer {
     ) {
       throw new RuntimeError(
         "artifact-unavailable",
-        "This result changed while the preview was opening"
+        "This file changed while the preview was opening"
       )
     }
     if (opened.size > limit) {
       throw new RuntimeError(
         "artifact-too-large",
-        `This result is too large to preview (${formatBytes(opened.size)})`
+        `This file is too large to preview (${formatBytes(opened.size)})`
       )
     }
 
@@ -568,7 +576,7 @@ function readSafeProjectFile(file: SafeProjectFile, limit: number): Buffer {
     if (offset > limit) {
       throw new RuntimeError(
         "artifact-too-large",
-        `This result is too large to preview (more than ${formatBytes(limit)})`
+        `This file is too large to preview (more than ${formatBytes(limit)})`
       )
     }
     return data.subarray(0, offset)
@@ -576,7 +584,7 @@ function readSafeProjectFile(file: SafeProjectFile, limit: number): Buffer {
     if (error instanceof RuntimeError) throw error
     throw new RuntimeError(
       "artifact-unavailable",
-      "This result is no longer available in the project folder"
+      "This file is no longer available in the project folder"
     )
   } finally {
     if (descriptor !== undefined) closeSync(descriptor)
@@ -604,7 +612,7 @@ function writeSafeProjectFile(file: SafeProjectFile, data: Buffer): Stats {
     ) {
       throw new RuntimeError(
         "artifact-unavailable",
-        "This result changed while it was being saved"
+        "This file changed while it was being saved"
       )
     }
 
@@ -647,7 +655,7 @@ function writeSafeProjectFile(file: SafeProjectFile, data: Buffer): Stats {
         : String(error)
     throw new RuntimeError(
       "artifact-unavailable",
-      `This result could not be saved to the project folder. ${reason}`
+      `This file could not be saved to the project folder. ${reason}`
     )
   } finally {
     if (descriptor !== undefined) closeSync(descriptor)
@@ -672,6 +680,34 @@ function toArtifact(row: ArtifactRow, stats: Stats): Artifact {
     createdAt: row.created_at,
     updatedAt: modifiedAt(stats),
   }
+}
+
+/**
+ * Converts output rows while validating each Artifact path once. A file may
+ * be attributed to many Turns, but its current path and metadata are shared.
+ */
+function toAvailableOutputs(rows: OutputRow[]): TurnOutput[] {
+  const artifacts = new Map<string, Artifact | null>()
+  return rows.flatMap((row) => {
+    let artifact = artifacts.get(row.id)
+    if (!artifacts.has(row.id)) {
+      // Apply the rule while listing too, so working files captured by an
+      // older build disappear from Files without rewriting user data.
+      const file = isWorkingFile(row.relative_path)
+        ? undefined
+        : safeProjectFile(row.project_path, row.relative_path)
+      artifact = file ? toArtifact(row, file.stats) : null
+      artifacts.set(row.id, artifact)
+    }
+    if (!artifact) return []
+    return [
+      {
+        turnId: row.turn_id,
+        producedAt: row.produced_at,
+        artifact,
+      },
+    ]
+  })
 }
 
 function modifiedAt(stats: Stats): string {

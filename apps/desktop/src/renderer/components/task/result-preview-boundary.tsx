@@ -28,7 +28,7 @@ export class ResultPreviewBoundary extends Component<
           message={`Deskto could not show this preview. ${this.state.message}`}
         />
         <p className="max-w-sm text-xs text-muted-foreground">
-          The file is still in the project. You can open another result or try
+          The file is still in the project. You can open another file or try
           this preview again.
         </p>
         <Button

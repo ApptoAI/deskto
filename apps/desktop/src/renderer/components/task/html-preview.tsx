@@ -48,7 +48,7 @@ export function HtmlPreview({ content }: { content: string }) {
     <iframe
       sandbox=""
       srcDoc={query.state.data}
-      title="HTML result preview"
+      title="HTML file preview"
       className="size-full border-0 bg-white"
     />
   )

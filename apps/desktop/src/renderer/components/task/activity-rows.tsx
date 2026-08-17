@@ -16,7 +16,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import { ArtifactIcon } from "./artifact-views.js"
 import { elapsedBetween, formatElapsed, useElapsed } from "./elapsed.js"
-import { useResultAt } from "./results-context.js"
+import { useFileAt } from "./files-context.js"
 
 /**
  * The rows a Turn's work is drawn with, shared by the conversation and the
@@ -308,10 +308,11 @@ function fileName(path: string): string {
   return path.split(/[\\/]/).pop() || path
 }
 
-/** The edits summarized as diff chips: file name plus added and removed
-    line counts, wrapping as needed. A chip whose file was captured as a
-    result opens it in the panel, so the conversation is a way into the work
-    rather than a report about it. */
+/**
+ * Edits summarized as diff chips: file name plus added and removed line
+ * counts, wrapping as needed. If the Runtime captured the file, its chip opens
+ * the Files view so the conversation is a route into the work.
+ */
 function FileChips({
   files,
 }: {
@@ -331,7 +332,7 @@ function FileChip({
 }: {
   file: { path: string; additions?: number; deletions?: number }
 }) {
-  const result = useResultAt(file.path)
+  const matchedFile = useFileAt(file.path)
   const body = (
     <>
       <span className="min-w-0 truncate text-foreground/90">
@@ -352,7 +353,7 @@ function FileChip({
   const className =
     "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted/60 px-1.5 font-mono text-[11px] ring-1 ring-border/40"
 
-  if (!result) {
+  if (!matchedFile) {
     return (
       <span title={file.path} className={className}>
         {body}
@@ -363,15 +364,15 @@ function FileChip({
   return (
     <button
       type="button"
-      onClick={result.open}
-      title={`Open ${result.artifact.relativePath}`}
+      onClick={matchedFile.open}
+      title={`Open ${matchedFile.artifact.relativePath}`}
       className={cn(
         className,
         "cursor-pointer transition-colors outline-none hover:bg-muted hover:ring-border focus-visible:ring-2 focus-visible:ring-ring/50"
       )}
     >
       <ArtifactIcon
-        kind={result.artifact.previewKind}
+        kind={matchedFile.artifact.previewKind}
         className="size-3 shrink-0 text-muted-foreground"
       />
       {body}

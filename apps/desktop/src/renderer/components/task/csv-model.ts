@@ -32,7 +32,7 @@ export type CsvGrid = {
 
 /**
  * Editing loads every cell as an input, so the grid stays small enough to
- * render as one table. A larger result opens read-only instead of being
+ * render as one table. A larger file opens read-only instead of being
  * silently cut down to the part that fits — saving a truncated grid would
  * delete the rows the user never saw. Virtualization would raise these.
  */

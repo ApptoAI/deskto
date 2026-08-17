@@ -213,6 +213,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("artifact.listOutputs"),
+    params: z.object({ threadId: z.string() }),
+  }),
+  z.object({
     method: z.literal("artifact.preview"),
     params: z.object({ threadId: z.string(), artifactId: z.string() }),
   }),
@@ -310,6 +314,7 @@ export interface RuntimeResponses {
   "thread.markVisited": z.infer<typeof threadSchema>
   "thread.delete": null
   "artifact.list": z.infer<typeof turnOutputSchema>[]
+  "artifact.listOutputs": z.infer<typeof turnOutputSchema>[]
   "artifact.preview": z.infer<typeof artifactPreviewSchema>
   "artifact.locate": z.infer<typeof artifactLocationSchema>
   "artifact.write": z.infer<typeof artifactSchema>

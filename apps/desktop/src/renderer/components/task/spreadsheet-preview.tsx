@@ -22,7 +22,7 @@ export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
     workbookWorkerSuccessSchema,
     workbookFromWorker,
     "Workbook worker failed",
-    "Workbook worker returned an unreadable result"
+    "Workbook preview worker returned unreadable data"
   )
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null)
 

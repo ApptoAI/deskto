@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Activity, Message } from "@deskto/protocol"
+import type { Activity, Message, TurnOutput } from "@deskto/protocol"
 
 import { buildTimeline, capLiveItems } from "./thread-timeline.js"
 
@@ -46,6 +46,27 @@ function tool(id: string, turnId: string, ordinal: number): Activity {
     ordinal,
     createdAt: "2026-08-16T10:00:01.000Z",
     finishedAt: "2026-08-16T10:00:02.000Z",
+  }
+}
+
+function output(id: string, turnId: string): TurnOutput {
+  const timestamp = "2026-08-16T10:00:06.000Z"
+  return {
+    turnId,
+    producedAt: timestamp,
+    artifact: {
+      id,
+      projectId: "project-1",
+      name: `${id}.xlsx`,
+      relativePath: `${id}.xlsx`,
+      mediaType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      previewKind: "spreadsheet",
+      openable: true,
+      sizeBytes: 42,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
   }
 }
 
@@ -103,6 +124,36 @@ describe("thread timeline", () => {
     })
 
     expect(rows.map((row) => row.kind)).toEqual(["message", "live"])
+  })
+
+  it("puts a settled Turn's files after its answer and hides live outputs", () => {
+    const settled = buildTimeline({
+      messages: [prompt("turn-1"), reply("answer", "turn-1", "Done.", 1)],
+      activities: [],
+      outputs: [output("forecast", "turn-1"), output("other", "turn-2")],
+      running: false,
+    })
+
+    expect(settled.map((row) => row.kind)).toEqual([
+      "message",
+      "message",
+      "files",
+    ])
+    expect(settled[2]).toMatchObject({
+      kind: "files",
+      outputs: [{ artifact: { id: "forecast" } }],
+    })
+
+    const live = buildTimeline({
+      messages: [
+        prompt("turn-1"),
+        reply("answer", "turn-1", "Still working.", 1, "streaming"),
+      ],
+      activities: [],
+      outputs: [output("forecast", "turn-1")],
+      running: true,
+    })
+    expect(live.some((row) => row.kind === "files")).toBe(false)
   })
 
   it("treats a streaming reply as live even when the thread reads idle", () => {

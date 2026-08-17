@@ -6,22 +6,18 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
 } from "react"
+import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import DownloadIcon from "lucide-react/dist/esm/icons/download"
 import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
+import FilesIcon from "lucide-react/dist/esm/icons/files"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
-import PlusIcon from "lucide-react/dist/esm/icons/plus"
 import XIcon from "lucide-react/dist/esm/icons/x"
 import type { Activity, Artifact, TurnOutput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
 import { z } from "zod"
 
@@ -46,13 +42,6 @@ import {
   ArtifactPreviewBody,
   isEditableArtifactKind,
 } from "./artifact-views.js"
-import {
-  activityTabId,
-  closeResultTab,
-  openActivityTab,
-  openResultTab,
-  usePanelTabs,
-} from "./panel-tabs.js"
 import { PreviewFailure, PreviewLoading } from "./preview-states.js"
 import { ResultPreviewBoundary } from "./result-preview-boundary.js"
 import {
@@ -63,6 +52,13 @@ import {
   minimumConversationWidth,
   minimumTaskPanelWidth,
 } from "./task-panel-size.js"
+import {
+  selectFiles,
+  showActivities,
+  showFile,
+  showFilesOverview,
+  usePanelState,
+} from "./task-panel-state.js"
 
 const taskPanelWidthSchema = z
   .number()
@@ -70,42 +66,32 @@ const taskPanelWidthSchema = z
   .min(minimumTaskPanelWidth)
   .max(maximumTaskPanelWidth)
 
-/**
- * One task's work beside its conversation. Activity leads and never closes:
- * the plan an agent is working to and the agents it spawned are always worth
- * a place, even before the task has produced a file. Every other tab is a
- * real file in the Project folder, which the panel previews, edits for the
- * formats that can be written back safely, and otherwise hands to the
- * application that owns it.
- */
+/** One task's files and activity beside its conversation. */
 export function TaskPanel({
   threadId,
   activities,
-  results,
+  files,
   onClose,
 }: {
   threadId: string
   activities: Activity[]
-  results: QueryState<TurnOutput[]>
+  files: QueryState<TurnOutput[]>
   onClose: () => void
 }) {
-  const outputs = results.status === "ready" ? results.data : undefined
-  const tabs = usePanelTabs(threadId)
+  const outputs = files.status === "ready" ? files.data : undefined
+  const panel = usePanelState(threadId)
   const byId = useMemo(
     () => new Map(outputs?.map((output) => [output.artifact.id, output])),
     [outputs]
   )
-  const onActivity = tabs.activeId === activityTabId
-  const active = onActivity ? undefined : byId.get(tabs.activeId)
+  const active = panel.selectedArtifactId
+    ? byId.get(panel.selectedArtifactId)
+    : undefined
   const activitySummary = useMemo(
     () => summarizeActivities(activities),
     [activities]
   )
   const runningAgents = activitySummary.working
-  const openNewestResult = useCallback(() => {
-    const newest = outputs?.[0]?.artifact.id
-    if (newest) openResultTab(threadId, newest)
-  }, [outputs, threadId])
   const [panelWidth, setPanelWidth] = useLocalStorage(
     // The key still says results: the width a user dragged is theirs, and a
     // rename is no reason to hand it back.
@@ -240,27 +226,16 @@ export function TaskPanel({
         <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring group-focus-visible/resize:bg-ring" />
       </div>
       <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-border pr-2 pl-1">
-        <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
-          <ActivityTab
-            active={onActivity}
-            runningAgents={runningAgents}
-            onSelect={() => openActivityTab(threadId)}
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <FilesTab
+            active={panel.surface === "files"}
+            count={outputs?.length ?? 0}
+            onSelect={() => selectFiles(threadId)}
           />
-          {tabs.open.map((id) => {
-            const output = byId.get(id)
-            return output ? (
-              <ResultTab
-                key={id}
-                artifact={output.artifact}
-                active={id === tabs.activeId}
-                onSelect={() => openResultTab(threadId, id)}
-                onClose={() => closeResultTab(threadId, id)}
-              />
-            ) : null
-          })}
-          <OpenResultMenu
-            outputs={outputs ?? []}
-            onSelect={(id) => openResultTab(threadId, id)}
+          <ActivityTab
+            active={panel.surface === "activities"}
+            runningAgents={runningAgents}
+            onSelect={() => showActivities(threadId)}
           />
         </div>
         <div className="flex shrink-0 items-center">
@@ -275,38 +250,55 @@ export function TaskPanel({
         </div>
       </div>
 
-      {onActivity ? (
+      {panel.surface === "activities" ? (
         <ActivityPanel
           summary={activitySummary}
-          onOpenResults={openNewestResult}
+          onOpenFiles={() => showFilesOverview(threadId)}
         />
-      ) : results.status === "error" ? (
+      ) : files.status === "error" ? (
         <div className="p-3">
-          <InlineError message={results.message} />
+          <InlineError message={files.message} />
         </div>
       ) : active ? (
         <ResultPreviewBoundary key={active.artifact.id}>
-          <ResultTabContent
+          <FilePreview
             key={active.artifact.id}
             threadId={threadId}
             output={active}
+            onBack={() => showFilesOverview(threadId)}
           />
         </ResultPreviewBoundary>
       ) : (
-        <EmptyResults
-          loading={results.status !== "ready"}
-          hasResults={(outputs?.length ?? 0) > 0}
+        <FilesOverview
+          loading={files.status !== "ready"}
+          outputs={outputs ?? []}
+          onSelect={(artifactId) => showFile(threadId, artifactId)}
         />
       )}
     </aside>
   )
 }
 
-/**
- * The fixture at the head of the strip. It carries no close button — there is
- * nothing to put back once a task's work is dismissed — and badges the agents
- * still running so the panel says so while a file is in front of it.
- */
+function FilesTab({
+  active,
+  count,
+  onSelect,
+}: {
+  active: boolean
+  count: number
+  onSelect: () => void
+}) {
+  return (
+    <PanelTab active={active} onSelect={onSelect}>
+      <FilesIcon aria-hidden className="size-3.5 shrink-0" />
+      <span>Files</span>
+      {count > 0 ? (
+        <span className="tabular-nums opacity-60">{count}</span>
+      ) : null}
+    </PanelTab>
+  )
+}
+
 function ActivityTab({
   active,
   runningAgents,
@@ -317,165 +309,132 @@ function ActivityTab({
   onSelect: () => void
 }) {
   return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center self-center rounded-md px-2 transition-colors",
-        active ? "bg-muted" : "hover:bg-muted/50"
-      )}
+    <PanelTab
+      active={active}
+      onSelect={onSelect}
+      title="This task's plan and agents"
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        title="This task's plan and agents"
-        className="flex h-7 items-center gap-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <BotIcon
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground"
+      <BotIcon aria-hidden className="size-3.5 shrink-0" />
+      <span>Activities</span>
+      {runningAgents > 0 ? (
+        <span
+          role="img"
+          className="size-1.5 rounded-full bg-foreground/60 [animation-duration:1.4s] motion-safe:animate-pulse"
+          aria-label={`${runningAgents} agents running`}
         />
-        <span className={active ? "text-foreground" : "text-muted-foreground"}>
-          Activity
-        </span>
-        {runningAgents > 0 ? (
-          <span
-            role="img"
-            className="size-1.5 rounded-full bg-foreground/60 [animation-duration:1.4s] motion-safe:animate-pulse"
-            aria-label={`${runningAgents} agents running`}
-          />
-        ) : null}
-      </button>
-    </div>
+      ) : null}
+    </PanelTab>
   )
 }
 
-function EmptyResults({
-  loading,
-  hasResults,
-}: {
-  loading: boolean
-  hasResults: boolean
-}) {
-  return (
-    <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
-      {loading
-        ? "Loading results…"
-        : hasResults
-          ? "Choose a file to open it here."
-          : "Files created or changed by this task will appear here."}
-    </div>
-  )
-}
-
-function ResultTab({
-  artifact,
+function PanelTab({
   active,
   onSelect,
-  onClose,
+  title,
+  children,
 }: {
-  artifact: Artifact
   active: boolean
   onSelect: () => void
-  onClose: () => void
+  title?: string
+  children: ReactNode
 }) {
   return (
-    <div
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      title={title}
       className={cn(
-        "group/tab flex min-w-0 shrink items-center gap-1 self-center rounded-md pr-1 pl-2 transition-colors",
-        active ? "bg-muted" : "hover:bg-muted/50"
+        "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        active
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
       )}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        title={artifact.relativePath}
-        className="flex h-7 min-w-0 items-center gap-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <ArtifactIcon
-          kind={artifact.previewKind}
-          className="size-3.5 shrink-0 text-muted-foreground"
-        />
-        <span
-          className={cn(
-            "max-w-36 truncate",
-            active ? "text-foreground" : "text-muted-foreground"
-          )}
-        >
-          {artifact.name}
-        </span>
-      </button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onClose}
-        aria-label={`Close ${artifact.name}`}
-        className="shrink-0 opacity-0 transition-opacity group-hover/tab:opacity-100 focus-visible:opacity-100"
-      >
-        <XIcon />
-      </Button>
-    </div>
+      {children}
+    </button>
   )
 }
 
-/** Every result of the task, so a file closed earlier can come back. */
-function OpenResultMenu({
+function FilesOverview({
+  loading,
   outputs,
   onSelect,
 }: {
+  loading: boolean
   outputs: TurnOutput[]
   onSelect: (artifactId: string) => void
 }) {
-  if (outputs.length === 0) return null
+  if (loading || outputs.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">
+        {loading
+          ? "Loading files…"
+          : "Files created or changed by this task will appear here."}
+      </div>
+    )
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="self-center"
-            aria-label="Open a result"
-          />
-        }
-      >
-        <PlusIcon />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-80">
-        {outputs.map(({ artifact }) => (
-          <DropdownMenuItem
-            key={artifact.id}
-            onClick={() => onSelect(artifact.id)}
-          >
-            <ArtifactIcon
-              kind={artifact.previewKind}
-              className="size-4 shrink-0 text-muted-foreground"
-            />
-            <span className="min-w-0 flex-1 truncate">{artifact.name}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {formatBytes(artifact.sizeBytes)}
-            </span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="mb-3 px-1">
+        <h2 className="text-sm font-medium">Files</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Created or changed during this task
+        </p>
+      </div>
+      <ul className="flex flex-col gap-1">
+        {outputs.map((output) => {
+          const artifact = output.artifact
+          return (
+            <li key={artifact.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(artifact.id)}
+                title={artifact.relativePath}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+                  <ArtifactIcon
+                    kind={artifact.previewKind}
+                    className="size-4 text-muted-foreground"
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {artifact.name}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {describeFile(artifact, output.producedAt)}
+                  </span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
 /**
  * The version an editing session started from. Editing pins the content it
  * loaded so an agent writing the same file mid-edit cannot swap the text
- * under the user; the tab says so instead and offers to reload.
+ * under the user; the preview says so instead and offers to reload.
  */
 type EditSession = {
   version: string
   content: string
 }
 
-function ResultTabContent({
+function FilePreview({
   threadId,
   output,
+  onBack,
 }: {
   threadId: string
   output: TurnOutput
+  onBack: () => void
 }) {
   const client = useRuntimeClient()
   const artifact = output.artifact
@@ -487,7 +446,7 @@ function ResultTabContent({
   const version = artifact.updatedAt
   const loadPreview = useMemo(() => {
     // A new version replaces this loader, so an agent edit landing while the
-    // tab is open refreshes the preview instead of showing stale content.
+    // preview is open refreshes it instead of showing stale content.
     void version
     return () => client.previewArtifact(threadId, artifact.id)
   }, [client, threadId, artifact.id, version])
@@ -537,6 +496,15 @@ function ResultTabContent({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Back to files"
+          title="Back to files"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon />
+        </Button>
         <div className="min-w-0 flex-1">
           <p
             className="truncate text-sm font-medium"
@@ -545,7 +513,7 @@ function ResultTabContent({
             {artifact.name}
           </p>
           <p className="truncate text-[11px] text-muted-foreground">
-            {describeResult(artifact, output.producedAt)}
+            {describeFile(artifact, output.producedAt)}
           </p>
         </div>
         {canEdit ? (
@@ -660,7 +628,7 @@ function ResultTabContent({
  * Size, when the task last wrote it, and the folder when there is one. A file
  * at the top of the Project would otherwise read its own name back twice.
  */
-function describeResult(artifact: Artifact, producedAt: string): string {
+function describeFile(artifact: Artifact, producedAt: string): string {
   const end = artifact.relativePath.lastIndexOf("/")
   return [
     formatBytes(artifact.sizeBytes),
