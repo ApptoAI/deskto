@@ -141,10 +141,64 @@ export const promptReferenceSchema = z.discriminatedUnion("kind", [
 
 export type PromptReference = z.infer<typeof promptReferenceSchema>
 
-export const turnInputSchema = z.object({
-  text: z.string().trim().min(1),
-  references: z.array(promptReferenceSchema).default([]),
+export const turnAttachmentLimit = 8
+export const turnImageMaxBytes = 10 * 1024 * 1024
+export const turnImageMimeTypes = [
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const
+const turnImageDataUrlMaxCharacters =
+  Math.ceil((turnImageMaxBytes * 4) / 3) + 128
+
+export const imageAttachmentSchema = z.object({
+  type: z.literal("image"),
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(255),
+  mimeType: z.enum(turnImageMimeTypes),
+  sizeBytes: z.number().int().positive().max(turnImageMaxBytes),
 })
+
+export type ImageAttachment = z.infer<typeof imageAttachmentSchema>
+
+export const uploadImageAttachmentSchema = imageAttachmentSchema
+  .extend({ dataUrl: z.string().max(turnImageDataUrlMaxCharacters) })
+  .refine(
+    (attachment) =>
+      attachment.dataUrl.startsWith(`data:${attachment.mimeType};base64,`),
+    { message: "Image data must match its media type", path: ["dataUrl"] }
+  )
+
+export type UploadImageAttachment = z.infer<typeof uploadImageAttachmentSchema>
+
+export const imageAttachmentPreviewSchema = z.object({
+  id: z.string().uuid(),
+  dataUrl: z.string(),
+})
+
+export type ImageAttachmentPreview = z.infer<
+  typeof imageAttachmentPreviewSchema
+>
+
+export const turnInputSchema = z
+  .object({
+    text: z.string().trim(),
+    references: z.array(promptReferenceSchema).default([]),
+    attachments: z
+      .array(uploadImageAttachmentSchema)
+      .max(turnAttachmentLimit)
+      .refine(
+        (attachments) =>
+          new Set(attachments.map((attachment) => attachment.id)).size ===
+          attachments.length,
+        { message: "Attachment IDs must be unique" }
+      )
+      .default([]),
+  })
+  .refine((input) => input.text.length > 0 || input.attachments.length > 0, {
+    message: "A message or image is required",
+  })
 
 export type TurnInput = z.infer<typeof turnInputSchema>
 
@@ -261,6 +315,7 @@ export const messageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
   references: z.array(promptReferenceSchema).optional(),
+  attachments: z.array(imageAttachmentSchema).optional(),
   state: z.enum(["streaming", "complete", "error"]),
   failure: harnessFailureSchema.optional(),
   /** Kept while existing databases migrate to the structured failure. */

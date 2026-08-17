@@ -1,7 +1,12 @@
-import { memo, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import FilesIcon from "lucide-react/dist/esm/icons/files"
-import type { Activity, Message, TurnOutput } from "@deskto/protocol"
+import type {
+  Activity,
+  ImageAttachment,
+  Message,
+  TurnOutput,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { Markdown } from "@workspace/ui/components/chat/markdown"
@@ -22,6 +27,8 @@ import { minimapPreviewText } from "@workspace/ui/lib/timeline-minimap"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { openExternal } from "../../lib/desktop.js"
+import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
+import { useRuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { ActivityLine, Collapse, activityIcon } from "./activity-rows.js"
 import { ArtifactIcon } from "./artifact-views.js"
 import { elapsedBetween, formatElapsed } from "./elapsed.js"
@@ -365,7 +372,20 @@ const MessageEntry = memo(function MessageEntry({
         className="enter-rise"
         {...minimapAnchor(message.id)}
       >
-        <MessageBody role="user">{message.content}</MessageBody>
+        <MessageBody role="user" className="space-y-2">
+          {message.attachments?.length ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              {message.attachments.map((attachment) => (
+                <MessageImage
+                  key={attachment.id}
+                  threadId={message.threadId}
+                  attachment={attachment}
+                />
+              ))}
+            </div>
+          ) : null}
+          {message.content ? <div>{message.content}</div> : null}
+        </MessageBody>
       </MessageRow>
     )
   }
@@ -419,3 +439,65 @@ const MessageEntry = memo(function MessageEntry({
     </MessageRow>
   )
 })
+
+function MessageImage({
+  threadId,
+  attachment,
+}: {
+  threadId: string
+  attachment: ImageAttachment
+}) {
+  const client = useRuntimeClient()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(
+    () => !("IntersectionObserver" in window)
+  )
+  const load = useCallback(
+    () => client.previewAttachment(threadId, attachment.id),
+    [attachment.id, client, threadId]
+  )
+  const preview = useRuntimeQuery(visible ? load : null)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || visible) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        setVisible(true)
+        observer.disconnect()
+      },
+      { rootMargin: "400px 0px" }
+    )
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [visible])
+
+  if (preview.state.status !== "ready") {
+    return (
+      <div
+        ref={containerRef}
+        className="flex size-24 items-center justify-center rounded-lg border border-border bg-muted px-2 text-center text-xs text-muted-foreground"
+        title={attachment.name}
+      >
+        {preview.state.status === "error"
+          ? "Preview unavailable"
+          : visible
+            ? "Loading…"
+            : attachment.name}
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className="size-24">
+      <img
+        src={preview.state.data.dataUrl}
+        alt={attachment.name}
+        title={attachment.name}
+        loading="lazy"
+        className="size-24 rounded-lg border border-border object-cover"
+      />
+    </div>
+  )
+}

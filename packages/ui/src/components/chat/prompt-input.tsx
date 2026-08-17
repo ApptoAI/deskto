@@ -28,7 +28,7 @@ function PromptInputTextarea({
     <Textarea
       data-slot="prompt-input-textarea"
       className={cn(
-        "max-h-64 min-h-14 resize-none rounded-2xl border-0 bg-transparent px-4 py-3 text-base focus-visible:ring-0 md:text-sm dark:bg-transparent",
+        "max-h-64 min-h-14 resize-none overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3 text-base focus-visible:ring-0 md:text-sm dark:bg-transparent",
         className
       )}
       onKeyDown={(event) => {

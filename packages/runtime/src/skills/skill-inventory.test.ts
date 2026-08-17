@@ -92,7 +92,7 @@ describe("skill inventory", () => {
         method: "turn.start",
         params: {
           threadId: thread.id,
-          input: { text: "Use the Pack", references: [] },
+          input: { text: "Use the Pack", references: [], attachments: [] },
         },
       })
     )

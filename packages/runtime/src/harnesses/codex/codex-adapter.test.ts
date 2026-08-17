@@ -108,6 +108,23 @@ describe("codexTurnInput", () => {
       },
     ])
   })
+
+  it("passes image attachments to app-server turns", () => {
+    expect(
+      codexTurnInput({
+        prompt: "",
+        references: [],
+        attachments: [
+          {
+            type: "image",
+            name: "screen.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,cG5n",
+          },
+        ],
+      })
+    ).toEqual([{ type: "image", url: "data:image/png;base64,cG5n" }])
+  })
 })
 
 describe("Codex MCP launch options", () => {

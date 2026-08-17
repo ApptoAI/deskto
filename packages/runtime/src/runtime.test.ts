@@ -17,6 +17,7 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
+import { turnInputSchema } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -106,7 +107,7 @@ describe("Runtime", () => {
         method: "turn.start",
         params: {
           threadId: thread.id,
-          input: { text: "Start the task", references: [] },
+          input: { text: "Start the task", references: [], attachments: [] },
         },
       })
     )
@@ -115,6 +116,97 @@ describe("Runtime", () => {
     expect(scripted.runs).toHaveLength(1)
     expect(scripted.runs[0]?.cancelled).toBe(false)
     await runtime.close()
+  })
+
+  it("persists image attachments and passes them to the Harness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness()
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "screen.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    const view = unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          input: { text: "", references: [], attachments: [attachment] },
+        },
+      })
+    )
+
+    expect(
+      view.messages.find((message) => message.role === "user")
+    ).toMatchObject({
+      content: "",
+      attachments: [
+        {
+          type: "image",
+          id: attachment.id,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        },
+      ],
+    })
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "attachment.preview",
+          params: { threadId: thread.id, attachmentId: attachment.id },
+        })
+      )
+    ).toEqual({ id: attachment.id, dataUrl: attachment.dataUrl })
+    expect(harness.runs[0]?.input.attachments).toEqual([
+      {
+        type: "image",
+        name: "screen.png",
+        mimeType: "image/png",
+        dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      },
+    ])
+    await runtime.close()
+  })
+
+  it("rejects duplicate attachment IDs before storage", () => {
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "screen.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    expect(
+      turnInputSchema.safeParse({
+        text: "Review this",
+        references: [],
+        attachments: [attachment, attachment],
+      }).success
+    ).toBe(false)
   })
 
   it("generates the first Thread title with the configured model", async () => {
@@ -1279,6 +1371,7 @@ describe("Runtime", () => {
                 name: "summarize",
               },
             ],
+            attachments: [],
           },
         },
       })

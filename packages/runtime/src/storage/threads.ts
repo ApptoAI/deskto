@@ -6,6 +6,7 @@ import {
   canSnooze,
   type ContextUsage,
   type ExecutionProfile,
+  type ImageAttachmentPreview,
   type Thread,
   type ThreadView,
 } from "@deskto/protocol"
@@ -16,10 +17,13 @@ import {
   toApproval,
   toActivity,
   toMessage,
+  toImageAttachment,
   toThread,
   type ApprovalRow,
   type ActivityRow,
   type MessageRow,
+  type MessageAttachmentMetadataRow,
+  type MessageAttachmentRow,
   type ThreadRow,
 } from "./records.js"
 import type { Projects } from "./projects.js"
@@ -254,6 +258,22 @@ export class Threads {
         "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at, rowid"
       )
       .all(id) as MessageRow[]
+    // SAFETY: Thread views carry attachment metadata only. The BLOB is read
+    // separately by previewAttachment when a visible image requests it.
+    const attachmentRows = this.database
+      .prepare(
+        "SELECT attachment.id, attachment.message_id, attachment.type, attachment.name, attachment.mime_type, attachment.size_bytes, attachment.sort_order FROM message_attachments attachment JOIN messages message ON message.id = attachment.message_id WHERE message.thread_id = ? ORDER BY attachment.message_id, attachment.sort_order"
+      )
+      .all(id) as MessageAttachmentMetadataRow[]
+    const attachmentsByMessage = new Map<
+      string,
+      ReturnType<typeof toImageAttachment>[]
+    >()
+    for (const row of attachmentRows) {
+      const attachments = attachmentsByMessage.get(row.message_id) ?? []
+      attachments.push(toImageAttachment(row))
+      attachmentsByMessage.set(row.message_id, attachments)
+    }
     // SAFETY: the query selects a complete ApprovalRow and LIMIT 1 yields
     // either one row or undefined.
     const approval = this.database
@@ -271,12 +291,32 @@ export class Threads {
 
     const view: ThreadView = {
       thread,
-      messages: messages.map(toMessage),
+      messages: messages.map((message) =>
+        toMessage(message, attachmentsByMessage.get(message.id))
+      ),
       activities: activities.map(toActivity),
       seq: this.sequences.current(id),
     }
     if (approval) view.pendingApproval = toApproval(approval)
     return view
+  }
+
+  previewAttachment(
+    threadId: string,
+    attachmentId: string
+  ): ImageAttachmentPreview {
+    // SAFETY: this is the one attachment read that selects the BLOB. The
+    // attachment id is unique, so it returns one row or undefined.
+    const row = this.database
+      .prepare(
+        "SELECT attachment.* FROM message_attachments attachment JOIN messages message ON message.id = attachment.message_id WHERE attachment.id = ? AND message.thread_id = ?"
+      )
+      .get(attachmentId, threadId) as MessageAttachmentRow | undefined
+    if (!row) throw new RuntimeError("attachment-not-found", "Image not found")
+    return {
+      id: row.id,
+      dataUrl: `data:${row.mime_type};base64,${Buffer.from(row.data).toString("base64")}`,
+    }
   }
 
   get(id: string): Thread {

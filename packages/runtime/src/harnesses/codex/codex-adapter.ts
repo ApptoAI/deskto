@@ -690,15 +690,21 @@ class CodexSession implements HarnessSession {
 }
 
 export function codexTurnInput(
-  input: Pick<HarnessRunInput, "prompt" | "references">
+  input: Pick<HarnessRunInput, "prompt" | "references" | "attachments">
 ): JsonObject[] {
   return [
-    { type: "text", text: input.prompt, text_elements: [] },
+    ...(input.prompt
+      ? [{ type: "text", text: input.prompt, text_elements: [] }]
+      : []),
     ...input.references.map((reference) =>
       reference.kind === "skill"
         ? { type: "skill", name: reference.name, path: reference.path }
         : { type: "mention", name: reference.name, path: reference.path }
     ),
+    ...(input.attachments ?? []).map((attachment) => ({
+      type: "image",
+      url: attachment.dataUrl,
+    })),
   ]
 }
 

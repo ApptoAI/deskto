@@ -7,6 +7,7 @@ import {
   artifactSchema,
   approvalSchema,
   harnessSchema,
+  imageAttachmentPreviewSchema,
   jsonObjectSchema,
   executionProfileSchema,
   messageSchema,
@@ -238,6 +239,13 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string(), artifactId: z.string() }),
   }),
   z.object({
+    method: z.literal("attachment.preview"),
+    params: z.object({
+      threadId: z.string(),
+      attachmentId: z.string().uuid(),
+    }),
+  }),
+  z.object({
     method: z.literal("artifact.locate"),
     params: z.object({ threadId: z.string(), artifactId: z.string() }),
   }),
@@ -336,6 +344,7 @@ export interface RuntimeResponses {
   "artifact.preview": z.infer<typeof artifactPreviewSchema>
   "artifact.locate": z.infer<typeof artifactLocationSchema>
   "artifact.write": z.infer<typeof artifactSchema>
+  "attachment.preview": z.infer<typeof imageAttachmentPreviewSchema>
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
   "approval.resolve": z.infer<typeof threadViewSchema>

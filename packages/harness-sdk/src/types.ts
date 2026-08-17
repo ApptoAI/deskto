@@ -95,12 +95,21 @@ export type HarnessPromptReference =
     }
   | { kind: "skill"; name: string; path: string }
 
+export type HarnessImageAttachment = {
+  type: "image"
+  name: string
+  mimeType: "image/gif" | "image/jpeg" | "image/png" | "image/webp"
+  dataUrl: string
+}
+
 export type HarnessRunInput = {
   threadId: string
   turnId: string
   projectPath: string
   prompt: string
   references: HarnessPromptReference[]
+  /** Image inputs already validated by the Runtime. */
+  attachments?: HarnessImageAttachment[]
   executionProfile: ExecutionProfile
   customization: SessionCustomization
   providerSessionId?: string

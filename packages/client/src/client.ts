@@ -299,6 +299,13 @@ export class RuntimeClient {
     })
   }
 
+  previewAttachment(threadId: string, attachmentId: string) {
+    return this.request({
+      method: "attachment.preview",
+      params: { threadId, attachmentId },
+    })
+  }
+
   writeArtifact(
     threadId: string,
     artifactId: string,
