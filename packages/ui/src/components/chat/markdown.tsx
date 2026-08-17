@@ -40,7 +40,7 @@ export const proseClassName = cn(
   "[&_hr]:my-[2em] [&_hr]:border-border",
   // The header row is a column label, so it takes the eyebrow voice; body
   // rows are divided by hairlines alone, with no fill and no zebra.
-  "[&_table]:my-[1.4em] [&_table]:w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-[0.95em]",
+  "[&_table]:w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-[0.95em]",
   "[&_th]:border-b [&_th]:border-border [&_th]:pt-0 [&_th]:pr-[1.5em] [&_th]:pb-[0.7em] [&_th]:font-mono [&_th]:text-[0.8em] [&_th]:font-normal [&_th]:tracking-[0.1em] [&_th]:whitespace-nowrap [&_th]:text-muted-foreground [&_th]:uppercase",
   "[&_td]:border-t [&_td]:border-border/50 [&_td]:py-[0.65em] [&_td]:pr-[1.5em] [&_td]:align-top [&_td]:tabular-nums",
   "[&_tbody_tr:first-child_td]:border-t-0 [&_td:last-child]:pr-0 [&_th:last-child]:pr-0",
@@ -60,6 +60,25 @@ type MarkdownProps = {
 }
 
 type CopyState = "idle" | "copied" | "failed"
+
+// Keep wide tables inside the reading column. The wrapper owns the margin and
+// focus so keyboard users can reach and scroll overflow without changing the
+// table's native semantics.
+function MarkdownTable({
+  children,
+  className,
+}: React.ComponentProps<"table"> & { node?: unknown }) {
+  return (
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Table"
+      className="my-[1.4em] max-w-full overflow-x-auto"
+    >
+      <table className={className}>{children}</table>
+    </div>
+  )
+}
 
 /**
  * A code block with the one action anybody wants from one. The text is read
@@ -185,6 +204,7 @@ function Markdown({ children, className, onLinkActivate }: MarkdownProps) {
         )
       },
       pre: CodeBlock,
+      table: MarkdownTable,
     }),
     [onLinkActivate]
   )
