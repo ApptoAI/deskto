@@ -2,7 +2,7 @@ import { maximumThreadChildren, type RequestFor } from "@deskto/protocol"
 import { McpServer } from "@modelcontextprotocol/server"
 import { z } from "zod"
 
-import { RuntimeClient } from "./runtime-client.js"
+import { RuntimeClient, RuntimeRequestError } from "./runtime-client.js"
 import {
   caughtErrorSchema,
   compactMessage,
@@ -16,6 +16,15 @@ import {
   waitForThreads,
 } from "./thread-tool-support.js"
 import type { SessionBinding } from "./types.js"
+
+type ToolError = { code: string | null; message: string }
+
+function toolError(error: Error): ToolError {
+  return {
+    code: error instanceof RuntimeRequestError ? error.code : null,
+    message: error.message,
+  }
+}
 
 export function createToolsServer(
   client: RuntimeClient,
@@ -106,6 +115,7 @@ export function createToolsServer(
             harnessId: z.string(),
             threadId: z.string().nullable(),
             stage: z.enum(["create", "start"]),
+            code: z.string().nullable(),
             message: z.string(),
           })
         ),
@@ -128,16 +138,14 @@ export function createToolsServer(
           )
           .map((harness) => harness.id)
       )
-      for (const task of tasks) {
-        const harnessId = task.harnessId ?? origin.thread.harnessId
-        if (!available.has(harnessId)) {
-          throw new Error(`Harness ${harnessId} is not installed or available`)
-        }
-      }
-
       const attempts = await Promise.allSettled(
         tasks.map(async (task) => {
           const harnessId = task.harnessId ?? origin.thread.harnessId
+          if (!available.has(harnessId)) {
+            throw new Error(
+              `Harness ${harnessId} is not installed or available`
+            )
+          }
           const params: RequestFor<"thread.create">["params"] = {
             projectId: binding.projectId,
             harnessId,
@@ -177,6 +185,7 @@ export function createToolsServer(
         harnessId: string
         threadId: string | null
         stage: "create" | "start"
+        code: string | null
         message: string
       }> = []
       for (const [index, attempt] of attempts.entries()) {
@@ -190,7 +199,7 @@ export function createToolsServer(
               harnessId: attempt.value.thread.harnessId,
               threadId: attempt.value.thread.id,
               stage: "start",
-              message: attempt.value.startError.message,
+              ...toolError(attempt.value.startError),
             })
           }
         } else {
@@ -199,7 +208,7 @@ export function createToolsServer(
             harnessId: task.harnessId ?? origin.thread.harnessId,
             threadId: null,
             stage: "create",
-            message: caughtErrorSchema.parse(attempt.reason).message,
+            ...toolError(caughtErrorSchema.parse(attempt.reason)),
           })
         }
       }
@@ -374,22 +383,45 @@ export function createToolsServer(
       inputSchema: z.object({
         threadIds: z.array(z.string().min(1)).min(1).max(maximumThreadChildren),
       }),
-      outputSchema: z.object({ threads: z.array(threadSummarySchema) }),
+      outputSchema: z.object({
+        threads: z.array(threadSummarySchema),
+        errors: z.array(
+          z.object({
+            threadId: z.string(),
+            code: z.string().nullable(),
+            message: z.string(),
+          })
+        ),
+      }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     async ({ threadIds }) => {
       const uniqueIds = [...new Set(threadIds)]
-      await Promise.all(
-        uniqueIds.map((threadId) => requireControl(client, binding, threadId))
+      const attempts = await Promise.allSettled(
+        uniqueIds.map(async (threadId) => {
+          await requireControl(client, binding, threadId)
+          return client.request({ method: "turn.cancel", params: { threadId } })
+        })
       )
-      const views = await Promise.all(
-        uniqueIds.map((threadId) =>
-          client.request({ method: "turn.cancel", params: { threadId } })
-        )
-      )
-      return textResult({
-        threads: views.map((view) => summarize(view.thread)),
+      const threads: ReturnType<typeof summarize>[] = []
+      const errors: Array<{
+        threadId: string
+        code: string | null
+        message: string
+      }> = []
+      attempts.forEach((attempt, index) => {
+        const threadId = uniqueIds[index]
+        if (!threadId) return
+        if (attempt.status === "fulfilled") {
+          threads.push(summarize(attempt.value.thread))
+        } else {
+          errors.push({
+            threadId,
+            ...toolError(caughtErrorSchema.parse(attempt.reason)),
+          })
+        }
       })
+      return textResult({ threads, errors })
     }
   )
 

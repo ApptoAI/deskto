@@ -7,7 +7,11 @@ import {
 
 import type { AuthInfo } from "@modelcontextprotocol/server"
 import { createMcpHandler } from "@modelcontextprotocol/server"
-import { toNodeHandler } from "@modelcontextprotocol/node"
+import {
+  localhostHostValidation,
+  localhostOriginValidation,
+  toNodeHandler,
+} from "@modelcontextprotocol/node"
 import { z } from "zod"
 
 import { RuntimeClient } from "./runtime-client.js"
@@ -35,20 +39,6 @@ function jsonError(response: ServerResponse, status: number, message: string) {
   response.end(JSON.stringify({ error: message }))
 }
 
-function allowedOrigin(origin: string | undefined): boolean {
-  if (!origin) return true
-  try {
-    const hostname = new URL(origin).hostname
-    return (
-      hostname === "127.0.0.1" ||
-      hostname === "localhost" ||
-      hostname === "[::1]"
-    )
-  } catch {
-    return false
-  }
-}
-
 export async function startDesktoMcpServer(
   options: DesktoMcpServerOptions
 ): Promise<DesktoMcpServer> {
@@ -63,23 +53,12 @@ export async function startDesktoMcpServer(
     return createToolsServer(client, binding)
   })
   const nodeHandler = toNodeHandler(handler)
+  const validateHost = localhostHostValidation()
+  const validateOrigin = localhostOriginValidation()
 
   const httpServer = createServer((request, response) => {
-    const currentAddress = tcpAddressSchema.safeParse(httpServer.address())
-    const expectedHost = currentAddress.success
-      ? `${localMcpHost}:${currentAddress.data.port}`
-      : undefined
-    if (request.headers.host !== expectedHost) {
-      jsonError(response, 421, "Invalid host")
-      return
-    }
-    const origin = Array.isArray(request.headers.origin)
-      ? request.headers.origin[0]
-      : request.headers.origin
-    if (!allowedOrigin(origin)) {
-      jsonError(response, 403, "Invalid origin")
-      return
-    }
+    if (!validateHost(request, response)) return
+    if (!validateOrigin(request, response)) return
     if (request.url !== "/mcp") {
       jsonError(response, 404, "Not found")
       return
@@ -145,10 +124,13 @@ export async function startDesktoMcpServer(
     },
     async close() {
       bindings.clear()
-      await handler.close()
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((error) => (error ? reject(error) : resolve()))
-      })
+      try {
+        await handler.close()
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          httpServer.close((error) => (error ? reject(error) : resolve()))
+        })
+      }
     },
   }
 }

@@ -281,6 +281,7 @@ const migrations = [
         SELECT group_concat(messages.content, char(10))
         FROM messages
         WHERE messages.thread_id = threads.id
+          AND messages.state <> 'streaming'
       ), '')
     FROM threads;
 
@@ -318,6 +319,7 @@ const migrations = [
         SELECT group_concat(messages.content, char(10))
         FROM messages
         WHERE messages.thread_id = new.thread_id
+          AND messages.state <> 'streaming'
       ), '')
       WHERE thread_id = new.thread_id;
     END;
@@ -329,6 +331,7 @@ const migrations = [
         SELECT group_concat(messages.content, char(10))
         FROM messages
         WHERE messages.thread_id = old.thread_id
+          AND messages.state <> 'streaming'
       ), '')
       WHERE thread_id = old.thread_id;
     END;

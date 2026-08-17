@@ -26,7 +26,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
-- **MCP Server**: The local `@deskto/mcp-server` process surface that lets a Harness create, inspect, search, wait for, and continue Runtime Threads. Desktop starts and configures it without user setup.
+- **MCP Server**: The local `@deskto/mcp-server` in-process HTTP server that lets a Harness create, inspect, search, wait for, and continue Runtime Threads. Desktop starts and configures it without user setup.
 - **Execution Profile**: The model, thinking level, and permission mode used by a Harness. A Thread owns the editable profile; every Turn stores the profile it started with.
 - **Skill Occurrence**: One skill directory found at one physical location. Occurrences keep their identity even when another skill has the same name or their `SKILL.md` is invalid.
 - **Skill Exposure**: The relationship between a Skill Occurrence and a Harness. It records native discovery or Deskto's latest attempt to configure an app-supplied root. It does not claim the Harness used the skill.

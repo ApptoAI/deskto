@@ -130,6 +130,7 @@ export async function waitForThreads(
     let settled = false
     let reading = false
     let recheck = false
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined
     let unsubscribe: () => void = () => undefined
     const finish = (result: { completed: boolean; threads: ThreadView[] }) => {
       if (settled) return
@@ -173,7 +174,7 @@ export async function waitForThreads(
         void check()
       }
     })
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       void read().then(
         (threads) => finish({ completed: threads.every(isTerminal), threads }),
         (error) => fail(caughtErrorSchema.parse(error))

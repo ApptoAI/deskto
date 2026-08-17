@@ -5,7 +5,7 @@ import type {
 } from "@deskto/protocol"
 import { describe, expect, it, vi } from "vitest"
 
-import { RuntimeClient } from "./runtime-client.js"
+import { RuntimeClient, RuntimeRequestError } from "./runtime-client.js"
 import { finalAnswer, waitForThreads } from "./thread-tool-support.js"
 
 const now = "2026-08-17T10:00:00.000Z"
@@ -63,6 +63,28 @@ function clientFor(options: {
 }
 
 describe("thread tool support", () => {
+  it("preserves Runtime error codes", async () => {
+    // SAFETY: this transport always returns a valid Runtime error response.
+    const request = vi.fn(async () => ({
+      ok: false as const,
+      error: { code: "turn-active", message: "Task is already running" },
+    })) as RuntimeTransport["request"]
+    const client = new RuntimeClient({
+      request,
+      subscribe: () => () => undefined,
+    })
+
+    await expect(
+      client.request({ method: "thread.get", params: { threadId: "child-1" } })
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<RuntimeRequestError>>({
+        name: "RuntimeRequestError",
+        code: "turn-active",
+        message: "Task is already running",
+      })
+    )
+  })
+
   it("does not complete a wait for a thread that has never started", async () => {
     const result = await waitForThreads(
       clientFor({ request: () => Promise.resolve(view("idle", null)) }),

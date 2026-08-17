@@ -144,7 +144,9 @@ async function openApplication(): Promise<void> {
     mcpServer = await startDesktoMcpServer({ runtime })
     mcpServerRef.current = mcpServer
   } catch (error) {
-    await closeRuntime()
+    const close = closeRuntime
+    closeRuntime = undefined
+    await close()
     throw error
   }
   const closeApplicationRuntime = async () => {

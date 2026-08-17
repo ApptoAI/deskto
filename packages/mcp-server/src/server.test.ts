@@ -59,6 +59,21 @@ const createPayloadSchema = z.object({
         z.object({
           threadId: z.string().nullable(),
           stage: z.enum(["create", "start"]),
+          code: z.string().nullable(),
+          message: z.string(),
+        })
+      ),
+    }),
+  }),
+})
+const cancelPayloadSchema = z.object({
+  result: z.object({
+    structuredContent: z.object({
+      threads: z.array(z.object({ id: z.string(), status: z.string() })),
+      errors: z.array(
+        z.object({
+          threadId: z.string(),
+          code: z.string().nullable(),
           message: z.string(),
         })
       ),
@@ -67,14 +82,34 @@ const createPayloadSchema = z.object({
 })
 
 function fakeRuntime(
-  options: { failTurnStart?: boolean } = {}
+  options: { failTurnStart?: boolean; failCancelThreadId?: string } = {}
 ): RuntimeTransport {
+  let childCount = 0
+  const childView = (
+    id: string,
+    status: ThreadView["thread"]["status"] = "running"
+  ): ThreadView => ({
+    ...view,
+    thread: {
+      ...view.thread,
+      id,
+      parentThreadId: "thread-1",
+      title: `Task ${id}`,
+      status,
+      lastUserMessageAt: now,
+    },
+  })
   // SAFETY: the switch returns the matching Runtime response shape for every
   // method this MCP server test calls. Unexpected methods throw.
   const request = vi.fn(async (request) => {
     switch (request.method) {
-      case "thread.get":
-        return { ok: true, data: view }
+      case "thread.get": {
+        const threadId = request.params.threadId
+        return {
+          ok: true,
+          data: threadId === "thread-1" ? view : childView(threadId),
+        }
+      }
       case "project.list":
         return {
           ok: true,
@@ -118,27 +153,35 @@ function fakeRuntime(
             },
           ],
         }
-      case "thread.create":
+      case "thread.create": {
+        childCount += 1
         return {
           ok: true,
           data: {
             ...view.thread,
-            id: "child-1",
+            id: `child-${childCount}`,
             parentThreadId: "thread-1",
-            title: "Check startup",
+            title: request.params.title ?? "Background task",
+            harnessId: request.params.harnessId,
             status: "idle" as const,
             lastUserMessageAt: null,
           },
         }
+      }
       case "turn.start": {
-        if (!options.failTurnStart) throw new Error("Unexpected turn.start")
+        if (!options.failTurnStart) {
+          return {
+            ok: true,
+            data: childView(request.params.threadId),
+          }
+        }
         return {
           ok: true,
           data: {
-            ...view,
+            ...childView(request.params.threadId, "failed"),
             thread: {
               ...view.thread,
-              id: "child-1",
+              id: request.params.threadId,
               parentThreadId: "thread-1",
               title: "Check startup",
               status: "failed" as const,
@@ -147,7 +190,7 @@ function fakeRuntime(
             messages: [
               {
                 id: "user-1",
-                threadId: "child-1",
+                threadId: request.params.threadId,
                 role: "user" as const,
                 content: "Check startup",
                 state: "complete" as const,
@@ -155,7 +198,7 @@ function fakeRuntime(
               },
               {
                 id: "assistant-1",
-                threadId: "child-1",
+                threadId: request.params.threadId,
                 role: "assistant" as const,
                 content: "Harness executable is unavailable",
                 state: "error" as const,
@@ -167,6 +210,18 @@ function fakeRuntime(
               },
             ],
           },
+        }
+      }
+      case "turn.cancel": {
+        if (request.params.threadId === options.failCancelThreadId) {
+          return {
+            ok: false,
+            error: { code: "turn-not-active", message: "Task is not running" },
+          }
+        }
+        return {
+          ok: true,
+          data: childView(request.params.threadId, "idle"),
         }
       }
       default:
@@ -239,6 +294,12 @@ describe("Deskto MCP server", () => {
     expect(new URL(server.url).hostname).toBe("127.0.0.1")
     const response = await fetch(server.url, { method: "POST" })
     expect(response.status).toBe(401)
+
+    const localhostHost = await fetch(server.url, {
+      method: "POST",
+      headers: { host: `localhost:${new URL(server.url).port}` },
+    })
+    expect(localhostHost.status).toBe(401)
 
     const connection = server.connectionFor({
       threadId: "thread-1",
@@ -390,6 +451,97 @@ describe("Deskto MCP server", () => {
         threadId: "child-1",
         stage: "start",
         message: "Harness executable is unavailable",
+      },
+    ])
+  })
+
+  it("keeps successful thread creations when another harness is unavailable", async () => {
+    server = await startDesktoMcpServer({ runtime: fakeRuntime() })
+    const connection = server.connectionFor({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      projectId: "project-1",
+      workspaceId: "personal",
+    })
+    await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+
+    const response = await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "deskto_create_threads",
+        arguments: {
+          tasks: [
+            { prompt: "Use Codex", harnessId: "codex" },
+            { prompt: "Use Claude", harnessId: "claude" },
+          ],
+        },
+      },
+    })
+    const payload = createPayloadSchema.parse(await responsePayload(response))
+
+    expect(payload.result.structuredContent.threads).toMatchObject([
+      { id: "child-1", status: "running" },
+    ])
+    expect(payload.result.structuredContent.errors).toMatchObject([
+      {
+        threadId: null,
+        stage: "create",
+        message: "Harness claude is not installed or available",
+      },
+    ])
+  })
+
+  it("returns successful cancellations together with per-thread errors", async () => {
+    server = await startDesktoMcpServer({
+      runtime: fakeRuntime({ failCancelThreadId: "child-2" }),
+    })
+    const connection = server.connectionFor({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      projectId: "project-1",
+      workspaceId: "personal",
+    })
+    await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+
+    const response = await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "deskto_cancel_threads",
+        arguments: { threadIds: ["child-1", "child-2"] },
+      },
+    })
+    const payload = cancelPayloadSchema.parse(await responsePayload(response))
+
+    expect(payload.result.structuredContent.threads).toMatchObject([
+      { id: "child-1", status: "idle" },
+    ])
+    expect(payload.result.structuredContent.errors).toEqual([
+      {
+        threadId: "child-2",
+        code: "turn-not-active",
+        message: "Task is not running",
       },
     ])
   })
