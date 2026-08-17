@@ -255,6 +255,7 @@ describe("Composer", () => {
     const textarea = screen.getByRole("textbox", { name: "Message" })
 
     fireEvent.change(textarea, { target: { value: "$", selectionStart: 1 } })
+    await waitFor(() => expect(request).toHaveBeenCalledOnce())
     fireEvent.change(textarea, {
       target: { value: "$an", selectionStart: 3 },
     })
