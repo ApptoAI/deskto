@@ -17,6 +17,7 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
+import { turnInputSchema } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -186,6 +187,25 @@ describe("Runtime", () => {
       },
     ])
     await runtime.close()
+  })
+
+  it("rejects duplicate attachment IDs before storage", () => {
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "screen.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    expect(
+      turnInputSchema.safeParse({
+        text: "Review this",
+        references: [],
+        attachments: [attachment, attachment],
+      }).success
+    ).toBe(false)
   })
 
   it("generates the first Thread title with the configured model", async () => {

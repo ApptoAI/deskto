@@ -188,6 +188,12 @@ export const turnInputSchema = z
     attachments: z
       .array(uploadImageAttachmentSchema)
       .max(turnAttachmentLimit)
+      .refine(
+        (attachments) =>
+          new Set(attachments.map((attachment) => attachment.id)).size ===
+          attachments.length,
+        { message: "Attachment IDs must be unique" }
+      )
       .default([]),
   })
   .refine((input) => input.text.length > 0 || input.attachments.length > 0, {

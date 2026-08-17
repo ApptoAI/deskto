@@ -128,6 +128,12 @@ describe("Composer", () => {
     fireEvent.paste(textarea, { clipboardData: { files: [second] } })
     expect(screen.queryByAltText("second.png")).toBeNull()
     expect(
+      fireEvent.drop(textarea.closest("form")!, {
+        dataTransfer: { types: ["Files"], files: [second] },
+      })
+    ).toBe(false)
+    expect(screen.queryByAltText("second.png")).toBeNull()
+    expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Attach images" })
         .disabled
     ).toBe(true)

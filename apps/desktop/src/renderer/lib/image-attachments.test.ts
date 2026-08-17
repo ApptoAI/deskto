@@ -27,4 +27,13 @@ describe("selectImageFiles", () => {
       error: "You can attach up to 8 images to one message.",
     })
   })
+
+  it("rejects empty images before preparation", () => {
+    const empty = new File([], "empty.png", { type: "image/png" })
+
+    expect(selectImageFiles([empty], 0)).toEqual({
+      accepted: [],
+      error: "'empty.png' is empty.",
+    })
+  })
 })

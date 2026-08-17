@@ -422,8 +422,9 @@ export function Composer({
               setDraggingFiles(true)
           }}
           onDragOver={(event) => {
-            if (sending || !event.dataTransfer.types.includes("Files")) return
+            if (!event.dataTransfer.types.includes("Files")) return
             event.preventDefault()
+            if (sending) return
             event.dataTransfer.dropEffect = "copy"
           }}
           onDragLeave={(event) => {
@@ -437,8 +438,9 @@ export function Composer({
           }}
           onDrop={(event) => {
             setDraggingFiles(false)
-            if (sending || event.dataTransfer.files.length === 0) return
+            if (!event.dataTransfer.types.includes("Files")) return
             event.preventDefault()
+            if (sending || event.dataTransfer.files.length === 0) return
             void addFiles(Array.from(event.dataTransfer.files))
           }}
         >

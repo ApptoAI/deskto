@@ -28,6 +28,10 @@ export function selectImageFiles(
       error = `You can attach up to ${turnAttachmentLimit} images to one message.`
       break
     }
+    if (file.size === 0) {
+      error = `'${file.name}' is empty.`
+      continue
+    }
     if (file.size > maxCompressibleSourceBytes) {
       error = `'${file.name}' is too large to process.`
       continue
