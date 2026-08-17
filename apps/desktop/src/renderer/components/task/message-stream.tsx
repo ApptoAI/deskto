@@ -117,6 +117,13 @@ export function MessageStream({
           ) : null}
         </div>
       </MessageList>
+      {/* The transcript ends at the composer's edge, which guillotines the
+          last line mid-glyph. A short wash of the canvas lets it fall away
+          instead — and says the text continues, rather than stopped. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-background to-transparent"
+      />
       <TimelineMinimap
         items={minimapItems}
         viewport={viewport}

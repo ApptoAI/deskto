@@ -60,9 +60,13 @@ export function ExecutionProfileToolbar({
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
+      {/* The model carries the longest label, so it gives it up first: three
+          times the shrink factor of its neighbours, which means "High" and
+          "Auto" are still readable at widths where the model name is not. */}
       <ProfileMenu
         label="Model"
         value={model.id}
+        triggerClassName="shrink-[3]"
         disabled={disabled}
         open={modelMenuOpen}
         onOpenChange={onModelMenuOpenChange}
@@ -83,6 +87,7 @@ export function ExecutionProfileToolbar({
           <ProfileMenu
             label="Thinking"
             value={profile.effort ?? DEFAULT_EFFORT}
+            labelClassName={compactLabel}
             disabled={disabled}
             options={thinkingOptions}
             onSelect={(effort) =>
@@ -98,6 +103,7 @@ export function ExecutionProfileToolbar({
       <ProfileMenu
         label="Permissions"
         value={profile.permissionMode}
+        labelClassName={compactLabel}
         disabled={disabled}
         options={permissionModeOptions}
         onSelect={(value) =>
@@ -107,6 +113,14 @@ export function ExecutionProfileToolbar({
     </div>
   )
 }
+
+/**
+ * "High" and "Auto" are four letters each: truncated they read as "H" and "A",
+ * which says less than the icon beside them already does. So they are shown
+ * whole or not at all, on the composer's own width rather than the window's.
+ * The model name is long enough to survive truncation and keeps it.
+ */
+const compactLabel = "hidden @[36rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />

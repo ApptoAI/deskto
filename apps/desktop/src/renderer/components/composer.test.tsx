@@ -41,9 +41,6 @@ describe("Composer", () => {
 
     fireEvent.paste(textarea, { clipboardData: { files: [image] } })
     await screen.findByAltText("screen.png")
-    expect(
-      screen.getByText("Enter to send · Shift+Enter for a new line")
-    ).toBeTruthy()
 
     fireEvent.change(textarea, {
       target: { value: "Review this", selectionStart: 11 },

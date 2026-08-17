@@ -526,9 +526,6 @@ export function Composer({
               <PaperclipIcon />
             </Button>
             {toolbar}
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              Enter to send · Shift+Enter for a new line
-            </span>
             <div className="ml-auto flex items-center gap-2">
               {trailing}
               {running && onCancel ? (

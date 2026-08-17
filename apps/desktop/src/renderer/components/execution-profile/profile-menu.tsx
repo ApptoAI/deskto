@@ -25,6 +25,8 @@ export function ProfileMenu({
   onSelect,
   disabled = false,
   contentClassName,
+  triggerClassName,
+  labelClassName,
   open,
   onOpenChange,
 }: {
@@ -34,6 +36,10 @@ export function ProfileMenu({
   onSelect: (value: string) => void
   disabled?: boolean
   contentClassName?: string
+  /** Lets one menu in a row give up its label before its neighbours do. */
+  triggerClassName?: string
+  /** For a label short enough that half of it is worse than none of it. */
+  labelClassName?: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
@@ -46,14 +52,25 @@ export function ProfileMenu({
           <Button
             variant="ghost"
             size="sm"
-            className="min-w-0 text-muted-foreground"
+            // Buttons are shrink-0 by default, which is right for a toolbar
+            // with room and wrong for this one: the composer narrows with the
+            // panel, and a row that cannot give way runs out of its own box.
+            // The label goes before the icon does, and the title says what the
+            // icon alone cannot.
+            className={cn(
+              "min-w-0 shrink text-muted-foreground",
+              triggerClassName
+            )}
             disabled={disabled}
+            title={`${label}: ${selected?.label ?? "not set"}`}
             aria-label={`${label}: ${selected?.label ?? "not set"}`}
           />
         }
       >
         {selected?.icon}
-        <span className="truncate">{selected?.label ?? label}</span>
+        <span className={cn("truncate", labelClassName)}>
+          {selected?.label ?? label}
+        </span>
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
