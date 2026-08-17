@@ -87,7 +87,6 @@ export type CodexClientFactory = (
 
 const createCodexClient: CodexClientFactory = (command, cwd, options) =>
   new JsonlClient(command, cwd, options)
-
 type PendingApproval = {
   id: string
   requestId: string | number

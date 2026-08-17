@@ -290,12 +290,27 @@ export class RequestRouter {
           request.params.harnessId,
           profile
         )
-        return this.store.threads.create(
+        const thread = this.store.threads.create(
           request.params.projectId,
           request.params.harnessId,
-          profile
+          profile,
+          {
+            parentThreadId: request.params.parentThreadId,
+            title: request.params.title,
+          }
         )
+        if (thread.parentThreadId) {
+          this.events.threadChanged(thread.parentThreadId)
+        }
+        return thread
       }
+      case "thread.search":
+        return this.store.threads.search(
+          request.params.originThreadId,
+          request.params.query,
+          request.params.scope,
+          request.params.limit
+        )
       case "thread.configure": {
         const thread = this.store.threads.getRow(request.params.threadId)
         const executionProfile = await this.harnesses.resolveProfile(
@@ -349,11 +364,19 @@ export class RequestRouter {
       case "thread.delete": {
         const threadId = request.params.threadId
         // Fail on a missing id before anything else runs.
-        this.store.threads.get(threadId)
+        const parentThreadId = this.store.threads.parentId(threadId)
+        const descendantIds = this.store.threads.descendantIds(threadId)
         // A live turn would keep writing into rows that are about to vanish.
+        for (const descendantId of descendantIds) {
+          await this.turns.discard(descendantId)
+        }
         await this.turns.discard(threadId)
         this.store.threads.delete(threadId)
+        for (const descendantId of descendantIds) {
+          this.events.threadDeleted(descendantId)
+        }
         this.events.threadDeleted(threadId)
+        if (parentThreadId) this.events.threadChanged(parentThreadId)
         return null
       }
       case "artifact.list":

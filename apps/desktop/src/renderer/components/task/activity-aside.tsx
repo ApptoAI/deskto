@@ -1,12 +1,13 @@
 import { memo, useMemo } from "react"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
-import type { Activity } from "@deskto/protocol"
+import type { Activity, Thread } from "@deskto/protocol"
 
 import { Plan } from "@workspace/ui/components/chat/plan"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { AgentElapsed, SubagentBadge } from "./activity-rows.js"
 import { summarizeActivities, type ActivityNode } from "./activity-tree.js"
+import { BackgroundThreadList } from "./background-thread-list.js"
 
 /**
  * The task's state beside its conversation: the plan it is working to and the
@@ -19,16 +20,24 @@ import { summarizeActivities, type ActivityNode } from "./activity-tree.js"
  */
 export const ActivityAside = memo(function ActivityAside({
   activities,
+  childThreads = [],
   onOpen,
+  onOpenThread = () => undefined,
 }: {
   activities: Activity[]
+  childThreads?: Thread[]
   onOpen: () => void
+  onOpenThread?: (threadId: string) => void
 }) {
   const { agents, plan, working } = useMemo(
     () => summarizeActivities(activities),
     [activities]
   )
-  if (!plan && agents.length === 0) return null
+  const runningThreads = childThreads.filter(
+    (thread) =>
+      thread.status === "running" || thread.status === "waiting-approval"
+  ).length
+  if (!plan && agents.length === 0 && childThreads.length === 0) return null
 
   return (
     <aside className="hidden w-76 shrink-0 flex-col pt-4 pr-4 pb-6 lg:flex">
@@ -40,9 +49,9 @@ export const ActivityAside = memo(function ActivityAside({
           aria-label="Open activity panel"
         >
           <span className="text-ui font-medium">Activity</span>
-          {working > 0 ? (
+          {working + runningThreads > 0 ? (
             <span className="text-micro text-muted-foreground tabular-nums">
-              {working} working
+              {working + runningThreads} working
             </span>
           ) : null}
           <PanelRightIcon
@@ -75,6 +84,19 @@ export const ActivityAside = memo(function ActivityAside({
                   </li>
                 ))}
               </ul>
+            </section>
+          ) : null}
+
+          {childThreads.length > 0 ? (
+            <section className="border-t border-border/60 px-1.5 py-2">
+              <h3 className="px-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+                Background tasks
+              </h3>
+              <BackgroundThreadList
+                threads={childThreads}
+                onOpenThread={onOpenThread}
+                compact
+              />
             </section>
           ) : null}
         </div>

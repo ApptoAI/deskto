@@ -10,6 +10,8 @@ const input: SessionToolInput = {
   harnessId: "codex",
   threadId: "thread-1",
   turnId: "turn-1",
+  projectId: "project-1",
+  workspaceId: "personal",
   projectPath: "/repo",
 }
 

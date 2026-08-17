@@ -184,6 +184,40 @@ describe("Codex skill provisioning", () => {
   })
 })
 
+describe("Codex MCP provisioning", () => {
+  it("starts app-server with a turn-scoped HTTP server", async () => {
+    let processOptions: Parameters<CodexClientFactory>[2]
+    const factory: CodexClientFactory = (_command, _cwd, options) => {
+      processOptions = options
+      return new FakeCodexClient()
+    }
+    await new CodexAdapter(factory).start(
+      {
+        ...runInputWithPack(),
+        customization: {
+          skillRoots: [],
+          mcpServers: [
+            {
+              id: "deskto",
+              url: "http://127.0.0.1:4321/mcp",
+              authorization: { type: "bearer", token: "secret-token" },
+            },
+          ],
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(processOptions?.args).toContain(
+      'mcp_servers.deskto.url="http://127.0.0.1:4321/mcp"'
+    )
+    expect(processOptions?.args).toContain(
+      'mcp_servers.deskto.bearer_token_env_var="DESKTO_MCP_0_TOKEN"'
+    )
+    expect(processOptions?.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
+  })
+})
+
 function runInputWithPack() {
   return {
     threadId: "thread-1",

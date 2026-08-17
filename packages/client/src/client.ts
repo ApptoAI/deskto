@@ -226,11 +226,27 @@ export class RuntimeClient {
   createThread(
     projectId: string,
     harnessId: string,
-    executionProfile?: RequestFor<"thread.create">["params"]["executionProfile"]
+    executionProfile?: RequestFor<"thread.create">["params"]["executionProfile"],
+    options: Pick<
+      RequestFor<"thread.create">["params"],
+      "parentThreadId" | "title"
+    > = {}
   ) {
     return this.request({
       method: "thread.create",
-      params: { projectId, harnessId, executionProfile },
+      params: { projectId, harnessId, executionProfile, ...options },
+    })
+  }
+
+  searchThreads(
+    originThreadId: string,
+    query: string,
+    scope: RequestFor<"thread.search">["params"]["scope"] = "project",
+    limit = 10
+  ) {
+    return this.request({
+      method: "thread.search",
+      params: { originThreadId, query, scope, limit },
     })
   }
 

@@ -35,6 +35,7 @@ export type ProjectRow = {
 export type ThreadRow = {
   id: string
   project_id: string
+  parent_thread_id: string | null
   title: string
   harness_id: string
   status: Thread["status"]
@@ -179,6 +180,7 @@ export function toThread(row: ThreadRow): Thread {
   const thread: Thread = {
     id: row.id,
     projectId: row.project_id,
+    parentThreadId: row.parent_thread_id,
     title: row.title,
     harnessId: row.harness_id,
     status: row.status,

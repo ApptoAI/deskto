@@ -182,7 +182,8 @@ export function effectiveDone(
   }
   if (referenceMs === 0) return false
   return (
-    referenceMs < parseTimestampMs(options.now) - options.autoDoneAfterDays * DAY_MS
+    referenceMs <
+    parseTimestampMs(options.now) - options.autoDoneAfterDays * DAY_MS
   )
 }
 

@@ -4,6 +4,8 @@ export type SessionToolInput = {
   harnessId: string
   threadId: string
   turnId: string
+  projectId: string
+  workspaceId: string
   projectPath: string
 }
 

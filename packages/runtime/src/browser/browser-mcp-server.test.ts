@@ -28,6 +28,8 @@ describe("BrowserMcpServer", () => {
         harnessId: "claude",
         threadId: "thread-7",
         turnId: "turn-8",
+        projectId: "project-6",
+        workspaceId: "personal",
         projectPath: "/repo",
       },
       controller.signal
@@ -144,6 +146,8 @@ const testInput = {
   harnessId: "claude",
   threadId: "thread-test",
   turnId: "turn-test",
+  projectId: "project-test",
+  workspaceId: "personal",
   projectPath: "/repo",
 }
 

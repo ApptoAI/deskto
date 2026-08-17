@@ -17,7 +17,7 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
-import { turnInputSchema } from "@deskto/protocol"
+import { maximumThreadChildren, turnInputSchema } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -2639,6 +2639,175 @@ describe("Runtime", () => {
       "Prepare the report",
     ])
     expect(unwrap(await starting).thread.status).toBe("idle")
+    await runtime.close()
+  })
+
+  it("links background tasks and finds their title and messages", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "codex", name: "Codex" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const parent = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "codex" },
+      })
+    )
+    const child = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "codex",
+          parentThreadId: parent.id,
+          title: "Investigate billing boundaries",
+        },
+      })
+    )
+
+    expect(child.parentThreadId).toBe(parent.id)
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: parent.id },
+        })
+      ).childThreads.map((thread) => thread.id)
+    ).toEqual([child.id])
+
+    const events: string[] = []
+    const unsubscribe = runtime.subscribe((event) => {
+      if (event.type === "thread.changed") events.push(event.threadId)
+    })
+    await runtime.request({
+      method: "turn.start",
+      params: { threadId: child.id, prompt: "Look for the quasar invoice" },
+    })
+    events.length = 0
+    harness.runs[0]?.emit({
+      type: "usage.updated",
+      usage: { usedTokens: 128, maxTokens: 4_096 },
+    })
+    await waitFor(() => Promise.resolve(events.includes(parent.id)))
+    harness.runs[0]?.emit({
+      type: "message.delta",
+      text: "Found quasar in billing",
+    })
+    harness.runs[0]?.emit({ type: "turn.completed" })
+    harness.runs[0]?.finish()
+    await waitFor(async () => {
+      const current = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: child.id },
+        })
+      )
+      return current.thread.status === "idle"
+    })
+    unsubscribe()
+
+    const results = unwrap(
+      await runtime.request({
+        method: "thread.search",
+        params: {
+          originThreadId: parent.id,
+          query: "quasar",
+          scope: "project",
+          limit: 10,
+        },
+      })
+    )
+    expect(results).toHaveLength(1)
+    expect(results[0]?.thread.id).toBe(child.id)
+    expect(results[0]?.excerpt).toContain("quasar")
+
+    unwrap(
+      await runtime.request({
+        method: "thread.delete",
+        params: { threadId: parent.id },
+      })
+    )
+    const deletedChild = await runtime.request({
+      method: "thread.get",
+      params: { threadId: child.id },
+    })
+    expect(deletedChild.ok).toBe(false)
+    await runtime.close()
+  })
+
+  it("enforces background task fan-out and depth inside storage", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [new ScriptedHarness({ id: "codex", name: "Codex" })],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const parent = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "codex" },
+      })
+    )
+
+    const attempts = await Promise.all(
+      Array.from({ length: maximumThreadChildren + 1 }, (_, index) =>
+        runtime.request({
+          method: "thread.create",
+          params: {
+            projectId: project.id,
+            harnessId: "codex",
+            parentThreadId: parent.id,
+            title: `Child ${index + 1}`,
+          },
+        })
+      )
+    )
+    const children = attempts.filter((attempt) => attempt.ok)
+    const rejected = attempts.filter((attempt) => !attempt.ok)
+    expect(children).toHaveLength(maximumThreadChildren)
+    expect(rejected).toMatchObject([
+      { ok: false, error: { code: "thread-child-limit" } },
+    ])
+
+    const firstChild = children[0]
+    if (!firstChild?.ok) throw new Error("Expected a background task")
+    const grandchild = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "codex",
+          parentThreadId: firstChild.data.id,
+        },
+      })
+    )
+    const tooDeep = await runtime.request({
+      method: "thread.create",
+      params: {
+        projectId: project.id,
+        harnessId: "codex",
+        parentThreadId: grandchild.id,
+      },
+    })
+    expect(tooDeep).toMatchObject({
+      ok: false,
+      error: { code: "thread-depth-limit" },
+    })
     await runtime.close()
   })
 

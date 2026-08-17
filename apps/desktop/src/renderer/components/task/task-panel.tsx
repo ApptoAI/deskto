@@ -19,7 +19,7 @@ import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type { Activity, Artifact, TurnOutput } from "@deskto/protocol"
+import type { Activity, Artifact, Thread, TurnOutput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -84,12 +84,16 @@ const taskPanelWidthSchema = z
 export function TaskPanel({
   threadId,
   activities,
+  childThreads,
   files,
+  onOpenThread,
   onClose,
 }: {
   threadId: string
   activities: Activity[]
+  childThreads: Thread[]
   files: QueryState<TurnOutput[]>
+  onOpenThread: (threadId: string) => void
   onClose: () => void
 }) {
   const outputs = files.status === "ready" ? files.data : undefined
@@ -117,7 +121,12 @@ export function TaskPanel({
     () => summarizeActivities(activities),
     [activities]
   )
-  const runningAgents = activitySummary.working
+  const runningAgents =
+    activitySummary.working +
+    childThreads.filter(
+      (thread) =>
+        thread.status === "running" || thread.status === "waiting-approval"
+    ).length
   const [panelWidth, setPanelWidth] = useLocalStorage(
     // The key still says results: the width a user dragged is theirs, and a
     // rename is no reason to hand it back.
@@ -288,6 +297,8 @@ export function TaskPanel({
       ) : panel.surface === "activities" ? (
         <ActivityPanel
           summary={activitySummary}
+          childThreads={childThreads}
+          onOpenThread={onOpenThread}
           onOpenFiles={() => showFilesOverview(threadId)}
         />
       ) : files.status === "error" ? (

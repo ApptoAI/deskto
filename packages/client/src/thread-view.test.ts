@@ -30,6 +30,7 @@ function view(overrides: Partial<ThreadView> = {}): ThreadView {
     thread: {
       id: "t1",
       projectId: "p1",
+      parentThreadId: null,
       title: "Task",
       harnessId: "scripted",
       status: "running",
@@ -50,6 +51,7 @@ function view(overrides: Partial<ThreadView> = {}): ThreadView {
       createdAt: "2026-08-14T10:00:00.000Z",
       updatedAt: "2026-08-14T10:00:00.000Z",
     },
+    childThreads: [],
     messages: [baseMessage],
     activities: [baseActivity],
     seq: 5,

@@ -88,14 +88,18 @@ export class Runtime implements RuntimeTransport {
       userSettings,
       options.sessionTools ?? [],
       {
-        changed: (threadId) => this.#emit({ type: "thread.changed", threadId }),
-        delta: (threadId, change) =>
+        changed: (threadId) => this.#emitThreadChanged(threadId),
+        delta: (threadId, change) => {
           this.#emit({
             type: "thread.delta",
             threadId,
             seq: sequences.next(threadId),
             change,
-          }),
+          })
+          if (change.type === "thread.updated") {
+            this.#emitParentThreadChanged(threadId)
+          }
+        },
         artifactsChanged: (threadId) =>
           this.#emit({ type: "artifact.changed", threadId }),
       }
@@ -109,8 +113,7 @@ export class Runtime implements RuntimeTransport {
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),
-        threadChanged: (threadId) =>
-          this.#emit({ type: "thread.changed", threadId }),
+        threadChanged: (threadId) => this.#emitThreadChanged(threadId),
         threadDeleted: (threadId) =>
           this.#emit({ type: "thread.deleted", threadId }),
         artifactsChanged: (threadId) =>
@@ -144,6 +147,22 @@ export class Runtime implements RuntimeTransport {
       } catch {
         continue
       }
+    }
+  }
+
+  #emitThreadChanged(threadId: string): void {
+    this.#emit({ type: "thread.changed", threadId })
+    this.#emitParentThreadChanged(threadId)
+  }
+
+  #emitParentThreadChanged(threadId: string): void {
+    try {
+      const parentThreadId = this.#store.threads.parentId(threadId)
+      if (parentThreadId) {
+        this.#emit({ type: "thread.changed", threadId: parentThreadId })
+      }
+    } catch {
+      // A delete announces its own lifecycle and resolves the parent first.
     }
   }
 }

@@ -115,6 +115,11 @@ export class TurnCoordinator {
     this.events.changed(threadId)
   }
 
+  #settleRun(threadId: string, run: StartingRun | ActiveRun): void {
+    if (this.#runs.get(threadId) !== run) return
+    this.#runs.delete(threadId)
+  }
+
   async start(threadId: string, input: TurnInput): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
       throw new RuntimeError(
@@ -148,6 +153,8 @@ export class TurnCoordinator {
           harnessId: turn.harnessId,
           threadId,
           turnId: turn.turnId,
+          projectId: thread.project_id,
+          workspaceId: turn.workspaceId,
           projectPath: turn.projectPath,
         },
         starting.controller.signal
@@ -241,7 +248,7 @@ export class TurnCoordinator {
         )
         this.#changed(threadId)
       }
-      if (this.#runs.get(threadId) === starting) this.#runs.delete(threadId)
+      this.#settleRun(threadId, starting)
     }
 
     return this.store.threads.view(threadId)
@@ -256,7 +263,7 @@ export class TurnCoordinator {
       run.cancelled = true
       run.controller.abort()
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
-      this.#runs.delete(threadId)
+      this.#settleRun(threadId, run)
       await run.tools?.close()
       this.#changed(threadId)
       return this.store.threads.view(threadId)
@@ -280,7 +287,7 @@ export class TurnCoordinator {
       )
       this.#changed(threadId)
       await run.outputs?.finish()
-      this.#runs.delete(threadId)
+      this.#settleRun(threadId, run)
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -294,7 +301,7 @@ export class TurnCoordinator {
       this.#changed(threadId)
     }
     await run.outputs?.finish()
-    this.#runs.delete(threadId)
+    this.#settleRun(threadId, run)
     return this.store.threads.view(threadId)
   }
 
@@ -370,6 +377,7 @@ export class TurnCoordinator {
         run.controller.abort()
         this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
         await run.tools?.close()
+        this.#settleRun(threadId, run)
         continue
       }
       this.#flush(run)
@@ -385,6 +393,7 @@ export class TurnCoordinator {
           this.#terminalMessageId(run)
         )
       }
+      this.#settleRun(threadId, run)
     }
     this.#runs.clear()
   }
@@ -426,9 +435,7 @@ export class TurnCoordinator {
       // files that this one could claim.
       await run.tools.close()
       if (!run.cancelled) await run.outputs?.finish()
-      if (!run.cancelled && this.#runs.get(threadId) === run) {
-        this.#runs.delete(threadId)
-      }
+      if (!run.cancelled) this.#settleRun(threadId, run)
     }
   }
 

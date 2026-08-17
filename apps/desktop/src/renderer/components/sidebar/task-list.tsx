@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { ComponentProps, ReactNode } from "react"
 import { z } from "zod"
 import CheckIcon from "lucide-react/dist/esm/icons/check"
@@ -118,6 +118,23 @@ export function TaskList({
   // The confirmation lives with the list, not the row: a row remounts when its
   // task changes section, and a dialog inside it would vanish mid-decision.
   const [deleteTarget, setDeleteTarget] = useState<Thread | null>(null)
+  const threadTree = useMemo(() => {
+    const threads = state.status === "ready" ? state.data : []
+    const ids = new Set(threads.map((thread) => thread.id))
+    const children = new Map<string, Thread[]>()
+    for (const thread of threads) {
+      if (!thread.parentThreadId || !ids.has(thread.parentThreadId)) continue
+      const siblings = children.get(thread.parentThreadId) ?? []
+      siblings.push(thread)
+      children.set(thread.parentThreadId, siblings)
+    }
+    return {
+      roots: threads.filter(
+        (thread) => !thread.parentThreadId || !ids.has(thread.parentThreadId)
+      ),
+      children,
+    }
+  }, [state])
 
   if (state.status === "idle") {
     return <div id={taskListFocusTargetId} tabIndex={-1} />
@@ -151,7 +168,20 @@ export function TaskList({
     )
   }
 
-  const partition = partitionInbox(state.data, { now, autoDoneAfterDays })
+  const allPartition = partitionInbox(state.data, {
+    now,
+    autoDoneAfterDays,
+  })
+  const sectionByThreadId = new Map<string, InboxSection>()
+  for (const section of ["pinned", "active", "later", "done"] as const) {
+    for (const thread of allPartition[section]) {
+      sectionByThreadId.set(thread.id, section)
+    }
+  }
+  const partition = partitionInbox(threadTree.roots, {
+    now,
+    autoDoneAfterDays,
+  })
   const total =
     partition.pinned.length +
     partition.active.length +
@@ -168,9 +198,12 @@ export function TaskList({
   }
 
   const pagedDone = partition.done.slice(0, doneVisibleCount)
+  const containsOpenThread = (thread: Thread): boolean =>
+    thread.id === openThreadId ||
+    (threadTree.children.get(thread.id) ?? []).some(containsOpenThread)
   const openDoneBeyondPage = partition.done
     .slice(doneVisibleCount)
-    .find((thread) => thread.id === openThreadId)
+    .find(containsOpenThread)
   const doneRows = openDoneBeyondPage
     ? [...pagedDone, openDoneBeyondPage]
     : pagedDone
@@ -179,25 +212,37 @@ export function TaskList({
   // the minute tick keeps them fresh enough for menus opened later.
   const snoozePresets = resolveSnoozePresets(new Date())
 
-  const renderRow = (thread: Thread, section: InboxSection) => (
-    <TaskRow
-      key={thread.id}
-      thread={thread}
-      section={section}
-      now={now}
-      isOpen={thread.id === openThreadId}
-      onOpenThread={onOpenThread}
-      actions={actions}
-      snoozePresets={snoozePresets}
-      projectName={projectNameById?.get(thread.projectId)}
-      onRequestDelete={setDeleteTarget}
-    />
-  )
+  const renderRow = (
+    thread: Thread,
+    section: InboxSection,
+    depth = 0
+  ): ReactNode => {
+    const displaySection = sectionByThreadId.get(thread.id) ?? section
+    return (
+      <Fragment key={thread.id}>
+        <TaskRow
+          thread={thread}
+          section={displaySection}
+          now={now}
+          isOpen={thread.id === openThreadId}
+          nested={depth > 0}
+          onOpenThread={onOpenThread}
+          actions={actions}
+          snoozePresets={snoozePresets}
+          projectName={projectNameById?.get(thread.projectId)}
+          onRequestDelete={setDeleteTarget}
+        />
+        {(threadTree.children.get(thread.id) ?? []).map((child) =>
+          renderRow(child, displaySection, depth + 1)
+        )}
+      </Fragment>
+    )
+  }
 
   // The open task must stay in view even when its shelf is collapsed,
   // otherwise the task on screen would have no row at all in the sidebar.
   const ghostRow = (rows: Thread[], expanded: boolean) =>
-    expanded ? undefined : rows.find((thread) => thread.id === openThreadId)
+    expanded ? undefined : rows.find(containsOpenThread)
 
   return (
     <div id={taskListFocusTargetId} tabIndex={-1} className="px-2">
@@ -364,6 +409,7 @@ function TaskRow({
   section,
   now,
   isOpen,
+  nested,
   onOpenThread,
   actions,
   snoozePresets,
@@ -374,6 +420,7 @@ function TaskRow({
   section: InboxSection
   now: string
   isOpen: boolean
+  nested: boolean
   onOpenThread: (threadId: string) => void
   actions: InboxActions
   snoozePresets: readonly SnoozePreset[]
@@ -426,7 +473,8 @@ function TaskRow({
             "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
             "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",
-            isOpen ? sidebarRowSelected : sidebarRowIdle
+            isOpen ? sidebarRowSelected : sidebarRowIdle,
+            nested && "ml-4 w-[calc(100%-1rem)]"
           )}
         >
           <span

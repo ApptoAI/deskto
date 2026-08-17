@@ -4,11 +4,13 @@ import path from "node:path"
 import { app, BrowserWindow, dialog, shell } from "electron"
 import { z } from "zod"
 
+import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
 import {
   BrowserMcpServer,
   ClaudeAdapter,
   CodexAdapter,
   createRuntime,
+  type SessionToolProvider,
 } from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
@@ -26,6 +28,40 @@ const fatalStartupDetailSchema = z
   .catch("The application failed to start")
 
 let closeRuntime: (() => Promise<void>) | undefined
+
+type McpServerReference = { current: DesktoMcpServer | undefined }
+
+function taskOrchestrationProvider(
+  reference: McpServerReference
+): SessionToolProvider {
+  return {
+    open(input) {
+      const server = reference.current
+      if (!server) return Promise.resolve(undefined)
+      const connection = server.connectionFor(input)
+      let closed = false
+      return Promise.resolve({
+        mcpServers: [
+          {
+            id: connection.id,
+            url: connection.url,
+            authorization: {
+              type: "bearer" as const,
+              token: connection.authorizationToken,
+            },
+          },
+        ],
+        close() {
+          if (!closed) {
+            closed = true
+            server.revokeTurn(input.turnId)
+          }
+          return Promise.resolve()
+        },
+      })
+    },
+  }
+}
 
 function packagedClaudeExecutable(): string | undefined {
   if (!app.isPackaged) return undefined
@@ -79,6 +115,7 @@ async function openApplication(): Promise<void> {
     : new ClaudeAdapter({
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
+  const mcpServerRef: McpServerReference = { current: undefined }
   let runtime: ReturnType<typeof createRuntime>
   try {
     runtime = createRuntime({
@@ -86,7 +123,7 @@ async function openApplication(): Promise<void> {
       packsPath: path.join(app.getPath("userData"), "packs"),
       harnesses: [claudeAdapter, new CodexAdapter()],
       probeGate: cliPathConfigured,
-      sessionTools: [browserMcp],
+      sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],
       fileActions: {
         trashItem: (targetPath) => shell.trashItem(targetPath),
       },
@@ -96,13 +133,32 @@ async function openApplication(): Promise<void> {
     browser.close()
     throw error
   }
-  // Install the cleanup path before IPC subscriptions so a later startup
-  // failure still closes the runtime and Browser resources.
+  // Install cleanup before the orchestration server starts so a startup
+  // failure still closes the Runtime and Browser resources.
   closeRuntime = async () => {
-    await runtime.close()
-    await browserMcp.close()
+    await Promise.allSettled([runtime.close(), browserMcp.close()])
     browser.close()
   }
+  let mcpServer: DesktoMcpServer
+  try {
+    mcpServer = await startDesktoMcpServer({ runtime })
+    mcpServerRef.current = mcpServer
+  } catch (error) {
+    const close = closeRuntime
+    closeRuntime = undefined
+    await close()
+    throw error
+  }
+  const closeApplicationRuntime = async () => {
+    mcpServerRef.current = undefined
+    await Promise.allSettled([
+      runtime.close(),
+      mcpServer.close(),
+      browserMcp.close(),
+    ])
+    browser.close()
+  }
+  closeRuntime = closeApplicationRuntime
   // File actions resolve results through the runtime, so they register once
   // it exists rather than at startup.
   registerDesktopIpc(runtime, browser)
@@ -113,9 +169,7 @@ async function openApplication(): Promise<void> {
   closeRuntime = async () => {
     unsubscribeBrowserRuntime()
     unregisterRuntimeIpc()
-    await runtime.close()
-    await browserMcp.close()
-    browser.close()
+    await closeApplicationRuntime()
   }
 }
 
