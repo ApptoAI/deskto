@@ -1,4 +1,8 @@
-export { RuntimeClient, RuntimeClientError } from "./client.js"
+export {
+  RuntimeClient,
+  RuntimeClientError,
+  type SkillLookupContext,
+} from "./client.js"
 export {
   detectComposerTrigger,
   filterSkills,

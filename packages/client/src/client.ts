@@ -6,9 +6,12 @@ import type {
   RuntimeMethod,
   RuntimeResponses,
   RuntimeTransport,
+  SkillLookupContext,
 } from "@deskto/protocol"
 import { turnInputSchema } from "@deskto/protocol"
 import type { TurnInput } from "@deskto/protocol"
+
+export type { SkillLookupContext } from "@deskto/protocol"
 
 export class RuntimeClientError extends Error {
   constructor(
@@ -155,14 +158,21 @@ export class RuntimeClient {
     })
   }
 
+  listSkillsForWorkspace(workspaceId: string) {
+    return this.request({
+      method: "skill.listForWorkspace",
+      params: { workspaceId },
+    })
+  }
+
   listSkillsOnComputer() {
     return this.request({ method: "skill.listOnComputer", params: {} })
   }
 
-  getSkill(occurrenceId: string, projectId?: string) {
+  getSkill(occurrenceId: string, context?: SkillLookupContext) {
     return this.request({
       method: "skill.get",
-      params: { occurrenceId, projectId },
+      params: { occurrenceId, ...context },
     })
   }
 

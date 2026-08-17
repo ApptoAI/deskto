@@ -105,3 +105,7 @@ export const skillDetailsSchema = z.object({
 })
 
 export type SkillDetails = z.infer<typeof skillDetailsSchema>
+
+export type SkillLookupContext =
+  | { projectId: string; workspaceId?: never }
+  | { workspaceId: string; projectId?: never }

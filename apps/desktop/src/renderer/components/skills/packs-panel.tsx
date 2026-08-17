@@ -1,10 +1,5 @@
 import { useState } from "react"
-import {
-  mySkillsPackName,
-  type ManagedSkillDraft,
-  type Pack,
-  type Workspace,
-} from "@deskto/protocol"
+import type { Pack, Workspace } from "@deskto/protocol"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import FileArchiveIcon from "lucide-react/dist/esm/icons/file-archive"
@@ -21,7 +16,6 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Switch } from "@workspace/ui/components/switch"
-import { Textarea } from "@workspace/ui/components/textarea"
 
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { openFolder } from "../../lib/desktop.js"
@@ -34,7 +28,6 @@ export type PackActions = {
   onLink: () => Promise<void>
   onUnlink: (packId: string) => Promise<void>
   onUninstall: (packId: string) => Promise<void>
-  onCreateSkill: (draft: ManagedSkillDraft) => Promise<void>
 }
 
 export function PacksPanel({
@@ -49,10 +42,6 @@ export function PacksPanel({
   const [newPackName, setNewPackName] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
   const [removing, setRemoving] = useState<Pack | null>(null)
-  const [creatingSkill, setCreatingSkill] = useState(false)
-  const [skillName, setSkillName] = useState("")
-  const [skillDescription, setSkillDescription] = useState("")
-  const [skillInstructions, setSkillInstructions] = useState("")
 
   async function run(key: string, action: () => Promise<void>) {
     setBusy(key)
@@ -121,14 +110,6 @@ export function PacksPanel({
         >
           <PlusIcon data-icon="inline-start" />
           Create
-        </Button>
-        <Button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => setCreatingSkill(true)}
-        >
-          <PlusIcon data-icon="inline-start" />
-          New skill
         </Button>
         <Button
           type="button"
@@ -284,78 +265,6 @@ export function PacksPanel({
               }}
             >
               {removing?.kind === "managed" ? "Move to Trash" : "Unlink"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={creatingSkill}
-        onOpenChange={(open) => setCreatingSkill(open)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create a skill</DialogTitle>
-            <DialogDescription>
-              Deskto will save it in the managed {mySkillsPackName} Pack and use
-              that Pack in this workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={skillName}
-              onChange={(event) => setSkillName(event.target.value)}
-              placeholder="Skill name"
-              aria-label="Skill name"
-              autoFocus
-            />
-            <Input
-              value={skillDescription}
-              onChange={(event) => setSkillDescription(event.target.value)}
-              placeholder="When should an agent use it?"
-              aria-label="Skill description"
-            />
-            <Textarea
-              value={skillInstructions}
-              onChange={(event) => setSkillInstructions(event.target.value)}
-              placeholder="Write the instructions for the agent"
-              aria-label="Skill instructions"
-              className="min-h-36"
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setCreatingSkill(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                busy !== null ||
-                !skillName.trim() ||
-                !skillDescription.trim() ||
-                !skillInstructions.trim()
-              }
-              onClick={() => {
-                void run("create-skill", () =>
-                  actions.onCreateSkill({
-                    name: skillName,
-                    description: skillDescription,
-                    instructions: skillInstructions,
-                  })
-                ).then((created) => {
-                  if (!created) return
-                  setCreatingSkill(false)
-                  setSkillName("")
-                  setSkillDescription("")
-                  setSkillInstructions("")
-                })
-              }}
-            >
-              Create skill
             </Button>
           </DialogFooter>
         </DialogContent>

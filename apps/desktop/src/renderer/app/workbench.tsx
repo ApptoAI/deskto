@@ -27,9 +27,9 @@ import { SettingsSidebar } from "../components/settings/settings-sidebar.js"
 import { SettingsView } from "../components/settings/settings-view.js"
 import { SkillsView } from "../components/skills/skills-view.js"
 import {
-  firstSkillsTab,
-  type SkillsTab,
-} from "../components/skills/skills-tabs.js"
+  firstSkillsFilter,
+  type SkillsFilter,
+} from "../components/skills/skills-filters.js"
 import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
 import { StatusPanel } from "../components/status-panel.js"
@@ -97,13 +97,12 @@ export function Workbench() {
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
-  // Pack scans stand down until the dedicated Pack view is open.
+  // Pack scans stand down outside Skills. The library needs them for its
+  // source manager and for creating skills in the managed My Skills Pack.
+  const skillsOpen = view.kind === "skills"
   const loadPacks = useMemo(
-    () =>
-      view.kind === "skills" && view.tab === "packs"
-        ? () => client.listPacks()
-        : null,
-    [client, view]
+    () => (skillsOpen ? () => client.listPacks() : null),
+    [client, skillsOpen]
   )
   const packsQuery = useRuntimeQuery(loadPacks)
 
@@ -367,12 +366,12 @@ export function Workbench() {
   }
 
   function openSkills() {
-    setView({ kind: "skills", tab: firstSkillsTab })
+    setView({ kind: "skills", filter: firstSkillsFilter })
   }
 
-  function selectSkillsTab(tab: SkillsTab) {
+  function selectSkillsFilter(filter: SkillsFilter) {
     setView((current) =>
-      current.kind === "skills" ? { ...current, tab } : current
+      current.kind === "skills" ? { ...current, filter } : current
     )
   }
 
@@ -510,7 +509,9 @@ export function Workbench() {
       reportErrors(async () => {
         if (!activeWorkspaceId) return
         const currentPacks =
-          packsQuery.state.status === "ready" ? packsQuery.state.data : []
+          packsQuery.state.status === "ready"
+            ? packsQuery.state.data
+            : await client.listPacks()
         const mySkills =
           currentPacks.find(
             (pack) => pack.canEditSkills && pack.name === mySkillsPackName
@@ -617,12 +618,13 @@ export function Workbench() {
           </Screen>
         ) : view.kind === "skills" ? (
           <SkillsView
-            tab={view.tab}
+            filter={view.filter}
             project={activeProject}
             workspace={activeWorkspace}
             packs={packsQuery}
             packActions={packActions}
-            onSelectTab={selectSkillsTab}
+            onCreateSkill={packActions.onCreateSkill}
+            onSelectFilter={selectSkillsFilter}
           />
         ) : !activeProject ? (
           <Screen>

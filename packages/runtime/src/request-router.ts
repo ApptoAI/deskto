@@ -219,13 +219,19 @@ export class RequestRouter {
       }
       case "skill.listForProject":
         return this.#skillInventory.listForProject(request.params.projectId)
+      case "skill.listForWorkspace":
+        return this.#skillInventory.listForWorkspace(request.params.workspaceId)
       case "skill.listOnComputer":
         return this.#skillInventory.listOnComputer()
-      case "skill.get":
-        return this.#skillInventory.get(
-          request.params.occurrenceId,
-          request.params.projectId
-        )
+      case "skill.get": {
+        const context =
+          "projectId" in request.params
+            ? { projectId: request.params.projectId }
+            : "workspaceId" in request.params
+              ? { workspaceId: request.params.workspaceId }
+              : undefined
+        return this.#skillInventory.get(request.params.occurrenceId, context)
+      }
       case "skill.createManaged": {
         const skill = await this.packManager.createSkill(
           request.params.packId,

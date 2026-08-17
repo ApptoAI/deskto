@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import type {
   SkillDetails,
   SkillInventory as SkillInventoryRecord,
+  SkillLookupContext,
   SkillSource,
 } from "@deskto/protocol"
 
@@ -40,13 +41,22 @@ export class SkillInventory {
     return (await this.#scanForProject(projectId)).inventory
   }
 
+  async listForWorkspace(workspaceId: string): Promise<SkillInventoryRecord> {
+    return (await this.#scanForWorkspace(workspaceId)).inventory
+  }
+
   async listOnComputer(): Promise<SkillInventoryRecord> {
     return (await this.#scanOnComputer()).inventory
   }
 
-  async get(occurrenceId: string, projectId?: string): Promise<SkillDetails> {
-    const scan = projectId
-      ? await this.#scanForProject(projectId)
+  async get(
+    occurrenceId: string,
+    context?: SkillLookupContext
+  ): Promise<SkillDetails> {
+    const scan = context
+      ? context.projectId !== undefined
+        ? await this.#scanForProject(context.projectId)
+        : await this.#scanForWorkspace(context.workspaceId)
       : await this.#scanOnComputer()
     const skill = scan.skills.find(
       ({ occurrence }) => occurrence.id === occurrenceId
@@ -66,27 +76,14 @@ export class SkillInventory {
       project.id
     )
     const native = await this.#nativeSources(project.path, "all")
-    const packs = this.store.packs
-      .attachedToWorkspace(project.workspaceId)
-      .map((pack): SourceToScan => {
-        const path = skillsDirectory(pack.path)
-        return {
-          source: {
-            id: pack.id,
-            kind: "pack",
-            scopes: ["workspace"],
-            label: pack.name,
-            path,
-            harnessIds: this.harnesses.harnessIds(),
-            packId: pack.id,
-            packKind: pack.kind,
-            editable: canEditManagedSkills(pack),
-            provisioning: latestProvisioning.get(pack.id) ?? [],
-          },
-          missingIsDiagnostic: true,
-        }
-      })
+    const packs = this.#packSources(project.workspaceId, latestProvisioning)
     return this.#scan(project.id, [...native, ...packs])
+  }
+
+  async #scanForWorkspace(workspaceId: string): Promise<InventoryScan> {
+    this.store.workspaces.get(workspaceId)
+    const native = await this.#nativeSources(null, "computer")
+    return this.#scan(null, [...native, ...this.#packSources(workspaceId)])
   }
 
   async #scanOnComputer(): Promise<InventoryScan> {
@@ -120,6 +117,32 @@ export class SkillInventory {
           }
         })
     )
+  }
+
+  #packSources(
+    workspaceId: string,
+    provisioning: ReadonlyMap<string, SkillSource["provisioning"]> = new Map()
+  ): SourceToScan[] {
+    return this.store.packs
+      .attachedToWorkspace(workspaceId)
+      .map((pack): SourceToScan => {
+        const path = skillsDirectory(pack.path)
+        return {
+          source: {
+            id: pack.id,
+            kind: "pack",
+            scopes: ["workspace"],
+            label: pack.name,
+            path,
+            harnessIds: this.harnesses.harnessIds(),
+            packId: pack.id,
+            packKind: pack.kind,
+            editable: canEditManagedSkills(pack),
+            provisioning: provisioning.get(pack.id) ?? [],
+          },
+          missingIsDiagnostic: true,
+        }
+      })
   }
 
   async #scan(
