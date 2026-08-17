@@ -37,7 +37,7 @@ function Plan({
       {...props}
     >
       <p className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-medium">{title}</span>
+        <span className="text-ui font-medium">{title}</span>
         <span className="text-muted-foreground tabular-nums">
           {done}/{steps.length}
         </span>

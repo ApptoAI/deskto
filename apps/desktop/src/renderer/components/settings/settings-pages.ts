@@ -36,7 +36,7 @@ export const settingsPages = {
   },
   appearance: {
     label: "Appearance",
-    description: "Choose the palette Deskto wears.",
+    description: "Choose the theme, workspace layout, and text size.",
     icon: ContrastIcon,
   },
   shortcuts: {

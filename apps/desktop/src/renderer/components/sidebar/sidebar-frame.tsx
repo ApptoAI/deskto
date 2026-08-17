@@ -1,15 +1,34 @@
 import type { ReactNode } from "react"
 
+import { cn } from "@workspace/ui/lib/utils"
+
 import { DesktoLockup } from "../deskto-logo.js"
 
+const sidebarWidthClass = {
+  default: "w-72 xl:w-80",
+  compact: "w-64",
+  "rail-stack": "w-82",
+} as const
+
 /**
- * The chrome both sidebars share: fixed width, the window drag strip, and the
- * lockup. Settings swaps one sidebar for the other, so the two have to line up
- * pixel for pixel across the swap.
+ * The chrome both sidebars share: width, the window drag strip, and the lockup.
+ * Settings replaces the workspace chrome, so rail-stack reserves the combined
+ * width of the rail and compact project sidebar.
  */
-export function SidebarFrame({ children }: { children: ReactNode }) {
+export function SidebarFrame({
+  children,
+  width = "default",
+}: {
+  children: ReactNode
+  width?: keyof typeof sidebarWidthClass
+}) {
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-sidebar xl:w-80">
+    <aside
+      className={cn(
+        "flex shrink-0 flex-col border-r border-border bg-sidebar",
+        sidebarWidthClass[width]
+      )}
+    >
       {/* Traffic lights sit at the left of this strip, so the logo takes the
           right. Still a drag region — the svg is not an interactive target. */}
       <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">

@@ -96,8 +96,7 @@ export function SkillsView({
   const inventoryData =
     inventory.state.status === "ready" ? inventory.state.data : null
   const effectiveFilter =
-    (filter === "project" && !project) ||
-    (filter === "workspace" && !workspace)
+    (filter === "project" && !project) || (filter === "workspace" && !workspace)
       ? "all"
       : filter
   const items = useMemo(
@@ -229,7 +228,7 @@ export function SkillsView({
                   onSelect={selectItem}
                 />
               </div>
-              <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+              <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2 text-micro text-muted-foreground">
                 <span>
                   {items.length === 1 ? "1 skill" : `${items.length} skills`}
                 </span>

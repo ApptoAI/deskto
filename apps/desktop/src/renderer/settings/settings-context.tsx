@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react"
 import {
@@ -34,12 +35,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const load = useCallback(() => client.getSettings(), [client])
   const query = useRuntimeQuery(load)
   const { revalidate, replace } = query
+  const updateQueue = useRef<Promise<void>>(Promise.resolve())
 
   useSettingsChanged(useCallback(() => revalidate(), [revalidate]))
 
   const update = useCallback(
-    async (entries: SettingValues) => {
-      replace(await client.updateSettings(entries))
+    (entries: SettingValues) => {
+      const request = updateQueue.current.then(() =>
+        client.updateSettings(entries)
+      )
+      updateQueue.current = request.then(
+        (nextSnapshot) => replace(nextSnapshot),
+        () => undefined
+      )
+      return request.then(() => undefined)
     },
     [client, replace]
   )
