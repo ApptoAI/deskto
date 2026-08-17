@@ -264,10 +264,6 @@ function TimelineMinimap({
             className="absolute top-1/2 left-0 block w-full -translate-y-1/2"
             style={{ height: minimapTrackHeightStyle(items.length) }}
           >
-            <span
-              aria-hidden
-              className="absolute top-0 left-3 h-full w-px bg-border/40"
-            />
             {items.map((item, tickIndex) => {
               const distance =
                 index === null ? null : Math.abs(tickIndex - index)
