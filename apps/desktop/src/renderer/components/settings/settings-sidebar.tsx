@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
+import type { WorkspaceLayout } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -21,10 +22,12 @@ import {
  */
 export function SettingsSidebar({
   page,
+  workspaceLayout,
   onSelectPage,
   onGoBack,
 }: {
   page: SettingsPageId
+  workspaceLayout: WorkspaceLayout
   onSelectPage: (page: SettingsPageId) => void
   onGoBack: () => void
 }) {
@@ -36,7 +39,9 @@ export function SettingsSidebar({
   }, [])
 
   return (
-    <SidebarFrame>
+    <SidebarFrame
+      width={workspaceLayout === "slack" ? "rail-stack" : "default"}
+    >
       <div className="no-drag px-2 pb-3">
         <Button
           ref={goBack}

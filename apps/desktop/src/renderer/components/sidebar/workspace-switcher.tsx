@@ -19,7 +19,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import { WorkspaceIcon, workspaceSwatch } from "../workspace/workspace-theme.js"
 
 /** The colored workspace tile, at header size or menu size. */
-function WorkspaceTile({
+export function WorkspaceTile({
   workspace,
   small,
 }: {
@@ -39,6 +39,22 @@ function WorkspaceTile({
         className={small ? "size-3" : "size-3.5"}
       />
     </span>
+  )
+}
+
+/** The workspace tile and name shared by both sidebar layouts. */
+export function WorkspaceHeaderLabel({
+  workspace,
+}: {
+  workspace: Workspace | null
+}) {
+  return (
+    <>
+      {workspace ? <WorkspaceTile workspace={workspace} /> : null}
+      <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
+        {workspace?.name ?? "Workspace"}
+      </span>
+    </>
   )
 }
 
@@ -85,10 +101,7 @@ export function WorkspaceSwitcher({
           />
         }
       >
-        {workspace ? <WorkspaceTile workspace={workspace} /> : null}
-        <span className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold tracking-tight">
-          {workspace?.name ?? "Workspace"}
-        </span>
+        <WorkspaceHeaderLabel workspace={workspace} />
         <ChevronsUpDownIcon
           data-icon="inline-end"
           className="text-muted-foreground"

@@ -11,8 +11,8 @@ export type SettingValue =
 export type SettingValues = { [key: string]: SettingValue }
 
 /** One selectable value in a `choice` setting, in the order it is offered. */
-export type SettingChoice = {
-  value: string
+export type SettingChoice<T extends string = string> = {
+  value: T
   label: string
   /** What picking this one means, when the label cannot say it alone. */
   description?: string
@@ -23,6 +23,7 @@ export type SettingInput =
   | { kind: "keybinding" }
   | { kind: "harness-model" }
   | { kind: "choice" }
+  | { kind: "range"; min: number; max: number; step: number; unit?: string }
 
 /** One configurable value: a stable key, a validated shape, and a default. */
 export interface SettingDefinition<T extends SettingValue> {

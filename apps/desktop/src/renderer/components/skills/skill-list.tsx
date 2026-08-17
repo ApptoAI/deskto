@@ -65,7 +65,7 @@ export function SkillList({
             <h2 id={`skill-group-${group}`} className="eyebrow">
               {skillCatalogGroupLabels[group]}
             </h2>
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span className="font-mono text-micro text-muted-foreground">
               {groupItems.length}
             </span>
           </div>
@@ -137,7 +137,7 @@ function SkillRow({
           <span className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {item.description ?? "Description could not be read."}
           </span>
-          <span className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="mt-1.5 flex items-center gap-2 text-micro text-muted-foreground">
             <span className="truncate">
               {harnesses.length > 0 ? harnesses.join(" · ") : "No agent"}
             </span>
@@ -179,7 +179,7 @@ function SourceIssues({ sources }: { sources: SkillInventory["sources"] }) {
               </span>{" "}
               {diagnostic.message}
               <span
-                className="mt-0.5 block truncate font-mono text-[11px]"
+                className="mt-0.5 block truncate font-mono text-micro"
                 title={diagnostic.path}
               >
                 {diagnostic.path}

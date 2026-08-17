@@ -79,7 +79,7 @@ export const ActivityPanel = memo(function ActivityPanel({
         </div>
       </div>
       {agents.length > 0 ? (
-        <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+        <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-1.5 text-micro text-muted-foreground">
           {working > 0 ? (
             <span className="tabular-nums">{working} working</span>
           ) : null}
@@ -116,14 +116,14 @@ function AgentCard({ node }: { node: ActivityNode }) {
         className="flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 text-left transition-colors duration-100 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
       >
         <SubagentBadge status={activity.status} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+        <span className="min-w-0 flex-1 truncate text-ui font-medium">
           {activity.name}
         </span>
         <AgentElapsed activity={activity} />
         {agentType ? (
           // A step above the card it sits on, since a chip filled with the
           // card's own colour would be an outline and nothing more.
-          <span className="inline-flex h-5.5 shrink-0 items-center rounded-md bg-muted px-1.5 font-mono text-[11px] text-muted-foreground ring-1 ring-border/70">
+          <span className="inline-flex h-5.5 shrink-0 items-center rounded-md bg-muted px-1.5 font-mono text-micro text-muted-foreground ring-1 ring-border/70">
             {agentType}
           </span>
         ) : null}
@@ -144,7 +144,7 @@ function AgentCard({ node }: { node: ActivityNode }) {
                 <NestedActivity key={child.activity.id} node={child} />
               ))
             ) : (
-              <p className="py-1 text-[11px] text-muted-foreground">
+              <p className="py-1 text-micro text-muted-foreground">
                 {running
                   ? "Working in a separate context."
                   : activity.status === "completed"

@@ -234,7 +234,7 @@ export function SkillDetailsPanel({
             <h2 id="skill-locations-heading" className="text-sm font-medium">
               Copies found
             </h2>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground">
               {item.occurrences.length}
             </span>
           </div>
@@ -262,12 +262,12 @@ export function SkillDetailsPanel({
                       {entry.source.label}
                     </span>
                     <span
-                      className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground"
+                      className="mt-0.5 block truncate font-mono text-micro text-muted-foreground"
                       title={entry.occurrence.directoryPath}
                     >
                       {entry.occurrence.directoryPath}
                     </span>
-                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                    <span className="mt-1 block text-micro text-muted-foreground">
                       {copyAvailabilityText(entry)}
                     </span>
                   </button>

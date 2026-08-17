@@ -134,7 +134,7 @@ export function ActivityLine({
       ) : activity.detail ? (
         <span
           className={cn(
-            "inline-flex h-5.5 min-w-0 items-center rounded-md bg-muted px-1.5 text-[11px] text-muted-foreground ring-1 ring-border/70",
+            "inline-flex h-5.5 min-w-0 items-center rounded-md bg-muted px-1.5 text-micro text-muted-foreground ring-1 ring-border/70",
             // The base layer only untracks `code` and friends, and this is a
             // plain span, so the body's negative tracking would follow the
             // mono face in here where the system tracks it the other way.
@@ -168,7 +168,7 @@ export function ActivityLine({
       <Collapse open={open}>
         <p
           className={cn(
-            "mt-0.5 mb-1 ml-[7px] border-l border-border py-0.5 pl-3.5 text-[11px] leading-relaxed break-all whitespace-pre-wrap text-muted-foreground",
+            "mt-0.5 mb-1 ml-[7px] border-l border-border py-0.5 pl-3.5 text-micro leading-relaxed break-all whitespace-pre-wrap text-muted-foreground",
             mono && "font-mono"
           )}
         >
@@ -298,7 +298,7 @@ function ElapsedText({
   return (
     <span
       className={cn(
-        "shrink-0 font-mono text-[11px] text-muted-foreground/80 tabular-nums",
+        "shrink-0 font-mono text-micro text-muted-foreground/80 tabular-nums",
         className
       )}
     >
@@ -358,7 +358,7 @@ function FileChip({
   // has no fill at all there. `tracking-normal` undoes the body's tracking,
   // which is tuned for Inter and would otherwise follow the mono face in.
   const className =
-    "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted px-1.5 font-mono text-[11px] tracking-normal ring-1 ring-border/70"
+    "inline-flex h-5.5 max-w-full min-w-0 items-center gap-1.5 rounded-md bg-muted px-1.5 font-mono text-micro tracking-normal ring-1 ring-border/70"
 
   if (!matchedFile) {
     return (
