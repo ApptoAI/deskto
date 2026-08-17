@@ -4,6 +4,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import {
   minimapHasPersistentGutter,
   minimapHeightStyle,
+  minimapHighlightedIndexes,
   minimapHitStripWidth,
   minimapIndexFromPointer,
   minimapMinItems,
@@ -92,30 +93,72 @@ function TimelineMinimap({
   // NUL, which no id can carry, so the key splits back to the same list.
   const anchorKey = items.map((item) => item.id).join("\0")
 
-  // Which stops are on screen, written straight onto the tick nodes. An
-  // observer fires only when a row crosses the edge, and skipping React here
-  // keeps the rail off the scroll path entirely.
+  // Highlight every prompt on screen. Between prompts, carry the preceding
+  // one through its reply so a long answer never leaves the rail unmarked.
+  // Scroll also refreshes the marks because a scrollbar-thumb jump can carry
+  // an anchor across the whole viewport without changing its observer state.
+  // DOM writes stay outside React and run at most once per animation frame.
   React.useEffect(() => {
     if (!viewport) return
 
     const ticks = ticksRef.current
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const id = entry.target.getAttribute(anchorAttribute)
-          const tick = id === null ? undefined : ticks.get(id)
-          if (tick)
-            tick.dataset.inView = entry.isIntersecting ? "true" : "false"
-        }
-      },
-      { root: viewport }
-    )
-
-    for (const id of anchorKey.split("\0")) {
+    const ids = anchorKey.split("\0")
+    const anchors = ids.flatMap((id) => {
       const anchor = viewport.querySelector(anchorSelector(id))
-      if (anchor) observer.observe(anchor)
+      return anchor instanceof HTMLElement ? [anchor] : []
+    })
+    let highlightedIds = new Set<string>()
+    const refreshHighlights = () => {
+      const viewportBounds = viewport.getBoundingClientRect()
+      const highlightedIndexes = minimapHighlightedIndexes({
+        anchorCount: anchors.length,
+        anchorAt: (index) => anchors[index]!.getBoundingClientRect(),
+        viewport: viewportBounds,
+      })
+      const nextIds = new Set(
+        highlightedIndexes.flatMap((index) => {
+          const id = anchors[index]?.getAttribute(anchorAttribute)
+          return id === null || id === undefined ? [] : [id]
+        })
+      )
+
+      for (const id of highlightedIds) {
+        if (nextIds.has(id)) continue
+        const tick = ticks.get(id)
+        if (tick) tick.dataset.inView = "false"
+      }
+      for (const id of nextIds) {
+        if (highlightedIds.has(id)) continue
+        const tick = ticks.get(id)
+        if (tick) tick.dataset.inView = "true"
+      }
+      highlightedIds = nextIds
     }
-    return () => observer.disconnect()
+
+    let frame: number | null = null
+    const scheduleRefresh = () => {
+      if (frame !== null) return
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        refreshHighlights()
+      })
+    }
+
+    refreshHighlights()
+    const observer = new IntersectionObserver(refreshHighlights, {
+      root: viewport,
+    })
+    for (const anchor of anchors) observer.observe(anchor)
+    viewport.addEventListener("scroll", scheduleRefresh, { passive: true })
+    return () => {
+      observer.disconnect()
+      viewport.removeEventListener("scroll", scheduleRefresh)
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      for (const id of highlightedIds) {
+        const tick = ticks.get(id)
+        if (tick) tick.dataset.inView = "false"
+      }
+    }
   }, [anchorKey, viewport])
 
   // Measured off the ticks, not the strip around them: the strip is padded out
