@@ -89,6 +89,7 @@ describe("codexTurnInput", () => {
           },
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: "/packs/review/SKILL.md",
           },

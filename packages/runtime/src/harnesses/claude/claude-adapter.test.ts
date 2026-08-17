@@ -73,6 +73,7 @@ describe("claudePrompt", () => {
         references: [
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: "/packs/review/SKILL.md",
           },
@@ -95,6 +96,33 @@ describe("claudePrompt", () => {
     ).toMatch(/^Use \/reviews-[a-f0-9]{8}:review on @src\/a\.ts$/)
   })
 
+  it("keeps a skill from Claude's own folder as its plain command", () => {
+    expect(
+      claudePrompt({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/repo",
+        prompt: "Use $animate here",
+        references: [
+          {
+            kind: "skill",
+            origin: "native",
+            name: "animate",
+            path: "/home/user/.claude/skills/animate/SKILL.md",
+          },
+        ],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [{ name: "Reviews", path: "/packs" }],
+        },
+      })
+    ).toBe("Use /animate here")
+  })
+
   it("does not translate a selected skill inside a longer token", () => {
     expect(
       claudePrompt({
@@ -105,6 +133,7 @@ describe("claudePrompt", () => {
         references: [
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: "/packs/review/SKILL.md",
           },
@@ -131,6 +160,7 @@ describe("claudePrompt", () => {
         references: [
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: `${packPath}/skills/review/SKILL.md`,
           },
@@ -162,6 +192,7 @@ describe("claudePrompt", () => {
         references: [
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: "/detached/review/SKILL.md",
           },
@@ -188,6 +219,7 @@ describe("claudePrompt", () => {
         references: [
           {
             kind: "skill",
+            origin: "pack",
             name: "review",
             path: "/packs/nested/skills/review/SKILL.md",
           },

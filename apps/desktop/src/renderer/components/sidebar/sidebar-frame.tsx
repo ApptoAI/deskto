@@ -32,7 +32,10 @@ export function SidebarFrame({
       {/* Traffic lights sit at the left of this strip, so the logo takes the
           right. Still a drag region — the svg is not an interactive target. */}
       <div className="drag-region flex h-13 shrink-0 items-center justify-end px-3">
-        <DesktoLockup className="h-[15px] w-auto text-foreground/70" />
+        {/* Sized by the lettering, not the whole lockup: the mark overshoots
+            the cap height on both sides, so matching the old 15px overall
+            would have set the word two steps smaller than it used to read. */}
+        <DesktoLockup className="h-[18px] w-auto text-foreground/70" />
       </div>
       {children}
     </aside>

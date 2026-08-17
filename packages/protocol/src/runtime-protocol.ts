@@ -13,6 +13,7 @@ import {
   messageSchema,
   packSchema,
   packSkillSchema,
+  promptSkillSchema,
   preferencesSchema,
   projectEntrySchema,
   selectionSchema,
@@ -129,8 +130,8 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     }),
   }),
   z.object({
-    method: z.literal("workspace.listSkills"),
-    params: z.object({ workspaceId: z.string().min(1) }),
+    method: z.literal("skill.listForPrompt"),
+    params: z.object({ projectId: z.string().min(1) }),
   }),
   z.object({
     method: z.literal("skill.listForProject"),
@@ -330,7 +331,7 @@ export interface RuntimeResponses {
   "pack.unlink": null
   "pack.uninstall": null
   "workspace.setPack": null
-  "workspace.listSkills": z.infer<typeof packSkillSchema>[]
+  "skill.listForPrompt": z.infer<typeof promptSkillSchema>[]
   "skill.listForProject": z.infer<typeof skillInventorySchema>
   "skill.listForWorkspace": z.infer<typeof skillInventorySchema>
   "skill.listOnComputer": z.infer<typeof skillInventorySchema>

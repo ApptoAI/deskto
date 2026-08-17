@@ -46,9 +46,15 @@ export async function parseSkillFile(
     if (opened.metadata.size > maxSkillFileBytes) {
       return tooLargeResult(path)
     }
-    const buffer = Buffer.allocUnsafe(maxSkillFileBytes + 1)
+    // Sized from the file, not from the ceiling: a scan opens one of these
+    // per skill folder and a fleet of them would otherwise reserve a megabyte
+    // each. One byte over the reported size still catches a file that grew
+    // past the limit between the stat and the read.
+    let buffer = Buffer.allocUnsafe(
+      Math.min(opened.metadata.size, maxSkillFileBytes) + 1
+    )
     let length = 0
-    while (length < buffer.length) {
+    for (;;) {
       const { bytesRead } = await opened.handle.read(
         buffer,
         length,
@@ -57,8 +63,15 @@ export async function parseSkillFile(
       )
       if (bytesRead === 0) break
       length += bytesRead
+      if (length > maxSkillFileBytes) return tooLargeResult(path)
+      if (length === buffer.length) {
+        const grown = Buffer.allocUnsafe(
+          Math.min(maxSkillFileBytes + 1, Math.max(buffer.length * 2, 2))
+        )
+        buffer.copy(grown)
+        buffer = grown
+      }
     }
-    if (length > maxSkillFileBytes) return tooLargeResult(path)
     bytes = buffer.subarray(0, length)
   } catch (error) {
     return unreadableResult(path, missingFileSchema.safeParse(error).success)

@@ -22,10 +22,12 @@ import {
   formatSkillReference,
   reconcilePromptReferences,
   replaceComposerTrigger,
+  shortlistSkills,
+  skillsForHarness,
   type ComposerCandidate,
   type ComposerTrigger,
 } from "@deskto/client"
-import type { PackSkill, PromptReference, TurnInput } from "@deskto/protocol"
+import type { PromptReference, PromptSkill, TurnInput } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -57,19 +59,25 @@ const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
 ]
 
 type SkillCache = {
-  workspaceId: string
-  skills: PackSkill[]
+  /** The `$` this list was read for, not just the project it came from. */
+  session: string
+  skills: PromptSkill[]
+}
+
+type SkillRequest = {
+  session: string
 }
 
 type SuggestionResult = {
   key: string
   candidates: ComposerCandidate[]
+  hidden: number
   failed: boolean
 }
 
 export function Composer({
   projectId,
-  workspaceId,
+  harnessId = null,
   label,
   placeholder,
   onSend,
@@ -82,7 +90,7 @@ export function Composer({
   autoFocus = false,
 }: {
   projectId: string
-  workspaceId: string
+  harnessId?: string | null
   label: string
   placeholder: string
   onSend: (input: TurnInput) => Promise<void>
@@ -101,6 +109,7 @@ export function Composer({
   const [suggestionResult, setSuggestionResult] = useState<SuggestionResult>({
     key: "",
     candidates: [],
+    hidden: 0,
     failed: false,
   })
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
@@ -119,6 +128,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const requestSequence = useRef(0)
+  const skillRequest = useRef<SkillRequest | null>(null)
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
@@ -132,9 +142,23 @@ export function Composer({
   const triggerKind = trigger?.kind ?? null
   const triggerQuery = trigger?.query ?? ""
   const menuOpen = trigger !== null && dismissedKey !== triggerKey && !blocked
+  // One `$` is one session: skills live in folders a person edits between
+  // messages, so a list read once per project would go stale for the rest of
+  // the session, and one read per keystroke would walk the disk while typing.
+  const skillSession =
+    trigger?.kind === "skill" ? `${projectId}:${trigger.rangeStart}` : null
   const cachedSkills =
-    trigger?.kind === "skill" && skillCache?.workspaceId === workspaceId
+    skillSession && skillCache?.session === skillSession
       ? skillCache.skills
+      : null
+  // Filtering and shortlisting happen here rather than in the Runtime: the
+  // list is fetched once per session, so every later keystroke is a sort over
+  // an array in memory and a render of at most four rows.
+  const shortlist =
+    trigger?.kind === "skill" && cachedSkills
+      ? shortlistSkills(
+          filterSkills(skillsForHarness(cachedSkills, harnessId), trigger.query)
+        )
       : null
   const candidates =
     trigger?.kind === "command"
@@ -147,11 +171,12 @@ export function Composer({
         )
       : trigger?.kind === "project-entry" && !trigger.query.trim()
         ? []
-        : cachedSkills
-          ? toSkillCandidates(filterSkills(cachedSkills, trigger?.query ?? ""))
+        : shortlist
+          ? toSkillCandidates(shortlist.visible)
           : suggestionResult.key === triggerKey
             ? suggestionResult.candidates
             : []
+  const hiddenCandidates = shortlist?.hidden ?? 0
   const suggestionsLoading =
     trigger !== null &&
     trigger.kind !== "command" &&
@@ -168,6 +193,7 @@ export function Composer({
 
   usePackChanged(
     useCallback(() => {
+      skillRequest.current = null
       setSkillCache(null)
     }, [])
   )
@@ -177,22 +203,29 @@ export function Composer({
     if (!triggerKind || blocked || triggerKind === "command") return
 
     if (triggerKind === "skill") {
-      if (skillCache?.workspaceId === workspaceId) return
-      void client.listWorkspaceSkills(workspaceId).then(
+      // The read is per session, and one is enough while it is in flight:
+      // without this every keystroke after `$` starts another walk of the
+      // same folders, all but the last discarded.
+      if (!skillSession) return
+      if (skillCache?.session === skillSession) return
+      if (skillRequest.current?.session === skillSession) return
+      const request = { session: skillSession }
+      skillRequest.current = request
+      void client.listSkillsForPrompt(projectId).then(
         (skills) => {
-          if (requestSequence.current !== sequence) return
-          setSkillCache({ workspaceId, skills })
-          setSuggestionResult({
-            key: triggerKey!,
-            candidates: toSkillCandidates(filterSkills(skills, triggerQuery)),
-            failed: false,
-          })
+          if (skillRequest.current !== request) return
+          skillRequest.current = null
+          setSkillCache({ session: skillSession, skills })
         },
         () => {
-          if (requestSequence.current !== sequence) return
+          if (skillRequest.current !== request) return
+          skillRequest.current = null
+          // The next `$` tries again: a failed read is about this moment, not
+          // about this project.
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],
+            hidden: 0,
             failed: true,
           })
         }
@@ -212,6 +245,7 @@ export function Composer({
               kind: "project-entry" as const,
               entry,
             })),
+            hidden: 0,
             failed: false,
           })
         },
@@ -220,6 +254,7 @@ export function Composer({
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],
+            hidden: 0,
             failed: true,
           })
         }
@@ -231,10 +266,10 @@ export function Composer({
     client,
     projectId,
     skillCache,
+    skillSession,
     triggerKey,
     triggerKind,
     triggerQuery,
-    workspaceId,
   ])
 
   useEffect(() => {
@@ -405,6 +440,11 @@ export function Composer({
               activeId={activeId}
               loading={suggestionsLoading}
               emptyText={suggestionEmptyText(trigger, suggestionsError)}
+              footerText={
+                hiddenCandidates > 0
+                  ? `${hiddenCandidates} more — keep typing to narrow`
+                  : undefined
+              }
               onActiveChange={setHighlightedId}
               onSelect={(id) => {
                 const candidate = candidates.find((item) => item.id === id)
@@ -509,9 +549,6 @@ export function Composer({
               <PaperclipIcon />
             </Button>
             {toolbar}
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              Enter to send · Shift+Enter for a new line
-            </span>
             <div className="ml-auto flex items-center gap-2">
               {trailing}
               {running && onCancel ? (
@@ -547,7 +584,7 @@ export function Composer({
   )
 }
 
-function toSkillCandidates(skills: PackSkill[]): ComposerCandidate[] {
+function toSkillCandidates(skills: PromptSkill[]): ComposerCandidate[] {
   return skills.map((skill) => ({
     id: `skill:${skill.id}`,
     kind: "skill",
@@ -572,7 +609,7 @@ function toSuggestionOption(
       id: candidate.id,
       label: `$${candidate.skill.name}`,
       description: candidate.skill.description || "Use this skill",
-      meta: candidate.skill.packName,
+      meta: candidate.skill.sourceLabel,
       icon: <BoxIcon className="size-4" />,
     }
   }
@@ -622,6 +659,10 @@ function suggestionEmptyText(
       ? "No matching files or folders."
       : "Type to search project files."
   }
-  if (trigger.kind === "skill") return "No matching skills in this workspace."
+  if (trigger.kind === "skill") {
+    return trigger.query.trim()
+      ? "No matching skills for this agent."
+      : "No skills found for this agent."
+  }
   return "No matching command."
 }

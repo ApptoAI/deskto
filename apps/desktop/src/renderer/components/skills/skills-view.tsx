@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import FileArchiveIcon from "lucide-react/dist/esm/icons/file-archive"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
@@ -9,6 +9,7 @@ import type {
   ManagedSkillDraft,
   Pack,
   Project,
+  SkillDetails,
   SkillInventory,
   Workspace,
 } from "@deskto/protocol"
@@ -31,11 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
+import { Sheet, SheetContent } from "@workspace/ui/components/sheet"
 
 import { InlineError } from "../inline-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import {
   useRuntimeQuery,
+  type QueryState,
   type RuntimeQuery,
 } from "../../runtime/use-runtime-query.js"
 import { usePackChanged } from "../../runtime/use-pack-changed.js"
@@ -56,6 +59,13 @@ import {
   type SkillsFilter,
 } from "./skills-filters.js"
 import { PacksPanel, type PackActions } from "./packs-panel.js"
+
+/** What the sheet is showing, kept for as long as it takes to slide out. */
+type ShownSkill = {
+  item: SkillCatalogItem
+  occurrence: CatalogOccurrence
+  state: QueryState<SkillDetails>
+}
 
 export function SkillsView({
   filter,
@@ -113,6 +123,12 @@ export function SkillsView({
       ) ?? selectedItem.primary)
     : null
   const selectedOccurrenceId = selectedOccurrence?.occurrence.id ?? null
+  // A selection the catalog no longer holds — searched away, renamed by an
+  // edit, or gone with its Pack — closes the sheet. Forgetting it is what
+  // stops the sheet reopening on its own when the item comes back.
+  useEffect(() => {
+    if (selection && !selectedItem) setSelection(null)
+  }, [selection, selectedItem])
 
   const loadDetails = useMemo(
     () =>
@@ -135,6 +151,29 @@ export function SkillsView({
   usePackChanged(
     useCallback(() => revalidateInventory(), [revalidateInventory])
   )
+
+  // The selection clears the moment the sheet starts closing, so the last
+  // skill stays around: without it the panel empties a frame before it has
+  // finished sliding out, and the reader watches a bare box leave.
+  const [lastShown, setLastShown] = useState<ShownSkill | null>(null)
+  const currentShown =
+    selectedItem && selectedOccurrence
+      ? {
+          item: selectedItem,
+          occurrence: selectedOccurrence,
+          state: details.state,
+        }
+      : null
+  const shownSkill = currentShown ?? lastShown
+  if (
+    currentShown &&
+    (lastShown?.item !== currentShown.item ||
+      lastShown.occurrence.occurrence.id !==
+        currentShown.occurrence.occurrence.id ||
+      lastShown.state !== currentShown.state)
+  ) {
+    setLastShown(currentShown)
+  }
 
   function selectItem(item: SkillCatalogItem) {
     setSelection({
@@ -165,7 +204,9 @@ export function SkillsView({
   return (
     <>
       <header className="drag-region h-10 shrink-0" />
-      <div className="min-h-0 flex-1 px-5 pb-5">
+      {/* One page, one scroll: the list owns the only scroller on this screen
+          and contains its overscroll, so nothing behind it can move. */}
+      <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
         <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
           <div className="flex shrink-0 items-start justify-between gap-4 pb-5">
             <div>
@@ -196,83 +237,81 @@ export function SkillsView({
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-background">
-            <aside className="flex min-h-0 flex-col border-r border-border bg-chrome/45">
-              <div className="space-y-2 border-b border-border p-3">
-                <div className="relative">
-                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search skills..."
-                    aria-label="Search skills"
-                    className="bg-background pl-8"
-                  />
-                </div>
-                <SkillsFilterMenu
-                  value={effectiveFilter}
-                  projectAvailable={project !== null}
-                  workspaceAvailable={workspace !== null}
-                  onChange={onSelectFilter}
-                />
-              </div>
+          <div className="flex shrink-0 items-center gap-2 border-b border-border pb-3">
+            <div className="relative w-full max-w-72">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search skills..."
+                aria-label="Search skills"
+                className="pl-8"
+              />
+            </div>
+            <SkillsFilterMenu
+              value={effectiveFilter}
+              projectAvailable={project !== null}
+              workspaceAvailable={workspace !== null}
+              onChange={onSelectFilter}
+            />
+            <span className="ml-auto font-mono text-micro text-muted-foreground tabular-nums">
+              {items.length === 1 ? "1 skill" : `${items.length} skills`}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Refresh skills"
+              onClick={() => {
+                inventory.revalidate()
+                details.revalidate()
+              }}
+            >
+              <RefreshCwIcon />
+            </Button>
+          </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <CatalogContent
-                  inventory={inventory}
-                  items={items}
-                  selectedKey={selectedItem?.key ?? null}
-                  filter={effectiveFilter}
-                  query={query}
-                  onSelect={selectItem}
-                />
-              </div>
-              <div className="flex shrink-0 items-center justify-between border-t border-border px-3 py-2 text-micro text-muted-foreground">
-                <span>
-                  {items.length === 1 ? "1 skill" : `${items.length} skills`}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Refresh skills"
-                  onClick={() => {
-                    inventory.revalidate()
-                    details.revalidate()
-                  }}
-                >
-                  <RefreshCwIcon />
-                </Button>
-              </div>
-            </aside>
-
-            <section className="min-h-0 overflow-y-auto">
-              {selectedItem && selectedOccurrence ? (
-                <SkillDetailsPanel
-                  key={selectedOccurrence.occurrence.id}
-                  item={selectedItem}
-                  selected={selectedOccurrence}
-                  state={details.state}
-                  onSelectOccurrence={selectOccurrence}
-                  onRetry={details.revalidate}
-                  onUpdateManaged={async (packId, directoryName, draft) => {
-                    await client.updateManagedSkill(
-                      packId,
-                      directoryName,
-                      draft
-                    )
-                    details.revalidate()
-                    inventory.revalidate()
-                  }}
-                />
-              ) : inventory.state.status === "ready" ? (
-                <EmptyDetails />
-              ) : null}
-            </section>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <CatalogContent
+              inventory={inventory}
+              items={items}
+              selectedKey={selectedItem?.key ?? null}
+              filter={effectiveFilter}
+              query={query}
+              onSelect={selectItem}
+            />
           </div>
         </div>
       </div>
+
+      <Sheet
+        open={shownSkill !== null && selection !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelection(null)
+        }}
+      >
+        <SheetContent
+          className="gap-0"
+          aria-label={shownSkill ? `${shownSkill.item.name} skill` : "Skill"}
+        >
+          {shownSkill ? (
+            <SkillDetailsPanel
+              key={shownSkill.occurrence.occurrence.id}
+              item={shownSkill.item}
+              selected={shownSkill.occurrence}
+              state={shownSkill.state}
+              onSelectOccurrence={selectOccurrence}
+              onRetry={details.revalidate}
+              onUpdateManaged={async (packId, directoryName, draft) => {
+                await client.updateManagedSkill(packId, directoryName, draft)
+                details.revalidate()
+                inventory.revalidate()
+              }}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <CreateSkillDialog
         open={creatingSkill}
@@ -352,17 +391,13 @@ function SkillsFilterMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-between bg-background font-normal"
-          />
+          <Button type="button" variant="outline" className="font-normal" />
         }
       >
         {skillsFilters[value].label}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-(--anchor-width)">
+      <DropdownMenuContent className="w-72">
         <DropdownMenuRadioGroup
           value={value}
           onValueChange={(nextValue) => {
@@ -466,17 +501,5 @@ function PackSourcesDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function EmptyDetails() {
-  return (
-    <div className="flex h-full min-h-80 flex-col items-center justify-center px-8 text-center">
-      <p className="text-sm font-medium">Choose a skill</p>
-      <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Select a skill to read its instructions, see where it came from, and
-        check which agents can find it.
-      </p>
-    </div>
   )
 }

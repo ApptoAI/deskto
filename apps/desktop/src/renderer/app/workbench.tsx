@@ -592,7 +592,10 @@ export function Workbench() {
         </>
       )}
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
+          whole — by focus, not by the wheel — which drags the window chrome
+          off the top of the app. Every screen scrolls inside itself. */}
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {actionError ? (
           <div className="px-6 pt-3">
             <InlineError message={actionError} />

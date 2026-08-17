@@ -93,7 +93,14 @@ export type HarnessPromptReference =
       path: string
       entryKind: "file" | "directory"
     }
-  | { kind: "skill"; name: string; path: string }
+  | {
+      kind: "skill"
+      /** A Pack skill is reached through the shim Deskto builds; a native one
+          is already installed in the agent's own folder. */
+      origin: "pack" | "native"
+      name: string
+      path: string
+    }
 
 export type HarnessImageAttachment = {
   type: "image"

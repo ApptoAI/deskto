@@ -114,7 +114,7 @@ export function NewTaskView({
           <div className="w-full">
             <Composer
               projectId={project.id}
-              workspaceId={project.workspaceId}
+              harnessId={harnessId}
               label="What should the agent do?"
               placeholder="Describe the task"
               onSend={handleSend}

@@ -2,6 +2,7 @@ import { realpath } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import type {
+  PromptSkill,
   SkillDetails,
   SkillInventory as SkillInventoryRecord,
   SkillLookupContext,
@@ -10,12 +11,13 @@ import type {
 
 import { RuntimeError } from "../errors.js"
 import type { HarnessRegistry } from "../harness-registry.js"
-import { skillsDirectory } from "../packs/pack-files.js"
+import { packSkillId, skillsDirectory } from "../packs/pack-files.js"
 import { canEditManagedSkills } from "../packs/pack-capabilities.js"
 import type { Store } from "../storage/store.js"
 
 import { skillSourceId } from "./skill-identifiers.js"
 import {
+  scanSkillNames,
   scanSkillSource,
   type ScannedSkill,
   type SkillSourceInput,
@@ -29,6 +31,12 @@ type SourceToScan = {
 type InventoryScan = {
   inventory: SkillInventoryRecord
   skills: ScannedSkill[]
+}
+
+/** A referenceable skill plus the SKILL.md a harness is handed for it. */
+export type ResolvedPromptSkill = {
+  skill: PromptSkill
+  path: string
 }
 
 export class SkillInventory {
@@ -47,6 +55,54 @@ export class SkillInventory {
 
   async listOnComputer(): Promise<SkillInventoryRecord> {
     return (await this.#scanOnComputer()).inventory
+  }
+
+  /**
+   * Every skill a prompt in this project may reference, with the file each one
+   * resolves to. Name-only scan: this runs when someone types `$`, and again
+   * when the turn starts, so it never pays for digests it will not read.
+   */
+  async listForPrompt(projectId: string): Promise<ResolvedPromptSkill[]> {
+    const project = this.store.projects.get(projectId)
+    const sources = [
+      ...(await this.#nativeSources(project.path, "all")),
+      ...this.#packSources(project.workspaceId),
+    ]
+    const scanned = await Promise.all(
+      uniqueById(sources).map(async ({ source }) => ({
+        source,
+        skills: await scanSkillNames(source),
+      }))
+    )
+    const bySkillId = new Map<string, ResolvedPromptSkill>()
+    for (const { source, skills } of scanned) {
+      for (const skill of skills) {
+        // Pack skills keep the id the Pack views already publish; a skill from
+        // an agent's own folder is identified the way the inventory does.
+        const id =
+          source.packId !== undefined
+            ? packSkillId(source.packId, skill.directoryName)
+            : skill.id
+        if (bySkillId.has(id)) continue
+        bySkillId.set(id, {
+          path: skill.skillFilePath,
+          skill: {
+            id,
+            name: skill.name,
+            description: skill.description,
+            origin: source.kind,
+            sourceLabel: source.label,
+            harnessIds: source.harnessIds,
+          },
+        })
+      }
+    }
+    // Sorted, because the composer offers the first few and counts the rest:
+    // in source order every Pack skill would sit behind every skill found in
+    // an agent's folder, and a workspace with four of those would bury them.
+    return [...bySkillId.values()].sort((left, right) =>
+      left.skill.name.localeCompare(right.skill.name)
+    )
   }
 
   async get(

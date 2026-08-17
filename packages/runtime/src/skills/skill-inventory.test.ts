@@ -419,6 +419,203 @@ describe("skill inventory", () => {
     await runtime.close()
   })
 
+  it("offers prompt skills from agent folders and Packs, scoped per agent", async () => {
+    const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
+    const claudeSkills = join(root, "claude-skills")
+    const codexSkills = join(root, "codex-skills")
+    await Promise.all([
+      mkdir(projectPath),
+      mkdir(claudeSkills),
+      mkdir(codexSkills),
+    ])
+    await writeSkill(claudeSkills, "animate", "animate", "Build an animation")
+    await writeSkill(codexSkills, "migrate", "migrate", "Move the schema")
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("claude", [
+          { path: claudeSkills, scope: "user", label: "Claude personal" },
+        ]),
+        inventoryHarness("codex", [
+          { path: codexSkills, scope: "user", label: "Codex personal" },
+        ]),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Project", workspaceId: "personal" },
+      })
+    )
+    const pack = unwrap(
+      await runtime.request({ method: "pack.create", params: { name: "Pack" } })
+    )
+    await writeSkill(join(pack.path, "skills"), "review", "review", "Review it")
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: { workspaceId: "personal", packId: pack.id, attached: true },
+      })
+    )
+
+    const skills = unwrap(
+      await runtime.request({
+        method: "skill.listForPrompt",
+        params: { projectId: project.id },
+      })
+    )
+
+    expect(
+      [...skills]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map(({ name, origin, harnessIds }) => ({ name, origin, harnessIds }))
+    ).toEqual([
+      { name: "animate", origin: "native", harnessIds: ["claude"] },
+      { name: "migrate", origin: "native", harnessIds: ["codex"] },
+      { name: "review", origin: "pack", harnessIds: ["claude", "codex"] },
+    ])
+    await runtime.close()
+  })
+
+  it("offers a name a prompt can carry, and puts Packs where they can be seen", async () => {
+    const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
+    const userSkills = join(root, "user-skills")
+    await Promise.all([mkdir(projectPath), mkdir(userSkills)])
+    // The frontmatter name is unvalidated on disk: this one cannot be typed
+    // after a `$` or sent as a command, so the folder name stands in.
+    await writeSkill(userSkills, "pr-review", "Pull Request Review", "Review")
+    await Promise.all(
+      ["alpha", "beta", "gamma", "delta"].map((name) =>
+        writeSkill(userSkills, name, name, "Personal")
+      )
+    )
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("claude", [
+          { path: userSkills, scope: "user", label: "Claude personal" },
+        ]),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Project", workspaceId: "personal" },
+      })
+    )
+    const pack = unwrap(
+      await runtime.request({ method: "pack.create", params: { name: "Pack" } })
+    )
+    await writeSkill(join(pack.path, "skills"), "brief", "brief", "Draft it")
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: { workspaceId: "personal", packId: pack.id, attached: true },
+      })
+    )
+
+    const skills = unwrap(
+      await runtime.request({
+        method: "skill.listForPrompt",
+        params: { projectId: project.id },
+      })
+    )
+
+    expect(skills.map(({ name }) => name)).toEqual([
+      "alpha",
+      "beta",
+      "brief",
+      "delta",
+      "gamma",
+      "pr-review",
+    ])
+    await runtime.close()
+  })
+
+  it("hands a native skill to the agent that owns it and refuses the other", async () => {
+    const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
+    const claudeSkills = join(root, "claude-skills")
+    await Promise.all([mkdir(projectPath), mkdir(claudeSkills)])
+    await writeSkill(claudeSkills, "animate", "animate", "Build an animation")
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("claude", [
+          { path: claudeSkills, scope: "user", label: "Claude personal" },
+        ]),
+        inventoryHarness("codex", []),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Project", workspaceId: "personal" },
+      })
+    )
+    const skills = unwrap(
+      await runtime.request({
+        method: "skill.listForPrompt",
+        params: { projectId: project.id },
+      })
+    )
+    const animate = skills.find(({ name }) => name === "animate")!
+    const reference = {
+      kind: "skill" as const,
+      skillId: animate.id,
+      name: "animate",
+    }
+
+    const claudeThread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: claudeThread.id,
+          input: {
+            text: "Use $animate",
+            references: [reference],
+            attachments: [],
+          },
+        },
+      })
+    )
+
+    const codexThread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "codex" },
+      })
+    )
+    const refused = await runtime.request({
+      method: "turn.start",
+      params: {
+        threadId: codexThread.id,
+        input: {
+          text: "Use $animate",
+          references: [reference],
+          attachments: [],
+        },
+      },
+    })
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) {
+      expect(refused.error.code).toBe("invalid-prompt-reference")
+      expect(refused.error.message).toContain("not available to this agent")
+    }
+    await runtime.close()
+  })
+
   it("returns project roots from the working directory through the Git root", async () => {
     const root = await temporaryDirectory()
     const nested = join(root, "packages", "app")

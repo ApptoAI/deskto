@@ -149,12 +149,6 @@ export async function readPackContents(
   }
 }
 
-export async function readPackSkills(
-  pack: Pick<PackRow, "id" | "name" | "path">
-): Promise<PackSkill[]> {
-  return (await readResolvedPackSkills(pack)).map((entry) => entry.skill)
-}
-
 export function slugify(name: string): string {
   return name
     .toLowerCase()

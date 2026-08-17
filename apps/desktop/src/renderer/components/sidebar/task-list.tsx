@@ -502,7 +502,7 @@ function TaskRow({
               while they are up rather than running underneath them. */}
           <span
             className={cn(
-              "min-w-0 flex-1 transition-[padding] duration-150 ease-(--ease-out-quart) group-focus-within:pr-8 group-hover:pr-8",
+              "min-w-0 flex-1 transition-[padding] duration-150 ease-(--ease-out-quart) group-hover:pr-8 group-has-focus-visible:pr-8",
               popupOpen && "pr-8"
             )}
           >
@@ -526,7 +526,7 @@ function TaskRow({
           </span>
           <span
             className={cn(
-              "flex h-5 shrink-0 items-center gap-1.5 transition-opacity duration-150 group-focus-within:opacity-0 group-hover:opacity-0",
+              "flex h-5 shrink-0 items-center gap-1.5 transition-opacity duration-150 group-hover:opacity-0 group-has-focus-visible:opacity-0",
               popupOpen && "opacity-0"
             )}
           >
@@ -769,8 +769,10 @@ function RowActionButton({
         "transition-[opacity,scale,background-color,border-color,color] duration-150 ease-(--ease-out-quart) outline-none active:scale-95",
         "group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100",
         // Keyboard focus anywhere in the row shows the cluster too: the
-        // timestamp fades on focus-within, and nothing should replace it.
-        "group-focus-within:pointer-events-auto group-focus-within:scale-100 group-focus-within:opacity-100",
+        // timestamp fades with it, and nothing should replace it. Focus-visible
+        // rather than focus, because a click leaves the row focused, and a
+        // pointer that has moved on should not still be offering buttons.
+        "group-has-focus-visible:pointer-events-auto group-has-focus-visible:scale-100 group-has-focus-visible:opacity-100",
         "focus-visible:ring-2 focus-visible:ring-ring",
         popupOpen && "pointer-events-auto scale-100 opacity-100",
         tone === "done"

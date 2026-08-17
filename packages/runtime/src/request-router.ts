@@ -12,11 +12,7 @@ import {
 
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
-import {
-  readPackContents,
-  readPackSkills,
-  resolvedDirectory,
-} from "./packs/pack-files.js"
+import { readPackContents, resolvedDirectory } from "./packs/pack-files.js"
 import { canEditManagedSkills } from "./packs/pack-capabilities.js"
 import type { PackManager } from "./packs/pack-manager.js"
 import { ProjectEntries } from "./project-entries.js"
@@ -208,15 +204,10 @@ export class RequestRouter {
         this.events.packChanged()
         return null
       }
-      case "workspace.listSkills": {
-        this.store.workspaces.get(request.params.workspaceId)
-        const packs = this.store.packs.attachedToWorkspace(
-          request.params.workspaceId
-        )
+      case "skill.listForPrompt":
         return (
-          await Promise.all(packs.map((pack) => readPackSkills(pack)))
-        ).flat()
-      }
+          await this.#skillInventory.listForPrompt(request.params.projectId)
+        ).map(({ skill }) => skill)
       case "skill.listForProject":
         return this.#skillInventory.listForProject(request.params.projectId)
       case "skill.listForWorkspace":

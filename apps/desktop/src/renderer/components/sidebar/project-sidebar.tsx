@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
@@ -79,6 +79,16 @@ export function ProjectSidebar({
 }) {
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
+  // Every row here belongs to the open project, and the label still earns its
+  // place: it sets the row's second line, which is what gives the list its
+  // rhythm whether or not the project could have been anything else.
+  const openProjectName = useMemo(
+    () =>
+      activeProject
+        ? new Map([[activeProject.id, activeProject.name]])
+        : undefined,
+    [activeProject]
+  )
   useEffect(() => {
     if (focusSettings) settingsButton.current?.focus()
   }, [focusSettings])
@@ -182,6 +192,7 @@ export function ProjectSidebar({
               onOpenThread={onOpenThread}
               onRetry={onRetryThreads}
               actions={inboxActions}
+              projectNameById={openProjectName}
             />
           )}
         </div>

@@ -1,4 +1,5 @@
 import { readdir, realpath, stat } from "node:fs/promises"
+import { availableParallelism } from "node:os"
 import { join } from "node:path"
 
 import type {
@@ -14,6 +15,7 @@ import { skillOccurrenceId } from "./skill-identifiers.js"
 import { parseSkillFile } from "./skill-parser.js"
 
 const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
+const skillNameScanWorkers = Math.max(1, availableParallelism())
 
 export type SkillSourceInput = Omit<SkillSource, "diagnostics">
 
@@ -25,6 +27,15 @@ export type ScannedSkill = {
 export type ScannedSkillSource = {
   source: SkillSource | null
   skills: ScannedSkill[]
+}
+
+/** What a name-only scan knows about one skill folder. */
+export type ScannedSkillName = {
+  id: string
+  directoryName: string
+  skillFilePath: string
+  name: string
+  description: string
 }
 
 export async function scanSkillSource(
@@ -97,6 +108,100 @@ export async function scanSkillSource(
   }
 }
 
+/**
+ * Names and descriptions only, for the composer's `$` menu. A full scan hashes
+ * every skill folder and probes for scripts, references and assets — four
+ * extra filesystem round trips per skill plus a recursive digest. That is the
+ * right price for the Skills screen and the wrong one for a keystroke, so this
+ * reads one SKILL.md per folder and stops.
+ */
+export async function scanSkillNames(source: {
+  id: string
+  path: string
+}): Promise<ScannedSkillName[]> {
+  const resolvedSourcePath = await realpath(source.path).catch(() => null)
+  if (!resolvedSourcePath) return []
+  const sourcePath = resolvedSourcePath
+  let entries
+  try {
+    entries = await readdir(source.path, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const candidates = entries.filter(
+    (entry) => entry.isDirectory() || entry.isSymbolicLink()
+  )
+  const scanned: Array<ScannedSkillName | null> = Array.from(
+    { length: candidates.length },
+    () => null
+  )
+  let nextIndex = 0
+  async function scanNext(): Promise<void> {
+    for (;;) {
+      const index = nextIndex
+      nextIndex += 1
+      const entry = candidates[index]
+      if (!entry) return
+      const directoryPath = join(source.path, entry.name)
+      const directory = await skillDirectoryTarget(
+        sourcePath,
+        directoryPath,
+        entry.isSymbolicLink() ? join(sourcePath, entry.name) : null
+      )
+      // A folder that leaves its source is a skill the Skills screen reports
+      // and nothing offers; there is nothing to say about it in a menu.
+      if (directory?.within !== true) {
+        scanned[index] = null
+        continue
+      }
+      const skillFilePath = join(directoryPath, "SKILL.md")
+      const parsed = await parseSkillFile(skillFilePath, sourcePath)
+      // A folder with no readable SKILL.md is not a skill anyone can call.
+      if (parsed.content === null) {
+        scanned[index] = null
+        continue
+      }
+      const name = referenceableName(parsed.name, entry.name)
+      scanned[index] = name
+        ? {
+            id: skillOccurrenceId(source.id, entry.name),
+            directoryName: entry.name,
+            skillFilePath,
+            name,
+            description: parsed.description ?? "",
+          }
+        : null
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(candidates.length, skillNameScanWorkers) },
+      scanNext
+    )
+  )
+  return scanned
+    .filter((skill): skill is ScannedSkillName => skill !== null)
+    .sort((left, right) => left.name.localeCompare(right.name))
+}
+
+/**
+ * A `$` token ends at the first space, and a harness reaches the skill through
+ * a command built from this name, so a frontmatter `name: Pull Request Review`
+ * can be neither typed nor sent. Nothing validates that field on disk, so the
+ * folder name — which every harness already treats as the skill's identity —
+ * stands in, and a folder that cannot be named either is not offered at all.
+ */
+function referenceableName(
+  declared: string | null,
+  directoryName: string
+): string | null {
+  if (declared && referenceableNamePattern.test(declared)) return declared
+  return referenceableNamePattern.test(directoryName) ? directoryName : null
+}
+
+const referenceableNamePattern = /^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u
+
 async function scanSkillDirectory(
   source: SkillSourceInput,
   resolvedSourcePath: string,
@@ -104,20 +209,21 @@ async function scanSkillDirectory(
   isSymbolicLink: boolean
 ): Promise<ScannedSkill | null> {
   const directoryPath = join(source.path, directoryName)
-  const directory = await directoryTarget(
+  const directory = await skillDirectoryTarget(
+    resolvedSourcePath,
     directoryPath,
     isSymbolicLink ? join(resolvedSourcePath, directoryName) : null
   )
   if (!directory) return null
   const skillFilePath = join(directoryPath, "SKILL.md")
-  if (!pathIsWithin(resolvedSourcePath, directory)) {
+  if (!directory.within) {
     return {
       occurrence: {
         id: skillOccurrenceId(source.id, directoryName),
         sourceId: source.id,
         directoryName,
         directoryPath,
-        resolvedDirectoryPath: directory,
+        resolvedDirectoryPath: directory.path,
         skillFilePath,
         name: null,
         description: null,
@@ -152,7 +258,7 @@ async function scanSkillDirectory(
       sourceId: source.id,
       directoryName,
       directoryPath,
-      resolvedDirectoryPath: directory,
+      resolvedDirectoryPath: directory.path,
       skillFilePath,
       name: parsed.name,
       description: parsed.description,
@@ -217,6 +323,22 @@ async function inspectSource(
       missing,
     }
   }
+}
+
+/**
+ * Where a skill folder really is, and whether it is still inside the source
+ * that declared it. Both scans ask the same question, and the answer decides
+ * whether a symlink out of the tree is reported or ignored — a rule that must
+ * not drift between them.
+ */
+async function skillDirectoryTarget(
+  resolvedSourcePath: string,
+  path: string,
+  brokenSymbolicLinkPath: string | null
+): Promise<{ path: string; within: boolean } | null> {
+  const target = await directoryTarget(path, brokenSymbolicLinkPath)
+  if (!target) return null
+  return { path: target, within: pathIsWithin(resolvedSourcePath, target) }
 }
 
 async function directoryTarget(

@@ -2,6 +2,14 @@ import path from "node:path"
 
 import { BrowserWindow, nativeTheme, screen } from "electron"
 
+/**
+ * The main bundle is ESM, where `__dirname` exists only if the bundler injects
+ * a shim — and electron-vite injects that shim after the last `import` line it
+ * finds, which a dependency's doc comment can swallow. Asking the module for
+ * its own directory does not depend on where a banner lands.
+ */
+const bundleDirectory = import.meta.dirname
+
 /** Opens large on a roomy display without overflowing a small one: most of
     the work area, capped so it never becomes an unwieldy full-screen sheet. */
 function defaultWindowSize() {
@@ -32,7 +40,7 @@ export function createMainWindow(): BrowserWindow {
     titleBarStyle: "hiddenInset",
     backgroundColor: canvasColor(),
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.cjs"),
+      preload: path.join(bundleDirectory, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -56,7 +64,7 @@ export function createMainWindow(): BrowserWindow {
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
-    void window.loadFile(path.join(__dirname, "../renderer/index.html"))
+    void window.loadFile(path.join(bundleDirectory, "../renderer/index.html"))
   }
 
   return window

@@ -144,10 +144,10 @@ export class RuntimeClient {
     })
   }
 
-  listWorkspaceSkills(workspaceId: string) {
+  listSkillsForPrompt(projectId: string) {
     return this.request({
-      method: "workspace.listSkills",
-      params: { workspaceId },
+      method: "skill.listForPrompt",
+      params: { projectId },
     })
   }
 

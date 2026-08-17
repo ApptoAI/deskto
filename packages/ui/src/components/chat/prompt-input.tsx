@@ -11,6 +11,10 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
         // A hairline and a raised surface, no shadow: a soft drop under a grey
         // well reads as smudge on a light canvas, and as nothing on a dark one.
         "flex w-full flex-col rounded-2xl bg-card pb-2 ring-1 ring-border transition-shadow duration-200 ease-out focus-within:ring-ring",
+        // The toolbar inside answers to this box, not to the window: the
+        // conversation column narrows when the panel opens while the window
+        // stays as wide as it was.
+        "@container",
         className
       )}
       {...props}
@@ -28,7 +32,11 @@ function PromptInputTextarea({
     <Textarea
       data-slot="prompt-input-textarea"
       className={cn(
-        "max-h-64 min-h-14 resize-none overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3 text-base focus-visible:ring-0 md:text-sm dark:bg-transparent",
+        // The ceiling is relative to the window as well as absolute: on a
+        // short screen a fixed 16rem draft leaves the conversation a strip,
+        // and a composer that owns half the window reads as the wrong thing
+        // being in charge.
+        "max-h-[min(16rem,30svh)] min-h-14 resize-none overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3 text-base focus-visible:ring-0 md:text-sm dark:bg-transparent",
         className
       )}
       onKeyDown={(event) => {

@@ -1324,20 +1324,36 @@ describe("Runtime", () => {
         (occurrence) => occurrence.directoryName === "fallback"
       )?.diagnostics
     ).toContainEqual(expect.objectContaining({ code: "name-missing" }))
-    const availableSkills = unwrap(
-      await runtime.request({
-        method: "workspace.listSkills",
-        params: { workspaceId: "personal" },
-      })
-    )
-    expect(availableSkills).toEqual(listed[0]?.skills)
-
     const project = unwrap(
       await runtime.request({
         method: "project.add",
         params: { path: directory, name: "Example", workspaceId: "personal" },
       })
     )
+    const promptSkills = unwrap(
+      await runtime.request({
+        method: "skill.listForPrompt",
+        params: { projectId: project.id },
+      })
+    )
+    expect(promptSkills.filter((skill) => skill.origin === "pack")).toEqual([
+      {
+        id: `${created.id}/fallback`,
+        name: "fallback",
+        description: "Use the directory name",
+        origin: "pack",
+        sourceLabel: "Press tools",
+        harnessIds: ["claude"],
+      },
+      {
+        id: `${created.id}/summarize`,
+        name: "summarize",
+        description: "Summarize articles",
+        origin: "pack",
+        sourceLabel: "Press tools",
+        harnessIds: ["claude"],
+      },
+    ])
     const thread = unwrap(
       await runtime.request({
         method: "thread.create",
@@ -1392,6 +1408,7 @@ describe("Runtime", () => {
       },
       {
         kind: "skill",
+        origin: "pack",
         name: "summarize",
         path: join(created.path, "skills", "summarize", "SKILL.md"),
       },
