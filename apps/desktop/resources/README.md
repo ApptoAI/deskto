@@ -13,7 +13,7 @@ not the conventional `build/`, which the repo's `.gitignore` drops).
 
 ## Artwork
 
-The sygnet on a 824×824 rounded rect centred in a 1024 canvas, corner radius
+The mark on a 824×824 rounded rect centred in a 1024 canvas, corner radius
 185.4 — the macOS Big Sur icon grid, which Windows and Linux crop to taste. The
 mark spans 58% of the body width and carries no wordmark, because at dock size
 the lettering would not resolve.
@@ -23,9 +23,9 @@ Background is `#0a0a0a` to match the window's `backgroundColor`. Swapping to
 
 ## Artwork source
 
-The sygnet — three stacked planes seen edge-on — comes from the brand artwork
-and is duplicated in `src/renderer/components/deskto-logo.tsx`, which also
-carries the wordmark as outlines. Both take `currentColor` there, so one set of
+The mark — three stacked planes seen edge-on — comes from the brand artwork
+and is duplicated in `src/renderer/components/deskto-logo.tsx` as `DesktoMark`,
+alongside `DesktoLockup`, which carries the wordmark as outlines. Both take `currentColor` there, so one set of
 paths serves the dark window and the light one; the icons below are the only
 place the fills are baked in.
 

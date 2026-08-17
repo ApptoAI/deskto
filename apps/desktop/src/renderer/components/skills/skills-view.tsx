@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import FileArchiveIcon from "lucide-react/dist/esm/icons/file-archive"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
@@ -9,6 +9,7 @@ import type {
   ManagedSkillDraft,
   Pack,
   Project,
+  SkillDetails,
   SkillInventory,
   Workspace,
 } from "@deskto/protocol"
@@ -37,6 +38,7 @@ import { InlineError } from "../inline-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import {
   useRuntimeQuery,
+  type QueryState,
   type RuntimeQuery,
 } from "../../runtime/use-runtime-query.js"
 import { usePackChanged } from "../../runtime/use-pack-changed.js"
@@ -57,6 +59,13 @@ import {
   type SkillsFilter,
 } from "./skills-filters.js"
 import { PacksPanel, type PackActions } from "./packs-panel.js"
+
+/** What the sheet is showing, kept for as long as it takes to slide out. */
+type ShownSkill = {
+  item: SkillCatalogItem
+  occurrence: CatalogOccurrence
+  state: QueryState<SkillDetails>
+}
 
 export function SkillsView({
   filter,
@@ -114,6 +123,12 @@ export function SkillsView({
       ) ?? selectedItem.primary)
     : null
   const selectedOccurrenceId = selectedOccurrence?.occurrence.id ?? null
+  // A selection the catalog no longer holds — searched away, renamed by an
+  // edit, or gone with its Pack — closes the sheet. Forgetting it is what
+  // stops the sheet reopening on its own when the item comes back.
+  useEffect(() => {
+    if (selection && !selectedItem) setSelection(null)
+  }, [selection, selectedItem])
 
   const loadDetails = useMemo(
     () =>
@@ -136,6 +151,26 @@ export function SkillsView({
   usePackChanged(
     useCallback(() => revalidateInventory(), [revalidateInventory])
   )
+
+  // The selection clears the moment the sheet starts closing, so the last
+  // skill stays around: without it the panel empties a frame before it has
+  // finished sliding out, and the reader watches a bare box leave.
+  const [lastShown, setLastShown] = useState<ShownSkill | null>(null)
+  const shownSkill =
+    selectedItem && selectedOccurrence
+      ? {
+          item: selectedItem,
+          occurrence: selectedOccurrence,
+          state: details.state,
+        }
+      : lastShown
+  if (selectedItem && selectedOccurrence && lastShown?.item !== selectedItem) {
+    setLastShown({
+      item: selectedItem,
+      occurrence: selectedOccurrence,
+      state: details.state,
+    })
+  }
 
   function selectItem(item: SkillCatalogItem) {
     setSelection({
@@ -248,21 +283,21 @@ export function SkillsView({
       </div>
 
       <Sheet
-        open={selectedItem !== null}
+        open={shownSkill !== null && selection !== null}
         onOpenChange={(open) => {
           if (!open) setSelection(null)
         }}
       >
         <SheetContent
           className="gap-0"
-          aria-label={selectedItem ? `${selectedItem.name} skill` : "Skill"}
+          aria-label={shownSkill ? `${shownSkill.item.name} skill` : "Skill"}
         >
-          {selectedItem && selectedOccurrence ? (
+          {shownSkill ? (
             <SkillDetailsPanel
-              key={selectedOccurrence.occurrence.id}
-              item={selectedItem}
-              selected={selectedOccurrence}
-              state={details.state}
+              key={shownSkill.occurrence.occurrence.id}
+              item={shownSkill.item}
+              selected={shownSkill.occurrence}
+              state={shownSkill.state}
               onSelectOccurrence={selectOccurrence}
               onRetry={details.revalidate}
               onUpdateManaged={async (packId, directoryName, draft) => {

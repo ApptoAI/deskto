@@ -56,6 +56,11 @@ export function knownHarnessLabel(harnessId: string): string {
   return harnessId
 }
 
+/** The same names where a column has room for one word, not two. */
+export function shortHarnessLabel(harnessId: string): string {
+  return harnessId === "claude" ? "Claude" : knownHarnessLabel(harnessId)
+}
+
 /**
  * Why the composer cannot send right now, or `undefined` when it can. Every
  * branch names the real cause instead of silently disabling the field.

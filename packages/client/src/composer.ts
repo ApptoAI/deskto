@@ -165,15 +165,14 @@ export type SkillShortlist = {
  * reach the rest. Keeping the rendered list at four is also what keeps the
  * menu cheap while someone types.
  */
-export function shortlistSkills(
-  skills: PromptSkill[],
-  limit = 4
-): SkillShortlist {
+export function shortlistSkills(skills: PromptSkill[]): SkillShortlist {
   return {
-    visible: skills.slice(0, limit),
-    hidden: Math.max(0, skills.length - limit),
+    visible: skills.slice(0, shortlistSize),
+    hidden: Math.max(0, skills.length - shortlistSize),
   }
 }
+
+const shortlistSize = 4
 
 export function filterSkills(
   skills: PromptSkill[],

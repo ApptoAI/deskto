@@ -115,12 +115,19 @@ export function ExecutionProfileToolbar({
 }
 
 /**
- * "High" and "Auto" are four letters each: truncated they read as "H" and "A",
- * which says less than the icon beside them already does. So they are shown
- * whole or not at all, on the composer's own width rather than the window's.
- * The model name is long enough to survive truncation and keeps it.
+ * Thinking and permissions are one or two words — "Auto", "Full access",
+ * "Extra high" — and truncated they read as "A" and "Full acce…", which says
+ * less than the icon beside them already does. So they are shown whole or not
+ * at all, on the composer's own width rather than the window's.
+ *
+ * The threshold is where the longest of them fit *without squeezing the model
+ * name*: measured at 572px for "Extra high" with "Full access", 581px for the
+ * longest thinking label a model may offer. Below it the model has the row to
+ * itself and truncates only when its own name is long; above it, nothing
+ * truncates. Anything lower and widening the panel would make the model name
+ * shorter, which is the wrong way round.
  */
-const compactLabel = "hidden @[36rem]:inline"
+const compactLabel = "hidden @[37rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />

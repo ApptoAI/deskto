@@ -131,24 +131,25 @@ export async function scanSkillNames(source: {
       .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .map(async (entry): Promise<ScannedSkillName | null> => {
         const directoryPath = join(source.path, entry.name)
-        const directory = await directoryTarget(
+        const directory = await skillDirectoryTarget(
+          resolvedSourcePath,
           directoryPath,
           entry.isSymbolicLink() ? join(resolvedSourcePath, entry.name) : null
         )
-        if (!directory || !pathIsWithin(resolvedSourcePath, directory)) {
-          return null
-        }
+        // A folder that leaves its source is a skill the Skills screen reports
+        // and nothing offers; there is nothing to say about it in a menu.
+        if (directory?.within !== true) return null
         const skillFilePath = join(directoryPath, "SKILL.md")
         const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
         // A folder with no readable SKILL.md is not a skill anyone can call.
-        // A readable one with no name is still callable by its folder, which
-        // is the name every other view of this skill already shows.
         if (parsed.content === null) return null
+        const name = referenceableName(parsed.name, entry.name)
+        if (!name) return null
         return {
           id: skillOccurrenceId(source.id, entry.name),
           directoryName: entry.name,
           skillFilePath,
-          name: parsed.name ?? entry.name,
+          name,
           description: parsed.description ?? "",
         }
       })
@@ -158,6 +159,23 @@ export async function scanSkillNames(source: {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
+/**
+ * A `$` token ends at the first space, and a harness reaches the skill through
+ * a command built from this name, so a frontmatter `name: Pull Request Review`
+ * can be neither typed nor sent. Nothing validates that field on disk, so the
+ * folder name — which every harness already treats as the skill's identity —
+ * stands in, and a folder that cannot be named either is not offered at all.
+ */
+function referenceableName(
+  declared: string | null,
+  directoryName: string
+): string | null {
+  if (declared && referenceableNamePattern.test(declared)) return declared
+  return referenceableNamePattern.test(directoryName) ? directoryName : null
+}
+
+const referenceableNamePattern = /^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u
+
 async function scanSkillDirectory(
   source: SkillSourceInput,
   resolvedSourcePath: string,
@@ -165,20 +183,21 @@ async function scanSkillDirectory(
   isSymbolicLink: boolean
 ): Promise<ScannedSkill | null> {
   const directoryPath = join(source.path, directoryName)
-  const directory = await directoryTarget(
+  const directory = await skillDirectoryTarget(
+    resolvedSourcePath,
     directoryPath,
     isSymbolicLink ? join(resolvedSourcePath, directoryName) : null
   )
   if (!directory) return null
   const skillFilePath = join(directoryPath, "SKILL.md")
-  if (!pathIsWithin(resolvedSourcePath, directory)) {
+  if (!directory.within) {
     return {
       occurrence: {
         id: skillOccurrenceId(source.id, directoryName),
         sourceId: source.id,
         directoryName,
         directoryPath,
-        resolvedDirectoryPath: directory,
+        resolvedDirectoryPath: directory.path,
         skillFilePath,
         name: null,
         description: null,
@@ -213,7 +232,7 @@ async function scanSkillDirectory(
       sourceId: source.id,
       directoryName,
       directoryPath,
-      resolvedDirectoryPath: directory,
+      resolvedDirectoryPath: directory.path,
       skillFilePath,
       name: parsed.name,
       description: parsed.description,
@@ -278,6 +297,22 @@ async function inspectSource(
       missing,
     }
   }
+}
+
+/**
+ * Where a skill folder really is, and whether it is still inside the source
+ * that declared it. Both scans ask the same question, and the answer decides
+ * whether a symlink out of the tree is reported or ignored — a rule that must
+ * not drift between them.
+ */
+async function skillDirectoryTarget(
+  resolvedSourcePath: string,
+  path: string,
+  brokenSymbolicLinkPath: string | null
+): Promise<{ path: string; within: boolean } | null> {
+  const target = await directoryTarget(path, brokenSymbolicLinkPath)
+  if (!target) return null
+  return { path: target, within: pathIsWithin(resolvedSourcePath, target) }
 }
 
 async function directoryTarget(

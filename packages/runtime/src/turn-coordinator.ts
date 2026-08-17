@@ -24,6 +24,7 @@ import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { ProjectOutputSweep } from "./project-outputs.js"
 import { resolvePromptReferences } from "./prompt-references.js"
+import { SkillInventory } from "./skills/skill-inventory.js"
 import { SessionToolLeases, type SessionToolProvider } from "./session-tools.js"
 import type {
   ActivityStartInput,
@@ -90,6 +91,8 @@ export class TurnCoordinator {
   readonly #discarding = new Set<string>()
   readonly #titles: ThreadTitleGenerator
 
+  readonly #skills: SkillInventory
+
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
@@ -97,6 +100,7 @@ export class TurnCoordinator {
     private readonly sessionTools: readonly SessionToolProvider[],
     private readonly events: TurnEvents
   ) {
+    this.#skills = new SkillInventory(store, harnesses)
     this.#titles = new ThreadTitleGenerator(
       store,
       harnesses,
@@ -132,7 +136,7 @@ export class TurnCoordinator {
     const harness = await this.harnesses.requireAvailable(thread.harness_id)
     const references = await resolvePromptReferences(
       this.store,
-      this.harnesses,
+      this.#skills,
       threadId,
       input.references
     )

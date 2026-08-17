@@ -7,7 +7,7 @@ import type { SkillInventory } from "@deskto/protocol"
 
 import { cn } from "@workspace/ui/lib/utils"
 
-import { knownHarnessLabel } from "../../lib/harness.js"
+import { shortHarnessLabel } from "../../lib/harness.js"
 import {
   skillCatalogGroupLabels,
   sourceMatchesSkillsFilter,
@@ -159,11 +159,6 @@ function SkillRow({
       </button>
     </li>
   )
-}
-
-/** "Claude Code" is the product; on the edge of a row one word is the label. */
-function shortHarnessLabel(harnessId: string): string {
-  return harnessId === "claude" ? "Claude" : knownHarnessLabel(harnessId)
 }
 
 function SourceIssues({ sources }: { sources: SkillInventory["sources"] }) {

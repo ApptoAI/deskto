@@ -59,7 +59,8 @@ const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
 ]
 
 type SkillCache = {
-  projectId: string
+  /** The `$` this list was read for, not just the project it came from. */
+  session: string
   skills: PromptSkill[]
 }
 
@@ -123,6 +124,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const requestSequence = useRef(0)
+  const skillRequest = useRef<string | null>(null)
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
@@ -136,13 +138,18 @@ export function Composer({
   const triggerKind = trigger?.kind ?? null
   const triggerQuery = trigger?.query ?? ""
   const menuOpen = trigger !== null && dismissedKey !== triggerKey && !blocked
+  // One `$` is one session: skills live in folders a person edits between
+  // messages, so a list read once per project would go stale for the rest of
+  // the session, and one read per keystroke would walk the disk while typing.
+  const skillSession =
+    trigger?.kind === "skill" ? `${projectId}:${trigger.rangeStart}` : null
   const cachedSkills =
-    trigger?.kind === "skill" && skillCache?.projectId === projectId
+    skillSession && skillCache?.session === skillSession
       ? skillCache.skills
       : null
   // Filtering and shortlisting happen here rather than in the Runtime: the
-  // whole list is fetched once per project, so every later keystroke is a
-  // sort over an array in memory and a render of at most four rows.
+  // list is fetched once per session, so every later keystroke is a sort over
+  // an array in memory and a render of at most four rows.
   const shortlist =
     trigger?.kind === "skill" && cachedSkills
       ? shortlistSkills(
@@ -182,6 +189,7 @@ export function Composer({
 
   usePackChanged(
     useCallback(() => {
+      skillRequest.current = null
       setSkillCache(null)
     }, [])
   )
@@ -191,15 +199,23 @@ export function Composer({
     if (!triggerKind || blocked || triggerKind === "command") return
 
     if (triggerKind === "skill") {
-      // One scan per project, then the cache answers every keystroke.
-      if (skillCache?.projectId === projectId) return
+      // The read is per session, and one is enough while it is in flight:
+      // without this every keystroke after `$` starts another walk of the
+      // same folders, all but the last discarded.
+      if (!skillSession) return
+      if (skillCache?.session === skillSession) return
+      if (skillRequest.current === skillSession) return
+      skillRequest.current = skillSession
       void client.listSkillsForPrompt(projectId).then(
         (skills) => {
           if (requestSequence.current !== sequence) return
-          setSkillCache({ projectId, skills })
+          setSkillCache({ session: skillSession, skills })
         },
         () => {
           if (requestSequence.current !== sequence) return
+          // The next `$` tries again: a failed read is about this moment, not
+          // about this project.
+          skillRequest.current = null
           setSuggestionResult({
             key: triggerKey!,
             candidates: [],
@@ -244,6 +260,7 @@ export function Composer({
     client,
     projectId,
     skillCache,
+    skillSession,
     triggerKey,
     triggerKind,
     triggerQuery,
@@ -417,11 +434,11 @@ export function Composer({
               activeId={activeId}
               loading={suggestionsLoading}
               emptyText={suggestionEmptyText(trigger, suggestionsError)}
-              {...(hiddenCandidates > 0
-                ? {
-                    footerText: `${hiddenCandidates} more — keep typing to narrow`,
-                  }
-                : {})}
+              footerText={
+                hiddenCandidates > 0
+                  ? `${hiddenCandidates} more — keep typing to narrow`
+                  : undefined
+              }
               onActiveChange={setHighlightedId}
               onSelect={(id) => {
                 const candidate = candidates.find((item) => item.id === id)

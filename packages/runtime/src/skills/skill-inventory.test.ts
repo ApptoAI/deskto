@@ -479,6 +479,63 @@ describe("skill inventory", () => {
     await runtime.close()
   })
 
+  it("offers a name a prompt can carry, and puts Packs where they can be seen", async () => {
+    const root = await temporaryDirectory()
+    const projectPath = join(root, "project")
+    const userSkills = join(root, "user-skills")
+    await Promise.all([mkdir(projectPath), mkdir(userSkills)])
+    // The frontmatter name is unvalidated on disk: this one cannot be typed
+    // after a `$` or sent as a command, so the folder name stands in.
+    await writeSkill(userSkills, "pr-review", "Pull Request Review", "Review")
+    await Promise.all(
+      ["alpha", "beta", "gamma", "delta"].map((name) =>
+        writeSkill(userSkills, name, name, "Personal")
+      )
+    )
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("claude", [
+          { path: userSkills, scope: "user", label: "Claude personal" },
+        ]),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: projectPath, name: "Project", workspaceId: "personal" },
+      })
+    )
+    const pack = unwrap(
+      await runtime.request({ method: "pack.create", params: { name: "Pack" } })
+    )
+    await writeSkill(join(pack.path, "skills"), "brief", "brief", "Draft it")
+    unwrap(
+      await runtime.request({
+        method: "workspace.setPack",
+        params: { workspaceId: "personal", packId: pack.id, attached: true },
+      })
+    )
+
+    const skills = unwrap(
+      await runtime.request({
+        method: "skill.listForPrompt",
+        params: { projectId: project.id },
+      })
+    )
+
+    expect(skills.map(({ name }) => name)).toEqual([
+      "alpha",
+      "beta",
+      "brief",
+      "delta",
+      "gamma",
+      "pr-review",
+    ])
+    await runtime.close()
+  })
+
   it("hands a native skill to the agent that owns it and refuses the other", async () => {
     const root = await temporaryDirectory()
     const projectPath = join(root, "project")

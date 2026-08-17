@@ -92,15 +92,17 @@ export class SkillInventory {
             description: skill.description,
             origin: source.kind,
             sourceLabel: source.label,
-            harnessIds:
-              source.kind === "pack"
-                ? this.harnesses.harnessIds()
-                : source.harnessIds,
+            harnessIds: source.harnessIds,
           },
         })
       }
     }
-    return [...bySkillId.values()]
+    // Sorted, because the composer offers the first few and counts the rest:
+    // in source order every Pack skill would sit behind every skill found in
+    // an agent's folder, and a workspace with four of those would bury them.
+    return [...bySkillId.values()].sort((left, right) =>
+      left.skill.name.localeCompare(right.skill.name)
+    )
   }
 
   async get(

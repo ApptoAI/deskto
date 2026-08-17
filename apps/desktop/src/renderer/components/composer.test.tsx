@@ -136,6 +136,72 @@ describe("Composer", () => {
     await waitFor(() => expect(screen.queryByAltText("first.png")).toBeNull())
   })
 
+  it("reads the skill list once per $, and again for the next one", async () => {
+    vi.stubGlobal("CSS", { escape: (value: string) => value })
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const request = vi.fn((body: { method: string }) =>
+      Promise.resolve(
+        body.method === "skill.listForPrompt"
+          ? {
+              ok: true as const,
+              data: [
+                {
+                  id: "skill:animate",
+                  name: "animate",
+                  description: "Build an animation",
+                  origin: "native" as const,
+                  sourceLabel: "Claude personal skills",
+                  harnessIds: ["claude"],
+                },
+              ],
+            }
+          : { ok: true as const, data: [] }
+      )
+    )
+    render(
+      <RuntimeClientProvider
+        client={
+          new RuntimeClient({
+            // SAFETY: the composer calls only skill.listForPrompt and
+            // project.searchEntries, and this fake answers both with the shape
+            // their RuntimeResponses entry declares.
+            request: request as RuntimeTransport["request"],
+            subscribe: () => () => {},
+          })
+        }
+      >
+        <Composer
+          projectId="project-1"
+          harnessId="claude"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole("textbox", { name: "Message" })
+    const listings = () =>
+      vi
+        .mocked(request)
+        .mock.calls.filter(([body]) => body.method === "skill.listForPrompt")
+        .length
+
+    fireEvent.change(textarea, { target: { value: "$", selectionStart: 1 } })
+    await screen.findByText("$animate")
+    fireEvent.change(textarea, { target: { value: "$an", selectionStart: 3 } })
+    await waitFor(() => expect(listings()).toBe(1))
+
+    // A second `$` is a second read: skills live in folders someone can edit
+    // between two messages.
+    fireEvent.change(textarea, {
+      target: { value: "$animate now $", selectionStart: 14 },
+    })
+    await waitFor(() => expect(listings()).toBe(2))
+  })
+
   it("describes the cross-platform paste shortcut", () => {
     render(
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>

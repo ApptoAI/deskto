@@ -5,13 +5,12 @@ import type { HarnessPromptReference } from "@deskto/harness-sdk"
 import type { PromptReference } from "@deskto/protocol"
 
 import { RuntimeError } from "./errors.js"
-import type { HarnessRegistry } from "./harness-registry.js"
-import { SkillInventory } from "./skills/skill-inventory.js"
+import type { SkillInventory } from "./skills/skill-inventory.js"
 import type { Store } from "./storage/store.js"
 
 export async function resolvePromptReferences(
   store: Store,
-  harnesses: HarnessRegistry,
+  skills: SkillInventory,
   threadId: string,
   references: PromptReference[]
 ): Promise<HarnessPromptReference[]> {
@@ -19,13 +18,16 @@ export async function resolvePromptReferences(
   const thread = store.threads.getRow(threadId)
   const project = store.projects.get(thread.project_id)
   const projectRoot = await realpath(project.path)
-  const resolvedSkills = await new SkillInventory(
-    store,
-    harnesses
-  ).listForPrompt(project.id)
-  const skillsById = new Map(
-    resolvedSkills.map((entry) => [entry.skill.id, entry] as const)
-  )
+  // Listing skills reads a SKILL.md per folder across every agent root and
+  // attached Pack. A turn that mentions only files has no use for that, and
+  // pays for it on every send otherwise.
+  const skillsById = references.some((reference) => reference.kind === "skill")
+    ? new Map(
+        (await skills.listForPrompt(project.id)).map(
+          (entry) => [entry.skill.id, entry] as const
+        )
+      )
+    : new Map()
 
   const resolved: HarnessPromptReference[] = []
   const seen = new Set<string>()
