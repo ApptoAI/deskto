@@ -54,13 +54,12 @@ conversation needs the width more than the roster does.
 
 **One slot, two sizes.** Opening the panel is that same information at full
 width, so the column gives up its slot instead of repeating itself. The card's
-one button opens the panel; a click on any agent row does the same. Activity
-is the panel's first tab and has no close button — there is nothing to put
-back once a task's own work is dismissed, and a task always has work to show
-before it has produced a single file. Results remain tabs beside it, opened by
-the header button and by a file chip in the conversation, both unchanged from
-ADR 0011. The tab strip badges agents still running, so a task says it is
-working while a spreadsheet is in front of it.
+one button opens the panel; a click on any agent row does the same. The compact
+column opens the stable Activities surface in the large panel. ADR 0015
+supersedes the dynamic Results tabs: Files is the other stable surface, and
+selecting a file opens it inside Files instead of creating a tab. The surface
+selector badges agents still running, so a task says it is working while a
+spreadsheet is in front of it.
 
 The conversation column widens from `max-w-3xl` to `max-w-4xl`. It carries
 prose now, not nested cards.
