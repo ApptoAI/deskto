@@ -4,6 +4,7 @@ import type {
   SkillSource,
 } from "@deskto/protocol"
 
+import { knownHarnessLabel } from "../../lib/harness.js"
 import type { SkillsFilter } from "./skills-filters.js"
 
 export type CatalogOccurrence = {
@@ -124,6 +125,7 @@ function matchesQuery(item: SkillCatalogItem, query: string): boolean {
       occurrence.directoryName,
       source.label,
       ...source.harnessIds,
+      ...source.harnessIds.map(knownHarnessLabel),
     ]),
   ]
   return searchable.some((value) => value?.toLocaleLowerCase().includes(query))

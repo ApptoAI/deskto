@@ -96,11 +96,10 @@ export function SkillsView({
   const inventoryData =
     inventory.state.status === "ready" ? inventory.state.data : null
   const effectiveFilter =
-    filter === "project" && !project
-      ? "computer"
-      : filter === "workspace" && !workspace
-        ? "all"
-        : filter
+    (filter === "project" && !project) ||
+    (filter === "workspace" && !workspace)
+      ? "all"
+      : filter
   const items = useMemo(
     () =>
       inventoryData

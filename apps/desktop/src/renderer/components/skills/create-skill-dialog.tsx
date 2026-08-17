@@ -42,8 +42,13 @@ export function CreateSkillDialog({
     }
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) setDraft(emptySkillDraft())
+    onOpenChange(nextOpen)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create a skill</DialogTitle>
@@ -63,7 +68,7 @@ export function CreateSkillDialog({
             type="button"
             variant="ghost"
             disabled={saving}
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
           >
             Cancel
           </Button>

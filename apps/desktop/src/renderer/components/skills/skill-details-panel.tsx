@@ -118,7 +118,7 @@ export function SkillDetailsPanel({
       </header>
 
       <div className="flex flex-wrap gap-2 border-b border-border py-4">
-        {source.editable && state.status === "ready" ? (
+        {source.editable && source.packId && state.status === "ready" ? (
           <Button
             type="button"
             variant="outline"
@@ -142,7 +142,10 @@ export function SkillDetailsPanel({
       </div>
 
       {editing ? (
-        <section className="mt-5 space-y-3 rounded-xl border border-border p-4">
+        <section
+          className="mt-5 space-y-3 rounded-xl border border-border p-4"
+          aria-label="Edit skill"
+        >
           <SkillDraftFields
             idPrefix="edit-skill"
             draft={draft}

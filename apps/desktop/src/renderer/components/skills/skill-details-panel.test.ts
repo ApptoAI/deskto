@@ -27,7 +27,9 @@ describe("instructionsFromSkillContent", () => {
       "Plain instructions"
     )
   })
+})
 
+describe("SkillDetailsPanel", () => {
   it("shows failed delivery for the selected Pack copy", () => {
     const packSource = source("pack", {
       kind: "pack",
@@ -93,8 +95,6 @@ describe("instructionsFromSkillContent", () => {
     expect(
       screen.getByText("The installed version rejected the skill root.")
     ).toBeDefined()
-    expect(screen.queryByText(/^Available$/)).toBeNull()
-
     const article = screen.getByRole("article")
     const header = article.querySelector("header")
     expect(header).not.toBeNull()

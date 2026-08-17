@@ -169,14 +169,14 @@ describe("buildSkillCatalog", () => {
     expect(result.map((item) => item.name)).toEqual(["pack-skill"])
   })
 
-  it("searches names, descriptions, sources, and harnesses", () => {
+  it("searches agent display names", () => {
     const result = buildSkillCatalog(
       inventory(
-        [source("Claude personal", { harnessIds: ["claude"] })],
-        [occurrence("one", "Claude personal", "release-notes")]
+        [source("personal", { harnessIds: ["claude"] })],
+        [occurrence("one", "personal", "release-notes")]
       ),
       "all",
-      "claude"
+      "code"
     )
 
     expect(result.map((item) => item.name)).toEqual(["release-notes"])
