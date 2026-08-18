@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import { requireControl } from "./access-control.js"
 import { defineTool } from "./definition.js"
-import { summarize, textResult } from "./format.js"
+import { latestTurnFailure, summarize, textResult } from "./format.js"
 import { threadSummarySchema } from "./schemas.js"
 
 export const startTurnTool = defineTool({
@@ -15,7 +15,10 @@ export const startTurnTool = defineTool({
       threadId: z.string().min(1),
       prompt: z.string().trim().min(1).max(30_000),
     }),
-    outputSchema: z.object({ thread: threadSummarySchema }),
+    outputSchema: z.object({
+      thread: threadSummarySchema,
+      startError: z.string().nullable(),
+    }),
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
   handler: async ({ threadId, prompt }, context) => {
@@ -24,6 +27,12 @@ export const startTurnTool = defineTool({
       method: "turn.start",
       params: { threadId, prompt },
     })
-    return textResult({ thread: summarize(view.thread) })
+    return textResult({
+      thread: summarize(view.thread),
+      startError:
+        view.thread.status === "failed"
+          ? (latestTurnFailure(view) ?? "The harness failed to start this task")
+          : null,
+    })
   },
 })
