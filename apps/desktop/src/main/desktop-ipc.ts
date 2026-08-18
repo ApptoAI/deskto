@@ -286,15 +286,14 @@ export function registerDesktopIpc(
     const ref = resultRefSchema.parse(value)
     return browser.openArtifact(ref.threadId, async () => {
       await existingBrowserThread(ref.threadId)
-      const listing = await runtime.request({
-        method: "artifact.list",
-        params: { threadId: ref.threadId },
+      const located = await runtime.request({
+        method: "artifact.locate",
+        params: ref,
       })
-      if (!listing.ok) throw new Error(listing.error.message)
-      const artifact = listing.data.find(
-        (output) => output.artifact.id === ref.artifactId
-      )?.artifact
-      if (!artifact || !isPageLikeArtifactPreviewKind(artifact.previewKind)) {
+      if (
+        !located.ok ||
+        !isPageLikeArtifactPreviewKind(located.data.previewKind)
+      ) {
         throw new Error("Only HTML and PDF files open in Browser.")
       }
       const preview = await runtime.request({
@@ -302,13 +301,13 @@ export function registerDesktopIpc(
         params: ref,
       })
       if (!preview.ok) throw new Error(preview.error.message)
-      if (artifact.previewKind === "html") {
+      if (located.data.previewKind === "html") {
         if (preview.data.kind !== "html") {
           throw new Error("That file is no longer available in this format.")
         }
         return {
           artifactId: ref.artifactId,
-          name: artifact.name,
+          name: located.data.name,
           kind: "html",
           body: preview.data.content,
         }
@@ -318,7 +317,7 @@ export function registerDesktopIpc(
       }
       return {
         artifactId: ref.artifactId,
-        name: artifact.name,
+        name: located.data.name,
         kind: "pdf",
         body: Uint8Array.from(Buffer.from(preview.data.dataBase64, "base64")),
       }

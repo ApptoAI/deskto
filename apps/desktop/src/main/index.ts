@@ -31,7 +31,6 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       stream: true,
-      allowExtensions: true,
     },
   },
 ])

@@ -184,6 +184,12 @@ describe("browser snapshot page script", () => {
 })
 
 describe("browser element picker page script", () => {
+  function evaluatePickerScript<Result>(script: string): Result {
+    // biome-ignore lint/security/noGlobalEval: generated picker code must run in the jsdom Window
+    // SAFETY: Each call supplies the generated script's documented result type.
+    return window.eval(script) as Result
+  }
+
   it("captures bounded semantic details without form values", async () => {
     document.body.innerHTML = `
       <label>Email <input type="email" value="private@example.com"></label>
@@ -204,9 +210,9 @@ describe("browser element picker page script", () => {
 
     const controlKey = "__deskto_picker_test"
     // SAFETY: The generated picker script always evaluates to its one-shot Promise.
-    const pending = window.eval(
+    const pending = evaluatePickerScript<Promise<unknown>>(
       browserElementPickerScript(controlKey)
-    ) as Promise<unknown>
+    )
     input.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }))
     input.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true })
@@ -235,9 +241,9 @@ describe("browser element picker page script", () => {
     if (!target) throw new Error("Sensitive element fixture is missing")
 
     // SAFETY: The generated picker script always evaluates to its one-shot Promise.
-    const pending = window.eval(
+    const pending = evaluatePickerScript<Promise<unknown>>(
       browserElementPickerScript("__deskto_sensitive_picker_test")
-    ) as Promise<unknown>
+    )
     target.dispatchEvent(
       new MouseEvent("click", { bubbles: true, cancelable: true })
     )
@@ -250,11 +256,11 @@ describe("browser element picker page script", () => {
   it("can be cancelled from the Browser toolbar", async () => {
     const controlKey = "__deskto_picker_cancel_test"
     // SAFETY: The generated picker script always evaluates to its one-shot Promise.
-    const pending = window.eval(
+    const pending = evaluatePickerScript<Promise<unknown>>(
       browserElementPickerScript(controlKey)
-    ) as Promise<unknown>
+    )
 
-    window.eval(browserCancelElementPickerScript(controlKey))
+    evaluatePickerScript<void>(browserCancelElementPickerScript(controlKey))
 
     await expect(pending).resolves.toBeNull()
     expect(document.querySelector("[data-deskto-element-picker]")).toBeNull()

@@ -2609,6 +2609,8 @@ describe("Runtime", () => {
       )
     ).toEqual({
       artifactId: csv.id,
+      name: "customers.csv",
+      previewKind: "csv",
       absolutePath: join(projectPath, "customers.csv"),
       device: expect.any(String),
       inode: expect.any(String),

@@ -8,7 +8,7 @@ type BrowserArtifactIdentity = {
 
 type BrowserArtifactPayload =
   | { kind: "html"; body: string }
-  | { kind: "pdf"; body: Uint8Array }
+  | { kind: "pdf"; body: Uint8Array<ArrayBuffer> }
 
 export type BrowserArtifactResource = BrowserArtifactIdentity &
   BrowserArtifactPayload
@@ -193,17 +193,14 @@ export function browserArtifactResponse(
       "Content-Range",
       `bytes ${range.start}-${range.end}/${bytes.byteLength}`
     )
-    return new Response(
-      request.method === "HEAD" ? null : Uint8Array.from(body).buffer,
-      {
-        status: 206,
-        headers,
-      }
-    )
+    return new Response(request.method === "HEAD" ? null : body, {
+      status: 206,
+      headers,
+    })
   }
   headers.set("Content-Length", String(bytes.byteLength))
-  return new Response(
-    request.method === "HEAD" ? null : Uint8Array.from(bytes).buffer,
-    { status: 200, headers }
-  )
+  return new Response(request.method === "HEAD" ? null : bytes, {
+    status: 200,
+    headers,
+  })
 }

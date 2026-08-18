@@ -283,17 +283,19 @@ export class BrowserManager implements BrowserAutomationHost {
   async cancelElementSelection(threadId: string): Promise<void> {
     const tab = this.#tabs.get(threadId)
     if (!tab?.selectingElement || tab.view.webContents.isDestroyed()) return
-    await tab.view.webContents.executeJavaScriptInIsolatedWorld(
-      browserAutomationWorldId,
-      [
-        {
-          code: browserCancelElementPickerScript(
-            browserElementPickerControlKey
-          ),
-        },
-      ],
-      true
-    )
+    await tab.view.webContents
+      .executeJavaScriptInIsolatedWorld(
+        browserAutomationWorldId,
+        [
+          {
+            code: browserCancelElementPickerScript(
+              browserElementPickerControlKey
+            ),
+          },
+        ],
+        true
+      )
+      .catch(() => undefined)
   }
 
   async status(threadId: string): Promise<BrowserStatus> {

@@ -566,6 +566,8 @@ export function isEditableArtifact(artifact: Artifact): boolean {
  */
 export const artifactLocationSchema = z.object({
   artifactId: z.string(),
+  name: z.string(),
+  previewKind: artifactPreviewKindSchema,
   absolutePath: z.string(),
   /** File identity captured by the Runtime's containment check. */
   device: z.string(),
