@@ -292,6 +292,7 @@ export function TaskView({
                   messages={messages}
                   activities={activities}
                   running={active}
+                  progress={state.data.progress}
                   outputs={outputHistory}
                 />
               </FilesProvider>

@@ -15,16 +15,39 @@ const CELL_DELAYS = Array.from({ length: 9 }, (_, index) => {
   return (column + Math.abs(row - 1)) * 90
 })
 
+export function progressSilenceLabel(
+  elapsedMs: number,
+  since?: string,
+  lastSignalAt?: string
+): string | undefined {
+  const startedAt = since ? Date.parse(since) : Number.NaN
+  const signalledAt = lastSignalAt ? Date.parse(lastSignalAt) : Number.NaN
+  if (Number.isNaN(startedAt) || Number.isNaN(signalledAt)) return undefined
+  const silenceMs = Math.max(0, startedAt + elapsedMs - signalledAt)
+  return silenceMs >= 10_000 ? formatElapsed(silenceMs) : undefined
+}
+
+export function progressStatusText(
+  label: string,
+  noRecentUpdate: boolean
+): string {
+  return `${label}…${noRecentUpdate ? " No recent update." : ""}`
+}
+
 export function WorkingIndicator({
   label = "Working",
   since,
+  lastSignalAt,
 }: {
-  label?: string
+  label?: string | undefined
   since?: string | undefined
+  lastSignalAt?: string | undefined
 }) {
   // Tenths, unlike the Turn headers: this indicator's whole job is to say the
   // agent is still there, and a number that only moves once a second does not.
-  const elapsed = formatElapsed(useElapsed(since), { precise: true })
+  const elapsedMs = useElapsed(since)
+  const elapsed = formatElapsed(elapsedMs, { precise: true })
+  const silenceLabel = progressSilenceLabel(elapsedMs, since, lastSignalAt)
   return (
     <div className="flex w-fit items-center gap-2.5">
       <span aria-hidden className="grid grid-cols-[repeat(3,4px)] gap-[1.5px]">
@@ -45,8 +68,13 @@ export function WorkingIndicator({
       >
         {elapsed}
       </span>
+      {silenceLabel ? (
+        <span aria-hidden className="text-micro text-muted-foreground">
+          No update for {silenceLabel}
+        </span>
+      ) : null}
       <span role="status" className="sr-only">
-        {label}…
+        {progressStatusText(label, Boolean(silenceLabel))}
       </span>
     </div>
   )

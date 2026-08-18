@@ -126,7 +126,7 @@ describe("thread timeline", () => {
     expect(rows.map((row) => row.kind)).toEqual(["message", "live"])
   })
 
-  it("puts a settled Turn's files after its answer and hides live outputs", () => {
+  it("puts a settled Turn's files after its answer and shows live outputs", () => {
     const settled = buildTimeline({
       messages: [prompt("turn-1"), reply("answer", "turn-1", "Done.", 1)],
       activities: [],
@@ -153,7 +153,7 @@ describe("thread timeline", () => {
       outputs: [output("forecast", "turn-1")],
       running: true,
     })
-    expect(live.some((row) => row.kind === "files")).toBe(false)
+    expect(live.map((row) => row.kind)).toEqual(["message", "live", "files"])
   })
 
   it("treats a streaming reply as live even when the thread reads idle", () => {

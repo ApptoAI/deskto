@@ -54,6 +54,13 @@ export function applyThreadDelta(
     return { outcome: "applied", view: { ...view, activities, seq: event.seq } }
   }
 
+  if (change.type === "progress.updated") {
+    return {
+      outcome: "applied",
+      view: { ...view, progress: change.progress, seq: event.seq },
+    }
+  }
+
   if (change.type === "approval.requested") {
     return {
       outcome: "applied",

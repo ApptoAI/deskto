@@ -16,7 +16,7 @@ Domain records, defined as zod schemas with types inferred from them:
 - `Thread`, a task inside a project, with its status and execution profile
 - `Message`, `Activity`, and `Approval`, the things a thread displays. An Activity may carry a typed payload (`tool`, `file-change`, `plan`, or `subagent`), a `parentActivityId` for work nested under a subagent, and an `ordinal` shared with messages so both interleave chronologically
 - `Harness`, an agent product with its availability and model catalog
-- `ThreadView`, the aggregate most calls return: the thread plus its messages, activities, any pending approval, and a `seq` delta cursor
+- `ThreadView`, the aggregate most calls return: the thread plus its messages, activities, transient active-Turn progress, any pending approval, and a `seq` delta cursor
 - `ExecutionProfile`, `Preferences`, and `Selection` (the last active workspace and project, so a restart reopens them)
 - `SettingsSnapshot`, the effective user settings: every value in effect plus the subset the user overrode. Values are opaque JSON here; both sides read them through `@deskto/settings`
 
@@ -24,7 +24,7 @@ Requests are one discriminated union, `runtimeRequestSchema`, keyed on `method`.
 
 Responses are typed through the `RuntimeResponses` map. Every call resolves to `{ ok: true, data }` or `{ ok: false, error: { code, message } }`, so transport code never throws domain errors.
 
-Events are a second discriminated union: `thread.changed` (with a `threadId`), `thread.delta`, `harness.changed`, `settings.changed`, `workspace.changed`, and `pack.changed`. Most events carry no payloads beyond the id and tell an open view to refetch. `thread.delta` is the exception for the high-frequency stream of a running turn: it carries one changed record (`message.appended`, `message.upserted`, `activity.upserted`, `approval.requested`, `approval.resolved`, or `thread.updated`) plus a per-thread `seq`. A client applies a delta only when its seq extends the view's cursor by exactly one; any gap means a refetch. Approval requests and resolutions apply incrementally; lifecycle transitions such as turn start and completion stay on `thread.changed`.
+Events are a second discriminated union: `thread.changed` (with a `threadId`), `thread.delta`, `harness.changed`, `settings.changed`, `workspace.changed`, and `pack.changed`. Most events carry no payloads beyond the id and tell an open view to refetch. `thread.delta` is the exception for the high-frequency stream of a running turn: it carries one changed record (`message.appended`, `message.upserted`, `activity.upserted`, `progress.updated`, `approval.requested`, `approval.resolved`, or `thread.updated`) plus a per-thread `seq`. A client applies a delta only when its seq extends the view's cursor by exactly one; any gap means a refetch. Approval requests, resolutions, and active progress apply incrementally; lifecycle transitions such as turn start and completion stay on `thread.changed`.
 
 The `RuntimeTransport` interface ties it together: `request()` for calls and `subscribe()` for events. The Runtime implements it in-process and the desktop app implements it over IPC.
 

@@ -86,15 +86,16 @@ export function buildTimeline({
     const prompt: TimelineRow[] = segment.prompt
       ? [{ kind: "message", key: segment.prompt.id, message: segment.prompt }]
       : []
+    const turnOutputs = outputsByTurn.get(segmentTurnKey(segment) ?? "") ?? []
     return [
       ...prompt,
       ...(live
-        ? liveRows(segment)
+        ? liveRows(segment, turnOutputs)
         : settledRows(
             segment,
             worked(segment, workingTurns),
             activityEndFor(segment, activityEnds),
-            outputsByTurn.get(segmentTurnKey(segment) ?? "") ?? []
+            turnOutputs
           )),
     ]
   })
@@ -204,20 +205,33 @@ function hasStreamingReply(segment: Segment): boolean {
  * working indicator at the tail already counts, and two timers on one Turn is
  * one timer too many.
  */
-function liveRows(segment: Segment): TimelineRow[] {
-  if (segment.body.length === 0) return []
+function liveRows(segment: Segment, outputs: TurnOutput[]): TimelineRow[] {
   const items: LiveItem[] = segment.body.map((entry) =>
     entry.kind === "message"
       ? { kind: "message", key: entry.message.id, message: entry.message }
       : { kind: "activity", key: entry.activity.id, activity: entry.activity }
   )
-  return [
-    {
-      kind: "live",
-      key: `live:${segmentTurnKey(segment) ?? items[0]!.key}`,
-      items,
-    },
-  ]
+  const workRows: TimelineRow[] =
+    items.length > 0
+      ? [
+          {
+            kind: "live",
+            key: `live:${segmentTurnKey(segment) ?? items[0]!.key}`,
+            items,
+          },
+        ]
+      : []
+  const files: TimelineRow[] =
+    outputs.length > 0
+      ? [
+          {
+            kind: "files",
+            key: `files:${segmentTurnKey(segment) ?? "live"}`,
+            outputs,
+          },
+        ]
+      : []
+  return [...workRows, ...files]
 }
 
 /**

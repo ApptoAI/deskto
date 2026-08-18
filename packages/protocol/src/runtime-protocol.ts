@@ -23,6 +23,7 @@ import {
   threadViewSchema,
   turnInputSchema,
   turnOutputSchema,
+  turnProgressSchema,
   projectSchema,
   workspaceSchema,
 } from "./models.js"
@@ -382,6 +383,10 @@ export const threadDeltaChangeSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("message.upserted"), message: messageSchema }),
   z.object({ type: z.literal("activity.upserted"), activity: activitySchema }),
+  z.object({
+    type: z.literal("progress.updated"),
+    progress: turnProgressSchema,
+  }),
   z.object({ type: z.literal("approval.requested"), approval: approvalSchema }),
   z.object({
     type: z.literal("approval.resolved"),

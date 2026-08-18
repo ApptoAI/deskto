@@ -428,6 +428,65 @@ describe("codexPlanSteps", () => {
 })
 
 describe("CodexAdapter activity notifications", () => {
+  it("reports reasoning and tool-output heartbeats without their contents", async () => {
+    const session = await new CodexAdapter(clientFactory).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const notify = clientState.notification!
+    notify({
+      method: "item/reasoning/textDelta",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        delta: "private reasoning",
+      },
+    })
+    notify({
+      method: "item/commandExecution/outputDelta",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        delta: "private command output",
+      },
+    })
+    notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+    expect(events).toEqual([
+      { type: "session.started", providerSessionId: "thread-1" },
+      {
+        type: "progress.updated",
+        progress: { stage: "thinking", label: "Thinking" },
+      },
+      {
+        type: "progress.updated",
+        progress: { stage: "running-tool", label: "Run command" },
+      },
+      { type: "turn.completed" },
+    ])
+    expect(JSON.stringify(events)).not.toContain("private")
+  })
+
   it("nests child work and scopes child failures to the subagent", async () => {
     const session = await new CodexAdapter(clientFactory).start(
       {

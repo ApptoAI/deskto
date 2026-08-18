@@ -17,6 +17,7 @@ export type {
   HarnessFailure,
   HarnessFailureKind,
   HarnessModelOption,
+  HarnessProgress,
   HarnessPromptReference,
   HarnessRunInput,
   HarnessSession,

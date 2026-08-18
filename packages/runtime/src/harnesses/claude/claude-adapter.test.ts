@@ -810,6 +810,29 @@ describe("ClaudeAdapter", () => {
     queryMock.mockReturnValue(
       fakeQuery([
         sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: "task-1",
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "todo-child",
+              name: "TodoWrite",
+              input: {},
+            },
+          },
+        }),
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: "task-1",
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"todos"' },
+          },
+        }),
+        sdkMessage({
           type: "assistant",
           parent_tool_use_id: "task-1",
           message: {
@@ -858,6 +881,28 @@ describe("ClaudeAdapter", () => {
         activity: {
           id: "todo-child",
           parentId: "task-1",
+          name: "TodoWrite",
+          payload: { kind: "tool", tool: "other" },
+        },
+      },
+      {
+        type: "progress.updated",
+        progress: {
+          stage: "preparing-tool",
+          label: "Preparing todowrite",
+        },
+      },
+      {
+        type: "progress.updated",
+        progress: {
+          stage: "preparing-tool",
+          label: "Preparing todowrite",
+        },
+      },
+      {
+        type: "activity.updated",
+        update: {
+          id: "todo-child",
           name: "TodoWrite",
           payload: { kind: "tool", tool: "other" },
         },
@@ -1582,6 +1627,277 @@ describe("ClaudeAdapter", () => {
       },
       { type: "turn.completed" },
     ])
+  })
+})
+
+describe("Claude live progress", () => {
+  it("starts a tool row before its streamed input has finished", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "bash-1",
+              name: "Bash",
+              input: {},
+            },
+          },
+        }),
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "input_json_delta", partial_json: '{"command"' },
+          },
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: null,
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "bash-1",
+                name: "Bash",
+                input: { command: "echo ready" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "bash-1",
+                content: "ready",
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Write the file",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events.slice(0, 4)).toEqual([
+      {
+        type: "activity.started",
+        activity: {
+          id: "bash-1",
+          name: "Run command",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+      {
+        type: "progress.updated",
+        progress: { stage: "preparing-tool", label: "Preparing command" },
+      },
+      {
+        type: "progress.updated",
+        progress: { stage: "preparing-tool", label: "Preparing command" },
+      },
+      {
+        type: "activity.updated",
+        update: {
+          id: "bash-1",
+          name: "Run command",
+          detail: "echo ready",
+          payload: { kind: "tool", tool: "command" },
+        },
+      },
+    ])
+    expect(
+      events.filter((event) => event.type === "activity.started")
+    ).toHaveLength(1)
+    expect(events.at(-1)).toEqual({ type: "turn.completed" })
+  })
+
+  it("keeps streamed tool preparation live inside a subagent", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: "agent-1",
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "write-1",
+              name: "Write",
+              input: {},
+            },
+          },
+        }),
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: "agent-1",
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "input_json_delta",
+              partial_json: '{"file_path"',
+            },
+          },
+        }),
+        sdkMessage({
+          type: "assistant",
+          parent_tool_use_id: "agent-1",
+          message: {
+            model: "claude-test",
+            usage: emptyAssistantUsage,
+            content: [
+              {
+                type: "tool_use",
+                id: "write-1",
+                name: "Write",
+                input: { file_path: "report.md", content: "Ready" },
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "user",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "write-1",
+                content: "Saved",
+              },
+            ],
+          },
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Delegate the report",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(
+      events.filter(
+        (event) =>
+          event.type === "progress.updated" &&
+          event.progress.stage === "preparing-tool" &&
+          event.progress.label === "Preparing file change"
+      )
+    ).toHaveLength(2)
+    expect(events).toContainEqual({
+      type: "activity.updated",
+      update: {
+        id: "write-1",
+        name: "Write file",
+        detail: "report.md",
+        payload: {
+          kind: "file-change",
+          files: [{ path: "report.md" }],
+        },
+      },
+    })
+  })
+
+  it("turns private thinking deltas into liveness only", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "thinking_delta", thinking: "private" },
+          },
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Think",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "progress.updated",
+        progress: { stage: "thinking", label: "Thinking" },
+      },
+      { type: "turn.completed" },
+    ])
+    expect(JSON.stringify(events)).not.toContain("private")
   })
 })
 

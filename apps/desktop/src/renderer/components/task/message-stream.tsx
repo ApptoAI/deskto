@@ -5,6 +5,7 @@ import type {
   Activity,
   ImageAttachment,
   Message,
+  TurnProgress,
   TurnOutput,
 } from "@deskto/protocol"
 
@@ -54,19 +55,15 @@ export function MessageStream({
   messages,
   activities,
   running,
+  progress,
   outputs,
 }: {
   messages: Message[]
   activities: Activity[]
   running: boolean
+  progress?: TurnProgress | undefined
   outputs: TurnOutput[]
 }) {
-  const lastMessage = messages.at(-1)
-  // The tail indicator holds the floor whenever nothing else is visibly
-  // streaming: before the first output and between prose segments while
-  // tools run. An actively streaming message shows its own caret instead.
-  const streamingTail =
-    lastMessage?.role === "assistant" && lastMessage.state === "streaming"
   const sinceTail = lastUserMessageAt(messages)
   const rows = useMemo(
     () => buildTimeline({ messages, activities, running, outputs }),
@@ -112,8 +109,12 @@ export function MessageStream({
                 return <TurnFiles key={row.key} outputs={row.outputs} />
             }
           })}
-          {running && !streamingTail ? (
-            <WorkingIndicator since={sinceTail} />
+          {running ? (
+            <WorkingIndicator
+              label={progress?.label}
+              since={sinceTail}
+              lastSignalAt={progress?.updatedAt}
+            />
           ) : null}
         </div>
       </MessageList>
@@ -405,7 +406,7 @@ const MessageEntry = memo(function MessageEntry({
     )
   }
 
-  if (message.state === "complete" && !message.content) return null
+  if (!message.content && message.state !== "error") return null
 
   return (
     <MessageRow role="assistant" className="enter-rise">
@@ -433,9 +434,7 @@ const MessageEntry = memo(function MessageEntry({
           <Markdown className={answerClassName} onLinkActivate={openExternal}>
             {message.content}
           </Markdown>
-        ) : (
-          <WorkingIndicator since={message.createdAt} />
-        )}
+        ) : null}
         {message.state === "streaming" && message.content ? (
           <span
             aria-hidden
