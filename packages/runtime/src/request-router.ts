@@ -1,8 +1,10 @@
 import {
+  executionProfilesByHarnessSchema,
   lastProfileSchema,
   selectionSchema,
   type ExecutionProfile,
   type RequestFor,
+  type Preferences,
   type RuntimeMethod,
   type RuntimeRequest,
   type RuntimeResponse,
@@ -28,6 +30,10 @@ const selectionSettingKey = "ui.selection"
 
 function lastProfileKeyFor(workspaceId: string): string {
   return `preferences.lastProfile.${workspaceId}`
+}
+
+function profilesByHarnessKeyFor(workspaceId: string): string {
+  return `preferences.profilesByHarness.${workspaceId}`
 }
 
 export type RouterEvents = {
@@ -90,12 +96,8 @@ export class RequestRouter {
         )
       case "harness.refresh":
         return this.harnesses.refresh()
-      case "preferences.get": {
-        const stored = lastProfileSchema.safeParse(
-          this.store.settings.get(lastProfileKeyFor(request.params.workspaceId))
-        )
-        return { lastProfile: stored.success ? stored.data : null }
-      }
+      case "preferences.get":
+        return this.#preferences(request.params.workspaceId)
       case "settings.get":
         return this.userSettings.snapshot()
       case "settings.update":
@@ -134,6 +136,9 @@ export class RequestRouter {
         this.#forgetSelection(request.params.workspaceId)
         this.store.settings.delete(
           lastProfileKeyFor(request.params.workspaceId)
+        )
+        this.store.settings.delete(
+          profilesByHarnessKeyFor(request.params.workspaceId)
         )
         this.events.workspaceChanged()
         // The FK cascade also detached the workspace's packs.
@@ -276,20 +281,23 @@ export class RequestRouter {
           request.params.executionProfile
         )
         const project = this.store.projects.get(request.params.projectId)
-        this.#rememberProfile(
-          project.workspaceId,
-          request.params.harnessId,
-          profile
-        )
-        const thread = this.store.threads.create(
-          request.params.projectId,
-          request.params.harnessId,
-          profile,
-          {
-            parentThreadId: request.params.parentThreadId,
-            title: request.params.title,
-          }
-        )
+        const thread = this.store.transaction(() => {
+          const created = this.store.threads.create(
+            request.params.projectId,
+            request.params.harnessId,
+            profile,
+            {
+              parentThreadId: request.params.parentThreadId,
+              title: request.params.title,
+            }
+          )
+          this.#rememberProfile(
+            project.workspaceId,
+            request.params.harnessId,
+            profile
+          )
+          return created
+        })
         if (thread.parentThreadId) {
           this.events.threadChanged(thread.parentThreadId)
         }
@@ -309,12 +317,18 @@ export class RequestRouter {
           request.params.executionProfile
         )
         const project = this.store.projects.get(thread.project_id)
-        this.#rememberProfile(
-          project.workspaceId,
-          thread.harness_id,
-          executionProfile
-        )
-        return this.store.threads.configure(thread.id, executionProfile)
+        return this.store.transaction(() => {
+          const configured = this.store.threads.configure(
+            thread.id,
+            executionProfile
+          )
+          this.#rememberProfile(
+            project.workspaceId,
+            thread.harness_id,
+            executionProfile
+          )
+          return configured
+        })
       }
       case "thread.get":
         return this.store.threads.view(request.params.threadId)
@@ -421,12 +435,43 @@ export class RequestRouter {
     }
   }
 
-  /** New threads start from the profile the user last used in this workspace. */
+  #preferences(workspaceId: string): Preferences {
+    const storedLastProfile = lastProfileSchema.safeParse(
+      this.store.settings.get(lastProfileKeyFor(workspaceId))
+    )
+    const lastProfile = storedLastProfile.success
+      ? storedLastProfile.data
+      : null
+    const storedProfiles = executionProfilesByHarnessSchema.safeParse(
+      this.store.settings.get(profilesByHarnessKeyFor(workspaceId))
+    )
+    const profilesByHarness = storedProfiles.success ? storedProfiles.data : {}
+    if (
+      !lastProfile ||
+      Object.hasOwn(profilesByHarness, lastProfile.harnessId)
+    ) {
+      return { lastProfile, profilesByHarness }
+    }
+    return {
+      lastProfile,
+      profilesByHarness: {
+        ...profilesByHarness,
+        [lastProfile.harnessId]: lastProfile.executionProfile,
+      },
+    }
+  }
+
+  /** New threads start from the profile last used for their Harness. */
   #rememberProfile(
     workspaceId: string,
     harnessId: string,
     executionProfile: ExecutionProfile
   ) {
+    const { profilesByHarness } = this.#preferences(workspaceId)
+    this.store.settings.set(profilesByHarnessKeyFor(workspaceId), {
+      ...profilesByHarness,
+      [harnessId]: executionProfile,
+    })
     this.store.settings.set(lastProfileKeyFor(workspaceId), {
       harnessId,
       executionProfile,

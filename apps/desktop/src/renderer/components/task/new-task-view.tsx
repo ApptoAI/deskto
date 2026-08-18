@@ -6,10 +6,7 @@ import type {
   TurnInput,
 } from "@deskto/protocol"
 
-import {
-  defaultExecutionProfile,
-  restoredExecutionProfile,
-} from "../../lib/execution-profile.js"
+import { executionProfileForHarness } from "../../lib/execution-profile.js"
 import {
   describeHarnessBlock,
   findHarness,
@@ -51,6 +48,10 @@ export function NewTaskView({
     preferences.state.status === "ready"
       ? preferences.state.data.lastProfile
       : null
+  const profilesByHarness =
+    preferences.state.status === "ready"
+      ? preferences.state.data.profilesByHarness
+      : {}
 
   const options = harnesses.status === "ready" ? harnesses.data : []
   const lastHarness = lastProfile
@@ -68,9 +69,7 @@ export function NewTaskView({
     : []
   const profile =
     chosenProfile ??
-    (lastProfile && lastProfile.harnessId === harnessId
-      ? restoredExecutionProfile(models, lastProfile.executionProfile)
-      : defaultExecutionProfile(models))
+    executionProfileForHarness(models, harnessId, profilesByHarness)
 
   function selectHarness(id: string) {
     setChosenHarnessId(id)

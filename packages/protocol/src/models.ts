@@ -242,8 +242,14 @@ export const lastProfileSchema = z.object({
 
 export type LastProfile = z.infer<typeof lastProfileSchema>
 
+export const executionProfilesByHarnessSchema = z.record(
+  z.string().min(1),
+  executionProfileSchema
+)
+
 export const preferencesSchema = z.object({
   lastProfile: lastProfileSchema.nullable(),
+  profilesByHarness: executionProfilesByHarnessSchema,
 })
 
 export type Preferences = z.infer<typeof preferencesSchema>
