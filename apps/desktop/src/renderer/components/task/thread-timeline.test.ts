@@ -156,6 +156,24 @@ describe("thread timeline", () => {
     expect(live.map((row) => row.kind)).toEqual(["message", "live", "files"])
   })
 
+  it("keeps settled files when the Turn has no answer", () => {
+    const withoutReply = buildTimeline({
+      messages: [prompt("turn-1")],
+      activities: [],
+      outputs: [output("forecast", "turn-1")],
+      running: false,
+    })
+    const withEmptyReply = buildTimeline({
+      messages: [prompt("turn-1"), reply("answer", "turn-1", "", 1)],
+      activities: [],
+      outputs: [output("forecast", "turn-1")],
+      running: false,
+    })
+
+    expect(withoutReply.map((row) => row.kind)).toEqual(["message", "files"])
+    expect(withEmptyReply.map((row) => row.kind)).toEqual(["message", "files"])
+  })
+
   it("treats a streaming reply as live even when the thread reads idle", () => {
     const rows = buildTimeline({
       messages: [

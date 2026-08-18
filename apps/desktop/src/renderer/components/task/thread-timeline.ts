@@ -296,11 +296,11 @@ function settledRows(
     ? [{ kind: "message", key: reply.id, message: reply }]
     : []
   const files: TimelineRow[] =
-    reply && outputs.length > 0
+    outputs.length > 0
       ? [
           {
             kind: "files",
-            key: `files:${segmentTurnKey(segment) ?? reply.id}`,
+            key: `files:${segmentTurnKey(segment) ?? outputs[0]!.turnId}`,
             outputs,
           },
         ]

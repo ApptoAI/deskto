@@ -374,7 +374,7 @@ class CodexSession implements HarnessSession {
       notification.method === "item/reasoning/summaryPartAdded" ||
       notification.method === "item/reasoning/textDelta"
     ) {
-      if (!this.#isCurrentTurn(params)) return
+      if (!this.#activityScope(params)) return
       this.#queue.push({
         type: "progress.updated",
         progress: { stage: "thinking", label: "Thinking" },
@@ -384,7 +384,7 @@ class CodexSession implements HarnessSession {
 
     const runningLabel = codexProgressLabel(notification.method)
     if (runningLabel) {
-      if (!this.#isCurrentTurn(params)) return
+      if (!this.#activityScope(params)) return
       this.#queue.push({
         type: "progress.updated",
         progress: { stage: "running-tool", label: runningLabel },
