@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 
 import {
+  browserCancelElementPickerScript,
   browserElementBoundsScript,
+  browserElementPickerScript,
   browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
@@ -178,5 +180,83 @@ describe("browser snapshot page script", () => {
         Reflect.deleteProperty(document, "elementFromPoint")
       }
     }
+  })
+})
+
+describe("browser element picker page script", () => {
+  it("captures bounded semantic details without form values", async () => {
+    document.body.innerHTML = `
+      <label>Email <input type="email" value="private@example.com"></label>
+    `
+    const input = document.querySelector("input")
+    if (!input) throw new Error("Input fixture is missing")
+    vi.spyOn(input, "getBoundingClientRect").mockReturnValue({
+      x: 10,
+      y: 10,
+      width: 120,
+      height: 24,
+      top: 10,
+      right: 130,
+      bottom: 34,
+      left: 10,
+      toJSON: () => ({}),
+    })
+
+    const controlKey = "__deskto_picker_test"
+    // SAFETY: The generated picker script always evaluates to its one-shot Promise.
+    const pending = window.eval(
+      browserElementPickerScript(controlKey)
+    ) as Promise<unknown>
+    input.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }))
+    input.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    )
+    const result = await pending
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        selector: "body > label > input",
+        tagName: "input",
+        role: "textbox",
+        name: null,
+        text: null,
+      })
+    )
+    expect(JSON.stringify(result)).not.toContain("private@example.com")
+    expect(document.querySelector("[data-deskto-element-picker]")).toBeNull()
+  })
+
+  it.each([
+    ["textarea", "<label>Private note<textarea>launch code</textarea></label>"],
+    ["contenteditable", '<div contenteditable="true">launch code</div>'],
+  ])("redacts %s contents", async (_kind, markup) => {
+    document.body.innerHTML = markup
+    const target = document.querySelector("textarea, [contenteditable]")
+    if (!target) throw new Error("Sensitive element fixture is missing")
+
+    // SAFETY: The generated picker script always evaluates to its one-shot Promise.
+    const pending = window.eval(
+      browserElementPickerScript("__deskto_sensitive_picker_test")
+    ) as Promise<unknown>
+    target.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    )
+
+    await expect(pending).resolves.toEqual(
+      expect.objectContaining({ name: null, text: null })
+    )
+  })
+
+  it("can be cancelled from the Browser toolbar", async () => {
+    const controlKey = "__deskto_picker_cancel_test"
+    // SAFETY: The generated picker script always evaluates to its one-shot Promise.
+    const pending = window.eval(
+      browserElementPickerScript(controlKey)
+    ) as Promise<unknown>
+
+    window.eval(browserCancelElementPickerScript(controlKey))
+
+    await expect(pending).resolves.toBeNull()
+    expect(document.querySelector("[data-deskto-element-picker]")).toBeNull()
   })
 })

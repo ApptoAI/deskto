@@ -2,9 +2,12 @@ import { contextBridge, ipcRenderer } from "electron"
 
 import {
   browserActionChannel,
+  browserCancelSelectionChannel,
   browserEventChannel,
   browserHideChannel,
   browserNavigateChannel,
+  browserOpenArtifactChannel,
+  browserSelectElementChannel,
   browserShowChannel,
   browserStateChannel,
   openExternalChannel,
@@ -52,6 +55,12 @@ const api: DesktopApi = {
       ipcRenderer.invoke(browserNavigateChannel, threadId, url),
     action: (threadId, action) =>
       ipcRenderer.invoke(browserActionChannel, threadId, action),
+    openArtifact: (result) =>
+      ipcRenderer.invoke(browserOpenArtifactChannel, result),
+    selectElement: (threadId) =>
+      ipcRenderer.invoke(browserSelectElementChannel, threadId),
+    cancelElementSelection: (threadId) =>
+      ipcRenderer.invoke(browserCancelSelectionChannel, threadId),
     subscribe: (listener) => {
       const handler = (
         _event: Electron.IpcRendererEvent,

@@ -1,4 +1,5 @@
 import type {
+  BrowserElementContext,
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
@@ -68,6 +69,9 @@ export interface DesktopApi {
     state(threadId: string): Promise<BrowserViewState>
     navigate(threadId: string, url: string): Promise<BrowserViewState>
     action(threadId: string, action: BrowserAction): Promise<BrowserViewState>
+    openArtifact(result: ResultRef): Promise<BrowserViewState>
+    selectElement(threadId: string): Promise<BrowserElementContext | undefined>
+    cancelElementSelection(threadId: string): Promise<void>
     subscribe(listener: (event: BrowserEvent) => void): () => void
   }
 }

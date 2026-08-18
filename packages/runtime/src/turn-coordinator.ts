@@ -19,6 +19,7 @@ import type {
   TurnInput,
 } from "@deskto/protocol"
 
+import { appendBrowserPromptContext } from "./browser/browser-prompt-context.js"
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -169,7 +170,10 @@ export class TurnCoordinator {
         threadId,
         turnId: turn.turnId,
         projectPath: turn.projectPath,
-        prompt: input.text,
+        prompt: appendBrowserPromptContext(
+          input.text,
+          input.browserContexts ?? []
+        ),
         references,
         attachments: input.attachments.map(
           ({ type, name, mimeType, dataUrl }) => ({

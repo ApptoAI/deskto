@@ -3,6 +3,7 @@ import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
 import { hasUnreadCompletion, threadCameBack } from "@deskto/client"
 import type {
+  BrowserElementContext,
   ExecutionProfile,
   Harness,
   Project,
@@ -14,6 +15,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 import {
   browserState,
+  openBrowserArtifact,
   openFolder,
   subscribeBrowser,
 } from "../../lib/desktop.js"
@@ -33,6 +35,7 @@ import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ActivityAside } from "./activity-aside.js"
 import { ApprovalPanel } from "./approval-panel.js"
+import { defaultArtifactOpenSurface } from "./artifact-open-target.js"
 import { sharedFolder } from "./file-listing.js"
 import { MessageStream } from "./message-stream.js"
 import { FilesProvider } from "./files-context.js"
@@ -61,10 +64,13 @@ export function TaskView({
 }) {
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(threadId)
-  const [folderError, setFolderError] = useState<string | null>(null)
+  const [taskActionError, setTaskActionError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [browserContexts, setBrowserContexts] = useState<
+    BrowserElementContext[]
+  >([])
 
   useEffect(() => {
     let active = true
@@ -143,9 +149,25 @@ export function TaskView({
   const openFile = useCallback(
     (artifactId: string) => {
       setPanelOpen(true)
+      const artifact =
+        fileList?.find((output) => output.artifact.id === artifactId)
+          ?.artifact ??
+        outputHistory.find((output) => output.artifact.id === artifactId)
+          ?.artifact
+      if (
+        artifact &&
+        defaultArtifactOpenSurface(artifact.previewKind) === "browser"
+      ) {
+        showBrowser(threadId)
+        setTaskActionError(null)
+        void openBrowserArtifact({ threadId, artifactId }).catch((error) =>
+          setTaskActionError(describedErrorSchema.parse(error))
+        )
+        return
+      }
       showFile(threadId, artifactId)
     },
-    [threadId]
+    [fileList, outputHistory, threadId]
   )
   // An answer's overflow opens the folder its files share, so "Show all 5"
   // shows five files rather than the one folder row they hide behind.
@@ -212,11 +234,11 @@ export function TaskView({
   }
 
   async function handleOpenFolder(path: string) {
-    setFolderError(null)
+    setTaskActionError(null)
     try {
       await openFolder(path)
     } catch (error) {
-      setFolderError(describedErrorSchema.parse(error))
+      setTaskActionError(describedErrorSchema.parse(error))
     }
   }
 
@@ -283,7 +305,9 @@ export function TaskView({
                   conversationMeasureClassName
                 )}
               >
-                {folderError ? <InlineError message={folderError} /> : null}
+                {taskActionError ? (
+                  <InlineError message={taskActionError} />
+                ) : null}
                 {profileError ? <InlineError message={profileError} /> : null}
                 {turnOutputs.state.status === "error" ? (
                   <div className="flex items-center gap-2">
@@ -324,6 +348,18 @@ export function TaskView({
                     active ? "The agent is working…" : "Ask for the next step"
                   }
                   running={active}
+                  browserContexts={browserContexts}
+                  onRemoveBrowserContext={(id) =>
+                    setBrowserContexts((current) =>
+                      current.filter((context) => context.id !== id)
+                    )
+                  }
+                  onClearBrowserContexts={(submittedIds) => {
+                    const submitted = new Set(submittedIds)
+                    setBrowserContexts((current) =>
+                      current.filter((context) => !submitted.has(context.id))
+                    )
+                  }}
                   blockedReason={blockedReason}
                   onSend={async (input) => {
                     replace(await client.startTurn(thread.id, input))
@@ -379,6 +415,15 @@ export function TaskView({
           files={files.state}
           onOpenThread={onOpenThread}
           onClose={() => setPanelOpen(false)}
+          browserContexts={browserContexts}
+          onSelectBrowserElement={(context) =>
+            setBrowserContexts((current) =>
+              current.length >= 16 ||
+              current.some((candidate) => candidate.id === context.id)
+                ? current
+                : [...current, context]
+            )
+          }
         />
       ) : null}
     </div>

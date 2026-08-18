@@ -25,6 +25,102 @@ afterEach(() => {
 })
 
 describe("Composer", () => {
+  it("sends selected browser elements and clears them after success", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    const onClearBrowserContexts = vi.fn()
+    render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          browserContexts={[
+            {
+              id: "1b9a61ab-dd90-4b3f-ad05-94badf1c6842",
+              source: {
+                url: "https://example.com/settings",
+                title: "Settings",
+              },
+              selector: "body > main > button",
+              tagName: "button",
+              role: "button",
+              name: "Save",
+              text: "Save changes",
+              capturedAt: "2026-08-18T10:00:00.000Z",
+            },
+          ]}
+          onClearBrowserContexts={onClearBrowserContexts}
+          onSend={onSend}
+        />
+      </RuntimeClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce())
+    expect(onSend.mock.calls[0]?.[0]).toMatchObject({
+      text: "",
+      browserContexts: [
+        expect.objectContaining({ name: "Save", tagName: "button" }),
+      ],
+    })
+    expect(onClearBrowserContexts).toHaveBeenCalledWith([
+      "1b9a61ab-dd90-4b3f-ad05-94badf1c6842",
+    ])
+  })
+
+  it("does not clear an element selected while the Turn is starting", async () => {
+    let finishSend: (() => void) | undefined
+    const onSend = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve
+        })
+    )
+    const onClearBrowserContexts = vi.fn()
+    const first = {
+      id: "1b9a61ab-dd90-4b3f-ad05-94badf1c6842",
+      source: { url: "https://example.com/settings", title: "Settings" },
+      selector: "body > main > button",
+      tagName: "button",
+      role: "button",
+      name: "Save",
+      text: "Save changes",
+      capturedAt: "2026-08-18T10:00:00.000Z",
+    }
+    const next = {
+      ...first,
+      id: "216bf37a-d634-4868-a446-a2bbf60bdf0a",
+      selector: "body > main > a",
+      tagName: "a",
+      role: "link",
+      name: "Next",
+      text: "Next page",
+    }
+    const renderComposer = (browserContexts: (typeof first)[]) => (
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          browserContexts={browserContexts}
+          onClearBrowserContexts={onClearBrowserContexts}
+          onSend={onSend}
+        />
+      </RuntimeClientProvider>
+    )
+    const view = render(renderComposer([first]))
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce())
+    view.rerender(renderComposer([first, next]))
+    finishSend?.()
+
+    await waitFor(() =>
+      expect(onClearBrowserContexts).toHaveBeenCalledWith([first.id])
+    )
+  })
+
   it("attaches pasted images and keeps Shift+Enter for a new line", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined)
     render(

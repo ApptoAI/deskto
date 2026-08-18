@@ -27,7 +27,12 @@ import {
   type ComposerCandidate,
   type ComposerTrigger,
 } from "@deskto/client"
-import type { PromptReference, PromptSkill, TurnInput } from "@deskto/protocol"
+import type {
+  BrowserElementContext,
+  PromptReference,
+  PromptSkill,
+  TurnInput,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -46,7 +51,10 @@ import { useImageAttachments } from "../lib/use-image-attachments.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { usePackChanged } from "../runtime/use-pack-changed.js"
 import { InlineError } from "./inline-error.js"
+import { BrowserContextAttachments } from "./browser-context-attachments.js"
 import { ComposerAttachments } from "./composer-attachments.js"
+
+const noBrowserContexts: readonly BrowserElementContext[] = []
 
 const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
   {
@@ -88,6 +96,9 @@ export function Composer({
   toolbar,
   trailing,
   autoFocus = false,
+  browserContexts = noBrowserContexts,
+  onRemoveBrowserContext,
+  onClearBrowserContexts,
 }: {
   projectId: string
   harnessId?: string | null
@@ -101,6 +112,9 @@ export function Composer({
   toolbar?: ReactNode
   trailing?: ReactNode
   autoFocus?: boolean
+  browserContexts?: readonly BrowserElementContext[]
+  onRemoveBrowserContext?: (id: string) => void
+  onClearBrowserContexts?: (submittedIds: readonly string[]) => void
 }) {
   const client = useRuntimeClient()
   const [prompt, setPrompt] = useState("")
@@ -133,7 +147,10 @@ export function Composer({
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
   const blocked = blockedReason !== undefined
-  const hasContent = prompt.trim().length > 0 || attachments.length > 0
+  const hasContent =
+    prompt.trim().length > 0 ||
+    attachments.length > 0 ||
+    browserContexts.length > 0
   const canSend =
     hasContent && preparingCount === 0 && !sending && !running && !blocked
   const triggerKey = trigger
@@ -309,13 +326,22 @@ export function Composer({
     const submittedAttachmentIds = new Set(
       attachments.map((attachment) => attachment.id)
     )
+    const submittedBrowserContexts = [...browserContexts]
     setSending(true)
     setError(null)
     try {
-      await onSend({ text, references: currentReferences, attachments })
+      await onSend({
+        text,
+        references: currentReferences,
+        attachments,
+        browserContexts: submittedBrowserContexts,
+      })
       setPrompt("")
       setReferences([])
       discardAttachments(submittedAttachmentIds)
+      onClearBrowserContexts?.(
+        submittedBrowserContexts.map((context) => context.id)
+      )
       setTrigger(null)
     } catch (sendError) {
       setError(describedErrorSchema.parse(sendError))
@@ -484,6 +510,10 @@ export function Composer({
             void addFiles(Array.from(event.dataTransfer.files))
           }}
         >
+          <BrowserContextAttachments
+            contexts={browserContexts}
+            onRemove={(id) => onRemoveBrowserContext?.(id)}
+          />
           <ComposerAttachments
             attachments={attachments}
             preparingCount={preparingCount}

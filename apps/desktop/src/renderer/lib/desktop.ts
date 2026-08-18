@@ -1,4 +1,6 @@
 /** Desktop-only capabilities, kept apart from the Runtime protocol. */
+import type { BrowserElementContext } from "@deskto/protocol"
+
 import type {
   BrowserAction,
   BrowserBounds,
@@ -69,6 +71,22 @@ export function runBrowserAction(
   action: BrowserAction
 ): Promise<BrowserViewState> {
   return window.deskto.browser.action(threadId, action)
+}
+
+export function openBrowserArtifact(
+  result: ResultRef
+): Promise<BrowserViewState> {
+  return window.deskto.browser.openArtifact(result)
+}
+
+export function selectBrowserElement(
+  threadId: string
+): Promise<BrowserElementContext | undefined> {
+  return window.deskto.browser.selectElement(threadId)
+}
+
+export function cancelBrowserElementSelection(threadId: string): Promise<void> {
+  return window.deskto.browser.cancelElementSelection(threadId)
 }
 
 export function subscribeBrowser(listener: (event: BrowserEvent) => void) {

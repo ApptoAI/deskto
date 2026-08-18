@@ -197,6 +197,31 @@ export type ImageAttachmentPreview = z.infer<
   typeof imageAttachmentPreviewSchema
 >
 
+export const browserElementSelectionSchema = z.object({
+  selector: z.string().min(1).max(1_024),
+  tagName: z.string().min(1).max(64),
+  role: z.string().max(64).nullable(),
+  name: z.string().max(256).nullable(),
+  text: z.string().max(280).nullable(),
+})
+
+export type BrowserElementSelection = z.infer<
+  typeof browserElementSelectionSchema
+>
+
+export const browserElementContextSchema = browserElementSelectionSchema.extend(
+  {
+    id: z.string().uuid(),
+    source: z.object({
+      url: z.string().min(1).max(2_048),
+      title: z.string().max(256),
+    }),
+    capturedAt: z.string().datetime(),
+  }
+)
+
+export type BrowserElementContext = z.infer<typeof browserElementContextSchema>
+
 export const turnInputSchema = z
   .object({
     text: z.string().trim(),
@@ -211,10 +236,25 @@ export const turnInputSchema = z
         { message: "Attachment IDs must be unique" }
       )
       .default([]),
+    /** Page elements selected by the person in this Task's shared Browser. */
+    browserContexts: z
+      .array(browserElementContextSchema)
+      .max(16)
+      .refine(
+        (contexts) =>
+          new Set(contexts.map((context) => context.id)).size ===
+          contexts.length,
+        { message: "Browser context IDs must be unique" }
+      )
+      .optional(),
   })
-  .refine((input) => input.text.length > 0 || input.attachments.length > 0, {
-    message: "A message or image is required",
-  })
+  .refine(
+    (input) =>
+      input.text.length > 0 ||
+      input.attachments.length > 0 ||
+      (input.browserContexts?.length ?? 0) > 0,
+    { message: "A message, image, or browser element is required" }
+  )
 
 export type TurnInput = z.infer<typeof turnInputSchema>
 
@@ -431,6 +471,17 @@ export const artifactPreviewKindSchema = z.enum([
 ])
 
 export type ArtifactPreviewKind = z.infer<typeof artifactPreviewKindSchema>
+
+const pageLikeArtifactPreviewKinds = new Set<ArtifactPreviewKind>([
+  "html",
+  "pdf",
+])
+
+export function isPageLikeArtifactPreviewKind(
+  kind: ArtifactPreviewKind
+): kind is "html" | "pdf" {
+  return pageLikeArtifactPreviewKinds.has(kind)
+}
 
 export const artifactSchema = z.object({
   id: z.string(),

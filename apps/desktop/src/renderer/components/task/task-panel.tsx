@@ -19,7 +19,13 @@ import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type { Activity, Artifact, Thread, TurnOutput } from "@deskto/protocol"
+import type {
+  Activity,
+  Artifact,
+  BrowserElementContext,
+  Thread,
+  TurnOutput,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -88,6 +94,8 @@ export function TaskPanel({
   files,
   onOpenThread,
   onClose,
+  browserContexts,
+  onSelectBrowserElement,
 }: {
   threadId: string
   activities: Activity[]
@@ -95,6 +103,8 @@ export function TaskPanel({
   files: QueryState<TurnOutput[]>
   onOpenThread: (threadId: string) => void
   onClose: () => void
+  browserContexts: readonly BrowserElementContext[]
+  onSelectBrowserElement: (context: BrowserElementContext) => void
 }) {
   const outputs = files.status === "ready" ? files.data : undefined
   const panel = usePanelState(threadId)
@@ -293,7 +303,11 @@ export function TaskPanel({
       </div>
 
       {panel.surface === "browser" ? (
-        <BrowserPanel threadId={threadId} />
+        <BrowserPanel
+          threadId={threadId}
+          selectedElementCount={browserContexts.length}
+          onSelectElement={onSelectBrowserElement}
+        />
       ) : panel.surface === "activities" ? (
         <ActivityPanel
           summary={activitySummary}
