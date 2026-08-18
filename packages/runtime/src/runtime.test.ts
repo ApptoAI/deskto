@@ -981,13 +981,16 @@ describe("Runtime", () => {
     await resumedRuntime.close()
   })
 
-  it("remembers the last used execution profile across restarts", async () => {
+  it("remembers the last used execution profile for each Harness", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
     const databasePath = join(directory, "runtime.sqlite")
     const runtime = createRuntime({
       databasePath,
-      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+      harnesses: [
+        new ScriptedHarness({ id: "claude", name: "Claude" }),
+        new ScriptedHarness({ id: "codex", name: "Codex" }),
+      ],
     })
 
     const empty = unwrap(
@@ -997,6 +1000,7 @@ describe("Runtime", () => {
       })
     )
     expect(empty.lastProfile).toBeNull()
+    expect(empty.profilesByHarness).toEqual({})
 
     const project = unwrap(
       await runtime.request({
@@ -1009,10 +1013,24 @@ describe("Runtime", () => {
         method: "thread.create",
         params: {
           projectId: project.id,
-          harnessId: "claude",
+          harnessId: "codex",
           executionProfile: {
             modelId: "test-model",
             effort: "high",
+            permissionMode: "auto",
+          },
+        },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "claude",
+          executionProfile: {
+            modelId: "test-model",
+            effort: "low",
             permissionMode: "full-access",
           },
         },
@@ -1022,7 +1040,10 @@ describe("Runtime", () => {
 
     const resumedRuntime = createRuntime({
       databasePath,
-      harnesses: [new ScriptedHarness({ id: "claude", name: "Claude" })],
+      harnesses: [
+        new ScriptedHarness({ id: "claude", name: "Claude" }),
+        new ScriptedHarness({ id: "codex", name: "Codex" }),
+      ],
     })
     const persisted = unwrap(
       await resumedRuntime.request({
@@ -1034,11 +1055,190 @@ describe("Runtime", () => {
       harnessId: "claude",
       executionProfile: {
         modelId: "test-model",
+        effort: "low",
+        permissionMode: "full-access",
+      },
+    })
+    expect(persisted.profilesByHarness).toEqual({
+      codex: {
+        modelId: "test-model",
         effort: "high",
+        permissionMode: "auto",
+      },
+      claude: {
+        modelId: "test-model",
+        effort: "low",
         permissionMode: "full-access",
       },
     })
     await resumedRuntime.close()
+  })
+
+  it("carries a legacy last profile into the per-Harness preferences", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const runtime = createRuntime({ databasePath, harnesses: [] })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    await runtime.close()
+
+    const database = new DatabaseSync(databasePath)
+    database.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+      "preferences.lastProfile.personal",
+      JSON.stringify({
+        harnessId: "codex",
+        executionProfile: {
+          modelId: "test-model",
+          effort: "high",
+          permissionMode: "auto",
+        },
+      })
+    )
+    database.close()
+
+    const resumedRuntime = createRuntime({
+      databasePath,
+      harnesses: [
+        new ScriptedHarness({ id: "claude", name: "Claude" }),
+        new ScriptedHarness({ id: "codex", name: "Codex" }),
+      ],
+    })
+    const legacy = unwrap(
+      await resumedRuntime.request({
+        method: "preferences.get",
+        params: { workspaceId: "personal" },
+      })
+    )
+    expect(legacy.profilesByHarness).toEqual({
+      codex: {
+        modelId: "test-model",
+        effort: "high",
+        permissionMode: "auto",
+      },
+    })
+
+    unwrap(
+      await resumedRuntime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "claude",
+          executionProfile: {
+            modelId: "test-model",
+            effort: "low",
+            permissionMode: "full-access",
+          },
+        },
+      })
+    )
+    const upgraded = unwrap(
+      await resumedRuntime.request({
+        method: "preferences.get",
+        params: { workspaceId: "personal" },
+      })
+    )
+    expect(upgraded.profilesByHarness).toEqual({
+      codex: legacy.profilesByHarness.codex,
+      claude: {
+        modelId: "test-model",
+        effort: "low",
+        permissionMode: "full-access",
+      },
+    })
+    await resumedRuntime.close()
+  })
+
+  it("does not remember a profile when a thread mutation fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [
+        new ScriptedHarness({ id: "claude", name: "Claude" }),
+        new ScriptedHarness({ id: "codex", name: "Codex" }),
+      ],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: {
+          projectId: project.id,
+          harnessId: "codex",
+          executionProfile: {
+            modelId: "test-model",
+            effort: "high",
+            permissionMode: "auto",
+          },
+        },
+      })
+    )
+
+    const failed = await runtime.request({
+      method: "thread.create",
+      params: {
+        projectId: project.id,
+        parentThreadId: "missing-parent",
+        harnessId: "claude",
+        executionProfile: {
+          modelId: "test-model",
+          effort: "low",
+          permissionMode: "full-access",
+        },
+      },
+    })
+    expect(failed.ok).toBe(false)
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Keep working" },
+      })
+    )
+    const failedConfiguration = await runtime.request({
+      method: "thread.configure",
+      params: {
+        threadId: thread.id,
+        executionProfile: {
+          modelId: "test-model",
+          effort: "low",
+          permissionMode: "full-access",
+        },
+      },
+    })
+    expect(failedConfiguration.ok).toBe(false)
+
+    const preferences = unwrap(
+      await runtime.request({
+        method: "preferences.get",
+        params: { workspaceId: "personal" },
+      })
+    )
+    expect(preferences.lastProfile?.harnessId).toBe("codex")
+    expect(preferences.profilesByHarness).toEqual({
+      codex: {
+        modelId: "test-model",
+        effort: "high",
+        permissionMode: "auto",
+      },
+    })
+    unwrap(
+      await runtime.request({
+        method: "turn.cancel",
+        params: { threadId: thread.id },
+      })
+    )
+    await runtime.close()
   })
 
   it("stores setting overrides across restarts and rejects invalid ones", async () => {

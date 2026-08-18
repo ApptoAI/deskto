@@ -1,4 +1,4 @@
-import type { ExecutionProfile, Harness } from "@deskto/protocol"
+import type { ExecutionProfile, Harness, Preferences } from "@deskto/protocol"
 
 export type HarnessModel = Harness["models"][number]
 
@@ -40,6 +40,17 @@ export function restoredExecutionProfile(
     effort: keptEffort(model, model.id === saved.modelId ? saved.effort : null),
     permissionMode: keptPermissionMode(model, saved.permissionMode),
   }
+}
+
+export function executionProfileForHarness(
+  models: HarnessModel[],
+  harnessId: string | null,
+  profilesByHarness: Preferences["profilesByHarness"]
+): ExecutionProfile {
+  const saved = harnessId ? profilesByHarness[harnessId] : undefined
+  return saved
+    ? restoredExecutionProfile(models, saved)
+    : defaultExecutionProfile(models)
 }
 
 export function withModel(
