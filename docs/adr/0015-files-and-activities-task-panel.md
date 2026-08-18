@@ -43,14 +43,15 @@ opens the panel, changes the surface, replaces the selected file, or moves the
 folder the user is standing in — including a folder that empties and later
 fills again.
 
-Each settled Turn renders its Turn Outputs after the final assistant answer as
-file buttons. Conversation links open page-like HTML and PDF outputs in
+Each Turn renders captured Outputs as file buttons as soon as they exist.
+During a running Turn they sit above the working indicator; once the Turn
+settles they move below the final assistant answer. Conversation links open
+page-like HTML and PDF outputs in
 `Browser`; other formats open inside `Files`. Choosing the same HTML or PDF
 from the Files overview still opens its Files preview, so the collection keeps
 a consistent place for metadata and file actions. An overflow action opens the
 folder that answer's files share, which is the Project root when they are
-spread across it. Running Turns do not show the buttons, even when the Runtime
-has already captured a file.
+spread across it.
 
 The Client reads two provider-neutral Runtime projections:
 

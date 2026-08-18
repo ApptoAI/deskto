@@ -11,12 +11,14 @@ import {
   type HarnessRunInput,
   type HarnessSession,
 } from "@deskto/harness-sdk"
-import type {
-  Activity,
-  ActivityPayload,
-  ThreadDeltaChange,
-  ThreadView,
-  TurnInput,
+import {
+  turnProgressLabelMaxLength,
+  type Activity,
+  type ActivityPayload,
+  type ThreadDeltaChange,
+  type ThreadView,
+  type TurnInput,
+  type TurnProgress,
 } from "@deskto/protocol"
 
 import { appendBrowserPromptContext } from "./browser/browser-prompt-context.js"
@@ -51,6 +53,7 @@ type StartingRun = ActiveTurnRecord & {
   phase: "starting"
   controller: AbortController
   cancelled: boolean
+  progress: TurnProgress
   tools?: SessionToolLeases
 }
 
@@ -60,6 +63,7 @@ type ActiveRun = ActiveTurnRecord & {
   session: HarnessSession
   cancelled: boolean
   terminal: boolean
+  progress: TurnProgress
   pendingText: string
   approvalIds: Map<string, string>
   activityIds: Map<string, string>
@@ -76,6 +80,62 @@ type ActiveRun = ActiveTurnRecord & {
 }
 
 const streamFlushIntervalMs = 50
+const progressHeartbeatIntervalMs = 1_000
+type ProgressState = Pick<TurnProgress, "stage" | "label">
+
+function turnProgress(
+  stage: TurnProgress["stage"],
+  label: string,
+  now = Date.now()
+): TurnProgress {
+  return {
+    stage,
+    label: boundedProgressLabel(stage, label),
+    updatedAt: new Date(now).toISOString(),
+  }
+}
+
+function progressLabel(stage: TurnProgress["stage"]): string {
+  if (stage === "starting") return "Starting agent"
+  if (stage === "responding") return "Writing response"
+  if (stage === "preparing-tool") return "Preparing tool"
+  if (stage === "running-tool") return "Running tool"
+  if (stage === "waiting-approval") return "Waiting for approval"
+  return "Thinking"
+}
+
+function boundedProgressLabel(
+  stage: TurnProgress["stage"],
+  label: string
+): string {
+  const normalized = label.trim() || progressLabel(stage)
+  let bounded = ""
+  for (const character of normalized) {
+    if (bounded.length + character.length > turnProgressLabelMaxLength) break
+    bounded += character
+  }
+  return bounded
+}
+
+function activityProgress(
+  activity: Pick<ActivityStart, "name" | "payload">
+): ProgressState {
+  if (activity.payload?.kind === "plan") {
+    return { stage: "thinking", label: "Updating plan" }
+  }
+  return { stage: "running-tool", label: activity.name }
+}
+
+function progressAfterActivity(activities: Activity[]): ProgressState {
+  let latest: Activity | undefined
+  for (const activity of activities) {
+    if (activity.payload?.kind === "plan") continue
+    if ((activity.ordinal ?? -1) > (latest?.ordinal ?? -1)) latest = activity
+  }
+  return latest
+    ? activityProgress(latest)
+    : { stage: "thinking", label: "Thinking" }
+}
 
 /** A command, an MCP call, a subagent, or an unknown tool can write without saying so. */
 function reportsItsFileEffects(payload: ActivityPayload | undefined): boolean {
@@ -125,6 +185,19 @@ export class TurnCoordinator {
     this.#runs.delete(threadId)
   }
 
+  /** Adds process-local liveness to the durable Thread projection. */
+  view(threadId: string): ThreadView {
+    const view = this.store.threads.view(threadId)
+    const run = this.#runs.get(threadId)
+    if (
+      run &&
+      (run.phase === "starting" || (run.phase === "active" && !run.terminal))
+    ) {
+      view.progress = run.progress
+    }
+    return view
+  }
+
   async start(threadId: string, input: TurnInput): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
       throw new RuntimeError(
@@ -148,6 +221,7 @@ export class TurnCoordinator {
       phase: "starting",
       controller: new AbortController(),
       cancelled: false,
+      progress: turnProgress("starting", "Starting agent"),
     }
     this.#runs.set(threadId, starting)
     this.#changed(threadId)
@@ -214,7 +288,7 @@ export class TurnCoordinator {
         outputs?.close()
         await session.cancel().catch(() => undefined)
         await tools.close()
-        return this.store.threads.view(threadId)
+        return this.view(threadId)
       }
       const run: ActiveRun = {
         ...turn,
@@ -223,6 +297,7 @@ export class TurnCoordinator {
         session,
         cancelled: false,
         terminal: false,
+        progress: turnProgress("thinking", "Thinking"),
         pendingText: "",
         approvalIds: new Map(),
         activityIds: new Map(),
@@ -234,6 +309,10 @@ export class TurnCoordinator {
         tools,
       }
       this.#runs.set(threadId, run)
+      this.events.delta(threadId, {
+        type: "progress.updated",
+        progress: run.progress,
+      })
       if (turn.generateTitle) {
         this.#titles.start({
           threadId,
@@ -260,7 +339,7 @@ export class TurnCoordinator {
       this.#settleRun(threadId, starting)
     }
 
-    return this.store.threads.view(threadId)
+    return this.view(threadId)
   }
 
   async cancel(threadId: string): Promise<ThreadView> {
@@ -275,7 +354,7 @@ export class TurnCoordinator {
       this.#settleRun(threadId, run)
       await run.tools?.close()
       this.#changed(threadId)
-      return this.store.threads.view(threadId)
+      return this.view(threadId)
     }
 
     run.cancelled = true
@@ -311,7 +390,7 @@ export class TurnCoordinator {
     }
     await run.outputs?.finish()
     this.#settleRun(threadId, run)
-    return this.store.threads.view(threadId)
+    return this.view(threadId)
   }
 
   /**
@@ -359,6 +438,10 @@ export class TurnCoordinator {
       type: "thread.updated",
       thread: this.store.threads.get(threadId),
     })
+    this.#updateProgress(threadId, run, {
+      stage: "thinking",
+      label: "Resuming agent",
+    })
     try {
       await run.session.respondToApproval(providerApprovalId, decision)
     } catch (error) {
@@ -374,7 +457,7 @@ export class TurnCoordinator {
       await run.session.cancel().catch(() => undefined)
       throw new RuntimeError("approval-failed", message)
     }
-    return this.store.threads.view(threadId)
+    return this.view(threadId)
   }
 
   async dispose(): Promise<void> {
@@ -456,11 +539,26 @@ export class TurnCoordinator {
           run.turnId,
           event.providerSessionId
         )
+        this.#updateProgress(threadId, run, {
+          stage: "thinking",
+          label: "Thinking",
+        })
+        break
+      case "progress.updated":
+        this.#updateProgress(threadId, run, {
+          stage: event.progress.stage,
+          label: event.progress.label ?? progressLabel(event.progress.stage),
+        })
         break
       case "message.delta":
+        this.#updateProgress(threadId, run, {
+          stage: "responding",
+          label: "Writing response",
+        })
         this.#appendDelta(run, event.text)
         break
       case "usage.updated": {
+        this.#updateProgress(threadId, run, run.progress)
         const usage =
           event.usage.maxTokens === undefined &&
           run.lastUsage?.maxTokens !== undefined
@@ -482,6 +580,10 @@ export class TurnCoordinator {
         break
       }
       case "approval.requested":
+        this.#updateProgress(threadId, run, {
+          stage: "waiting-approval",
+          label: "Waiting for approval",
+        })
         this.#flush(run)
         this.#requestApproval(threadId, run, event.request)
         this.#changed(threadId)
@@ -514,12 +616,22 @@ export class TurnCoordinator {
         break
       case "activity.started":
         this.#startActivity(threadId, run, event.activity)
+        this.#updateProgress(threadId, run, activityProgress(event.activity))
         break
-      case "activity.updated":
-        this.#updateActivity(threadId, run, event.update)
+      case "activity.updated": {
+        const activity = this.#updateActivity(threadId, run, event.update)
+        if (activity) {
+          this.#updateProgress(threadId, run, activityProgress(activity))
+        }
         break
+      }
       case "activity.completed":
         this.#completeActivity(threadId, run, event.id, event.outcome)
+        this.#updateProgress(
+          threadId,
+          run,
+          progressAfterActivity(this.store.activities.running(run.turnId))
+        )
         break
     }
   }
@@ -542,6 +654,29 @@ export class TurnCoordinator {
     run.pendingText += text
     if (run.flushTimer) return
     run.flushTimer = setTimeout(() => this.#flush(run), streamFlushIntervalMs)
+  }
+
+  #updateProgress(
+    threadId: string,
+    run: ActiveRun,
+    progress: ProgressState
+  ): void {
+    const now = Date.now()
+    const previousAt = Date.parse(run.progress.updatedAt)
+    const label = boundedProgressLabel(progress.stage, progress.label)
+    if (
+      run.progress.stage === progress.stage &&
+      run.progress.label === label &&
+      !Number.isNaN(previousAt) &&
+      now - previousAt < progressHeartbeatIntervalMs
+    ) {
+      return
+    }
+    run.progress = turnProgress(progress.stage, label, now)
+    this.events.delta(threadId, {
+      type: "progress.updated",
+      progress: run.progress,
+    })
   }
 
   #requestApproval(
@@ -593,9 +728,9 @@ export class TurnCoordinator {
     threadId: string,
     run: ActiveRun,
     update: ActivityUpdate
-  ): void {
+  ): Activity | undefined {
     const id = run.activityIds.get(update.id)
-    if (!id) return
+    if (!id) return undefined
     const patch: ActivityUpdateInput = {}
     if (update.name !== undefined) patch.name = update.name
     if (update.detail !== undefined) patch.detail = update.detail
@@ -606,6 +741,7 @@ export class TurnCoordinator {
         type: "activity.upserted",
         activity: record,
       })
+    return record
   }
 
   #completeActivity(

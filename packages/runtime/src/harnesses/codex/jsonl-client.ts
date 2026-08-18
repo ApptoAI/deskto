@@ -25,7 +25,12 @@ type PendingRequest = {
 export type JsonlClientOptions = {
   args?: string[]
   env?: NodeJS.ProcessEnv
+  /** Fails a silent app-server request instead of leaving the UI running forever. */
+  requestTimeoutMs?: number
 }
+
+const defaultRequestTimeoutMs = 30_000
+const maximumStderrTailLength = 8_192
 
 export class JsonlClient {
   readonly #process: ChildProcessWithoutNullStreams
@@ -35,10 +40,13 @@ export class JsonlClient {
   >()
   readonly #requestListeners = new Set<(request: CodexServerRequest) => void>()
   readonly #failureListeners = new Set<(error: Error) => void>()
+  readonly #requestTimeoutMs: number
+  #stderrTail = ""
   #nextId = 1
   #closed = false
 
   constructor(command: string, cwd: string, options: JsonlClientOptions = {}) {
+    this.#requestTimeoutMs = options.requestTimeoutMs ?? defaultRequestTimeoutMs
     this.#process = spawn(command, ["app-server", ...(options.args ?? [])], {
       cwd,
       env: options.env ?? process.env,
@@ -46,13 +54,20 @@ export class JsonlClient {
     })
 
     const lines = createInterface({ input: this.#process.stdout })
-    this.#process.stderr.resume()
+    this.#process.stderr.on("data", (chunk: Buffer) => {
+      this.#stderrTail = (this.#stderrTail + chunk.toString()).slice(
+        -maximumStderrTailLength
+      )
+    })
     lines.on("line", (line) => this.#onLine(line))
     this.#process.stdin.on("error", (error) => this.#fail(error))
     this.#process.once("error", (error) => this.#fail(error))
     this.#process.once("exit", (code, signal) => {
+      const diagnostic = this.#stderrDiagnostic()
       this.#fail(
-        new Error(`Codex app-server exited (${signal ?? code ?? "unknown"})`)
+        new Error(
+          `Codex app-server exited (${signal ?? code ?? "unknown"})${diagnostic}`
+        )
       )
     })
   }
@@ -64,15 +79,35 @@ export class JsonlClient {
   ): Promise<T> {
     const id = this.#nextId++
     return new Promise<T>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const clearTimer = () => {
+        if (timer) clearTimeout(timer)
+      }
       this.#pending.set(id, {
         resolve: (value) => {
+          clearTimer()
           const parsed = schema.safeParse(value)
           if (parsed.success) resolve(parsed.data)
           else reject(new Error(`Codex returned an invalid ${method} response`))
         },
-        reject,
+        reject: (error) => {
+          clearTimer()
+          reject(error)
+        },
       })
       this.#write({ id, method, params })
+      if (this.#requestTimeoutMs > 0) {
+        timer = setTimeout(() => {
+          const pending = this.#pending.get(id)
+          if (!pending) return
+          this.#pending.delete(id)
+          pending.reject(
+            new Error(
+              `Codex did not respond to ${method} within ${this.#requestTimeoutMs}ms`
+            )
+          )
+        }, this.#requestTimeoutMs)
+      }
     })
   }
 
@@ -169,5 +204,10 @@ export class JsonlClient {
     for (const pending of this.#pending.values()) pending.reject(error)
     this.#pending.clear()
     for (const listener of this.#failureListeners) listener(error)
+  }
+
+  #stderrDiagnostic(): string {
+    const line = this.#stderrTail.trim().split(/\r?\n/).filter(Boolean).at(-1)
+    return line ? `: ${line.slice(0, 1_000)}` : ""
   }
 }

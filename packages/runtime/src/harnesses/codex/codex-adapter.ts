@@ -369,6 +369,29 @@ class CodexSession implements HarnessSession {
     const params = notification.params
     if (!params) return
 
+    if (
+      notification.method === "item/reasoning/summaryTextDelta" ||
+      notification.method === "item/reasoning/summaryPartAdded" ||
+      notification.method === "item/reasoning/textDelta"
+    ) {
+      if (!this.#activityScope(params)) return
+      this.#queue.push({
+        type: "progress.updated",
+        progress: { stage: "thinking", label: "Thinking" },
+      })
+      return
+    }
+
+    const runningLabel = codexProgressLabel(notification.method)
+    if (runningLabel) {
+      if (!this.#activityScope(params)) return
+      this.#queue.push({
+        type: "progress.updated",
+        progress: { stage: "running-tool", label: runningLabel },
+      })
+      return
+    }
+
     if (notification.method === "item/agentMessage/delta") {
       if (!this.#isCurrentTurn(params)) return
       const delta = getString(params, "delta")
@@ -403,6 +426,13 @@ class CodexSession implements HarnessSession {
       const scope = this.#activityScope(params)
       if (!scope) return
       const item = parseJsonObject(params.item)
+      if (getString(item, "type") === "reasoning") {
+        this.#queue.push({
+          type: "progress.updated",
+          progress: { stage: "thinking", label: "Thinking" },
+        })
+        return
+      }
       const delegation = codexDelegationLifecycle(item)
       if (delegation) {
         const activityId = getString(item, "id")
@@ -972,6 +1002,23 @@ export function codexActivity(
 }
 
 const ignoredItemTypes = new Set(["agentMessage", "userMessage", "reasoning"])
+
+function codexProgressLabel(method: string): string | undefined {
+  if (
+    method === "command/exec/outputDelta" ||
+    method === "process/outputDelta" ||
+    method === "item/commandExecution/outputDelta" ||
+    method === "item/commandExecution/terminalInteraction"
+  )
+    return "Run command"
+  if (
+    method === "item/fileChange/outputDelta" ||
+    method === "item/fileChange/patchUpdated"
+  )
+    return "Changing files"
+  if (method === "item/mcpToolCall/progress") return "Using tool"
+  return undefined
+}
 
 const codexPlanActivityId = "codex-plan"
 

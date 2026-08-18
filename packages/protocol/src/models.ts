@@ -458,6 +458,25 @@ export const activitySchema = z.object({
 
 export type Activity = z.infer<typeof activitySchema>
 
+export const turnProgressLabelMaxLength = 120
+
+/** Current, non-durable state of an active Turn. */
+export const turnProgressSchema = z.object({
+  stage: z.enum([
+    "starting",
+    "thinking",
+    "responding",
+    "preparing-tool",
+    "running-tool",
+    "waiting-approval",
+  ]),
+  label: z.string().trim().min(1).max(turnProgressLabelMaxLength),
+  /** Last provider or Runtime signal, used to distinguish quiet work from a stall. */
+  updatedAt: z.iso.datetime(),
+})
+
+export type TurnProgress = z.infer<typeof turnProgressSchema>
+
 export const artifactPreviewKindSchema = z.enum([
   "text",
   "markdown",
@@ -595,6 +614,8 @@ export const threadViewSchema = z.object({
   childThreads: z.array(threadSchema),
   messages: z.array(messageSchema),
   activities: z.array(activitySchema),
+  /** Present only while this process owns the active Turn. */
+  progress: turnProgressSchema.optional(),
   pendingApproval: approvalSchema.optional(),
   /**
    * Delta cursor for this thread. A `thread.delta` event applies to an open

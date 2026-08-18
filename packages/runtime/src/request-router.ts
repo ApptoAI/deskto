@@ -331,7 +331,7 @@ export class RequestRouter {
         })
       }
       case "thread.get":
-        return this.store.threads.view(request.params.threadId)
+        return this.turns.view(request.params.threadId)
       case "thread.setDone": {
         const thread = this.store.threads.setDone(
           request.params.threadId,

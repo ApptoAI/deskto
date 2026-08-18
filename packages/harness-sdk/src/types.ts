@@ -193,8 +193,19 @@ export type ActivityUpdate = {
   payload?: ActivityPayload
 }
 
+/**
+ * A bounded liveness signal. It says what kind of work is happening without
+ * exposing model reasoning or streaming raw tool arguments into the product.
+ */
+export type HarnessProgress = {
+  stage: "thinking" | "preparing-tool" | "running-tool"
+  /** Runtime trims, defaults, and caps this provider-supplied summary. */
+  label?: string
+}
+
 export type HarnessEvent =
   | { type: "session.started"; providerSessionId: string }
+  | { type: "progress.updated"; progress: HarnessProgress }
   | { type: "message.delta"; text: string }
   | { type: "usage.updated"; usage: ContextUsage }
   | { type: "activity.started"; activity: ActivityStart }

@@ -13,6 +13,7 @@ import {
   AsyncQueue,
   harnessFailure,
   type ActivityStart,
+  type ActivityUpdate,
   type ApprovalDecision,
   type HarnessAdapterFactory,
   type HarnessEvent,
@@ -187,6 +188,11 @@ class ClaudeSession implements HarnessSession {
   readonly #ignoredBackgroundTaskIds = new Set<string>()
   readonly #liveBackgroundTaskIds = new Set<string>()
   readonly #settledActivities = new Set<string>()
+  readonly #streamedToolActivities = new Set<string>()
+  readonly #streamedToolsByIndex = new Map<
+    string,
+    { id: string; name: string }
+  >()
   readonly #taskActivities = new Map<string, string>()
   /** Task-tool calls whose results feed the plan instead of settling a row. */
   readonly #taskPlanCalls = new Set<string>()
@@ -394,6 +400,25 @@ class ClaudeSession implements HarnessSession {
       return
     }
 
+    if (message.type === "system" && message.subtype === "thinking_tokens") {
+      this.#queue.push({
+        type: "progress.updated",
+        progress: { stage: "thinking", label: "Thinking" },
+      })
+      return
+    }
+
+    if (message.type === "tool_progress") {
+      this.#queue.push({
+        type: "progress.updated",
+        progress: {
+          stage: "running-tool",
+          label: readableToolName(message.tool_name),
+        },
+      })
+      return
+    }
+
     const assistantFailure = claudeAssistantFailure(
       message,
       this.#usageLimitResetAt
@@ -472,15 +497,74 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.type === "stream_event") {
-      // Sidechain (subagent) streams narrate their own work; mixing them into
-      // the main message would garble the prose character by character.
-      if (message.parent_tool_use_id !== null) return
       const event = message.event
+      if (event.type === "content_block_start") {
+        const block = event.content_block
+        if (block.type === "thinking" && message.parent_tool_use_id === null) {
+          this.#queue.push({
+            type: "progress.updated",
+            progress: { stage: "thinking", label: "Thinking" },
+          })
+          return
+        }
+        if (block.type !== "tool_use") return
+        this.#streamedToolsByIndex.set(
+          streamedToolKey(message.parent_tool_use_id, event.index),
+          { id: block.id, name: block.name }
+        )
+        const isMainPlanTool =
+          message.parent_tool_use_id === null && isPlanTool(block.name)
+        if (!isMainPlanTool) {
+          this.#streamedToolActivities.add(block.id)
+          this.#queue.push({
+            type: "activity.started",
+            activity: claudeActivity(
+              block.id,
+              block.name,
+              null,
+              message.parent_tool_use_id ?? undefined
+            ),
+          })
+        }
+        this.#queue.push({
+          type: "progress.updated",
+          progress: {
+            stage: "preparing-tool",
+            label: preparingToolLabel(block.name),
+          },
+        })
+        return
+      }
       if (
         event.type === "content_block_delta" &&
         event.delta.type === "text_delta"
       ) {
+        // Sidechain narration belongs to that agent, not the main answer.
+        if (message.parent_tool_use_id !== null) return
         this.#queue.push({ type: "message.delta", text: event.delta.text })
+      } else if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "thinking_delta" &&
+        message.parent_tool_use_id === null
+      ) {
+        this.#queue.push({
+          type: "progress.updated",
+          progress: { stage: "thinking", label: "Thinking" },
+        })
+      } else if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "input_json_delta"
+      ) {
+        const tool = this.#streamedToolsByIndex.get(
+          streamedToolKey(message.parent_tool_use_id, event.index)
+        )
+        this.#queue.push({
+          type: "progress.updated",
+          progress: {
+            stage: "preparing-tool",
+            label: tool ? preparingToolLabel(tool.name) : "Preparing tool",
+          },
+        })
       }
       return
     }
@@ -501,10 +585,12 @@ class ClaudeSession implements HarnessSession {
         // The main thread's task list is the Turn's plan: one activity,
         // updated in place. A subagent's own list stays ordinary tool rows.
         if (!parentId && block.name === "TodoWrite") {
+          this.#forgetStreamedTool(block.id)
           this.#pushPlan(planStepsFromTodos(input))
           continue
         }
         if (!parentId && isTaskPlanTool(block.name)) {
+          this.#forgetStreamedTool(block.id)
           this.#taskPlanCalls.add(block.id)
           const changed =
             block.name === "TaskCreate"
@@ -521,10 +607,16 @@ class ClaudeSession implements HarnessSession {
           this.#backgroundActivities.add(block.id)
           this.#backgroundActivityStartedAfterLevel = true
         }
-        this.#queue.push({
-          type: "activity.started",
-          activity: claudeActivity(block.id, block.name, input, parentId),
-        })
+        const activity = claudeActivity(block.id, block.name, input, parentId)
+        if (this.#streamedToolActivities.has(block.id)) {
+          this.#forgetStreamedTool(block.id)
+          this.#queue.push({
+            type: "activity.updated",
+            update: activityUpdate(activity),
+          })
+        } else {
+          this.#queue.push({ type: "activity.started", activity })
+        }
       }
       return
     }
@@ -621,6 +713,13 @@ class ClaudeSession implements HarnessSession {
     this.#queue.push({ type: "usage.updated", usage })
   }
 
+  #forgetStreamedTool(id: string): void {
+    this.#streamedToolActivities.delete(id)
+    for (const [index, tool] of this.#streamedToolsByIndex) {
+      if (tool.id === id) this.#streamedToolsByIndex.delete(index)
+    }
+  }
+
   #completeActivity(id: string, outcome: "completed" | "failed"): void {
     if (this.#settledActivities.has(id)) return
     this.#settledActivities.add(id)
@@ -703,6 +802,8 @@ class ClaudeSession implements HarnessSession {
     if (this.#closed) return
     this.#closed = true
     this.#denyPending()
+    this.#streamedToolActivities.clear()
+    this.#streamedToolsByIndex.clear()
     this.#query.close()
     this.#queue.close()
   }
@@ -785,6 +886,29 @@ function isTokenBoundary(character: string): boolean {
 }
 
 const planActivityId = "claude-plan"
+
+function isPlanTool(toolName: string): boolean {
+  return toolName === "TodoWrite" || isTaskPlanTool(toolName)
+}
+
+function streamedToolKey(parentId: string | null, index: number): string {
+  return JSON.stringify([parentId, index])
+}
+
+function preparingToolLabel(toolName: string): string {
+  if (fileChangeTools.has(toolName)) return "Preparing file change"
+  if (toolName === "Bash") return "Preparing command"
+  if (toolName === "WebFetch" || toolName === "WebSearch")
+    return "Preparing web request"
+  return `Preparing ${readableToolName(toolName).toLowerCase()}`
+}
+
+function activityUpdate(activity: ActivityStart): ActivityUpdate {
+  const update: ActivityUpdate = { id: activity.id, name: activity.name }
+  if (activity.detail) update.detail = activity.detail
+  if (activity.payload) update.payload = activity.payload
+  return update
+}
 
 /** Classifies one Claude tool call into the provider-neutral activity shape. */
 export function claudeActivity(

@@ -156,6 +156,22 @@ describe("applyThreadDelta", () => {
     expect(updated.view.activities[0]?.status).toBe("completed")
   })
 
+  it("updates active turn progress without reloading the view", () => {
+    const progress = {
+      stage: "preparing-tool" as const,
+      label: "Preparing file change",
+      updatedAt: "2026-08-14T10:00:03.000Z",
+    }
+    const result = applyThreadDelta(
+      view(),
+      delta(6, { type: "progress.updated", progress })
+    )
+    expect(result.outcome).toBe("applied")
+    if (result.outcome !== "applied") return
+    expect(result.view.progress).toEqual(progress)
+    expect(result.view.seq).toBe(6)
+  })
+
   it("adds a pending approval and clears it on resolution", () => {
     const approval = {
       id: "ap1",

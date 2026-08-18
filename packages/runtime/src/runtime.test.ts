@@ -17,7 +17,11 @@ import {
   type TextGenerationInput,
 } from "@deskto/harness-sdk"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
-import { maximumThreadChildren, turnInputSchema } from "@deskto/protocol"
+import {
+  maximumThreadChildren,
+  turnInputSchema,
+  turnProgressLabelMaxLength,
+} from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { existingSkillRoots } from "./packs/pack-files.js"
@@ -784,6 +788,16 @@ describe("Runtime", () => {
       },
     })
     await approvalHarness.responding
+    const resuming = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(resuming.progress).toMatchObject({
+      stage: "thinking",
+      label: "Resuming agent",
+    })
 
     unwrap(
       await runtime.request({
@@ -1726,6 +1740,48 @@ describe("Runtime", () => {
     )
 
     const run = harness.runs[0]!
+    run.emit({
+      type: "progress.updated",
+      progress: {
+        stage: "running-tool",
+        label: `  ${"x".repeat(turnProgressLabelMaxLength + 20)}  `,
+      },
+    })
+    await waitFor(async () => {
+      const active = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return active.progress?.label === "x".repeat(turnProgressLabelMaxLength)
+    })
+    run.emit({
+      type: "progress.updated",
+      progress: { stage: "thinking", label: "   " },
+    })
+    await waitFor(async () => {
+      const active = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return active.progress?.label === "Thinking"
+    })
+    run.emit({
+      type: "progress.updated",
+      progress: { stage: "preparing-tool", label: "Preparing command" },
+    })
+    await waitFor(async () => {
+      const active = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return active.progress?.stage === "preparing-tool"
+    })
     run.emit({ type: "message.delta", text: "Starting on it." })
     run.emit({
       type: "activity.started",
@@ -1773,6 +1829,15 @@ describe("Runtime", () => {
       },
     })
     run.emit({ type: "activity.completed", id: "tool-9", outcome: "completed" })
+    await waitFor(async () => {
+      const active = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return active.progress?.label === "Research the topic"
+    })
     run.emit({
       type: "activity.completed",
       id: "task-1",
@@ -1811,6 +1876,7 @@ describe("Runtime", () => {
     expect(view.messages.every((message) => message.state === "complete")).toBe(
       true
     )
+    expect(view.progress).toBeUndefined()
 
     const plan = view.activities.find((activity) => activity.name === "Plan")
     expect(plan).toMatchObject({
@@ -1845,6 +1911,13 @@ describe("Runtime", () => {
         (event) =>
           event.change.type === "message.appended" &&
           event.change.text === "Starting on it."
+      )
+    ).toBe(true)
+    expect(
+      deltas.some(
+        (event) =>
+          event.change.type === "progress.updated" &&
+          event.change.progress.label === "Preparing command"
       )
     ).toBe(true)
     expect(
