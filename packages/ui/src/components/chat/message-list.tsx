@@ -1,6 +1,10 @@
 import * as React from "react"
 
-import { cn } from "@workspace/ui/lib/utils"
+import {
+  ScrollAreaRoot,
+  ScrollAreaViewport,
+  ScrollBar,
+} from "@workspace/ui/components/scroll-area"
 
 const pinnedThreshold = 48
 
@@ -27,6 +31,11 @@ function prefersReducedMotion(): boolean {
 /**
  * Scroll container that follows new content while the reader is at the bottom
  * and leaves the scroll position alone once they have scrolled up.
+ *
+ * Its scrollbar floats over the conversation and comes out while the view is
+ * moving or the pointer is on the bar: a permanent lane down the right edge
+ * would take the measure's air and sit against whatever the conversation is
+ * placed beside.
  */
 function MessageList({
   className,
@@ -103,25 +112,35 @@ function MessageList({
   })
 
   return (
-    <div
-      ref={setViewport}
-      data-slot="message-list"
-      role="log"
-      tabIndex={0}
-      className={cn("min-h-0 flex-1 overflow-y-auto outline-none", className)}
-      onScroll={(event) => {
-        if (!jumpingRef.current) {
-          const viewport = event.currentTarget
-          const distanceToBottom =
-            viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-          pinnedRef.current = distanceToBottom < pinnedThreshold
-        }
-        onScroll?.(event)
-      }}
-      {...props}
-    >
-      {children}
-    </div>
+    <ScrollAreaRoot className="flex-1">
+      <ScrollAreaViewport
+        ref={setViewport}
+        data-slot="message-list"
+        role="log"
+        className={className}
+        onScroll={(event) => {
+          if (!jumpingRef.current) {
+            const viewport = event.currentTarget
+            const distanceToBottom =
+              viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+            pinnedRef.current = distanceToBottom < pinnedThreshold
+          }
+          onScroll?.(event)
+        }}
+        {...props}
+      >
+        {children}
+      </ScrollAreaViewport>
+      {/* Only the one bar: a row too wide for the column — a table, a code
+          block — scrolls sideways inside itself, so the conversation never
+          travels that way. Held off the edge so the bar reads as part of the
+          conversation rather than a rule drawn against what sits beside it. */}
+      <ScrollBar
+        orientation="vertical"
+        reveal="scroll"
+        className="data-[orientation=vertical]:mr-1"
+      />
+    </ScrollAreaRoot>
   )
 }
 
