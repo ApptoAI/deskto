@@ -292,7 +292,9 @@ export function SkillsView({
         }}
       >
         <SheetContent
-          className="gap-0"
+          // The close button overlaps the titlebar's window drag region.
+          // Electron needs an explicit opt-out before it will deliver clicks.
+          className="no-drag gap-0"
           aria-label={shownSkill ? `${shownSkill.item.name} skill` : "Skill"}
         >
           {shownSkill ? (
