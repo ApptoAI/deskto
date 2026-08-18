@@ -15,7 +15,7 @@ import {
 import { z } from "zod"
 
 import { RuntimeClient } from "./runtime-client.js"
-import { createToolsServer } from "./tools.js"
+import { createToolsServer } from "./tools/index.js"
 import type {
   DesktoMcpConnection,
   DesktoMcpServer,
