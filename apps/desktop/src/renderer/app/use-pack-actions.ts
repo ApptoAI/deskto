@@ -47,42 +47,38 @@ export function usePackActions(
     packsState.current = packsQuery.state
   })
 
-  const packActions: WorkbenchPackActions = useMemo(
-    () => ({
+  const packActions: WorkbenchPackActions = useMemo(() => {
+    // The create/install/link handlers share one shape: acquire a Pack, then
+    // attach it. `acquire` resolves null when the user cancels a picker.
+    const acquireAndAttach = (acquire: () => Promise<{ id: string } | null>) =>
+      tryAction(async () => {
+        if (!activeWorkspaceId) return
+        const pack = await acquire()
+        if (!pack) return
+        await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+      })
+
+    return {
       onToggle: (packId, attached) =>
         tryAction(async () => {
           if (!activeWorkspaceId) return
           await client.setWorkspacePack(activeWorkspaceId, packId, attached)
         }),
-      onCreate: (name) =>
-        tryAction(async () => {
-          if (!activeWorkspaceId) return
-          const pack = await client.createPack(name)
-          await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
-        }),
+      onCreate: (name) => acquireAndAttach(() => client.createPack(name)),
       onInstallFolder: () =>
-        tryAction(async () => {
-          if (!activeWorkspaceId) return
+        acquireAndAttach(async () => {
           const picked = await pickPackFolder()
-          if (!picked) return
-          const pack = await client.installPackFromFolder(picked.path)
-          await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+          return picked ? client.installPackFromFolder(picked.path) : null
         }),
       onInstallZip: () =>
-        tryAction(async () => {
-          if (!activeWorkspaceId) return
+        acquireAndAttach(async () => {
           const picked = await pickPackArchive()
-          if (!picked) return
-          const pack = await client.installPackFromZip(picked.path)
-          await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+          return picked ? client.installPackFromZip(picked.path) : null
         }),
       onLink: () =>
-        tryAction(async () => {
-          if (!activeWorkspaceId) return
+        acquireAndAttach(async () => {
           const picked = await pickPackFolder()
-          if (!picked) return
-          const pack = await client.linkPack(picked.path)
-          await client.setWorkspacePack(activeWorkspaceId, pack.id, true)
+          return picked ? client.linkPack(picked.path) : null
         }),
       onUnlink: (packId) =>
         tryAction(async () => {
@@ -105,9 +101,8 @@ export function usePackActions(
           await client.setWorkspacePack(activeWorkspaceId, mySkills.id, true)
           await client.createManagedSkill(mySkills.id, draft)
         }),
-    }),
-    [client, activeWorkspaceId, tryAction]
-  )
+    }
+  }, [client, activeWorkspaceId, tryAction])
 
   return { packsQuery, packActions }
 }
