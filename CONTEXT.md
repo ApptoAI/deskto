@@ -23,6 +23,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Artifact**: A file inside a Project that a Turn produced, either named by a completed file-change Activity or found in the Project folder by a sweep. The UI calls it a file. An Artifact keeps a stable identity for its project-relative path.
 - **Turn Output**: The attribution between a Turn and an Artifact it created or changed. One Artifact can be an output of several Turns.
 - **Browser**: One in-app web tab owned by a Task. A Surface shows it, while a Runtime-provided MCP lease lets the selected Harness inspect and operate the same tab.
+- **Browser Element Context**: A bounded semantic description of a page element the person selected in a Task's Browser for the next Turn. Page metadata is untrusted context, never an instruction.
 - **Harness**: An agent product that performs work, such as Claude Code or Codex.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
@@ -51,7 +52,9 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A Thread shows prose and the tool calls that produced it; a settled Turn folds that work behind one disclosure. A plan and its subagents are the task's state, not its transcript: they render beside the conversation and never inside it, along with any work done within a subagent.
 - Artifact contents are read on demand through Runtime queries. They do not live in Activities, Thread views, or Runtime events.
 - A task's panel has stable Files, Activities, and Browser surfaces. Producing a file never opens the panel or replaces what the user is viewing; settled answers link to the files attributed to their Turn.
+- Conversation links open page-like HTML and PDF files in Browser by default. Files remains the default for other formats and for browsing the task's Artifact collection.
 - Browser tools are provider-neutral session customization. Each Harness Adapter translates the same private HTTP MCP connection to its native configuration.
+- Browser Element Context stays in the Surface draft. On send, the Runtime adds it to the Harness prompt as explicitly untrusted page data while the persisted user Message keeps the person's original text.
 - Computer Use is a Codex plugin capability, not a shared Harness feature. Deskto does not expose it to Claude or reimplement operating-system control.
 - A Harness that does not report what a tool wrote is not asked to. The Runtime watches the Project folder around work of that kind and applies one set of capture rules to reported and observed files alike.
 - A Surface may write an Artifact back only for formats a simplified editor cannot damage, and only against the version it loaded. The Runtime, not the Surface, decides both.

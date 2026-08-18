@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 
-import { app, BrowserWindow, dialog, shell } from "electron"
+import { app, BrowserWindow, dialog, protocol, shell } from "electron"
 import { z } from "zod"
 
 import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
@@ -14,6 +14,7 @@ import {
 } from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
+import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
@@ -22,6 +23,17 @@ import { createMainWindow } from "./window.js"
 import { browserEventChannel } from "../shared/channels.js"
 
 const runtimeCloseTimeoutMs = 5_000
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: browserArtifactScheme,
+    privileges: {
+      standard: true,
+      secure: true,
+      stream: true,
+    },
+  },
+])
 const fatalStartupDetailSchema = z
   .instanceof(Error)
   .transform((error) => error.stack ?? error.message)

@@ -270,9 +270,11 @@ export class Artifacts {
    * operating system without ever resolving a path of its own.
    */
   locate(threadId: string, artifactId: string): ArtifactLocation {
-    const { file } = this.#openArtifact(threadId, artifactId)
+    const { row, file } = this.#openArtifact(threadId, artifactId)
     return {
       artifactId,
+      name: row.name,
+      previewKind: row.preview_kind,
       absolutePath: file.absolutePath,
       device: String(file.stats.dev),
       inode: String(file.stats.ino),

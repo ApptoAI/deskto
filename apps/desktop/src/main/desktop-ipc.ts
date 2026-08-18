@@ -7,14 +7,18 @@ import { dialog, ipcMain, shell } from "electron"
 import { z } from "zod"
 
 import type { Runtime } from "@deskto/runtime"
+import { isPageLikeArtifactPreviewKind } from "@deskto/protocol"
 
 import type { BrowserManager } from "./browser/browser-manager.js"
 import { maximumBrowserUrlLength } from "./browser/browser-url.js"
 
 import {
   browserActionChannel,
+  browserCancelSelectionChannel,
   browserHideChannel,
   browserNavigateChannel,
+  browserOpenArtifactChannel,
+  browserSelectElementChannel,
   browserShowChannel,
   browserStateChannel,
   openExternalChannel,
@@ -278,4 +282,51 @@ export function registerDesktopIpc(
     if (parsed === "forward") return browser.forward(id)
     return browser.reload(id)
   })
+  ipcMain.handle(browserOpenArtifactChannel, async (_event, value) => {
+    const ref = resultRefSchema.parse(value)
+    return browser.openArtifact(ref.threadId, async () => {
+      await existingBrowserThread(ref.threadId)
+      const located = await runtime.request({
+        method: "artifact.locate",
+        params: ref,
+      })
+      if (
+        !located.ok ||
+        !isPageLikeArtifactPreviewKind(located.data.previewKind)
+      ) {
+        throw new Error("Only HTML and PDF files open in Browser.")
+      }
+      const preview = await runtime.request({
+        method: "artifact.preview",
+        params: ref,
+      })
+      if (!preview.ok) throw new Error(preview.error.message)
+      if (located.data.previewKind === "html") {
+        if (preview.data.kind !== "html") {
+          throw new Error("That file is no longer available in this format.")
+        }
+        return {
+          artifactId: ref.artifactId,
+          name: located.data.name,
+          kind: "html",
+          body: preview.data.content,
+        }
+      }
+      if (preview.data.kind !== "pdf") {
+        throw new Error("That file is no longer available in this format.")
+      }
+      return {
+        artifactId: ref.artifactId,
+        name: located.data.name,
+        kind: "pdf",
+        body: Uint8Array.from(Buffer.from(preview.data.dataBase64, "base64")),
+      }
+    })
+  })
+  ipcMain.handle(browserSelectElementChannel, async (_event, threadId) =>
+    browser.selectElement(await existingBrowserThread(threadId))
+  )
+  ipcMain.handle(browserCancelSelectionChannel, async (_event, threadId) =>
+    browser.cancelElementSelection(await existingBrowserThread(threadId))
+  )
 }

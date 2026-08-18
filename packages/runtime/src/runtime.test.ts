@@ -190,6 +190,66 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("keeps Browser Element Context out of the stored Message", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness()
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+
+    const view = unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Make this action easier to find",
+            references: [],
+            attachments: [],
+            browserContexts: [
+              {
+                id: "1b9a61ab-dd90-4b3f-ad05-94badf1c6842",
+                source: {
+                  url: "https://example.com/settings",
+                  title: "Settings",
+                },
+                selector: "body > main > button",
+                tagName: "button",
+                role: "button",
+                name: "Save",
+                text: "Save changes",
+                capturedAt: "2026-08-18T10:00:00.000Z",
+              },
+            ],
+          },
+        },
+      })
+    )
+
+    expect(
+      view.messages.find((message) => message.role === "user")?.content
+    ).toBe("Make this action easier to find")
+    expect(harness.runs[0]?.input.prompt).toContain(
+      "Make this action easier to find\n\n<browser_element_context>"
+    )
+    expect(harness.runs[0]?.input.prompt).toContain('"name":"Save"')
+    await runtime.close()
+  })
+
   it("rejects duplicate attachment IDs before storage", () => {
     const attachment = {
       type: "image" as const,
@@ -2549,6 +2609,8 @@ describe("Runtime", () => {
       )
     ).toEqual({
       artifactId: csv.id,
+      name: "customers.csv",
+      previewKind: "csv",
       absolutePath: join(projectPath, "customers.csv"),
       device: expect.any(String),
       inode: expect.any(String),

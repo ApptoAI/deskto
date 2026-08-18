@@ -3,7 +3,8 @@ import type { Artifact, TurnOutput } from "@deskto/protocol"
 
 /**
  * Lets the conversation open a captured file without knowing how the task
- * panel works. Activity links and answer buttons both open the Files view.
+ * panel routes its format. Page-like results may open in Browser; the rest
+ * open in Files.
  */
 type FilesAccess = {
   outputs: TurnOutput[]

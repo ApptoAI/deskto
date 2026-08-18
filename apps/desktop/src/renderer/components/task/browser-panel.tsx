@@ -9,28 +9,42 @@ import {
 import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import ArrowRightIcon from "lucide-react/dist/esm/icons/arrow-right"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
+import MousePointer2Icon from "lucide-react/dist/esm/icons/mouse-pointer-2"
 import RotateCwIcon from "lucide-react/dist/esm/icons/rotate-cw"
+import type { BrowserElementContext } from "@deskto/protocol"
 import type { BrowserViewState } from "../../../shared/desktop-api.js"
 
 import { Button } from "@workspace/ui/components/button"
 
 import {
   browserState,
+  cancelBrowserElementSelection,
   hideBrowser,
   navigateBrowser,
   runBrowserAction,
+  selectBrowserElement,
   showBrowser,
   subscribeBrowser,
 } from "../../lib/desktop.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { InlineError } from "../inline-error.js"
 
-export function BrowserPanel({ threadId }: { threadId: string }) {
+export function BrowserPanel({
+  threadId,
+  selectedElementCount,
+  onSelectElement,
+}: {
+  threadId: string
+  selectedElementCount: number
+  onSelectElement: (context: BrowserElementContext) => void
+}) {
   const slotRef = useRef<HTMLDivElement>(null)
   const addressFocused = useRef(false)
   const [state, setState] = useState<BrowserViewState>()
   const [address, setAddress] = useState("")
   const [error, setError] = useState<string>()
+  const [selecting, setSelecting] = useState(false)
+  const selectionSequence = useRef(0)
 
   useEffect(() => {
     let active = true
@@ -80,8 +94,10 @@ export function BrowserPanel({ threadId }: { threadId: string }) {
     observer.observe(slot)
     window.addEventListener("resize", placeBrowser)
     return () => {
+      selectionSequence.current += 1
       observer.disconnect()
       window.removeEventListener("resize", placeBrowser)
+      void cancelBrowserElementSelection(threadId).catch(() => undefined)
       void hideBrowser(threadId)
     }
   }, [placeBrowser, threadId])
@@ -102,6 +118,37 @@ export function BrowserPanel({ threadId }: { threadId: string }) {
       setState(await runBrowserAction(threadId, value))
     } catch (reason) {
       setError(describedErrorSchema.parse(reason))
+    }
+  }
+
+  async function toggleElementSelection() {
+    setError(undefined)
+    const sequence = selectionSequence.current + 1
+    selectionSequence.current = sequence
+    if (selecting) {
+      setSelecting(false)
+      try {
+        await cancelBrowserElementSelection(threadId)
+      } catch (reason) {
+        if (selectionSequence.current === sequence) {
+          setError(describedErrorSchema.parse(reason))
+        }
+      }
+      return
+    }
+
+    setSelecting(true)
+    try {
+      const context = await selectBrowserElement(threadId)
+      if (selectionSequence.current === sequence && context) {
+        onSelectElement(context)
+      }
+    } catch (reason) {
+      if (selectionSequence.current === sequence) {
+        setError(describedErrorSchema.parse(reason))
+      }
+    } finally {
+      if (selectionSequence.current === sequence) setSelecting(false)
     }
   }
 
@@ -137,6 +184,25 @@ export function BrowserPanel({ threadId }: { threadId: string }) {
           <RotateCwIcon
             className={state?.loading ? "animate-spin" : undefined}
           />
+        </Button>
+        <Button
+          variant={selecting ? "secondary" : "ghost"}
+          size="icon-sm"
+          disabled={
+            (!selecting && (!state?.url || state.loading)) ||
+            selectedElementCount >= 16
+          }
+          aria-label={
+            selecting ? "Cancel element selection" : "Select a page element"
+          }
+          title={
+            selecting
+              ? "Cancel element selection"
+              : "Add a page element to the next message"
+          }
+          onClick={() => void toggleElementSelection()}
+        >
+          <MousePointer2Icon />
         </Button>
         <form
           className="min-w-0 flex-1"
