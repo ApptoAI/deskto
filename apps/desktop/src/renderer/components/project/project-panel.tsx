@@ -115,7 +115,11 @@ export function ProjectPanel({
   }
 
   return (
-    <section aria-label="Project settings" className="enter-rise w-full space-y-3">
+    <section
+      id="project-settings-panel"
+      aria-label="Project settings"
+      className="enter-rise w-full space-y-3"
+    >
       {panelError ? <InlineError message={panelError} /> : null}
       {loadError ? (
         <div className="space-y-2">
@@ -151,6 +155,7 @@ export function ProjectPanel({
           title="Instructions"
           editLabel="Edit project instructions"
           hasContent={ready !== null && ready.instructions !== ""}
+          editDisabled={ready === null}
           onEdit={() => setDialog("instructions")}
         >
           {ready === null ? (
@@ -302,12 +307,14 @@ function PanelCard({
   title,
   editLabel,
   hasContent,
+  editDisabled = false,
   onEdit,
   children,
 }: {
   title: string
   editLabel: string
   hasContent: boolean
+  editDisabled?: boolean
   onEdit: () => void
   children: ReactNode
 }) {
@@ -322,6 +329,7 @@ function PanelCard({
             size="icon-sm"
             className="-mt-0.5 -mr-1 text-muted-foreground"
             aria-label={editLabel}
+            disabled={editDisabled}
             onClick={onEdit}
           >
             {hasContent ? <PencilIcon /> : <PlusIcon />}

@@ -43,7 +43,10 @@ export function managedDirectoryName(name: string): string {
     .replace(/[. ]+$/, "")
   // The trailing strip runs again after the cut: slicing can expose a new
   // trailing dot, which Windows silently drops when creating the folder.
-  const shortened = cleaned.slice(0, 80).replace(/[. ]+$/, "")
+  const shortened = [...cleaned]
+    .slice(0, 80)
+    .join("")
+    .replace(/[. ]+$/, "")
   return shortened === "" ? "Project" : shortened
 }
 

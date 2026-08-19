@@ -14,6 +14,7 @@ import { join } from "node:path"
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { managedDirectoryName } from "./project-manager.js"
 import { createRuntime, type Runtime } from "./runtime.js"
 
 const directories: string[] = []
@@ -29,6 +30,12 @@ afterEach(async () => {
 })
 
 describe("managed projects and templates", () => {
+  it("does not split Unicode code points when shortening folder names", () => {
+    const name = `${"a".repeat(79)}😀suffix`
+
+    expect(managedDirectoryName(name)).toBe(`${"a".repeat(79)}😀`)
+  })
+
   it("creates a real managed folder beside the Runtime database", async () => {
     const { directory, runtime } = await testRuntime()
 

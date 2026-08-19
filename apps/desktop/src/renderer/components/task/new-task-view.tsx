@@ -193,6 +193,7 @@ export function NewTaskView({
                 size="sm"
                 className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted"
                 aria-expanded={panelVisible}
+                aria-controls="project-settings-panel"
                 onClick={() => onPanelCollapsedChange(panelVisible)}
               >
                 <SettingsIcon data-icon="inline-start" />

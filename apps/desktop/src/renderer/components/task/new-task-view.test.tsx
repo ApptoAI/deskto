@@ -34,6 +34,60 @@ const harnesses: Harness[] = [
 afterEach(cleanup)
 
 describe("NewTaskView", () => {
+  it("opens project settings automatically when instructions are empty", async () => {
+    renderNewTaskView({ instructions: "", panelPreference: "auto" })
+
+    expect(
+      await screen.findByRole("region", { name: "Project settings" })
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole("button", { name: "Project settings" })
+        .getAttribute("aria-controls")
+    ).toBe("project-settings-panel")
+  })
+
+  it("keeps project settings collapsed when instructions exist", async () => {
+    renderNewTaskView({
+      instructions: "Use the approved terminology.",
+      panelPreference: "auto",
+    })
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "Project settings" })
+          .getAttribute("aria-expanded")
+      ).toBe("false")
+    )
+    expect(
+      screen.queryByRole("region", { name: "Project settings" })
+    ).toBeNull()
+  })
+
+  it("disables instruction editing until project details load", async () => {
+    let resolveDetails!: (value: ReturnType<typeof projectDetails>) => void
+    const details = new Promise<ReturnType<typeof projectDetails>>(
+      (resolve) => {
+        resolveDetails = resolve
+      }
+    )
+
+    renderNewTaskView({
+      instructions: "",
+      panelPreference: "open",
+      details,
+    })
+
+    const edit = screen.getByRole("button", {
+      name: "Edit project instructions",
+    })
+    expect(edit.hasAttribute("disabled")).toBe(true)
+
+    resolveDetails(projectDetails("Existing instructions"))
+    await waitFor(() => expect(edit.hasAttribute("disabled")).toBe(false))
+  })
+
   it("sends the saved profile after switching back to a Harness", async () => {
     const request = vi.fn((body: { method: string }) => {
       if (body.method === "preferences.get") {
@@ -132,6 +186,55 @@ describe("NewTaskView", () => {
     })
   })
 })
+
+function renderNewTaskView({
+  instructions,
+  panelPreference,
+  details = Promise.resolve(projectDetails(instructions)),
+}: {
+  instructions: string
+  panelPreference: "open" | "collapsed" | "auto"
+  details?: Promise<ReturnType<typeof projectDetails>>
+}) {
+  const request = vi.fn((body: { method: string }) => {
+    if (body.method === "preferences.get") {
+      return Promise.resolve({
+        ok: true as const,
+        data: { lastProfile: null, profilesByHarness: {} },
+      })
+    }
+    if (body.method === "project.get") return details
+    return Promise.reject(new Error(`Unexpected request: ${body.method}`))
+  })
+
+  return render(
+    <RuntimeClientProvider
+      client={
+        new RuntimeClient({
+          // SAFETY: these tests exercise only the handled read requests.
+          request: request as RuntimeTransport["request"],
+          subscribe: () => () => {},
+        })
+      }
+    >
+      <NewTaskView
+        project={project}
+        harnesses={{ status: "ready", data: harnesses }}
+        onTaskCreated={vi.fn()}
+        onTaskStarted={vi.fn()}
+        panelPreference={panelPreference}
+        onPanelCollapsedChange={vi.fn()}
+      />
+    </RuntimeClientProvider>
+  )
+}
+
+function projectDetails(instructions: string) {
+  return {
+    ok: true as const,
+    data: { project, instructions, sourceTemplate: null },
+  }
+}
 
 function harness(id: string, name: string, modelId: string): Harness {
   return {
