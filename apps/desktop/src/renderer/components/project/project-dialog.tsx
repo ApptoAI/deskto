@@ -1,5 +1,19 @@
 import { useState } from "react"
-import { projectNameMaxLength, type ProjectTemplate } from "@deskto/protocol"
+import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
+import ChevronRightIcon from "lucide-react/dist/esm/icons/chevron-right"
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
+import {
+  projectDescriptionMaxLength,
+  projectNameMaxLength,
+  type ProjectTemplate,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import {
@@ -12,12 +26,14 @@ import {
 } from "@workspace/ui/components/dialog"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { InlineError } from "../inline-error.js"
 
 export type ProjectDraft = {
   name: string
+  description: string
   location: { kind: "managed" } | { kind: "linked"; path: string }
   templateId?: string
 }
@@ -105,11 +121,21 @@ function ProjectForm({
   busy: boolean
 }) {
   const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [templateId, setTemplateId] = useState("")
   const [locationKind, setLocationKind] = useState<"managed" | "linked">(
     "managed"
   )
   const [folder, setFolder] = useState<PickedFolder | null>(null)
+  const selectedTemplate =
+    templates.find((template) => template.id === templateId) ?? null
+  const collapsedSummary = [
+    selectedTemplate ? `Template: ${selectedTemplate.name}` : null,
+    locationKind === "linked" && folder ? `Folder: ${folder.path}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
   async function chooseFolder() {
     const picked = await onChooseFolder()
@@ -132,6 +158,7 @@ function ProjectForm({
     try {
       await onSubmit({
         name: normalizedName,
+        description: description.trim(),
         location,
         ...(templateId ? { templateId } : undefined),
       })
@@ -140,12 +167,14 @@ function ProjectForm({
     }
   }
 
+  const AdvancedChevron = advancedOpen ? ChevronDownIcon : ChevronRightIcon
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>New project</DialogTitle>
+        <DialogTitle>Create a project</DialogTitle>
         <DialogDescription>
-          Start in a folder managed by Deskto or choose one now.
+          A project keeps related tasks, files, and instructions together.
         </DialogDescription>
       </DialogHeader>
 
@@ -157,12 +186,12 @@ function ProjectForm({
         }}
       >
         <div className="space-y-2">
-          <Label htmlFor="project-name">Name</Label>
+          <Label htmlFor="project-name">What are you working on?</Label>
           <Input
             id="project-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Client North"
+            placeholder="Name your project"
             maxLength={projectNameMaxLength}
             disabled={busy}
             autoFocus
@@ -170,69 +199,141 @@ function ProjectForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="project-template">Template</Label>
-          <select
-            id="project-template"
-            value={templateId}
-            onChange={(event) => setTemplateId(event.target.value)}
-            disabled={busy || templatesLoading}
-            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
-          >
-            <option value="">
-              {templatesLoading ? "Loading templates…" : "Blank project"}
-            </option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name} · {template.packName}
-              </option>
-            ))}
-          </select>
-          {templateId ? (
-            <p className="text-xs text-muted-foreground">
-              {
-                templates.find((template) => template.id === templateId)
-                  ?.description
-              }
-            </p>
+          <Label htmlFor="project-description">
+            What are you trying to achieve?
+          </Label>
+          <Textarea
+            id="project-description"
+            className="min-h-20 resize-y"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Describe your project, goals, subject, etc..."
+            maxLength={projectDescriptionMaxLength}
+            disabled={busy}
+          />
+        </div>
+
+        {/* Deskto manages the folder unless someone asks otherwise, so the
+            filesystem question stays folded away from first-time users. */}
+        <div className="space-y-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground"
+              aria-expanded={advancedOpen}
+              onClick={() => setAdvancedOpen((current) => !current)}
+            >
+              <AdvancedChevron className="size-3.5" />
+              Advanced
+            </button>
+            {/* Folding the section must not hide what it changed: a chosen
+                template or linked folder stays summarized on the fold line. */}
+            {!advancedOpen && collapsedSummary ? (
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {collapsedSummary}
+              </span>
+            ) : null}
+          </div>
+
+          {advancedOpen ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label id="project-template-label">Template</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-between font-normal"
+                        aria-labelledby="project-template-label"
+                        disabled={busy || templatesLoading}
+                      />
+                    }
+                  >
+                    <span className="min-w-0 truncate">
+                      {templatesLoading
+                        ? "Loading templates…"
+                        : (selectedTemplate?.name ?? "Blank project")}
+                    </span>
+                    <ChevronDownIcon
+                      data-icon="inline-end"
+                      className="text-muted-foreground"
+                    />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuRadioGroup
+                      value={templateId}
+                      onValueChange={(value) => setTemplateId(String(value))}
+                    >
+                      <DropdownMenuRadioItem value="" closeOnClick>
+                        Blank project
+                      </DropdownMenuRadioItem>
+                      {templates.map((template) => (
+                        <DropdownMenuRadioItem
+                          key={template.id}
+                          value={template.id}
+                          closeOnClick
+                        >
+                          <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
+                            <span className="truncate">{template.name}</span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              {template.packName}
+                            </span>
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {selectedTemplate?.description ? (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTemplate.description}
+                  </p>
+                ) : null}
+              </div>
+
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Location</legend>
+                <div
+                  role="radiogroup"
+                  aria-label="Project location"
+                  className="grid gap-2 sm:grid-cols-2"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={locationKind === "managed"}
+                    disabled={busy}
+                    onClick={() => setLocationKind("managed")}
+                    className={locationOption(locationKind === "managed")}
+                  >
+                    <span className="font-medium">Managed by Deskto</span>
+                    <span className="text-xs text-muted-foreground">
+                      Choose another folder later.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={locationKind === "linked"}
+                    disabled={busy}
+                    onClick={() => void chooseFolder()}
+                    className={locationOption(locationKind === "linked")}
+                  >
+                    <span className="font-medium">Choose folder</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {folder?.path ?? "Use an existing local folder."}
+                    </span>
+                  </button>
+                </div>
+              </fieldset>
+            </div>
           ) : null}
         </div>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Location</legend>
-          <div
-            role="radiogroup"
-            aria-label="Project location"
-            className="grid gap-2 sm:grid-cols-2"
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={locationKind === "managed"}
-              disabled={busy}
-              onClick={() => setLocationKind("managed")}
-              className={locationOption(locationKind === "managed")}
-            >
-              <span className="font-medium">Managed by Deskto</span>
-              <span className="text-xs text-muted-foreground">
-                Choose another folder later.
-              </span>
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={locationKind === "linked"}
-              disabled={busy}
-              onClick={() => void chooseFolder()}
-              className={locationOption(locationKind === "linked")}
-            >
-              <span className="font-medium">Choose folder</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {folder?.path ?? "Use an existing local folder."}
-              </span>
-            </button>
-          </div>
-        </fieldset>
-
+        {/* The template list failing must stay visible with Advanced folded,
+            or "Blank project" quietly becomes the only choice. */}
         {loadError ? (
           <div className="space-y-2">
             <InlineError message={loadError} />
@@ -279,7 +380,7 @@ function locationOption(selected: boolean): string {
   return cn(
     "flex min-w-0 flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
     selected
-      ? "border-ring bg-muted"
+      ? "border-input bg-muted"
       : "border-border hover:border-muted-foreground"
   )
 }

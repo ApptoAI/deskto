@@ -122,7 +122,9 @@
     /* Heavier than the hairline: a control's boundary is what identifies it,
        so it clears 3:1 against the page rather than whispering like a rule. */
     --input: oklch(0.6 0.012 262);
-    --ring: oklch(0.6 0.012 262);
+    /* Translucent on purpose: the focus halo should read as a glow around
+       the control, not a second black border stacked on the first. */
+    --ring: oklch(0.6 0.012 262 / 45%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -136,7 +138,7 @@
     --sidebar-accent: oklch(0.9 0.008 271);
     --sidebar-accent-foreground: oklch(0.145 0 0);
     --sidebar-border: oklch(0.915 0.008 278.6);
-    --sidebar-ring: oklch(0.6 0.012 262);
+    --sidebar-ring: oklch(0.6 0.012 262 / 45%);
 }
 
 /*
@@ -177,7 +179,8 @@
     --border: oklch(0.277 0.01 268.3);
     /* See the light block: a control's edge is not a hairline. */
     --input: oklch(0.55 0.012 265);
-    --ring: oklch(0.55 0.012 265);
+    /* Mirrors the light ladder: a halo, not a second border. */
+    --ring: oklch(0.55 0.012 265 / 55%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -190,7 +193,7 @@
     --sidebar-accent: oklch(0.3 0.011 268);
     --sidebar-accent-foreground: oklch(1 0 0);
     --sidebar-border: oklch(0.243 0.008 264.4);
-    --sidebar-ring: oklch(0.55 0.012 265);
+    --sidebar-ring: oklch(0.55 0.012 265 / 55%);
 }
 
 @layer base {

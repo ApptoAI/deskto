@@ -12,7 +12,7 @@ import {
   rm,
   rmdir,
 } from "node:fs/promises"
-import { dirname, join, resolve } from "node:path"
+import { dirname, join, resolve, sep } from "node:path"
 
 import type {
   Project,
@@ -29,9 +29,31 @@ import type { Projects } from "./storage/projects.js"
 
 const crossDeviceErrorSchema = z.object({ code: z.literal("EXDEV") })
 
+/**
+ * The folder a managed project gets in Finder. The project name survives as
+ * far as the filesystem allows — an opaque UUID here reads as a bug to the
+ * person who clicks "Show folder".
+ */
+export function managedDirectoryName(name: string): string {
+  const cleaned = name
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what this strips
+    .replace(/[\u0000-\u001f/\\:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[. ]+/, "")
+    .replace(/[. ]+$/, "")
+  // The trailing strip runs again after the cut: slicing can expose a new
+  // trailing dot, which Windows silently drops when creating the folder.
+  const shortened = [...cleaned]
+    .slice(0, 80)
+    .join("")
+    .replace(/[. ]+$/, "")
+  return shortened === "" ? "Project" : shortened
+}
+
 export type CreateProjectInput = {
   workspaceId: string
   name: string
+  description?: string
   location: { kind: "managed" } | { kind: "linked"; path: string }
   templateId?: string
 }
@@ -67,29 +89,41 @@ export class ProjectManager {
       : undefined
 
     if (input.location.kind === "managed") {
-      const staging = await mkdtemp(join(this.#managedRoot, ".create-"))
-      const destination = join(this.#managedRoot, id)
+      // The claimed directory is never given up: template content is copied
+      // into it instead of renamed over it. A rename would first release the
+      // name, and POSIX rename onto an empty directory succeeds silently, so
+      // a concurrent creator's claim could be eaten without a trace.
+      const destination = await this.#claimDirectory(
+        this.#managedRoot,
+        input.name
+      )
       try {
         if (template) {
-          await rmdir(staging)
-          await this.packs.templates.materialize(template, staging)
+          const staging = await mkdtemp(join(this.#managedRoot, ".create-"))
+          try {
+            await rmdir(staging)
+            await this.packs.templates.materialize(template, staging)
+            const copied = await copyDirectoryContentsNoClobber(
+              staging,
+              destination
+            )
+            await copied.finalize().catch(() => undefined)
+          } catch (error) {
+            await rm(staging, { recursive: true, force: true }).catch(
+              () => undefined
+            )
+            throw error
+          }
         }
-        await rename(staging, destination)
-        try {
-          this.projects.add(destination, input.name, input.workspaceId, {
-            id,
-            locationKind: "managed",
-            instructions,
-            sourceTemplate,
-          })
-        } catch (error) {
-          await rm(destination, { recursive: true, force: true }).catch(
-            () => undefined
-          )
-          throw error
-        }
+        this.projects.add(destination, input.name, input.workspaceId, {
+          id,
+          locationKind: "managed",
+          description: input.description,
+          instructions,
+          sourceTemplate,
+        })
       } catch (error) {
-        await rm(staging, { recursive: true, force: true }).catch(
+        await rm(destination, { recursive: true, force: true }).catch(
           () => undefined
         )
         throw error
@@ -106,6 +140,7 @@ export class ProjectManager {
       const project = this.projects.add(path, input.name, input.workspaceId, {
         id,
         locationKind: "linked",
+        description: input.description,
       })
       return this.projects.details(project.id)
     }
@@ -121,6 +156,7 @@ export class ProjectManager {
         this.projects.add(path, input.name, input.workspaceId, {
           id,
           locationKind: "linked",
+          description: input.description,
           instructions,
           sourceTemplate,
         })
@@ -154,12 +190,33 @@ export class ProjectManager {
           "Managed project path is outside the Deskto projects directory"
         )
       }
-      const destination = await resolvedEmptyOrExistingDirectory(
+      const picked = await resolvedEmptyOrExistingDirectory(
         selectedPath,
-        true
+        false
       )
-      this.projects.ensurePathAvailable(destination, projectId)
-      const move = await moveProjectDirectory(source, destination)
+      if (picked === source || picked.startsWith(source + sep)) {
+        throw new RuntimeError(
+          "invalid-project-path",
+          "Choose a folder outside the project's current folder"
+        )
+      }
+      // An empty pick becomes the project folder itself; a folder that
+      // already holds things gets a fresh subfolder named after the
+      // project, so nobody has to prepare an empty directory first.
+      const pickedIsEmpty = (await readdir(picked)).length === 0
+      const destination = pickedIsEmpty
+        ? picked
+        : await this.#claimDirectory(picked, current.name, projectId)
+      // The claimed branch already checked availability; re-checking here
+      // could throw after the claim and leak the freshly made subfolder.
+      if (pickedIsEmpty) this.projects.ensurePathAvailable(destination, projectId)
+      let move: PendingProjectMove
+      try {
+        move = await moveProjectDirectory(source, destination)
+      } catch (error) {
+        if (!pickedIsEmpty) await rmdir(destination).catch(() => undefined)
+        throw error
+      }
       try {
         const project = this.projects.changeLocation(
           projectId,
@@ -170,6 +227,7 @@ export class ProjectManager {
         return project
       } catch (error) {
         await move.rollback()
+        if (!pickedIsEmpty) await rmdir(destination).catch(() => undefined)
         throw error
       }
     } finally {
@@ -180,6 +238,45 @@ export class ProjectManager {
   listTemplateFiles(projectId: string): Promise<ProjectTemplateFile[]> {
     const project = this.projects.get(projectId)
     return this.packs.templates.listProjectFiles(project.path)
+  }
+
+  /**
+   * Reserves a readable folder name under the given parent. mkdir is the
+   * claim: a name that exists — on disk or in Project storage — moves the
+   * loop on to "Name 2", "Name 3", and a UUID ends the pathological case.
+   */
+  async #claimDirectory(
+    parent: string,
+    name: string,
+    exceptProjectId?: string
+  ): Promise<string> {
+    const base = managedDirectoryName(name)
+    const candidates = [
+      base,
+      ...Array.from({ length: 49 }, (_, index) => `${base} ${index + 2}`),
+      randomUUID(),
+    ]
+    for (let index = 0; index < candidates.length; index += 1) {
+      const destination = join(parent, candidates[index]!)
+      try {
+        this.projects.ensurePathAvailable(destination, exceptProjectId)
+      } catch {
+        continue
+      }
+      try {
+        await mkdir(destination)
+        return destination
+      } catch (error) {
+        // A name-derived candidate can fail for more than collisions —
+        // Windows reserved names, byte-length limits — so any failure moves
+        // the loop on. Only the UUID fallback failing is worth surfacing.
+        if (index === candidates.length - 1) throw error
+      }
+    }
+    throw new RuntimeError(
+      "project-create-failed",
+      "Deskto could not reserve a folder for the project"
+    )
   }
 }
 

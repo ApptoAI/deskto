@@ -17,6 +17,7 @@ import {
   preferencesSchema,
   projectDetailsSchema,
   projectEntrySchema,
+  projectDescriptionMaxLength,
   projectInstructionsMaxLength,
   projectNameMaxLength,
   projectTemplateDescriptionMaxLength,
@@ -174,6 +175,11 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({
       workspaceId: z.string().min(1),
       name: z.string().trim().min(1).max(projectNameMaxLength),
+      description: z
+        .string()
+        .trim()
+        .max(projectDescriptionMaxLength)
+        .optional(),
       location: z.discriminatedUnion("kind", [
         z.object({ kind: z.literal("managed") }),
         z.object({ kind: z.literal("linked"), path: z.string().min(1) }),
@@ -195,11 +201,18 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
       .object({
         projectId: z.string().min(1),
         name: z.string().trim().min(1).max(projectNameMaxLength).optional(),
+        description: z
+          .string()
+          .trim()
+          .max(projectDescriptionMaxLength)
+          .optional(),
         instructions: z.string().max(projectInstructionsMaxLength).optional(),
       })
       .refine(
-        ({ name, instructions }) =>
-          name !== undefined || instructions !== undefined,
+        ({ name, description, instructions }) =>
+          name !== undefined ||
+          description !== undefined ||
+          instructions !== undefined,
         { message: "A project setting is required" }
       ),
   }),

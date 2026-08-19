@@ -99,7 +99,7 @@ function ShortcutRow({
         size="sm"
         className={cn(
           "min-w-24 font-mono tabular-nums",
-          recording && "border-ring ring-2 ring-ring/30"
+          recording && "border-input ring-2 ring-ring/30"
         )}
         aria-label={`Change shortcut for ${definition.label}`}
         onClick={() => setRecording(true)}

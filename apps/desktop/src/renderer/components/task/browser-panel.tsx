@@ -219,7 +219,7 @@ export function BrowserPanel({
             }}
             aria-label="Browser address"
             placeholder="Enter a URL or search"
-            className="h-7 w-full rounded-md border border-input bg-muted/40 px-2.5 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            className="h-7 w-full rounded-md border border-input bg-muted/40 px-2.5 text-xs outline-none focus:border-input focus:ring-2 focus:ring-ring/30"
           />
         </form>
       </div>

@@ -14,7 +14,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Environment**: A place where a Runtime runs and where work executes. The MVP has one local Environment inside the Electron main process.
 - **Connection**: Client configuration for reaching an Environment. Desktop uses Electron IPC. A future hosted Runtime can use HTTP and WebSocket without changing Client use cases.
 - **Workspace**: A container of Projects for one area of life or work, modeled on Arc browser Spaces. It owns a name, color, icon, its attached Packs, and the last active Project. Every install has a non-deletable Personal Workspace.
-- **Project**: One working folder and its Tasks. It belongs to exactly one Workspace. Deskto may manage the folder below application data or link a folder selected by the person. Use "project" in UI copy and `Project` in code.
+- **Project**: One working folder and its Tasks. It belongs to exactly one Workspace. Deskto may manage the folder below application data or link a folder selected by the person. It owns a free-text description, up to 1000 characters and possibly empty, shown on project cards as context for people and agents. Use "project" in UI copy and `Project` in code.
 - **Project Template**: A Pack-owned snapshot of starter files and shared Project instructions. Applying a template creates independent Project content; later template changes do not propagate.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.

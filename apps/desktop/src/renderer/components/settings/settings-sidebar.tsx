@@ -45,7 +45,7 @@ export function SettingsSidebar({
       <div className="no-drag px-2 pb-3">
         <Button
           ref={goBack}
-          variant="secondary"
+          variant="ghost"
           size="lg"
           className="w-full justify-start"
           onClick={onGoBack}

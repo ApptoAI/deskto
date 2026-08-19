@@ -59,6 +59,7 @@ export const projectSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   name: z.string(),
+  description: z.string(),
   path: z.string(),
   locationKind: projectLocationKindSchema,
   pinnedAt: z.string().nullable(),
@@ -77,6 +78,7 @@ export const projectTemplateSourceSchema = z.object({
 export type ProjectTemplateSource = z.infer<typeof projectTemplateSourceSchema>
 
 export const projectNameMaxLength = 160
+export const projectDescriptionMaxLength = 1_000
 export const projectInstructionsMaxLength = 64_000
 export const projectTemplateDescriptionMaxLength = 500
 

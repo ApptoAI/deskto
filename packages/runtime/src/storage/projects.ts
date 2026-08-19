@@ -41,6 +41,7 @@ export class Projects {
     options: {
       id?: string
       locationKind?: ProjectLocationKind
+      description?: string
       instructions?: string
       sourceTemplate?: ProjectTemplateSource
     } = {}
@@ -63,6 +64,7 @@ export class Projects {
       id: options.id ?? randomUUID(),
       workspaceId,
       name,
+      description: options.description ?? "",
       path,
       locationKind: options.locationKind ?? "linked",
       pinnedAt: null,
@@ -72,15 +74,17 @@ export class Projects {
     this.database
       .prepare(
         `INSERT INTO projects (
-          id, workspace_id, name, path, location_kind, instructions, pinned_at,
+          id, workspace_id, name, description, path, location_kind,
+          instructions, pinned_at,
           source_template_id, source_template_name, source_template_pack_name,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
       )
       .run(
         project.id,
         project.workspaceId,
         project.name,
+        project.description,
         project.path,
         project.locationKind,
         options.instructions ?? "",
@@ -126,17 +130,18 @@ export class Projects {
 
   update(
     projectId: string,
-    patch: { name?: string; instructions?: string }
+    patch: { name?: string; description?: string; instructions?: string }
   ): ProjectDetails {
     const current = this.#getRow(projectId)
     const name = patch.name ?? current.name
+    const description = patch.description ?? current.description
     const instructions = patch.instructions ?? current.instructions
     const updatedAt = new Date().toISOString()
     this.database
       .prepare(
-        "UPDATE projects SET name = ?, instructions = ?, updated_at = ? WHERE id = ?"
+        "UPDATE projects SET name = ?, description = ?, instructions = ?, updated_at = ? WHERE id = ?"
       )
-      .run(name, instructions, updatedAt, projectId)
+      .run(name, description, instructions, updatedAt, projectId)
     return this.details(projectId)
   }
 
