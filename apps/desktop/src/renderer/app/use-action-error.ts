@@ -25,7 +25,7 @@ export function useActionError() {
   )
 
   const runAction = useCallback(
-    (action: () => Promise<unknown>) => {
+    <T>(action: () => Promise<T>) => {
       tryAction(action).catch(() => {
         // Already surfaced through the error strip.
       })

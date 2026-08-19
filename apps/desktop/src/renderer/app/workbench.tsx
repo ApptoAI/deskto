@@ -80,7 +80,7 @@ export function Workbench() {
     listsError,
     retryLists,
     revalidateSelection,
-  } = useWorkspaceSelection(client, setView)
+  } = useWorkspaceSelection(client, setView, runAction)
 
   const {
     threads,

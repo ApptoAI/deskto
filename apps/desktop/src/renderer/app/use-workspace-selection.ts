@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import type { RuntimeClient } from "@deskto/client"
 import type { Selection } from "@deskto/protocol"
 import { z } from "zod"
@@ -11,6 +11,7 @@ import { afterScopeChange, toNewTask, type MainView } from "./work-view.js"
 type ProjectScope = "all" | "project"
 
 const projectScopeMapSchema = z.record(z.string(), z.enum(["all", "project"]))
+type RunAction = <T>(action: () => Promise<T>) => void
 
 /**
  * Loads workspaces, projects, and the persisted Selection, and derives which
@@ -20,7 +21,8 @@ const projectScopeMapSchema = z.record(z.string(), z.enum(["all", "project"]))
  */
 export function useWorkspaceSelection(
   client: RuntimeClient,
-  setView: (update: (current: MainView) => MainView) => void
+  setView: (update: (current: MainView) => MainView) => void,
+  runAction: RunAction
 ) {
   const loadWorkspaces = useCallback(() => client.listWorkspaces(), [client])
   const workspacesQuery = useRuntimeQuery(loadWorkspaces)
@@ -95,6 +97,27 @@ export function useWorkspaceSelection(
   )
 
   const replaceSelection = selectionQuery.replace
+  const revalidateSelection = selectionQuery.revalidate
+  const selectionRequest = useRef(0)
+
+  const persistSelection = useCallback(
+    (write: () => Promise<Selection>) => {
+      const request = ++selectionRequest.current
+      runAction(async () => {
+        try {
+          const persisted = await write()
+          if (request === selectionRequest.current) {
+            replaceSelection(persisted)
+          }
+        } catch (error) {
+          if (request !== selectionRequest.current) return
+          revalidateSelection()
+          throw error
+        }
+      })
+    },
+    [replaceSelection, revalidateSelection, runAction]
+  )
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
@@ -103,9 +126,9 @@ export function useWorkspaceSelection(
         lastWorkspaceId: workspaceId,
         lastProjectIds: selection?.lastProjectIds ?? {},
       })
-      client.setSelection(workspaceId).then(replaceSelection, () => {})
+      persistSelection(() => client.setSelection(workspaceId))
     },
-    [client, replaceSelection, selection, setView]
+    [client, persistSelection, replaceSelection, selection, setView]
   )
 
   const selectProject = useCallback(
@@ -121,12 +144,11 @@ export function useWorkspaceSelection(
         },
       }
       replaceSelection(next)
-      client
-        .setSelection(activeWorkspaceId, projectId)
-        .then(replaceSelection, () => {})
+      persistSelection(() => client.setSelection(activeWorkspaceId, projectId))
     },
     [
       client,
+      persistSelection,
       replaceSelection,
       selection,
       activeWorkspaceId,
@@ -154,7 +176,6 @@ export function useWorkspaceSelection(
           ? selectionQuery.state.message
           : null
 
-  const revalidateSelection = selectionQuery.revalidate
   const retryLists = useCallback(() => {
     revalidateWorkspaces()
     revalidateProjects()
