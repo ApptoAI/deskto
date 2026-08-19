@@ -26,6 +26,7 @@ import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { ProjectOutputSweep } from "./project-outputs.js"
+import type { ProjectActivityGate } from "./project-activity-gate.js"
 import { resolvePromptReferences } from "./prompt-references.js"
 import { SkillInventory } from "./skills/skill-inventory.js"
 import { SessionToolLeases, type SessionToolProvider } from "./session-tools.js"
@@ -55,6 +56,7 @@ type StartingRun = ActiveTurnRecord & {
   cancelled: boolean
   progress: TurnProgress
   tools?: SessionToolLeases
+  releaseProject: () => void
 }
 
 type ActiveRun = ActiveTurnRecord & {
@@ -77,6 +79,7 @@ type ActiveRun = ActiveTurnRecord & {
   lastUsage?: ContextUsage
   outputs?: ProjectOutputSweep
   tools: SessionToolLeases
+  releaseProject: () => void
 }
 
 const streamFlushIntervalMs = 50
@@ -159,6 +162,7 @@ export class TurnCoordinator {
     private readonly harnesses: HarnessRegistry,
     settings: UserSettings,
     private readonly sessionTools: readonly SessionToolProvider[],
+    private readonly projectActivity: ProjectActivityGate,
     private readonly events: TurnEvents
   ) {
     this.#skills = new SkillInventory(store, harnesses)
@@ -183,6 +187,7 @@ export class TurnCoordinator {
   #settleRun(threadId: string, run: StartingRun | ActiveRun): void {
     if (this.#runs.get(threadId) !== run) return
     this.#runs.delete(threadId)
+    run.releaseProject()
   }
 
   /** Adds process-local liveness to the durable Thread projection. */
@@ -207,14 +212,32 @@ export class TurnCoordinator {
     }
 
     const thread = this.store.threads.getRow(threadId)
-    const harness = await this.harnesses.requireAvailable(thread.harness_id)
-    const references = await resolvePromptReferences(
-      this.store,
-      this.#skills,
-      threadId,
-      input.references
-    )
-    const turn = this.store.turns.begin(threadId, input)
+    const releaseProject = this.projectActivity.beginTurn(thread.project_id)
+    const prepare = () =>
+      Promise.all([
+        this.harnesses.requireAvailable(thread.harness_id),
+        resolvePromptReferences(
+          this.store,
+          this.#skills,
+          threadId,
+          input.references
+        ),
+      ] as const)
+    let preparation: Awaited<ReturnType<typeof prepare>>
+    try {
+      preparation = await prepare()
+    } catch (error) {
+      releaseProject()
+      throw error
+    }
+    const [harness, references] = preparation
+    let turn: ActiveTurnRecord
+    try {
+      turn = this.store.turns.begin(threadId, input)
+    } catch (error) {
+      releaseProject()
+      throw error
+    }
     const starting: StartingRun = {
       ...turn,
       threadId,
@@ -222,6 +245,7 @@ export class TurnCoordinator {
       controller: new AbortController(),
       cancelled: false,
       progress: turnProgress("starting", "Starting agent"),
+      releaseProject,
     }
     this.#runs.set(threadId, starting)
     this.#changed(threadId)
@@ -262,6 +286,7 @@ export class TurnCoordinator {
           skillRoots: existingSkillRoots(
             this.store.packs.attachedToWorkspace(turn.workspaceId)
           ),
+          instructions: this.store.projects.instructions(thread.project_id),
           mcpServers: tools.mcpServers,
         },
       }
@@ -307,6 +332,7 @@ export class TurnCoordinator {
         ordinal: 2,
         outputs,
         tools,
+        releaseProject,
       }
       this.#runs.set(threadId, run)
       this.events.delta(threadId, {
@@ -410,7 +436,7 @@ export class TurnCoordinator {
       await this.cancel(threadId).catch(() => undefined)
     } finally {
       this.#discarding.delete(threadId)
-      this.#runs.delete(threadId)
+      this.#settleRun(threadId, run)
     }
   }
 

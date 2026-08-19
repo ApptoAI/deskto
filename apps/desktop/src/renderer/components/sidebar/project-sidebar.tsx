@@ -32,6 +32,8 @@ export function ProjectSidebar({
   onSelectAllProjects,
   onAddProject,
   onMoveProject,
+  onEditProject,
+  onSetProjectPinned,
   addingProject,
   onSelectWorkspace,
   onCreateWorkspace,
@@ -58,6 +60,8 @@ export function ProjectSidebar({
   onSelectAllProjects: () => void
   onAddProject: () => void
   onMoveProject: (projectId: string, workspaceId: string) => void
+  onEditProject: () => void
+  onSetProjectPinned: (projectId: string, pinned: boolean) => void
   addingProject: boolean
   onSelectWorkspace: (workspaceId: string) => void
   onCreateWorkspace: () => void
@@ -150,6 +154,8 @@ export function ProjectSidebar({
           onSelectAllProjects={onSelectAllProjects}
           onAddProject={onAddProject}
           onMoveProject={onMoveProject}
+          onEditProject={onEditProject}
+          onSetPinned={onSetProjectPinned}
           adding={addingProject}
         />
       </div>
@@ -173,7 +179,7 @@ export function ProjectSidebar({
                 onClick={onAddProject}
                 disabled={addingProject}
               >
-                {addingProject ? "Opening…" : "Add a project folder"}
+                Create project
               </Button>
             </div>
           ) : allProjects ? (

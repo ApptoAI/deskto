@@ -7,6 +7,7 @@ import {
   type ImageAttachment,
   type PackKind,
   type PackReceipt,
+  type ProjectLocationKind,
   type Thread,
   type Project,
   type Workspace,
@@ -28,6 +29,12 @@ export type ProjectRow = {
   workspace_id: string
   name: string
   path: string
+  location_kind: ProjectLocationKind
+  instructions: string
+  pinned_at: string | null
+  source_template_id: string | null
+  source_template_name: string | null
+  source_template_pack_name: string | null
   created_at: string
   updated_at: string
 }
@@ -164,6 +171,8 @@ export function toProject(row: ProjectRow): Project {
     workspaceId: row.workspace_id,
     name: row.name,
     path: row.path,
+    locationKind: row.location_kind,
+    pinnedAt: row.pinned_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

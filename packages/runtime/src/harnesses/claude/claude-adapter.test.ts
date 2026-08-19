@@ -62,6 +62,37 @@ describe("Claude MCP provisioning", () => {
   })
 })
 
+describe("Claude Project instructions", () => {
+  it("appends shared instructions to the Claude Code system prompt", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: {
+          skillRoots: [],
+          instructions: "Use the approved client terminology.",
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(queryMock.mock.calls[0]?.[0]?.options?.systemPrompt).toEqual({
+      type: "preset",
+      preset: "claude_code",
+      append: "Use the approved client terminology.",
+    })
+  })
+})
+
 describe("claudePrompt", () => {
   it("translates selected skills to Claude plugin commands", () => {
     expect(

@@ -52,16 +52,59 @@ export type Workspace = z.infer<typeof workspaceSchema>
 /** Every install has this workspace. It adopts orphaned projects and cannot be deleted. */
 export const personalWorkspaceId = "personal"
 
+export const projectLocationKindSchema = z.enum(["managed", "linked"])
+export type ProjectLocationKind = z.infer<typeof projectLocationKindSchema>
+
 export const projectSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   name: z.string(),
   path: z.string(),
+  locationKind: projectLocationKindSchema,
+  pinnedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
 
 export type Project = z.infer<typeof projectSchema>
+
+export const projectTemplateSourceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  packName: z.string().min(1),
+})
+
+export type ProjectTemplateSource = z.infer<typeof projectTemplateSourceSchema>
+
+export const projectNameMaxLength = 160
+export const projectInstructionsMaxLength = 64_000
+export const projectTemplateDescriptionMaxLength = 500
+
+export const projectDetailsSchema = z.object({
+  project: projectSchema,
+  instructions: z.string().max(projectInstructionsMaxLength),
+  sourceTemplate: projectTemplateSourceSchema.nullable(),
+})
+
+export type ProjectDetails = z.infer<typeof projectDetailsSchema>
+
+export const projectTemplateSchema = z.object({
+  id: z.string().min(1),
+  packId: z.string().min(1),
+  packName: z.string().min(1),
+  directoryName: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+})
+
+export type ProjectTemplate = z.infer<typeof projectTemplateSchema>
+
+export const projectTemplateFileSchema = z.object({
+  path: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+})
+
+export type ProjectTemplateFile = z.infer<typeof projectTemplateFileSchema>
 
 export const packSkillSchema = z.object({
   id: z.string().min(1),
@@ -108,6 +151,7 @@ export const packReceiptSchema = z.object({
 export type PackReceipt = z.infer<typeof packReceiptSchema>
 
 export const mySkillsPackName = "My Skills"
+export const myTemplatesPackName = "My Templates"
 
 /**
  * A Pack is a directory of skills the user manages in the app. Its layout is

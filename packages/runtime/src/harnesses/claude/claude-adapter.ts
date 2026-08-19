@@ -304,7 +304,13 @@ class ClaudeSession implements HarnessSession {
       allowDangerouslySkipPermissions:
         input.executionProfile.permissionMode === "full-access",
       settingSources: ["user", "project", "local"],
-      systemPrompt: { type: "preset", preset: "claude_code" },
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+        ...(input.customization.instructions
+          ? { append: input.customization.instructions }
+          : undefined),
+      },
     }
     if (input.executionProfile.modelId)
       options.model = input.executionProfile.modelId

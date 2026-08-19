@@ -9,7 +9,7 @@ import { RuntimeError } from "../errors.js"
 import { pathIsDirectChild } from "../path-boundaries.js"
 import type { PackRow } from "../storage/records.js"
 import type { Packs } from "../storage/packs.js"
-import { digestPackDirectory } from "./pack-digest.js"
+import { refreshPackDigest } from "./refresh-pack-digest.js"
 import { packSkillId, skillsDirectory, slugify } from "./pack-files.js"
 import { canEditManagedSkills } from "./pack-capabilities.js"
 
@@ -39,7 +39,7 @@ export class ManagedSkills {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined)
       throw error
     }
-    await this.#refreshDigest(pack)
+    await refreshPackDigest(this.packs, pack)
     return toPackSkill(pack, directoryName, draft)
   }
 
@@ -70,7 +70,7 @@ export class ManagedSkills {
       await rm(temporaryFile, { force: true }).catch(() => undefined)
       throw error
     }
-    await this.#refreshDigest(pack)
+    await refreshPackDigest(this.packs, pack)
     return toPackSkill(pack, directoryName, draft)
   }
 
@@ -109,20 +109,6 @@ export class ManagedSkills {
       )
     }
     return root
-  }
-
-  async #refreshDigest(pack: PackRow): Promise<void> {
-    try {
-      const digest = await digestPackDirectory(pack.path)
-      this.packs.updateContentDigest(pack.id, digest.contentDigest)
-    } catch {
-      try {
-        this.packs.updateContentDigest(pack.id, null)
-      } catch {
-        // The skill write is already committed. Digest bookkeeping must not
-        // turn it into a reported failure or encourage a duplicate retry.
-      }
-    }
   }
 }
 

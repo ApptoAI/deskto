@@ -28,7 +28,7 @@ class FakeCodexClient implements CodexClient {
     schema: ZodType<T>
   ): Promise<T> {
     const response: JsonValue =
-      method === "thread/start"
+      method === "thread/start" || method === "thread/resume"
         ? { thread: { id: "thread-1" } }
         : method === "turn/start"
           ? { turn: { id: "turn-1" } }
@@ -65,6 +65,19 @@ class UnsupportedSkillRootsClient extends FakeCodexClient {
   ): Promise<T> {
     if (method === "skills/extraRoots/set")
       return Promise.reject(new Error("Unsupported request"))
+    return super.request(method, params, schema)
+  }
+}
+
+class RecordingCodexClient extends FakeCodexClient {
+  readonly requests: { method: string; params: JsonObject }[] = []
+
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    this.requests.push({ method, params })
     return super.request(method, params, schema)
   }
 }
@@ -216,6 +229,44 @@ describe("Codex MCP provisioning", () => {
       'mcp_servers.deskto.bearer_token_env_var="DESKTO_MCP_0_TOKEN"'
     )
     expect(processOptions?.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
+  })
+})
+
+describe("Codex Project instructions", () => {
+  it("passes shared instructions as app-server developer instructions", async () => {
+    const client = new RecordingCodexClient()
+    await new CodexAdapter(() => client).start(
+      {
+        ...runInputWithPack(),
+        customization: {
+          skillRoots: [],
+          instructions: "Use the approved client terminology.",
+        },
+      },
+      new AbortController().signal
+    )
+
+    expect(
+      client.requests.find(({ method }) => method === "thread/start")?.params
+    ).toMatchObject({
+      developerInstructions: "Use the approved client terminology.",
+    })
+  })
+
+  it("clears shared instructions when resuming an existing thread", async () => {
+    const client = new RecordingCodexClient()
+    await new CodexAdapter(() => client).start(
+      {
+        ...runInputWithPack(),
+        providerSessionId: "codex-thread-1",
+        customization: { skillRoots: [], instructions: "" },
+      },
+      new AbortController().signal
+    )
+
+    expect(
+      client.requests.find(({ method }) => method === "thread/resume")?.params
+    ).toMatchObject({ developerInstructions: "" })
   })
 })
 

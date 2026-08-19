@@ -11,6 +11,8 @@ import type {
 
 import { HarnessRegistry } from "./harness-registry.js"
 import { PackManager } from "./packs/pack-manager.js"
+import { ProjectActivityGate } from "./project-activity-gate.js"
+import { ProjectManager } from "./project-manager.js"
 import { RequestRouter } from "./request-router.js"
 import type { SessionToolProvider } from "./session-tools.js"
 import { openDatabase } from "./storage/database.js"
@@ -23,6 +25,8 @@ export type RuntimeOptions = {
   databasePath: string
   /** Where app-created Packs live. Defaults to a packs folder next to the database. */
   packsPath?: string
+  /** Where app-created Project folders live. Defaults beside the database. */
+  projectsPath?: string
   harnesses: HarnessAdapterFactory[]
   /** How often harness health is re-checked. Pass 0 to turn the loop off. */
   harnessRefreshMs?: number
@@ -52,13 +56,24 @@ export class Runtime implements RuntimeTransport {
     const packsRoot = resolve(
       options.packsPath ?? join(dirname(options.databasePath), "packs")
     )
+    const projectsRoot = resolve(
+      options.projectsPath ?? join(dirname(options.databasePath), "projects")
+    )
     this.#store = new Store(openDatabase(options.databasePath), sequences)
+    const projectActivity = new ProjectActivityGate()
     let packManager: PackManager
+    let projectManager: ProjectManager
     try {
       packManager = new PackManager(
         this.#store.packs,
         packsRoot,
         options.fileActions
+      )
+      projectManager = new ProjectManager(
+        this.#store.projects,
+        packManager,
+        projectsRoot,
+        projectActivity
       )
     } catch (error) {
       try {
@@ -87,6 +102,7 @@ export class Runtime implements RuntimeTransport {
       this.#harnesses,
       userSettings,
       options.sessionTools ?? [],
+      projectActivity,
       {
         changed: (threadId) => this.#emitThreadChanged(threadId),
         delta: (threadId, change) => {
@@ -110,6 +126,7 @@ export class Runtime implements RuntimeTransport {
       this.#turns,
       userSettings,
       packManager,
+      projectManager,
       {
         workspaceChanged: () => this.#emit({ type: "workspace.changed" }),
         packChanged: () => this.#emit({ type: "pack.changed" }),

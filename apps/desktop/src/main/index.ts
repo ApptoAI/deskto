@@ -133,6 +133,7 @@ async function openApplication(): Promise<void> {
     runtime = createRuntime({
       databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
       packsPath: path.join(app.getPath("userData"), "packs"),
+      projectsPath: path.join(app.getPath("userData"), "projects"),
       harnesses: [claudeAdapter, new CodexAdapter()],
       probeGate: cliPathConfigured,
       sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],

@@ -1,6 +1,7 @@
 import {
   executionProfilesByHarnessSchema,
   lastProfileSchema,
+  myTemplatesPackName,
   selectionSchema,
   type ExecutionProfile,
   type RequestFor,
@@ -18,6 +19,7 @@ import { readPackContents, resolvedDirectory } from "./packs/pack-files.js"
 import { canEditManagedSkills } from "./packs/pack-capabilities.js"
 import type { PackManager } from "./packs/pack-manager.js"
 import { ProjectEntries } from "./project-entries.js"
+import type { ProjectManager } from "./project-manager.js"
 import { SkillInventory } from "./skills/skill-inventory.js"
 import { toPackRecord, type PackRow } from "./storage/records.js"
 import type { Store } from "./storage/store.js"
@@ -59,6 +61,7 @@ export class RequestRouter {
     private readonly turns: TurnCoordinator,
     private readonly userSettings: UserSettings,
     private readonly packManager: PackManager,
+    private readonly projectManager: ProjectManager,
     private readonly events: RouterEvents
   ) {
     this.#skillInventory = new SkillInventory(store, harnesses)
@@ -247,12 +250,23 @@ export class RequestRouter {
       }
       case "project.list":
         return this.store.projects.list()
+      case "project.get":
+        return this.store.projects.details(request.params.projectId)
+      case "project.create": {
+        const project = await this.projectManager.createProject({
+          ...request.params,
+          name: requiredName(request.params.name),
+        })
+        this.events.workspaceChanged()
+        return project
+      }
       case "project.add": {
         const path = await validDirectory(request.params.path)
         const project = this.store.projects.add(
           path,
           requiredName(request.params.name),
-          request.params.workspaceId
+          request.params.workspaceId,
+          { locationKind: "linked" }
         )
         this.events.workspaceChanged()
         return project
@@ -264,6 +278,60 @@ export class RequestRouter {
         )
         this.events.workspaceChanged()
         return project
+      }
+      case "project.update": {
+        const project = this.store.projects.update(request.params.projectId, {
+          ...(request.params.name !== undefined
+            ? { name: requiredName(request.params.name) }
+            : undefined),
+          ...(request.params.instructions !== undefined
+            ? { instructions: request.params.instructions }
+            : undefined),
+        })
+        this.events.workspaceChanged()
+        return project
+      }
+      case "project.setPinned": {
+        const project = this.store.projects.setPinned(
+          request.params.projectId,
+          request.params.pinned
+        )
+        this.events.workspaceChanged()
+        return project
+      }
+      case "project.relocate": {
+        const project = await this.projectManager.relocate(
+          request.params.projectId,
+          request.params.path
+        )
+        this.events.workspaceChanged()
+        return project
+      }
+      case "project.listTemplateFiles":
+        return this.projectManager.listTemplateFiles(request.params.projectId)
+      case "template.listForWorkspace":
+        this.store.workspaces.get(request.params.workspaceId)
+        return this.packManager.templates.listForWorkspace(
+          request.params.workspaceId
+        )
+      case "template.saveFromProject": {
+        const name = requiredName(request.params.name)
+        const details = this.store.projects.details(request.params.projectId)
+        const pack = await this.packManager.create(myTemplatesPackName)
+        this.store.packs.setAttached(details.project.workspaceId, pack.id, true)
+        const template = await this.packManager.templates.saveFromProject(
+          pack.id,
+          {
+            path: details.project.path,
+            instructions: details.instructions,
+          },
+          {
+            ...request.params,
+            name,
+          }
+        )
+        this.events.packChanged()
+        return template
       }
       case "project.searchEntries": {
         const project = this.store.projects.get(request.params.projectId)

@@ -14,7 +14,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Environment**: A place where a Runtime runs and where work executes. The MVP has one local Environment inside the Electron main process.
 - **Connection**: Client configuration for reaching an Environment. Desktop uses Electron IPC. A future hosted Runtime can use HTTP and WebSocket without changing Client use cases.
 - **Workspace**: A container of Projects for one area of life or work, modeled on Arc browser Spaces. It owns a name, color, icon, its attached Packs, and the last active Project. Every install has a non-deletable Personal Workspace.
-- **Project**: A folder the user has opened as a project. It belongs to exactly one Workspace. Use "project" in UI copy and `Project` in code.
+- **Project**: One working folder and its Tasks. It belongs to exactly one Workspace. Deskto may manage the folder below application data or link a folder selected by the person. Use "project" in UI copy and `Project` in code.
+- **Project Template**: A Pack-owned snapshot of starter files and shared Project instructions. Applying a template creates independent Project content; later template changes do not propagate.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.
 - **Turn**: One user request and one Harness execution in a Thread.
@@ -38,7 +39,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 
 ## Core rules
 
-- A Project points to one folder, belongs to one Workspace, and owns its Threads.
+- A Project points to one real folder, belongs to one Workspace, and owns its Threads. Its location is either managed by Deskto or linked from a person-selected folder.
 - Deleting a Workspace moves its Projects to the Personal Workspace. Nothing on disk is touched.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
 - A Background task is a normal durable Thread. Write access through MCP stays inside the current Thread tree; read-only search may span all local Threads.
@@ -62,6 +63,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Local use never requires a Hub or an account.
 - Provider-specific types stay inside their Harness Adapter.
 - Project, user, and system skill files remain on disk and are not mirrored in SQLite.
+- Shared Project instructions live in Runtime storage and reach Harnesses through provider-neutral session customization. Native instruction files remain untouched.
 - A Pack attachment applies to every Project in its Workspace.
 - Unlinking a Pack never deletes files. Uninstalling is limited to managed Packs and moves their directory to trash.
 
@@ -83,7 +85,6 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Authentication and team administration
 - Hub, Catalog, remote Pack distribution, and policy enforcement
 - User and Pack MCP provisioning, beyond the app-owned Browser server
-- Starter project distribution
 - Automation and usage screens
 - A user-facing global search screen
 

@@ -198,6 +198,14 @@ export class RuntimeClient {
     return this.request({ method: "project.list", params: {} })
   }
 
+  getProject(projectId: string) {
+    return this.request({ method: "project.get", params: { projectId } })
+  }
+
+  createProject(params: RequestFor<"project.create">["params"]) {
+    return this.request({ method: "project.create", params })
+  }
+
   addProject(path: string, name: string, workspaceId: string) {
     return this.request({
       method: "project.add",
@@ -210,6 +218,44 @@ export class RuntimeClient {
       method: "project.move",
       params: { projectId, workspaceId },
     })
+  }
+
+  updateProject(params: RequestFor<"project.update">["params"]) {
+    return this.request({ method: "project.update", params })
+  }
+
+  setProjectPinned(projectId: string, pinned: boolean) {
+    return this.request({
+      method: "project.setPinned",
+      params: { projectId, pinned },
+    })
+  }
+
+  relocateProject(projectId: string, path: string) {
+    return this.request({
+      method: "project.relocate",
+      params: { projectId, path },
+    })
+  }
+
+  listProjectTemplateFiles(projectId: string) {
+    return this.request({
+      method: "project.listTemplateFiles",
+      params: { projectId },
+    })
+  }
+
+  listTemplatesForWorkspace(workspaceId: string) {
+    return this.request({
+      method: "template.listForWorkspace",
+      params: { workspaceId },
+    })
+  }
+
+  saveTemplateFromProject(
+    params: RequestFor<"template.saveFromProject">["params"]
+  ) {
+    return this.request({ method: "template.saveFromProject", params })
   }
 
   searchProjectEntries(projectId: string, query: string, limit = 50) {

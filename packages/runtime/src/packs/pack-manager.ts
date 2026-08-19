@@ -4,6 +4,7 @@ import { z } from "zod"
 
 import {
   mySkillsPackName,
+  myTemplatesPackName,
   type ManagedSkillDraft,
   type PackReceipt,
   type PackSkill,
@@ -15,6 +16,7 @@ import type { PackRow } from "../storage/records.js"
 import type { Packs } from "../storage/packs.js"
 import { readPackName, validatePackDirectory } from "./pack-files.js"
 import { ManagedSkills } from "./managed-skills.js"
+import { ProjectTemplates } from "./project-templates.js"
 import {
   sourceLabel,
   stageManagedPack,
@@ -22,7 +24,10 @@ import {
   stagePackZip,
   type StagedManagedPack,
 } from "./pack-installer.js"
-import { canEditManagedSkills } from "./pack-capabilities.js"
+import {
+  canEditManagedSkills,
+  canEditManagedTemplates,
+} from "./pack-capabilities.js"
 
 export type PackFileActions = {
   trashItem(path: string): Promise<void>
@@ -33,7 +38,8 @@ const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
 export class PackManager {
   readonly #managedRoot: string
   readonly #managedSkills: ManagedSkills
-  #mySkillsPackCreation: Promise<PackRow> | null = null
+  readonly #packCreations = new Map<string, Promise<PackRow>>()
+  readonly templates: ProjectTemplates
 
   constructor(
     private readonly packs: Packs,
@@ -44,6 +50,7 @@ export class PackManager {
     this.#managedRoot = realpathSync(managedRoot)
     this.packs.initializeOwnership(this.#managedRoot)
     this.#managedSkills = new ManagedSkills(this.packs, this.#managedRoot)
+    this.templates = new ProjectTemplates(this.packs, this.#managedRoot)
   }
 
   async create(name: string): Promise<PackRow> {
@@ -52,16 +59,14 @@ export class PackManager {
       throw new RuntimeError("invalid-name", "A name is required")
 
     if (normalizedName === mySkillsPackName) {
-      const existing = this.packs.list().find(canEditManagedSkills)
-      if (existing) return existing
-      if (!this.#mySkillsPackCreation) {
-        this.#mySkillsPackCreation = this.#create(normalizedName).finally(
-          () => {
-            this.#mySkillsPackCreation = null
-          }
-        )
-      }
-      return this.#mySkillsPackCreation
+      return this.#getOrCreatePersonalPack(normalizedName, canEditManagedSkills)
+    }
+    if (normalizedName === myTemplatesPackName) {
+      return this.#getOrCreatePersonalPack(
+        normalizedName,
+        (pack) =>
+          pack.name === myTemplatesPackName && canEditManagedTemplates(pack)
+      )
     }
 
     return this.#create(normalizedName)
@@ -70,6 +75,21 @@ export class PackManager {
   async #create(name: string): Promise<PackRow> {
     const staged = await stageManagedPack(name, this.#managedRoot)
     return this.#registerManaged(staged, { kind: "created" })
+  }
+
+  #getOrCreatePersonalPack(
+    name: string,
+    isMatch: (pack: PackRow) => boolean
+  ): Promise<PackRow> {
+    const existing = this.packs.list().find(isMatch)
+    if (existing) return Promise.resolve(existing)
+    const inFlight = this.#packCreations.get(name)
+    if (inFlight) return inFlight
+    const creation = this.#create(name).finally(() => {
+      this.#packCreations.delete(name)
+    })
+    this.#packCreations.set(name, creation)
+    return creation
   }
 
   async installFolder(sourcePath: string): Promise<PackRow> {
