@@ -43,9 +43,9 @@ export function useProjectPanel(activeProjectId: string | null) {
     [activeProjectId, setCollapsedMap]
   )
 
-  const forceOpen = useCallback(() => {
-    if (activeProjectId) setOverrideProjectId(activeProjectId)
-  }, [activeProjectId])
+  const forceOpen = useCallback((projectId: string) => {
+    setOverrideProjectId(projectId)
+  }, [])
 
   return { preference, setCollapsed, forceOpen }
 }

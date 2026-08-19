@@ -138,8 +138,8 @@ export function Workbench() {
 
   const openProjectPanel = useCallback(() => {
     if (!activeProject) return
-    setView(toNewTask)
-    forcePanelOpen()
+    setView({ kind: "new-task", projectId: activeProject.id })
+    forcePanelOpen(activeProject.id)
   }, [activeProject, forcePanelOpen])
 
   const openProjectFromGrid = useCallback(

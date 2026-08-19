@@ -405,7 +405,7 @@ describe("managed projects and templates", () => {
     ).toBe("Keep it short.")
   })
 
-  it("rejects moving a Project into the Deskto projects directory", async () => {
+  it("rejects moving a Project into or below the Deskto projects directory", async () => {
     const { runtime } = await testRuntime()
     const created = unwrap(
       await runtime.request({
@@ -417,16 +417,23 @@ describe("managed projects and templates", () => {
         },
       })
     ).project
+    const managedRoot = dirname(created.path)
+    const managedChild = join(managedRoot, "another-project")
+    const marker = join(created.path, "keep.txt")
+    await mkdir(managedChild)
+    await writeFile(marker, "keep\n")
 
-    const response = await runtime.request({
-      method: "project.relocate",
-      params: { projectId: created.id, path: dirname(created.path) },
-    })
+    for (const path of [managedRoot, managedChild]) {
+      const response = await runtime.request({
+        method: "project.relocate",
+        params: { projectId: created.id, path },
+      })
 
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: "invalid-project-path" },
-    })
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: "invalid-project-path" },
+      })
+    }
     expect(
       unwrap(
         await runtime.request({
@@ -436,6 +443,7 @@ describe("managed projects and templates", () => {
       ).project
     ).toMatchObject({ path: created.path, locationKind: "managed" })
     await expect(realpath(created.path)).resolves.toBe(created.path)
+    await expect(readFile(marker, "utf8")).resolves.toBe("keep\n")
   })
 
   it("rejects a linked Project path that is a symbolic link", async () => {
