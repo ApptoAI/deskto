@@ -348,6 +348,7 @@ const migrations = [
     CREATE INDEX projects_workspace_pinned_updated_idx
       ON projects(workspace_id, pinned_at DESC, updated_at DESC);
   `,
+  `ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT '';`,
 ]
 
 export function migrate(database: DatabaseSync): void {

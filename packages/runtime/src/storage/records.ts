@@ -28,6 +28,7 @@ export type ProjectRow = {
   id: string
   workspace_id: string
   name: string
+  description: string
   path: string
   location_kind: ProjectLocationKind
   instructions: string
@@ -170,6 +171,7 @@ export function toProject(row: ProjectRow): Project {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
+    description: row.description,
     path: row.path,
     locationKind: row.location_kind,
     pinnedAt: row.pinned_at,

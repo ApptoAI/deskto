@@ -284,6 +284,9 @@ export class RequestRouter {
           ...(request.params.name !== undefined
             ? { name: requiredName(request.params.name) }
             : undefined),
+          ...(request.params.description !== undefined
+            ? { description: request.params.description }
+            : undefined),
           ...(request.params.instructions !== undefined
             ? { instructions: request.params.instructions }
             : undefined),

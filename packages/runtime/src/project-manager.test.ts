@@ -53,11 +53,33 @@ describe("managed projects and templates", () => {
       sourceTemplate: null,
     })
     expect(details.project.path).toBe(
-      join(await realpath(directory), "projects", details.project.id)
+      join(await realpath(directory), "projects", "Client North")
     )
     await expect(mkdir(details.project.path)).rejects.toMatchObject({
       code: "EEXIST",
     })
+  })
+
+  it("names managed folders after the project and suffixes collisions", async () => {
+    const { directory, runtime } = await testRuntime()
+    const create = (name: string) =>
+      runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name,
+          location: { kind: "managed" },
+        },
+      })
+
+    const first = unwrap(await create("Client North"))
+    const second = unwrap(await create("Client North"))
+    const hostile = unwrap(await create("  ../../etc: passwd?  "))
+
+    const root = join(await realpath(directory), "projects")
+    expect(first.project.path).toBe(join(root, "Client North"))
+    expect(second.project.path).toBe(join(root, "Client North 2"))
+    expect(hostile.project.path).toBe(join(root, "etc passwd"))
   })
 
   it("passes shared Project instructions to the Harness", async () => {
@@ -326,6 +348,54 @@ describe("managed projects and templates", () => {
       path: await realpath(destination),
       locationKind: "linked",
     })
+  })
+
+  it("moves into a named subfolder when the picked folder is not empty", async () => {
+    const { directory, runtime } = await testRuntime()
+    const created = unwrap(
+      await runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name: "Notes",
+          location: { kind: "managed" },
+        },
+      })
+    ).project
+    unwrap(
+      await runtime.request({
+        method: "project.update",
+        params: { projectId: created.id, instructions: "Keep it short." },
+      })
+    )
+    await writeFile(join(created.path, "note.md"), "Draft\n")
+
+    const picked = join(directory, "documents")
+    await mkdir(picked)
+    await writeFile(join(picked, "existing.txt"), "keep\n")
+
+    const moved = unwrap(
+      await runtime.request({
+        method: "project.relocate",
+        params: { projectId: created.id, path: picked },
+      })
+    )
+
+    expect(moved).toMatchObject({
+      id: created.id,
+      path: join(await realpath(picked), "Notes"),
+      locationKind: "linked",
+    })
+    expect(await readFile(join(moved.path, "note.md"), "utf8")).toBe("Draft\n")
+    expect(await readFile(join(picked, "existing.txt"), "utf8")).toBe("keep\n")
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "project.get",
+          params: { projectId: created.id },
+        })
+      ).instructions
+    ).toBe("Keep it short.")
   })
 
   it("rejects a linked Project path that is a symbolic link", async () => {
