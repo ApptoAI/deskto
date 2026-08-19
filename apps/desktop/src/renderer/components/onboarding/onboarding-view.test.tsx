@@ -100,7 +100,7 @@ describe("OnboardingView", () => {
     ).toBe(false)
   })
 
-  it("copies the install command", () => {
+  it("copies the install command", async () => {
     renderOnboarding({ harnesses: unavailableHarnesses })
     goToAgentStep()
 
@@ -111,8 +111,21 @@ describe("OnboardingView", () => {
       "npm install -g @anthropic-ai/claude-code"
     )
     expect(
-      screen.getAllByRole("button", { name: "Copied" }).length
+      (await screen.findAllByRole("button", { name: "Copied" })).length
     ).toBeGreaterThan(0)
+  })
+
+  it("does not show copied when the clipboard write fails", async () => {
+    writeText.mockRejectedValueOnce(new Error("Clipboard unavailable"))
+    renderOnboarding({ harnesses: unavailableHarnesses })
+    goToAgentStep()
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Copy install command" })[0]!
+    )
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
+    expect(screen.queryByRole("button", { name: "Copied" })).toBeNull()
   })
 
   it("re-probes on Check again and applies the answer", async () => {

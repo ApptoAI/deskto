@@ -777,10 +777,14 @@ function CopyField({ command }: { command: string }) {
   )
 
   function copy() {
-    navigator.clipboard.writeText(command).catch(() => {})
-    setCopied(true)
-    if (resetTimer.current) clearTimeout(resetTimer.current)
-    resetTimer.current = setTimeout(() => setCopied(false), 2000)
+    void navigator.clipboard
+      .writeText(command)
+      .then(() => {
+        setCopied(true)
+        if (resetTimer.current) clearTimeout(resetTimer.current)
+        resetTimer.current = setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => {})
   }
 
   return (
