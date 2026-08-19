@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, realpathSync } from "node:fs"
+import { constants, mkdirSync, realpathSync } from "node:fs"
 import {
   chmod,
+  copyFile,
   lstat,
+  mkdir,
   mkdtemp,
   realpath,
   readdir,
@@ -19,7 +21,7 @@ import type {
 } from "@deskto/protocol"
 import { z } from "zod"
 
-import { RuntimeError } from "./errors.js"
+import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
 import type { PackManager } from "./packs/pack-manager.js"
 import { pathIsDirectChild } from "./path-boundaries.js"
 import type { ProjectActivityGate } from "./project-activity-gate.js"
@@ -114,7 +116,7 @@ export class ProjectManager {
     try {
       await rmdir(staging)
       await this.packs.templates.materialize(template, staging)
-      materialized = await moveDirectoryContents(staging, path)
+      materialized = await copyDirectoryContentsNoClobber(staging, path)
       try {
         this.projects.add(path, input.name, input.workspaceId, {
           id,
@@ -167,7 +169,7 @@ export class ProjectManager {
         await move.finalize().catch(() => undefined)
         return project
       } catch (error) {
-        await move.rollback().catch(() => undefined)
+        await move.rollback()
         throw error
       }
     } finally {
@@ -243,30 +245,59 @@ export async function moveProjectDirectory(
   )
   let displaced = false
   let moved = false
+
+  async function restore(): Promise<void> {
+    if (moved) {
+      await renamePath(destination, source)
+      moved = false
+      await chmod(source, sourceMode)
+    }
+    if (displaced) {
+      await renamePath(displacedDestination, destination)
+      displaced = false
+    }
+  }
+
   try {
     await renamePath(destination, displacedDestination)
     displaced = true
+    if ((await readdir(displacedDestination)).length > 0) {
+      throw new RuntimeError(
+        "project-folder-not-empty",
+        "The selected folder changed while Deskto was preparing the move"
+      )
+    }
     await renamePath(source, destination)
     moved = true
     await chmod(destination, destinationMode)
     return {
       async rollback() {
-        await renamePath(destination, source)
-        await chmod(source, sourceMode)
-        await renamePath(displacedDestination, destination)
+        try {
+          await restore()
+        } catch (error) {
+          throw projectMoveRecoveryError(
+            source,
+            destination,
+            runtimeErrorMessageSchema.parse(error)
+          )
+        }
       },
       async finalize() {
         await rmdir(displacedDestination)
+        displaced = false
       },
     }
   } catch (error) {
-    if (moved) {
-      await renamePath(destination, source).catch(() => undefined)
-      await chmod(source, sourceMode).catch(() => undefined)
+    try {
+      await restore()
+    } catch (recoveryError) {
+      throw projectMoveRecoveryError(
+        source,
+        destination,
+        runtimeErrorMessageSchema.parse(recoveryError)
+      )
     }
-    if (displaced) {
-      await renamePath(displacedDestination, destination).catch(() => undefined)
-    }
+    if (error instanceof RuntimeError) throw error
     if (crossDeviceErrorSchema.safeParse(error).success) {
       throw new RuntimeError(
         "project-move-cross-device",
@@ -280,36 +311,70 @@ export async function moveProjectDirectory(
   }
 }
 
-async function moveDirectoryContents(
+export async function copyDirectoryContentsNoClobber(
   source: string,
   destination: string
 ): Promise<PendingProjectMove> {
-  const movedNames: string[] = []
+  const createdFiles: string[] = []
+  const createdDirectories: string[] = []
+
+  async function rollback(): Promise<void> {
+    for (let index = createdFiles.length - 1; index >= 0; index -= 1) {
+      const path = createdFiles[index]
+      if (path) await rm(path, { force: true })
+    }
+    for (let index = createdDirectories.length - 1; index >= 0; index -= 1) {
+      const path = createdDirectories[index]
+      if (path) await rmdir(path)
+    }
+  }
+
+  async function copyDirectory(
+    sourceDirectory: string,
+    destinationDirectory: string
+  ): Promise<void> {
+    for (const name of await readdir(sourceDirectory)) {
+      const sourcePath = join(sourceDirectory, name)
+      const destinationPath = join(destinationDirectory, name)
+      const metadata = await lstat(sourcePath)
+      if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
+        await mkdir(destinationPath)
+        createdDirectories.push(destinationPath)
+        await copyDirectory(sourcePath, destinationPath)
+        continue
+      }
+      if (!metadata.isFile() || metadata.isSymbolicLink()) {
+        throw new RuntimeError(
+          "invalid-template",
+          `Template staging contains an unsupported entry: ${name}`
+        )
+      }
+      await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
+      createdFiles.push(destinationPath)
+    }
+  }
+
   try {
-    for (const name of await readdir(source)) {
-      await rename(join(source, name), join(destination, name))
-      movedNames.push(name)
-    }
+    await copyDirectory(source, destination)
   } catch (error) {
-    for (let index = movedNames.length - 1; index >= 0; index -= 1) {
-      const name = movedNames[index]
-      if (!name) continue
-      await rename(join(destination, name), join(source, name)).catch(
-        () => undefined
-      )
-    }
+    await rollback()
     throw error
   }
   return {
-    async rollback() {
-      for (let index = movedNames.length - 1; index >= 0; index -= 1) {
-        const name = movedNames[index]
-        if (!name) continue
-        await rename(join(destination, name), join(source, name))
-      }
-    },
+    rollback,
     async finalize() {
-      await rmdir(source)
+      await rm(source, { recursive: true, force: true })
     },
   }
+}
+
+function projectMoveRecoveryError(
+  source: string,
+  destination: string,
+  cause: string
+): RuntimeError {
+  return new RuntimeError(
+    "project-move-recovery-failed",
+    `Deskto could not restore the Project from ${destination} to ${source}: ${cause}`
+  )
 }

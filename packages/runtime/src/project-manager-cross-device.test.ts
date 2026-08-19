@@ -15,7 +15,10 @@ import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import { moveProjectDirectory } from "./project-manager.js"
+import {
+  copyDirectoryContentsNoClobber,
+  moveProjectDirectory,
+} from "./project-manager.js"
 
 const directories: string[] = []
 
@@ -28,6 +31,82 @@ afterEach(async () => {
 })
 
 describe("cross-device Project relocation", () => {
+  it("keeps a destination file that appears before template materialization", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-template-copy-"))
+    directories.push(root)
+    const source = join(root, "staging")
+    const destination = join(root, "selected-folder")
+    await mkdir(source)
+    await mkdir(destination)
+    await writeFile(join(source, "README.md"), "Template\n")
+    await writeFile(join(destination, "README.md"), "User content\n")
+
+    await expect(
+      copyDirectoryContentsNoClobber(source, destination)
+    ).rejects.toMatchObject({ code: "EEXIST" })
+    await expect(
+      readFile(join(destination, "README.md"), "utf8")
+    ).resolves.toBe("User content\n")
+  })
+
+  it("restores a selected folder that changes while being claimed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-project-move-"))
+    directories.push(root)
+    const source = join(root, "projects", "project-1")
+    const destination = join(root, "selected-folder")
+    await mkdir(source, { recursive: true })
+    await mkdir(destination)
+    await writeFile(join(source, "README.md"), "Portable\n")
+
+    await expect(
+      moveProjectDirectory(source, destination, async (from, to) => {
+        await rename(from, to)
+        if (from === destination) {
+          await writeFile(join(to, "late.txt"), "Keep me\n")
+        }
+      })
+    ).rejects.toMatchObject({ code: "project-folder-not-empty" })
+
+    await expect(readFile(join(destination, "late.txt"), "utf8")).resolves.toBe(
+      "Keep me\n"
+    )
+    await expect(readFile(join(source, "README.md"), "utf8")).resolves.toBe(
+      "Portable\n"
+    )
+  })
+
+  it("surfaces a failed relocation rollback with both paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-project-move-"))
+    directories.push(root)
+    const source = join(root, "projects", "project-1")
+    const destination = join(root, "selected-folder")
+    await mkdir(source, { recursive: true })
+    await mkdir(destination)
+    let rejectRollback = false
+    const move = await moveProjectDirectory(
+      source,
+      destination,
+      async (from, to) => {
+        if (rejectRollback && from === destination && to === source) {
+          throw Object.assign(new Error("Permission denied"), {
+            code: "EACCES",
+          })
+        }
+        await rename(from, to)
+      }
+    )
+
+    rejectRollback = true
+    const rollback = move.rollback()
+    await expect(rollback).rejects.toMatchObject({
+      code: "project-move-recovery-failed",
+      message: expect.stringContaining(source),
+    })
+    await expect(rollback).rejects.toMatchObject({
+      message: expect.stringContaining(destination),
+    })
+  })
+
   it("moves into an existing empty folder when rename cannot replace it", async () => {
     const root = await mkdtemp(join(tmpdir(), "deskto-project-move-"))
     directories.push(root)
