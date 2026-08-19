@@ -1,4 +1,5 @@
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -36,7 +37,7 @@ describe("managed projects and templates", () => {
         method: "project.create",
         params: {
           workspaceId: "personal",
-          name: "Client North",
+          name: "  Client North  ",
           location: { kind: "managed" },
         },
       })
@@ -104,7 +105,7 @@ describe("managed projects and templates", () => {
   })
 
   it("saves selected safe files and creates an independent template snapshot", async () => {
-    const { runtime } = await testRuntime()
+    const { directory, runtime } = await testRuntime()
     const pack = unwrap(
       await runtime.request({
         method: "pack.create",
@@ -196,6 +197,76 @@ describe("managed projects and templates", () => {
     expect(
       await readFile(join(source.path, "briefs", "README.md"), "utf8")
     ).toBe("Starter\n")
+
+    const linkedPath = join(directory, "linked-from-template")
+    await mkdir(linkedPath)
+    const linkedBefore = await lstat(linkedPath)
+    const linked = unwrap(
+      await runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name: "Client South",
+          location: { kind: "linked", path: linkedPath },
+          templateId: template.id,
+        },
+      })
+    )
+    const linkedAfter = await lstat(linkedPath)
+    expect(linked.project.path).toBe(await realpath(linkedPath))
+    expect({
+      dev: linkedAfter.dev,
+      ino: linkedAfter.ino,
+      mode: linkedAfter.mode,
+    }).toEqual({
+      dev: linkedBefore.dev,
+      ino: linkedBefore.ino,
+      mode: linkedBefore.mode,
+    })
+    await expect(
+      readFile(join(linkedPath, "briefs", "README.md"), "utf8")
+    ).resolves.toBe("Starter\n")
+  })
+
+  it("rejects blank names on the new write routes", async () => {
+    const { runtime } = await testRuntime()
+    const projectResponse = await runtime.request({
+      method: "project.create",
+      params: {
+        workspaceId: "personal",
+        name: "   ",
+        location: { kind: "managed" },
+      },
+    })
+    expect(projectResponse).toMatchObject({
+      ok: false,
+      error: { code: "invalid-name" },
+    })
+
+    const project = unwrap(
+      await runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name: "Template source",
+          location: { kind: "managed" },
+        },
+      })
+    ).project
+    const templateResponse = await runtime.request({
+      method: "template.saveFromProject",
+      params: {
+        projectId: project.id,
+        name: "   ",
+        description: "",
+        includeInstructions: false,
+        paths: [],
+      },
+    })
+    expect(templateResponse).toMatchObject({
+      ok: false,
+      error: { code: "invalid-name" },
+    })
   })
 
   it("moves managed Projects and sorts pinned Projects first", async () => {

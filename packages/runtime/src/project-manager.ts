@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { mkdirSync, realpathSync } from "node:fs"
 import {
+  chmod,
   lstat,
-  mkdir,
   mkdtemp,
   realpath,
   readdir,
@@ -110,13 +110,11 @@ export class ProjectManager {
 
     const parent = await realpath(dirname(path))
     const staging = await mkdtemp(join(parent, ".deskto-template-"))
-    let destinationReplaced = false
+    let materialized: PendingProjectMove | null = null
     try {
       await rmdir(staging)
       await this.packs.templates.materialize(template, staging)
-      await rmdir(path)
-      destinationReplaced = true
-      await rename(staging, path)
+      materialized = await moveDirectoryContents(staging, path)
       try {
         this.projects.add(path, input.name, input.workspaceId, {
           id,
@@ -125,13 +123,12 @@ export class ProjectManager {
           sourceTemplate,
         })
       } catch (error) {
-        await rm(path, { recursive: true, force: true }).catch(() => undefined)
-        await mkdir(path).catch(() => undefined)
+        await materialized.rollback()
         throw error
       }
+      await materialized.finalize().catch(() => undefined)
     } catch (error) {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined)
-      if (destinationReplaced) await mkdir(path).catch(() => undefined)
       throw error
     }
     return this.projects.details(id)
@@ -238,16 +235,38 @@ export async function moveProjectDirectory(
   destination: string,
   renamePath: ProjectRename = rename
 ): Promise<PendingProjectMove> {
+  const sourceMode = (await lstat(source)).mode
+  const destinationMode = (await lstat(destination)).mode
+  const displacedDestination = join(
+    dirname(destination),
+    `.deskto-move-${randomUUID()}`
+  )
+  let displaced = false
+  let moved = false
   try {
+    await renamePath(destination, displacedDestination)
+    displaced = true
     await renamePath(source, destination)
+    moved = true
+    await chmod(destination, destinationMode)
     return {
       async rollback() {
         await renamePath(destination, source)
-        await mkdir(destination)
+        await chmod(source, sourceMode)
+        await renamePath(displacedDestination, destination)
       },
-      finalize: () => Promise.resolve(),
+      async finalize() {
+        await rmdir(displacedDestination)
+      },
     }
   } catch (error) {
+    if (moved) {
+      await renamePath(destination, source).catch(() => undefined)
+      await chmod(source, sourceMode).catch(() => undefined)
+    }
+    if (displaced) {
+      await renamePath(displacedDestination, destination).catch(() => undefined)
+    }
     if (crossDeviceErrorSchema.safeParse(error).success) {
       throw new RuntimeError(
         "project-move-cross-device",
@@ -258,5 +277,39 @@ export async function moveProjectDirectory(
       "project-move-failed",
       error instanceof Error ? error.message : "Project folder could not move"
     )
+  }
+}
+
+async function moveDirectoryContents(
+  source: string,
+  destination: string
+): Promise<PendingProjectMove> {
+  const movedNames: string[] = []
+  try {
+    for (const name of await readdir(source)) {
+      await rename(join(source, name), join(destination, name))
+      movedNames.push(name)
+    }
+  } catch (error) {
+    for (let index = movedNames.length - 1; index >= 0; index -= 1) {
+      const name = movedNames[index]
+      if (!name) continue
+      await rename(join(destination, name), join(source, name)).catch(
+        () => undefined
+      )
+    }
+    throw error
+  }
+  return {
+    async rollback() {
+      for (let index = movedNames.length - 1; index >= 0; index -= 1) {
+        const name = movedNames[index]
+        if (!name) continue
+        await rename(join(destination, name), join(source, name))
+      }
+    },
+    async finalize() {
+      await rmdir(source)
+    },
   }
 }

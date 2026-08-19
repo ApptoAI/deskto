@@ -111,13 +111,17 @@ export async function listSafeProjectTemplateFiles(
   scan: while (pending.length > 0 && files.length < maximumTemplateFiles) {
     const directory = pending.pop()
     if (!directory) break
-    const entries = await readDirectoryWithinRoot(directory, root)
+    const entries = await readDirectoryWithinRoot(directory, root).catch(
+      () => null
+    )
+    if (!entries) continue
     entries.sort((left, right) => right.name.localeCompare(left.name))
     for (const entry of entries) {
       inspectedEntries += 1
       if (inspectedEntries > maximumTemplateEntries) break scan
       const path = join(directory, entry.name)
-      const metadata = await lstat(path)
+      const metadata = await lstat(path).catch(() => null)
+      if (!metadata) continue
       if (metadata.isSymbolicLink()) continue
       if (metadata.isDirectory()) {
         if (shouldIgnoreDirectory(entry.name)) continue

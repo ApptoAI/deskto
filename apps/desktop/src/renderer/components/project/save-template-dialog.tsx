@@ -110,7 +110,9 @@ function SaveTemplateForm({
   onClose: () => void
   busy: boolean
 }) {
-  const [name, setName] = useState(`${project.name} template`)
+  const [name, setName] = useState(() =>
+    `${project.name} template`.slice(0, projectNameMaxLength)
+  )
   const [description, setDescription] = useState("")
   const [includeInstructions, setIncludeInstructions] = useState(true)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(

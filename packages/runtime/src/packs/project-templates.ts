@@ -36,6 +36,7 @@ const templateManifestSchema = z.object({
     .max(projectTemplateDescriptionMaxLength)
     .default(""),
 })
+const maximumTemplateTextBytes = 64 * 1024
 
 type ResolvedTemplate = {
   template: ProjectTemplate
@@ -257,7 +258,7 @@ async function readTemplateManifest(
   )
   if (!opened) return null
   try {
-    if (opened.metadata.size > 64 * 1024) return null
+    if (opened.metadata.size > maximumTemplateTextBytes) return null
     return templateManifestSchema.parse(
       JSON.parse(await opened.handle.readFile("utf8"))
     )
@@ -278,7 +279,7 @@ async function readTemplateInstructions(
   )
   if (!opened) return ""
   try {
-    if (opened.metadata.size > 64_000) return ""
+    if (opened.metadata.size > maximumTemplateTextBytes) return ""
     return await opened.handle.readFile("utf8")
   } finally {
     await opened.handle.close()

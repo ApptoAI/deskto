@@ -1,4 +1,5 @@
 import {
+  chmod,
   lstat,
   mkdtemp,
   mkdir,
@@ -27,6 +28,43 @@ afterEach(async () => {
 })
 
 describe("cross-device Project relocation", () => {
+  it("moves into an existing empty folder when rename cannot replace it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-project-move-"))
+    directories.push(root)
+    const source = join(root, "projects", "project-1")
+    const destination = join(root, "selected-folder")
+    await mkdir(source, { recursive: true })
+    await mkdir(destination)
+    await chmod(source, 0o700)
+    await chmod(destination, 0o750)
+    await writeFile(join(source, "README.md"), "Portable\n")
+
+    const move = await moveProjectDirectory(
+      source,
+      destination,
+      async (from, to) => {
+        if (to === destination) {
+          const destinationExists = await lstat(destination)
+            .then(() => true)
+            .catch(() => false)
+          if (destinationExists) {
+            throw Object.assign(new Error("Destination exists"), {
+              code: "EEXIST",
+            })
+          }
+        }
+        await rename(from, to)
+      }
+    )
+
+    await move.finalize()
+    await expect(
+      readFile(join(destination, "README.md"), "utf8")
+    ).resolves.toBe("Portable\n")
+    expect((await lstat(destination)).mode & 0o777).toBe(0o750)
+    await expect(lstat(source)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
   it("rejects the move without changing either folder", async () => {
     const root = await mkdtemp(join(tmpdir(), "deskto-project-move-"))
     directories.push(root)

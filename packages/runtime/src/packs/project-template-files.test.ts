@@ -1,10 +1,18 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises"
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
+  copyProjectTemplateFiles,
   listSafeProjectTemplateFiles,
   materializeTemplateFiles,
 } from "./project-template-files.js"
@@ -75,6 +83,56 @@ describe("Project template files", () => {
       await mkdir(directory)
     }
     await writeFile(join(directory, "README.md"), "Too deep\n")
+
+    await expect(
+      materializeTemplateFiles(
+        { path: template, packRoot: pack },
+        join(root, "destination")
+      )
+    ).rejects.toMatchObject({ code: "invalid-template" })
+  })
+
+  it("copies only the selected project paths", async () => {
+    const project = await temporaryDirectory()
+    const destination = await temporaryDirectory()
+    await mkdir(join(project, "briefs"))
+    await writeFile(join(project, "briefs", "README.md"), "Starter\n")
+    await writeFile(join(project, "notes.md"), "Private notes\n")
+
+    await copyProjectTemplateFiles(project, destination, ["briefs/README.md"])
+
+    await expect(
+      readFile(join(destination, "briefs", "README.md"), "utf8")
+    ).resolves.toBe("Starter\n")
+    await expect(
+      readFile(join(destination, "notes.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("rejects a selected file above the per-file size limit", async () => {
+    const project = await temporaryDirectory()
+    const destination = await temporaryDirectory()
+    await writeFile(
+      join(project, "oversized.bin"),
+      Buffer.alloc(5 * 1024 * 1024 + 1)
+    )
+
+    await expect(
+      copyProjectTemplateFiles(project, destination, ["oversized.bin"])
+    ).rejects.toMatchObject({ code: "invalid-template-file" })
+  })
+
+  it("rejects a template with more than the allowed file count", async () => {
+    const root = await temporaryDirectory()
+    const pack = join(root, "pack")
+    const template = join(pack, "templates", "too-many-files")
+    const files = join(template, "files")
+    await mkdir(files, { recursive: true })
+    await Promise.all(
+      Array.from({ length: 201 }, (_, index) =>
+        writeFile(join(files, `${index}.txt`), "")
+      )
+    )
 
     await expect(
       materializeTemplateFiles(

@@ -253,7 +253,10 @@ export class RequestRouter {
       case "project.get":
         return this.store.projects.details(request.params.projectId)
       case "project.create": {
-        const project = await this.projectManager.createProject(request.params)
+        const project = await this.projectManager.createProject({
+          ...request.params,
+          name: requiredName(request.params.name),
+        })
         this.events.workspaceChanged()
         return project
       }
@@ -312,6 +315,7 @@ export class RequestRouter {
           request.params.workspaceId
         )
       case "template.saveFromProject": {
+        const name = requiredName(request.params.name)
         const details = this.store.projects.details(request.params.projectId)
         const pack = await this.packManager.create(myTemplatesPackName)
         this.store.packs.setAttached(details.project.workspaceId, pack.id, true)
@@ -321,7 +325,10 @@ export class RequestRouter {
             path: details.project.path,
             instructions: details.instructions,
           },
-          request.params
+          {
+            ...request.params,
+            name,
+          }
         )
         this.events.packChanged()
         return template

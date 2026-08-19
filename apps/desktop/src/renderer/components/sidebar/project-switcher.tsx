@@ -113,7 +113,10 @@ export function ProjectSwitcher({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate">{project.name}</span>
                     {project.pinnedAt ? (
-                      <PinIcon className="size-3 shrink-0 text-muted-foreground" />
+                      <>
+                        <PinIcon className="size-3 shrink-0 text-muted-foreground" />
+                        <span className="sr-only">Pinned</span>
+                      </>
                     ) : null}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">

@@ -199,10 +199,15 @@ function ProjectForm({
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Location</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div
+            role="radiogroup"
+            aria-label="Project location"
+            className="grid gap-2 sm:grid-cols-2"
+          >
             <button
               type="button"
-              aria-pressed={locationKind === "managed"}
+              role="radio"
+              aria-checked={locationKind === "managed"}
               disabled={busy}
               onClick={() => setLocationKind("managed")}
               className={locationOption(locationKind === "managed")}
@@ -214,7 +219,8 @@ function ProjectForm({
             </button>
             <button
               type="button"
-              aria-pressed={locationKind === "linked"}
+              role="radio"
+              aria-checked={locationKind === "linked"}
               disabled={busy}
               onClick={() => void chooseFolder()}
               className={locationOption(locationKind === "linked")}

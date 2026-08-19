@@ -179,7 +179,7 @@ export function ProjectSidebar({
                 onClick={onAddProject}
                 disabled={addingProject}
               >
-                {addingProject ? "Opening…" : "Create project"}
+                Create project
               </Button>
             </div>
           ) : allProjects ? (

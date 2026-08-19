@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react"
-import type { Project } from "@deskto/protocol"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
+import { projectNameMaxLength, type Project } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { SaveTemplateDialog } from "./save-template-dialog.js"
@@ -33,13 +39,64 @@ describe("SaveTemplateDialog", () => {
         .hasAttribute("disabled")
     ).toBe(true)
   })
+
+  it("submits every file after selecting all", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <SaveTemplateDialog
+        open
+        onOpenChange={vi.fn()}
+        project={project()}
+        files={[
+          { path: "README.md", sizeBytes: 8 },
+          { path: "src/index.ts", sizeBytes: 20 },
+        ]}
+        loading={false}
+        loadError={null}
+        actionError={null}
+        onRetry={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }))
+    fireEvent.click(screen.getByRole("button", { name: "Save template" }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        name: "Client North template",
+        description: "",
+        includeInstructions: true,
+        paths: ["README.md", "src/index.ts"],
+      })
+    )
+  })
+
+  it("keeps the suggested name within the Runtime limit", () => {
+    render(
+      <SaveTemplateDialog
+        open
+        onOpenChange={vi.fn()}
+        project={project("x".repeat(projectNameMaxLength))}
+        files={[]}
+        loading={false}
+        loadError={null}
+        actionError={null}
+        onRetry={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    )
+
+    const input = screen.getByLabelText<HTMLInputElement>("Name")
+    expect(input.value).toHaveLength(projectNameMaxLength)
+  })
 })
 
-function project(): Project {
+function project(name = "Client North"): Project {
   return {
     id: "project-1",
     workspaceId: "personal",
-    name: "Client North",
+    name,
     path: "/projects/project-1",
     locationKind: "managed",
     pinnedAt: null,

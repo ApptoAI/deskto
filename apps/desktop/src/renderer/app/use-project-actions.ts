@@ -175,7 +175,10 @@ export function useProjectActions(
     openProjectSettings,
     projectDialog: {
       open: projectDialogOpen,
-      setOpen: setProjectDialogOpen,
+      setOpen: (open: boolean) => {
+        setProjectDialogOpen(open)
+        if (!open) clearActionError()
+      },
       templates:
         templatesQuery.state.status === "ready"
           ? templatesQuery.state.data
@@ -194,7 +197,10 @@ export function useProjectActions(
     settingsDialog: {
       open: editingProjectId !== null,
       setOpen: (open: boolean) => {
-        if (!open) setEditingProjectId(null)
+        if (!open) {
+          setEditingProjectId(null)
+          clearActionError()
+        }
       },
       details:
         projectDetailsQuery.state.status === "ready"
@@ -221,7 +227,10 @@ export function useProjectActions(
     templateDialog: {
       open: templateSourceProjectId !== null,
       setOpen: (open: boolean) => {
-        if (!open) setTemplateSourceProjectId(null)
+        if (!open) {
+          setTemplateSourceProjectId(null)
+          clearActionError()
+        }
       },
       project:
         projects.find((project) => project.id === templateSourceProjectId) ??
