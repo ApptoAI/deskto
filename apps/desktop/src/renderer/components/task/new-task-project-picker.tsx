@@ -3,6 +3,8 @@ import type { Project } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
+import { DesktoWordmark } from "./deskto-wordmark.js"
+
 /**
  * The question the all-projects scope asks before the composer: which project
  * the new task belongs to. Picking one is per task — the sidebar stays on
@@ -25,12 +27,7 @@ export function NewTaskProjectPicker({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
         <div className="flex min-h-full items-center justify-center">
           <div className="enter-rise -mt-10 flex w-full max-w-md flex-col items-center gap-4">
-            <div
-              aria-hidden
-              className="font-heading text-6xl leading-none font-normal tracking-[-0.04em] text-foreground/8 select-none sm:text-7xl"
-            >
-              deskto
-            </div>
+            <DesktoWordmark />
 
             <p className="text-center display-sm text-body">
               Which project is this task for?
