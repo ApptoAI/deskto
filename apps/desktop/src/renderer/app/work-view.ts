@@ -2,7 +2,9 @@ import type { SettingsPageId } from "../components/settings/settings-pages.js"
 import type { SkillsFilter } from "../components/skills/skills-filters.js"
 
 export type WorkView =
-  | { kind: "new-task" }
+  // projectId is the project picked for this one task while the sidebar is in
+  // all-projects scope; without it that scope asks before showing the composer.
+  | { kind: "new-task"; projectId?: string }
   | { kind: "task"; threadId: string }
   | { kind: "skills"; filter: SkillsFilter }
   | { kind: "projects" }

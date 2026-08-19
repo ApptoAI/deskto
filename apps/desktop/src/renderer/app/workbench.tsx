@@ -22,6 +22,7 @@ import { ProjectSidebar } from "../components/sidebar/project-sidebar.js"
 import type { InboxActions } from "../components/sidebar/task-list.js"
 import { WorkspaceRail } from "../components/sidebar/workspace-rail.js"
 import { StatusPanel } from "../components/status-panel.js"
+import { NewTaskProjectPicker } from "../components/task/new-task-project-picker.js"
 import { NewTaskView } from "../components/task/new-task-view.js"
 import { TaskView } from "../components/task/task-view.js"
 import {
@@ -117,11 +118,23 @@ export function Workbench() {
   })
   const hasOpenModal = hasOpenDialog || workspaceDialog !== null
 
+  // In all-projects scope the remembered project must not decide for the
+  // user: a new task uses the project picked on the view itself, and until
+  // one is picked the composer stays behind the project question. A lone
+  // project answers the question by itself.
+  const newTaskProject = allProjects
+    ? workspaceProjects.length === 1
+      ? (workspaceProjects[0] ?? null)
+      : (workspaceProjects.find(
+          (project) => view.kind === "new-task" && project.id === view.projectId
+        ) ?? null)
+    : activeProject
+
   const {
     preference: panelPreference,
     setCollapsed: setPanelCollapsed,
     forceOpen: forcePanelOpen,
-  } = useProjectPanel(activeProject?.id ?? null)
+  } = useProjectPanel(newTaskProject?.id ?? null)
 
   const openProjectPanel = useCallback(() => {
     if (!activeProject) return
@@ -368,10 +381,18 @@ export function Workbench() {
         />
       )
     }
+    if (!newTaskProject) {
+      return (
+        <NewTaskProjectPicker
+          projects={workspaceProjects}
+          onSelect={(projectId) => setView({ kind: "new-task", projectId })}
+        />
+      )
+    }
     return (
       <NewTaskView
-        key={activeProject.id}
-        project={activeProject}
+        key={newTaskProject.id}
+        project={newTaskProject}
         harnesses={harnesses.state}
         onTaskCreated={revalidateThreads}
         onTaskStarted={openThread}
