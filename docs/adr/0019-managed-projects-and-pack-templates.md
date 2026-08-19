@@ -23,9 +23,16 @@ templates as later Pack content.
 Every Project keeps one required path. A Project location is `managed` when
 its folder is a direct child of the Runtime's managed Project root and
 `linked` when the person selected an external folder. The default Runtime root
-is `projects` beside its SQLite database.
+is `projects` beside its SQLite database. A managed folder takes the Project's
+name, filesystem-sanitized, with a "Name 2"-style suffix on collision, an
+atomic `mkdir` claim, and a UUID fallback. It is not named after the Project
+id.
 
-Moving a managed Project uses an atomic directory rename and is limited to a
+Moving a managed Project to a linked folder accepts any picked folder. An
+empty pick becomes the project folder; a non-empty pick receives a fresh
+subfolder named after the Project. Tasks, the description, and shared
+instructions stay in Runtime storage and are unaffected. The move keeps the
+active-task guard, uses an atomic directory rename, and is limited to a
 destination on the same storage volume. Cross-volume moves need a durable
 relocation journal so a crash cannot leave SQLite pointing at a missing folder;
 that recovery protocol is deferred rather than approximated with an unsafe
@@ -35,6 +42,11 @@ Shared Project instructions live in Runtime storage. Session customization
 carries them beside skill roots and MCP servers. Claude and Codex Adapters map
 the same text to native instruction fields. Native Project instruction files
 remain on disk and additive.
+
+Per-Project settings — name, description, shared instructions, and folder
+location — live in a collapsible panel on the new-task screen, not a modal
+dialog. A workspace-level Projects view lists every Project in a grid with
+search and sort, reached from the sidebar footer.
 
 A Project Template is content inside an installed or linked Pack. Applying it
 copies starter files and instructions once. The Project records template
