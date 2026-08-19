@@ -298,6 +298,11 @@ class CodexSession implements HarnessSession {
     const params = {
       cwd: this.input.projectPath,
       ...permissions.thread,
+      ...(this.input.customization.instructions !== undefined
+        ? {
+            developerInstructions: this.input.customization.instructions,
+          }
+        : undefined),
     }
     if (this.input.executionProfile.modelId) {
       Object.assign(params, { model: this.input.executionProfile.modelId })

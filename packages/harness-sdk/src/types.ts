@@ -81,6 +81,8 @@ export type NativeSkillRoot = {
  */
 export type SessionCustomization = {
   skillRoots: SkillRoot[]
+  /** Shared Project instructions translated by each Harness Adapter. */
+  instructions?: string
   /** Host capabilities leased for this run. Omitted by older Runtime hosts. */
   mcpServers?: SessionMcpServer[]
 }

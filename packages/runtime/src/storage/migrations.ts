@@ -336,6 +336,18 @@ const migrations = [
       WHERE thread_id = old.thread_id;
     END;
   `,
+  `
+    ALTER TABLE projects ADD COLUMN location_kind TEXT NOT NULL DEFAULT 'linked'
+      CHECK (location_kind IN ('managed', 'linked'));
+    ALTER TABLE projects ADD COLUMN instructions TEXT NOT NULL DEFAULT '';
+    ALTER TABLE projects ADD COLUMN pinned_at TEXT;
+    ALTER TABLE projects ADD COLUMN source_template_id TEXT;
+    ALTER TABLE projects ADD COLUMN source_template_name TEXT;
+    ALTER TABLE projects ADD COLUMN source_template_pack_name TEXT;
+
+    CREATE INDEX projects_workspace_pinned_updated_idx
+      ON projects(workspace_id, pinned_at DESC, updated_at DESC);
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

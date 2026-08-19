@@ -5,6 +5,9 @@ import { personalWorkspaceId } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
+import { ProjectDialog } from "../components/project/project-dialog.js"
+import { ProjectSettingsDialog } from "../components/project/project-settings-dialog.js"
+import { SaveTemplateDialog } from "../components/project/save-template-dialog.js"
 import {
   firstSettingsPage,
   type SettingsPageId,
@@ -26,7 +29,6 @@ import {
   WorkspaceDialog,
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
-import { pickProjectFolder } from "../lib/desktop.js"
 import { readRememberedWorkspaceLayout } from "../lib/workspace-layout.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
@@ -36,6 +38,7 @@ import { useKeybinding } from "../settings/use-keybinding.js"
 import { useSettings } from "../settings/settings-context.js"
 import { useActionError } from "./use-action-error.js"
 import { usePackActions } from "./use-pack-actions.js"
+import { useProjectActions } from "./use-project-actions.js"
 import { useThreadQueries } from "./use-thread-queries.js"
 import { useWorkspaceSelection } from "./use-workspace-selection.js"
 import { toNewTask, type MainView } from "./work-view.js"
@@ -58,11 +61,11 @@ export function Workbench() {
   )
 
   const [view, setView] = useState<MainView>({ kind: "new-task" })
-  const [addingProject, setAddingProject] = useState(false)
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
-  const { actionError, tryAction, runAction } = useActionError()
+  const { actionError, clearActionError, tryAction, runAction } =
+    useActionError()
 
   const {
     workspaces,
@@ -99,6 +102,26 @@ export function Workbench() {
     tryAction,
   })
 
+  const {
+    hasOpenDialog,
+    addProject,
+    moveProject,
+    setProjectPinned,
+    openProjectSettings,
+    projectDialog,
+    settingsDialog,
+    templateDialog,
+  } = useProjectActions(client, {
+    activeWorkspaceId,
+    activeProject,
+    projects,
+    selectProject,
+    clearActionError,
+    tryAction,
+    runAction,
+  })
+  const hasOpenModal = hasOpenDialog || workspaceDialog !== null
+
   // A deleted task has nothing left to reload, so the pane closes on the event
   // rather than after the request resolves — otherwise the open view refetches
   // the missing thread first and flashes an error.
@@ -133,9 +156,11 @@ export function Workbench() {
     useCallback(
       () =>
         setView((current) =>
-          current.kind === "settings" ? current : { kind: "new-task" }
+          current.kind === "settings" || hasOpenModal
+            ? current
+            : { kind: "new-task" }
         ),
-      []
+      [hasOpenModal]
     )
   )
 
@@ -144,7 +169,7 @@ export function Workbench() {
     (direction: number) => {
       // The workspace switcher is off screen under Settings; switching there
       // would write the new selection with nothing on screen to show for it.
-      if (inSettings || workspaces.length < 2) return
+      if (inSettings || hasOpenModal || workspaces.length < 2) return
       const index = workspaces.findIndex(
         (workspace) => workspace.id === activeWorkspaceId
       )
@@ -152,7 +177,7 @@ export function Workbench() {
         workspaces[(index + direction + workspaces.length) % workspaces.length]!
       selectWorkspace(next.id)
     },
-    [inSettings, workspaces, activeWorkspaceId, selectWorkspace]
+    [inSettings, hasOpenModal, workspaces, activeWorkspaceId, selectWorkspace]
   )
 
   useKeybinding(
@@ -202,31 +227,6 @@ export function Workbench() {
     setView((current) =>
       current.kind === "skills" ? { ...current, filter } : current
     )
-  }
-
-  async function addProject() {
-    if (!activeWorkspaceId) return
-    setAddingProject(true)
-    try {
-      await tryAction(async () => {
-        const picked = await pickProjectFolder()
-        if (!picked) return
-        const project = await client.addProject(
-          picked.path,
-          picked.name,
-          activeWorkspaceId
-        )
-        selectProject(project.id)
-      })
-    } catch {
-      // Already surfaced through the error strip.
-    } finally {
-      setAddingProject(false)
-    }
-  }
-
-  function moveProject(projectId: string, workspaceId: string) {
-    runAction(() => client.moveProject(projectId, workspaceId))
   }
 
   // Mutation responses are ignored on purpose: each one emits thread.changed,
@@ -317,11 +317,11 @@ export function Workbench() {
       return (
         <Screen>
           <StatusPanel
-            title="Open a project folder"
-            description="Deskto works inside one folder at a time. Choose the folder that holds the work you want done."
+            title="Create your first project"
+            description="Deskto can manage its folder now. You can move it somewhere else later."
           >
-            <Button onClick={addProject} disabled={addingProject}>
-              {addingProject ? "Opening…" : "Choose a folder"}
+            <Button onClick={addProject} disabled={projectDialog.open}>
+              Create project
             </Button>
           </StatusPanel>
         </Screen>
@@ -378,7 +378,9 @@ export function Workbench() {
             onSelectAllProjects={selectAllProjects}
             onAddProject={addProject}
             onMoveProject={moveProject}
-            addingProject={addingProject}
+            onEditProject={openProjectSettings}
+            onSetProjectPinned={setProjectPinned}
+            addingProject={projectDialog.open}
             onSelectWorkspace={selectWorkspace}
             onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
             onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
@@ -432,6 +434,41 @@ export function Workbench() {
         canDelete={activeWorkspace?.id !== personalWorkspaceId}
         onSubmit={submitWorkspace}
         onDelete={deleteActiveWorkspace}
+      />
+      <ProjectDialog
+        open={projectDialog.open}
+        onOpenChange={projectDialog.setOpen}
+        templates={projectDialog.templates}
+        templatesLoading={projectDialog.loading}
+        loadError={projectDialog.error}
+        actionError={actionError}
+        onRetry={projectDialog.retry}
+        onChooseFolder={projectDialog.chooseFolder}
+        onSubmit={projectDialog.createProject}
+      />
+      <ProjectSettingsDialog
+        open={settingsDialog.open}
+        onOpenChange={settingsDialog.setOpen}
+        details={settingsDialog.details}
+        loading={settingsDialog.loading}
+        loadError={settingsDialog.error}
+        actionError={actionError}
+        onRetry={settingsDialog.retry}
+        onSubmit={settingsDialog.updateProject}
+        onMoveFolder={settingsDialog.relocateProject}
+        onOpenFolder={settingsDialog.openFolder}
+        onSaveAsTemplate={settingsDialog.openTemplateSave}
+      />
+      <SaveTemplateDialog
+        open={templateDialog.open}
+        onOpenChange={templateDialog.setOpen}
+        project={templateDialog.project}
+        files={templateDialog.files}
+        loading={templateDialog.loading}
+        loadError={templateDialog.error}
+        actionError={actionError}
+        onRetry={templateDialog.retry}
+        onSubmit={templateDialog.saveTemplate}
       />
     </div>
   )

@@ -3,6 +3,9 @@ import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderInputIcon from "lucide-react/dist/esm/icons/folder-input"
 import FolderPlusIcon from "lucide-react/dist/esm/icons/folder-plus"
 import LayersIcon from "lucide-react/dist/esm/icons/layers"
+import PinIcon from "lucide-react/dist/esm/icons/pin"
+import PinOffIcon from "lucide-react/dist/esm/icons/pin-off"
+import SettingsIcon from "lucide-react/dist/esm/icons/settings"
 import type { Project, Workspace } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -34,6 +37,8 @@ export function ProjectSwitcher({
   onSelectAllProjects,
   onAddProject,
   onMoveProject,
+  onEditProject,
+  onSetPinned,
   adding,
 }: {
   workspaces: Workspace[]
@@ -44,6 +49,8 @@ export function ProjectSwitcher({
   onSelectAllProjects: () => void
   onAddProject: () => void
   onMoveProject: (projectId: string, workspaceId: string) => void
+  onEditProject: () => void
+  onSetPinned: (projectId: string, pinned: boolean) => void
   adding: boolean
 }) {
   const otherWorkspaces = workspaces.filter(
@@ -103,7 +110,12 @@ export function ProjectSwitcher({
                 closeOnClick
               >
                 <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-                  <span className="truncate">{project.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate">{project.name}</span>
+                    {project.pinnedAt ? (
+                      <PinIcon className="size-3 shrink-0 text-muted-foreground" />
+                    ) : null}
+                  </span>
                   <span className="truncate text-xs text-muted-foreground">
                     {project.path}
                   </span>
@@ -111,27 +123,41 @@ export function ProjectSwitcher({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
-          {!allProjects && activeProject && otherWorkspaces.length > 0 ? (
+          {!allProjects && activeProject ? (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <FolderInputIcon />
-                  Move project to…
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  {otherWorkspaces.map((workspace) => (
-                    <DropdownMenuItem
-                      key={workspace.id}
-                      onClick={() =>
-                        onMoveProject(activeProject.id, workspace.id)
-                      }
-                    >
-                      {workspace.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onClick={onEditProject}>
+                <SettingsIcon />
+                Project settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  onSetPinned(activeProject.id, !activeProject.pinnedAt)
+                }
+              >
+                {activeProject.pinnedAt ? <PinOffIcon /> : <PinIcon />}
+                {activeProject.pinnedAt ? "Unpin project" : "Pin project"}
+              </DropdownMenuItem>
+              {otherWorkspaces.length > 0 ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <FolderInputIcon />
+                    Move project to…
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {otherWorkspaces.map((workspace) => (
+                      <DropdownMenuItem
+                        key={workspace.id}
+                        onClick={() =>
+                          onMoveProject(activeProject.id, workspace.id)
+                        }
+                      >
+                        {workspace.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : null}
             </>
           ) : null}
         </DropdownMenuContent>
@@ -140,7 +166,7 @@ export function ProjectSwitcher({
         variant="ghost"
         size="icon-sm"
         className="text-muted-foreground"
-        aria-label="Add a project folder"
+        aria-label="Create project"
         onClick={onAddProject}
         disabled={adding}
       >

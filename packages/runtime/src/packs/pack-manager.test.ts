@@ -101,6 +101,22 @@ describe("PackManager", () => {
     ).toHaveLength(1)
   })
 
+  it("gets or creates one editable My Templates Pack", async () => {
+    const context = await testContext()
+
+    const [first, concurrent] = await Promise.all([
+      context.manager.create("My Templates"),
+      context.manager.create("My Templates"),
+    ])
+    const repeated = await context.manager.create("My Templates")
+
+    expect(concurrent.id).toBe(first.id)
+    expect(repeated.id).toBe(first.id)
+    expect(
+      context.packs.list().filter((pack) => pack.name === "My Templates")
+    ).toHaveLength(1)
+  })
+
   it("registers the receipt before committing the staged directory", async () => {
     const context = await testContext()
     const source = join(context.root, "source")

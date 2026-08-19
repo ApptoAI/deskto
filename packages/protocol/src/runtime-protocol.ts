@@ -15,7 +15,13 @@ import {
   packSkillSchema,
   promptSkillSchema,
   preferencesSchema,
+  projectDetailsSchema,
   projectEntrySchema,
+  projectInstructionsMaxLength,
+  projectNameMaxLength,
+  projectTemplateDescriptionMaxLength,
+  projectTemplateFileSchema,
+  projectTemplateSchema,
   selectionSchema,
   settingsSnapshotSchema,
   threadSchema,
@@ -160,11 +166,73 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ method: z.literal("project.list"), params: z.object({}) }),
   z.object({
+    method: z.literal("project.get"),
+    params: z.object({ projectId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("project.create"),
+    params: z.object({
+      workspaceId: z.string().min(1),
+      name: z.string().trim().min(1).max(projectNameMaxLength),
+      location: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("managed") }),
+        z.object({ kind: z.literal("linked"), path: z.string().min(1) }),
+      ]),
+      templateId: z.string().min(1).optional(),
+    }),
+  }),
+  z.object({
     method: z.literal("project.add"),
     params: z.object({
       path: z.string().min(1),
       name: z.string().min(1),
       workspaceId: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.update"),
+    params: z
+      .object({
+        projectId: z.string().min(1),
+        name: z.string().trim().min(1).max(projectNameMaxLength).optional(),
+        instructions: z.string().max(projectInstructionsMaxLength).optional(),
+      })
+      .refine(
+        ({ name, instructions }) =>
+          name !== undefined || instructions !== undefined,
+        { message: "A project setting is required" }
+      ),
+  }),
+  z.object({
+    method: z.literal("project.setPinned"),
+    params: z.object({
+      projectId: z.string().min(1),
+      pinned: z.boolean(),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.relocate"),
+    params: z.object({
+      projectId: z.string().min(1),
+      path: z.string().min(1),
+    }),
+  }),
+  z.object({
+    method: z.literal("project.listTemplateFiles"),
+    params: z.object({ projectId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("template.listForWorkspace"),
+    params: z.object({ workspaceId: z.string().min(1) }),
+  }),
+  z.object({
+    method: z.literal("template.saveFromProject"),
+    params: z.object({
+      projectId: z.string().min(1),
+      name: z.string().trim().min(1).max(projectNameMaxLength),
+      description: z.string().trim().max(projectTemplateDescriptionMaxLength),
+      includeInstructions: z.boolean(),
+      paths: z.array(z.string().min(1)).max(200),
     }),
   }),
   z.object({
@@ -340,8 +408,16 @@ export interface RuntimeResponses {
   "skill.createManaged": z.infer<typeof packSkillSchema>
   "skill.updateManaged": z.infer<typeof packSkillSchema>
   "project.list": z.infer<typeof projectSchema>[]
+  "project.get": z.infer<typeof projectDetailsSchema>
+  "project.create": z.infer<typeof projectDetailsSchema>
   "project.add": z.infer<typeof projectSchema>
   "project.move": z.infer<typeof projectSchema>
+  "project.update": z.infer<typeof projectDetailsSchema>
+  "project.setPinned": z.infer<typeof projectSchema>
+  "project.relocate": z.infer<typeof projectSchema>
+  "project.listTemplateFiles": z.infer<typeof projectTemplateFileSchema>[]
+  "template.listForWorkspace": z.infer<typeof projectTemplateSchema>[]
+  "template.saveFromProject": z.infer<typeof projectTemplateSchema>
   "project.searchEntries": z.infer<typeof projectEntrySchema>[]
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>

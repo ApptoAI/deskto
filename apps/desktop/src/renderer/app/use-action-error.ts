@@ -10,6 +10,7 @@ import { describedErrorSchema } from "../runtime/describe-error.js"
  */
 export function useActionError() {
   const [actionError, setActionError] = useState<string | null>(null)
+  const clearActionError = useCallback(() => setActionError(null), [])
 
   const tryAction = useCallback(
     async <T>(action: () => Promise<T>): Promise<T> => {
@@ -33,5 +34,5 @@ export function useActionError() {
     [tryAction]
   )
 
-  return { actionError, tryAction, runAction }
+  return { actionError, clearActionError, tryAction, runAction }
 }
