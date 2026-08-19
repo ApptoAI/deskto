@@ -313,34 +313,38 @@ export async function moveProjectDirectory(
 
 export async function copyDirectoryContentsNoClobber(
   source: string,
-  destination: string
+  destination: string,
+  hooks: {
+    afterCreate?(entry: {
+      kind: "file" | "directory"
+      path: string
+    }): Promise<void>
+  } = {}
 ): Promise<PendingProjectMove> {
-  const createdFiles: string[] = []
-  const createdDirectories: string[] = []
-
-  async function rollback(): Promise<void> {
-    for (let index = createdFiles.length - 1; index >= 0; index -= 1) {
-      const path = createdFiles[index]
-      if (path) await rm(path, { force: true })
-    }
-    for (let index = createdDirectories.length - 1; index >= 0; index -= 1) {
-      const path = createdDirectories[index]
-      if (path) await rmdir(path)
-    }
-  }
+  let createdEntries = 0
+  const destinationRoot = await ownedDirectory(destination)
 
   async function copyDirectory(
     sourceDirectory: string,
-    destinationDirectory: string
+    destinationDirectory: OwnedDirectory
   ): Promise<void> {
     for (const name of await readdir(sourceDirectory)) {
+      await assertOwnedDirectory(destinationDirectory)
       const sourcePath = join(sourceDirectory, name)
-      const destinationPath = join(destinationDirectory, name)
+      const destinationPath = join(destinationDirectory.path, name)
       const metadata = await lstat(sourcePath)
       if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
         await mkdir(destinationPath)
-        createdDirectories.push(destinationPath)
-        await copyDirectory(sourcePath, destinationPath)
+        createdEntries += 1
+        const createdDirectory = await ownedDirectory(destinationPath)
+        await hooks.afterCreate?.({
+          kind: "directory",
+          path: destinationPath,
+        })
+        await assertOwnedDirectory(createdDirectory)
+        await copyDirectory(sourcePath, createdDirectory)
+        await assertOwnedDirectory(createdDirectory)
+        await assertOwnedDirectory(destinationDirectory)
         continue
       }
       if (!metadata.isFile() || metadata.isSymbolicLink()) {
@@ -350,21 +354,88 @@ export async function copyDirectoryContentsNoClobber(
         )
       }
       await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
-      createdFiles.push(destinationPath)
+      createdEntries += 1
+      const createdFile = await ownedRegularFile(destinationPath)
+      await hooks.afterCreate?.({ kind: "file", path: destinationPath })
+      await assertOwnedRegularFile(createdFile)
+      await assertOwnedDirectory(destinationDirectory)
     }
   }
 
   try {
-    await copyDirectory(source, destination)
+    await copyDirectory(source, destinationRoot)
   } catch (error) {
-    await rollback()
+    if (createdEntries > 0) {
+      throw projectMoveRecoveryError(
+        source,
+        destination,
+        runtimeErrorMessageSchema.parse(error)
+      )
+    }
     throw error
   }
   return {
-    rollback,
+    async rollback() {
+      throw projectMoveRecoveryError(
+        source,
+        destination,
+        "Template content was copied before Project storage failed; Deskto left it in place to avoid deleting concurrent changes"
+      )
+    },
     async finalize() {
       await rm(source, { recursive: true, force: true })
     },
+  }
+}
+
+type OwnedEntry = {
+  path: string
+  dev: number
+  ino: number
+}
+
+type OwnedDirectory = OwnedEntry
+type OwnedRegularFile = OwnedEntry
+
+async function ownedDirectory(path: string): Promise<OwnedDirectory> {
+  const metadata = await lstat(path)
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new RuntimeError(
+      "project-move-recovery-failed",
+      `Deskto no longer owns the expected directory: ${path}`
+    )
+  }
+  return { path, dev: metadata.dev, ino: metadata.ino }
+}
+
+async function ownedRegularFile(path: string): Promise<OwnedRegularFile> {
+  const metadata = await lstat(path)
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new RuntimeError(
+      "project-move-recovery-failed",
+      `Deskto no longer owns the expected file: ${path}`
+    )
+  }
+  return { path, dev: metadata.dev, ino: metadata.ino }
+}
+
+async function assertOwnedDirectory(entry: OwnedDirectory): Promise<void> {
+  const current = await ownedDirectory(entry.path)
+  if (current.dev !== entry.dev || current.ino !== entry.ino) {
+    throw new RuntimeError(
+      "project-move-recovery-failed",
+      `Deskto no longer owns the expected directory: ${entry.path}`
+    )
+  }
+}
+
+async function assertOwnedRegularFile(entry: OwnedRegularFile): Promise<void> {
+  const current = await ownedRegularFile(entry.path)
+  if (current.dev !== entry.dev || current.ino !== entry.ino) {
+    throw new RuntimeError(
+      "project-move-recovery-failed",
+      `Deskto no longer owns the expected file: ${entry.path}`
+    )
   }
 }
 

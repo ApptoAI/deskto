@@ -8,6 +8,8 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
+  symlink,
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -47,6 +49,57 @@ describe("cross-device Project relocation", () => {
     await expect(
       readFile(join(destination, "README.md"), "utf8")
     ).resolves.toBe("User content\n")
+  })
+
+  it("does not delete a file that replaces a copied template file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-template-copy-"))
+    directories.push(root)
+    const source = join(root, "staging")
+    const destination = join(root, "selected-folder")
+    await mkdir(source)
+    await mkdir(destination)
+    await writeFile(join(source, "README.md"), "Template\n")
+
+    await expect(
+      copyDirectoryContentsNoClobber(source, destination, {
+        async afterCreate(entry) {
+          if (entry.kind !== "file") return
+          await rm(entry.path)
+          await writeFile(entry.path, "Replacement\n")
+        },
+      })
+    ).rejects.toMatchObject({ code: "project-move-recovery-failed" })
+    await expect(
+      readFile(join(destination, "README.md"), "utf8")
+    ).resolves.toBe("Replacement\n")
+  })
+
+  it("does not traverse a directory replaced by a symlink", async () => {
+    const root = await mkdtemp(join(tmpdir(), "deskto-template-copy-"))
+    directories.push(root)
+    const source = join(root, "staging")
+    const destination = join(root, "selected-folder")
+    const outside = join(root, "outside")
+    await mkdir(join(source, "nested"), { recursive: true })
+    await mkdir(destination)
+    await mkdir(outside)
+    await writeFile(join(source, "nested", "README.md"), "Template\n")
+
+    await expect(
+      copyDirectoryContentsNoClobber(source, destination, {
+        async afterCreate(entry) {
+          if (entry.kind !== "directory") return
+          await rmdir(entry.path)
+          await symlink(outside, entry.path, "dir")
+        },
+      })
+    ).rejects.toMatchObject({ code: "project-move-recovery-failed" })
+    expect((await lstat(join(destination, "nested"))).isSymbolicLink()).toBe(
+      true
+    )
+    await expect(lstat(join(outside, "README.md"))).rejects.toMatchObject({
+      code: "ENOENT",
+    })
   })
 
   it("restores a selected folder that changes while being claimed", async () => {
