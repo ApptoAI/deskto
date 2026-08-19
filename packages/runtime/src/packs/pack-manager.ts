@@ -2,10 +2,11 @@ import { mkdirSync, realpathSync } from "node:fs"
 import { lstat } from "node:fs/promises"
 import { z } from "zod"
 
-import type {
-  ManagedSkillDraft,
-  PackReceipt,
-  PackSkill,
+import {
+  mySkillsPackName,
+  type ManagedSkillDraft,
+  type PackReceipt,
+  type PackSkill,
 } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
@@ -21,6 +22,7 @@ import {
   stagePackZip,
   type StagedManagedPack,
 } from "./pack-installer.js"
+import { canEditManagedSkills } from "./pack-capabilities.js"
 
 export type PackFileActions = {
   trashItem(path: string): Promise<void>
@@ -31,6 +33,7 @@ const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
 export class PackManager {
   readonly #managedRoot: string
   readonly #managedSkills: ManagedSkills
+  #mySkillsPackCreation: Promise<PackRow> | null = null
 
   constructor(
     private readonly packs: Packs,
@@ -47,7 +50,25 @@ export class PackManager {
     const normalizedName = name.trim()
     if (!normalizedName)
       throw new RuntimeError("invalid-name", "A name is required")
-    const staged = await stageManagedPack(normalizedName, this.#managedRoot)
+
+    if (normalizedName === mySkillsPackName) {
+      const existing = this.packs.list().find(canEditManagedSkills)
+      if (existing) return existing
+      if (!this.#mySkillsPackCreation) {
+        this.#mySkillsPackCreation = this.#create(normalizedName).finally(
+          () => {
+            this.#mySkillsPackCreation = null
+          }
+        )
+      }
+      return this.#mySkillsPackCreation
+    }
+
+    return this.#create(normalizedName)
+  }
+
+  async #create(name: string): Promise<PackRow> {
+    const staged = await stageManagedPack(name, this.#managedRoot)
     return this.#registerManaged(staged, { kind: "created" })
   }
 
