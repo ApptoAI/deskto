@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
@@ -403,6 +403,39 @@ describe("managed projects and templates", () => {
         })
       ).instructions
     ).toBe("Keep it short.")
+  })
+
+  it("rejects moving a Project into the Deskto projects directory", async () => {
+    const { runtime } = await testRuntime()
+    const created = unwrap(
+      await runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name: "Stays managed",
+          location: { kind: "managed" },
+        },
+      })
+    ).project
+
+    const response = await runtime.request({
+      method: "project.relocate",
+      params: { projectId: created.id, path: dirname(created.path) },
+    })
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: "invalid-project-path" },
+    })
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "project.get",
+          params: { projectId: created.id },
+        })
+      ).project
+    ).toMatchObject({ path: created.path, locationKind: "managed" })
+    await expect(realpath(created.path)).resolves.toBe(created.path)
   })
 
   it("rejects a linked Project path that is a symbolic link", async () => {

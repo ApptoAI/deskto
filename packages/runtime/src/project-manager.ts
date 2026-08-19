@@ -190,14 +190,22 @@ export class ProjectManager {
           "Managed project path is outside the Deskto projects directory"
         )
       }
-      const picked = await resolvedEmptyOrExistingDirectory(
-        selectedPath,
-        false
-      )
+      const picked = await resolvedEmptyOrExistingDirectory(selectedPath, false)
       if (picked === source || picked.startsWith(source + sep)) {
         throw new RuntimeError(
           "invalid-project-path",
           "Choose a folder outside the project's current folder"
+        )
+      }
+      // A pick inside the managed root would persist a "linked" project in
+      // Deskto's private folder, and linked projects cannot relocate again.
+      if (
+        picked === this.#managedRoot ||
+        picked.startsWith(this.#managedRoot + sep)
+      ) {
+        throw new RuntimeError(
+          "invalid-project-path",
+          "Choose a folder outside the Deskto projects directory"
         )
       }
       // An empty pick becomes the project folder itself; a folder that
@@ -209,7 +217,8 @@ export class ProjectManager {
         : await this.#claimDirectory(picked, current.name, projectId)
       // The claimed branch already checked availability; re-checking here
       // could throw after the claim and leak the freshly made subfolder.
-      if (pickedIsEmpty) this.projects.ensurePathAvailable(destination, projectId)
+      if (pickedIsEmpty)
+        this.projects.ensurePathAvailable(destination, projectId)
       let move: PendingProjectMove
       try {
         move = await moveProjectDirectory(source, destination)
