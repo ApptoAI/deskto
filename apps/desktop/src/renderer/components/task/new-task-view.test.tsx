@@ -18,6 +18,7 @@ const project: Project = {
   id: "project-1",
   workspaceId: "personal",
   name: "Example",
+  description: "",
   path: "/projects/example",
   locationKind: "linked",
   pinnedAt: null,
@@ -62,6 +63,12 @@ describe("NewTaskView", () => {
           },
         })
       }
+      if (body.method === "project.get") {
+        return Promise.resolve({
+          ok: true as const,
+          data: { project, instructions: "", sourceTemplate: null },
+        })
+      }
       if (body.method === "thread.create") {
         return Promise.resolve({ ok: true as const, data: { id: "thread-1" } })
       }
@@ -87,6 +94,8 @@ describe("NewTaskView", () => {
           harnesses={{ status: "ready", data: harnesses }}
           onTaskCreated={vi.fn()}
           onTaskStarted={onTaskStarted}
+          panelPreference="collapsed"
+          onPanelCollapsedChange={vi.fn()}
         />
       </RuntimeClientProvider>
     )

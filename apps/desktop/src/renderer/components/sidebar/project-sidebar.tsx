@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react"
+import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
@@ -44,6 +45,8 @@ export function ProjectSidebar({
   onOpenThread,
   onNewTask,
   onRetryThreads,
+  onOpenProjects,
+  projectsActive,
   onOpenSkills,
   skillsActive,
   onOpenSettings,
@@ -72,6 +75,8 @@ export function ProjectSidebar({
   onOpenThread: (threadId: string) => void
   onNewTask: () => void
   onRetryThreads: () => void
+  onOpenProjects: () => void
+  projectsActive: boolean
   onOpenSkills: () => void
   skillsActive: boolean
   onOpenSettings: () => void
@@ -128,7 +133,7 @@ export function ProjectSidebar({
 
       <div className="no-drag space-y-1.5 px-2 pb-2">
         <Button
-          variant="secondary"
+          variant="ghost"
           size="lg"
           className="w-full justify-start"
           onClick={onNewTask}
@@ -204,11 +209,19 @@ export function ProjectSidebar({
         </div>
       </ScrollArea>
 
-      <div className="no-drag border-t border-border p-2">
+      <div className="no-drag space-y-0.5 px-2 pb-3">
+        <Button
+          variant={projectsActive ? "secondary" : "ghost"}
+          className="w-full justify-start text-muted-foreground"
+          onClick={onOpenProjects}
+          aria-current={projectsActive ? "page" : undefined}
+        >
+          <FolderIcon data-icon="inline-start" />
+          Projects
+        </Button>
         <Button
           variant={skillsActive ? "secondary" : "ghost"}
-          size="sm"
-          className="mb-1 w-full justify-start text-muted-foreground"
+          className="w-full justify-start text-muted-foreground"
           onClick={onOpenSkills}
           aria-current={skillsActive ? "page" : undefined}
         >
@@ -218,7 +231,6 @@ export function ProjectSidebar({
         <Button
           ref={settingsButton}
           variant="ghost"
-          size="sm"
           className="w-full justify-start text-muted-foreground"
           onClick={onOpenSettings}
         >

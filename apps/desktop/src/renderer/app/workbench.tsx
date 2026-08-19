@@ -6,8 +6,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
 import { ProjectDialog } from "../components/project/project-dialog.js"
-import { ProjectSettingsDialog } from "../components/project/project-settings-dialog.js"
-import { SaveTemplateDialog } from "../components/project/save-template-dialog.js"
+import { ProjectsView } from "../components/project/projects-view.js"
 import {
   firstSettingsPage,
   type SettingsPageId,
@@ -30,6 +29,7 @@ import {
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
 import { readRememberedWorkspaceLayout } from "../lib/workspace-layout.js"
+import { useProjectPanel } from "./use-project-panel.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
@@ -107,20 +107,35 @@ export function Workbench() {
     addProject,
     moveProject,
     setProjectPinned,
-    openProjectSettings,
     projectDialog,
-    settingsDialog,
-    templateDialog,
   } = useProjectActions(client, {
     activeWorkspaceId,
-    activeProject,
-    projects,
     selectProject,
     clearActionError,
     tryAction,
     runAction,
   })
   const hasOpenModal = hasOpenDialog || workspaceDialog !== null
+
+  const {
+    preference: panelPreference,
+    setCollapsed: setPanelCollapsed,
+    forceOpen: forcePanelOpen,
+  } = useProjectPanel(activeProject?.id ?? null)
+
+  const openProjectPanel = useCallback(() => {
+    if (!activeProject) return
+    setView(toNewTask)
+    forcePanelOpen()
+  }, [activeProject, forcePanelOpen])
+
+  const openProjectFromGrid = useCallback(
+    (projectId: string) => {
+      selectProject(projectId)
+      setView(toNewTask)
+    },
+    [selectProject]
+  )
 
   // A deleted task has nothing left to reload, so the pane closes on the event
   // rather than after the request resolves — otherwise the open view refetches
@@ -223,6 +238,10 @@ export function Workbench() {
     setView({ kind: "skills", filter: firstSkillsFilter })
   }
 
+  function openProjects() {
+    setView({ kind: "projects" })
+  }
+
   function selectSkillsFilter(filter: SkillsFilter) {
     setView((current) =>
       current.kind === "skills" ? { ...current, filter } : current
@@ -300,6 +319,17 @@ export function Workbench() {
         </Screen>
       )
     }
+    if (view.kind === "projects") {
+      return (
+        <ProjectsView
+          projects={workspaceProjects}
+          onOpenProject={openProjectFromGrid}
+          onNewProject={addProject}
+          onSetPinned={setProjectPinned}
+          creating={projectDialog.open}
+        />
+      )
+    }
     if (view.kind === "skills") {
       return (
         <SkillsView
@@ -345,6 +375,8 @@ export function Workbench() {
         harnesses={harnesses.state}
         onTaskCreated={revalidateThreads}
         onTaskStarted={openThread}
+        panelPreference={panelPreference}
+        onPanelCollapsedChange={setPanelCollapsed}
       />
     )
   }
@@ -378,7 +410,7 @@ export function Workbench() {
             onSelectAllProjects={selectAllProjects}
             onAddProject={addProject}
             onMoveProject={moveProject}
-            onEditProject={openProjectSettings}
+            onEditProject={openProjectPanel}
             onSetProjectPinned={setProjectPinned}
             addingProject={projectDialog.open}
             onSelectWorkspace={selectWorkspace}
@@ -390,6 +422,8 @@ export function Workbench() {
             onOpenThread={openThread}
             onNewTask={() => setView(toNewTask)}
             onRetryThreads={revalidateThreads}
+            onOpenProjects={openProjects}
+            projectsActive={view.kind === "projects"}
             onOpenSkills={openSkills}
             skillsActive={view.kind === "skills"}
             onOpenSettings={openSettings}
@@ -445,30 +479,6 @@ export function Workbench() {
         onRetry={projectDialog.retry}
         onChooseFolder={projectDialog.chooseFolder}
         onSubmit={projectDialog.createProject}
-      />
-      <ProjectSettingsDialog
-        open={settingsDialog.open}
-        onOpenChange={settingsDialog.setOpen}
-        details={settingsDialog.details}
-        loading={settingsDialog.loading}
-        loadError={settingsDialog.error}
-        actionError={actionError}
-        onRetry={settingsDialog.retry}
-        onSubmit={settingsDialog.updateProject}
-        onMoveFolder={settingsDialog.relocateProject}
-        onOpenFolder={settingsDialog.openFolder}
-        onSaveAsTemplate={settingsDialog.openTemplateSave}
-      />
-      <SaveTemplateDialog
-        open={templateDialog.open}
-        onOpenChange={templateDialog.setOpen}
-        project={templateDialog.project}
-        files={templateDialog.files}
-        loading={templateDialog.loading}
-        loadError={templateDialog.error}
-        actionError={actionError}
-        onRetry={templateDialog.retry}
-        onSubmit={templateDialog.saveTemplate}
       />
     </div>
   )

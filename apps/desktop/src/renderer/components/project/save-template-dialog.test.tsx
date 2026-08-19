@@ -97,6 +97,7 @@ function project(name = "Client North"): Project {
     id: "project-1",
     workspaceId: "personal",
     name,
+    description: "",
     path: "/projects/project-1",
     locationKind: "managed",
     pinnedAt: null,

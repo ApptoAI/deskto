@@ -138,7 +138,7 @@ function SaveTemplateForm({
         paths: [...selectedPaths].sort(),
       })
     } catch {
-      // The workbench shows the error without discarding the selection.
+      // The caller surfaces the error via actionError; the selection stays.
     }
   }
 

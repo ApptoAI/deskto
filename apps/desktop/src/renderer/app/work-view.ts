@@ -5,6 +5,7 @@ export type WorkView =
   | { kind: "new-task" }
   | { kind: "task"; threadId: string }
   | { kind: "skills"; filter: SkillsFilter }
+  | { kind: "projects" }
 
 export type MainView =
   | WorkView
@@ -19,6 +20,6 @@ export function toNewTask(current: MainView): MainView {
 
 /** Project and workspace changes keep the inventory open for the new scope. */
 export function afterScopeChange(current: MainView): MainView {
-  if (current.kind === "skills") return current
+  if (current.kind === "skills" || current.kind === "projects") return current
   return toNewTask(current)
 }
