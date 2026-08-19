@@ -186,7 +186,7 @@ export function Workbench() {
         setView((current) =>
           current.kind === "settings" || hasOpenModal
             ? current
-            : { kind: "new-task" }
+            : toNewTask(current)
         ),
       [hasOpenModal]
     )

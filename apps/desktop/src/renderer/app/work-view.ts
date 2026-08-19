@@ -13,8 +13,13 @@ export type MainView =
   | WorkView
   | { kind: "settings"; page: SettingsPageId; returnTo: WorkView }
 
-/** Sends the workbench to a blank task, including the view behind Settings. */
+/**
+ * Sends the workbench to a blank task, including the view behind Settings.
+ * A view already on the new-task screen is returned unchanged, so a repeat
+ * New task is a no-op and an in-progress draft is never thrown away.
+ */
 export function toNewTask(current: MainView): MainView {
+  if (current.kind === "new-task") return current
   return current.kind === "settings"
     ? { ...current, returnTo: { kind: "new-task" } }
     : { kind: "new-task" }

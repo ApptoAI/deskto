@@ -6,7 +6,7 @@ import { z } from "zod"
 import { useLocalStorage } from "../lib/use-local-storage.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
 import { useWorkspaceChanged } from "../runtime/use-workspace-changed.js"
-import { afterScopeChange, toNewTask, type MainView } from "./work-view.js"
+import { afterScopeChange, type MainView } from "./work-view.js"
 
 type ProjectScope = "all" | "project"
 
@@ -158,7 +158,9 @@ export function useWorkspaceSelection(
   )
 
   const selectAllProjects = useCallback(() => {
-    setView(toNewTask)
+    // Re-entering All projects deliberately drops any per-task project choice
+    // so the picker asks again.
+    setView(() => ({ kind: "new-task" }))
     setProjectScope("all")
   }, [setProjectScope, setView])
 
