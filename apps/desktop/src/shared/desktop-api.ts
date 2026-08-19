@@ -45,6 +45,11 @@ export type BrowserEvent =
 export type BrowserAction = "back" | "forward" | "reload"
 
 export interface DesktopApi {
+  /** Development-only switches; every flag is false in a packaged build. */
+  devFlags: {
+    /** Show the first-run wizard on every launch, ignoring the saved answer. */
+    forceOnboarding: boolean
+  }
   runtime: {
     request<M extends RuntimeMethod>(
       request: RequestFor<M>

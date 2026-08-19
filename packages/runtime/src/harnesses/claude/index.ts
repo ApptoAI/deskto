@@ -1,1 +1,4 @@
-export { ClaudeAdapter } from "./claude-adapter.js"
+export {
+  ClaudeAdapter,
+  claudeNotSignedInReason,
+} from "./claude-adapter.js"

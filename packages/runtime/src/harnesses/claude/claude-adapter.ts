@@ -3,6 +3,7 @@ import { join } from "node:path"
 
 import {
   query,
+  type AccountInfo,
   type CanUseTool,
   type Options,
   type Query,
@@ -47,7 +48,7 @@ import { ClaudeTaskPlan, isTaskPlanTool } from "./claude-task-plan.js"
 
 export type ClaudeQuery = Pick<
   Query,
-  "close" | "interrupt" | "supportedModels" | "getContextUsage"
+  "close" | "interrupt" | "supportedModels" | "getContextUsage" | "accountInfo"
 > &
   AsyncIterable<SDKMessage>
 
@@ -65,6 +66,29 @@ type ClaudeAdapterOptions = {
 const claudeErrorMessageSchema = createErrorMessageSchema(
   "Claude stopped unexpectedly"
 )
+
+export const claudeNotSignedInReason =
+  "Claude Code is not signed in. Run `claude` in a terminal and sign in, or set ANTHROPIC_API_KEY."
+
+// Local deadlines for discovery spawns. The registry's own timeouts only
+// abandon the promise; aborting here is what actually stops the CLI, so a
+// hung install cannot leak one process per probe.
+const availabilityDeadlineMs = 10_000
+const modelListDeadlineMs = 30_000
+
+/**
+ * Whether the CLI reports a usable identity. Third-party providers (Bedrock,
+ * Vertex, gateways) authenticate outside the CLI, so any non-firstParty
+ * provider counts as signed in; first-party needs an OAuth login or an API
+ * key, both of which the CLI reports through these fields.
+ */
+export function claudeAccountSignedIn(account: AccountInfo): boolean {
+  if (account.apiProvider && account.apiProvider !== "firstParty") return true
+  // Presence means a non-empty value; an empty string is as good as unset.
+  return [account.email, account.tokenSource, account.apiKeySource].some(
+    (value) => Boolean(value)
+  )
+}
 
 const claudePlanSchema = z.object({
   todos: z.array(
@@ -100,22 +124,24 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
 
   constructor(private readonly options: ClaudeAdapterOptions = {}) {}
 
-  checkAvailability() {
-    return Promise.resolve({ status: "available" as const })
+  async checkAvailability() {
+    try {
+      const account = await this.#discover(availabilityDeadlineMs, (discovery) =>
+        discovery.accountInfo()
+      )
+      return claudeAccountSignedIn(account)
+        ? { status: "available" as const }
+        : { status: "unavailable" as const, reason: claudeNotSignedInReason }
+    } catch {
+      // A CLI that cannot answer the control request gets the benefit of the
+      // doubt: listModels stays the arbiter there, and a false "available" is
+      // cheaper than bricking a working install with a false "unavailable".
+      return { status: "available" as const }
+    }
   }
 
-  async listModels(): Promise<HarnessModelOption[]> {
-    const abortController = new AbortController()
-    const prompt = new AsyncQueue<SDKUserMessage>()
-    const options: Options = { abortController }
-    if (this.options.executablePath) {
-      options.pathToClaudeCodeExecutable = this.options.executablePath
-    }
-    const discovery = (this.options.queryFactory ?? query)({
-      prompt,
-      options,
-    })
-    try {
+  listModels(): Promise<HarnessModelOption[]> {
+    return this.#discover(modelListDeadlineMs, async (discovery) => {
       const models = await discovery.supportedModels()
       return models.map((model) => {
         const supportedEfforts = model.supportedEffortLevels ?? []
@@ -132,7 +158,27 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
           ],
         }
       })
+    })
+  }
+
+  /** One short-lived query per discovery call, aborted on a local deadline. */
+  async #discover<T>(
+    deadlineMs: number,
+    run: (discovery: ClaudeQuery) => Promise<T>
+  ): Promise<T> {
+    const abortController = new AbortController()
+    const prompt = new AsyncQueue<SDKUserMessage>()
+    const options: Options = { abortController }
+    if (this.options.executablePath) {
+      options.pathToClaudeCodeExecutable = this.options.executablePath
+    }
+    const discovery = (this.options.queryFactory ?? query)({ prompt, options })
+    const deadline = setTimeout(() => abortController.abort(), deadlineMs)
+    deadline.unref?.()
+    try {
+      return await run(discovery)
     } finally {
+      clearTimeout(deadline)
       abortController.abort()
       prompt.close()
       discovery.close()

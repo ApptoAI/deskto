@@ -24,6 +24,8 @@ export type SettingInput =
   | { kind: "harness-model" }
   | { kind: "choice" }
   | { kind: "range"; min: number; max: number; step: number; unit?: string }
+  /** Stored and validated like any setting, but no settings screen edits it. */
+  | { kind: "hidden" }
 
 /** One configurable value: a stable key, a validated shape, and a default. */
 export interface SettingDefinition<T extends SettingValue> {

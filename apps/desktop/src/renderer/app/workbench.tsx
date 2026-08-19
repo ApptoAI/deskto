@@ -5,6 +5,7 @@ import { personalWorkspaceId } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
 import { InlineError } from "../components/inline-error.js"
+import { OnboardingView } from "../components/onboarding/onboarding-view.js"
 import { ProjectDialog } from "../components/project/project-dialog.js"
 import { ProjectsView } from "../components/project/projects-view.js"
 import {
@@ -29,6 +30,11 @@ import {
   WorkspaceDialog,
   type WorkspaceDraft,
 } from "../components/workspace/workspace-dialog.js"
+import {
+  readRememberedOnboardingCompleted,
+  rememberOnboardingCompleted,
+  shouldShowOnboarding,
+} from "../lib/onboarding.js"
 import { readRememberedWorkspaceLayout } from "../lib/workspace-layout.js"
 import { useProjectPanel } from "./use-project-panel.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
@@ -48,11 +54,34 @@ type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
 export function Workbench() {
   const client = useRuntimeClient()
-  const { snapshot: settingsSnapshot } = useSettings()
+  const { snapshot: settingsSnapshot, update: updateSettings } = useSettings()
   const [rememberedWorkspaceLayout] = useState(readRememberedWorkspaceLayout)
   const workspaceLayout = settingsSnapshot
     ? settingValue(settingsSnapshot, appSettings.workspaceLayout)
     : rememberedWorkspaceLayout
+
+  const [rememberedOnboarding] = useState(readRememberedOnboardingCompleted)
+  const onboardingCompleted = settingsSnapshot
+    ? settingValue(settingsSnapshot, appSettings.onboardingCompleted)
+    : rememberedOnboarding
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+  const showOnboarding = shouldShowOnboarding({
+    completed: onboardingCompleted,
+    forceOnboarding: window.deskto.devFlags.forceOnboarding,
+    dismissedThisSession: onboardingDismissed,
+  })
+
+  function finishOnboarding() {
+    rememberOnboardingCompleted(true)
+    void updateSettings({ [appSettings.onboardingCompleted.key]: true }).catch(
+      () => {
+        // Best effort: the session stays dismissed either way, but if this
+        // write failed the sync will re-mirror false and the wizard may
+        // return on the next launch.
+      }
+    )
+    setOnboardingDismissed(true)
+  }
 
   const loadHarnesses = useCallback(() => client.listHarnesses(), [client])
   const harnesses = useRuntimeQuery(loadHarnesses)
@@ -184,11 +213,11 @@ export function Workbench() {
     useCallback(
       () =>
         setView((current) =>
-          current.kind === "settings" || hasOpenModal
+          current.kind === "settings" || hasOpenModal || showOnboarding
             ? current
             : toNewTask(current)
         ),
-      [hasOpenModal]
+      [hasOpenModal, showOnboarding]
     )
   )
 
@@ -197,7 +226,14 @@ export function Workbench() {
     (direction: number) => {
       // The workspace switcher is off screen under Settings; switching there
       // would write the new selection with nothing on screen to show for it.
-      if (inSettings || hasOpenModal || workspaces.length < 2) return
+      // The same goes for the whole workbench under the welcome wizard.
+      if (
+        inSettings ||
+        hasOpenModal ||
+        showOnboarding ||
+        workspaces.length < 2
+      )
+        return
       const index = workspaces.findIndex(
         (workspace) => workspace.id === activeWorkspaceId
       )
@@ -205,7 +241,14 @@ export function Workbench() {
         workspaces[(index + direction + workspaces.length) % workspaces.length]!
       selectWorkspace(next.id)
     },
-    [inSettings, hasOpenModal, workspaces, activeWorkspaceId, selectWorkspace]
+    [
+      inSettings,
+      hasOpenModal,
+      showOnboarding,
+      workspaces,
+      activeWorkspaceId,
+      selectWorkspace,
+    ]
   )
 
   useKeybinding(
@@ -402,6 +445,40 @@ export function Workbench() {
     )
   }
 
+  // Shared between the wizard and the workbench: the wizard's project step
+  // opens this same dialog, so it must stay mounted in both returns.
+  const projectDialogElement = (
+    <ProjectDialog
+      open={projectDialog.open}
+      onOpenChange={projectDialog.setOpen}
+      templates={projectDialog.templates}
+      templatesLoading={projectDialog.loading}
+      loadError={projectDialog.error}
+      actionError={actionError}
+      onRetry={projectDialog.retry}
+      onChooseFolder={projectDialog.chooseFolder}
+      onSubmit={projectDialog.createProject}
+    />
+  )
+
+  // More modal than Settings: the wizard replaces the sidebars, the error
+  // strips, and every screen until the user finishes or skips.
+  if (showOnboarding) {
+    return (
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
+        <OnboardingView
+          harnesses={harnesses}
+          workspaceReady={activeWorkspaceId !== null}
+          hasProject={activeProject !== null}
+          creatingProject={projectDialog.open}
+          onCreateProject={addProject}
+          onFinish={finishOnboarding}
+        />
+        {projectDialogElement}
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {view.kind === "settings" ? (
@@ -490,17 +567,7 @@ export function Workbench() {
         onSubmit={submitWorkspace}
         onDelete={deleteActiveWorkspace}
       />
-      <ProjectDialog
-        open={projectDialog.open}
-        onOpenChange={projectDialog.setOpen}
-        templates={projectDialog.templates}
-        templatesLoading={projectDialog.loading}
-        loadError={projectDialog.error}
-        actionError={actionError}
-        onRetry={projectDialog.retry}
-        onChooseFolder={projectDialog.chooseFolder}
-        onSubmit={projectDialog.createProject}
-      />
+      {projectDialogElement}
     </div>
   )
 }

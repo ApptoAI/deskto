@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["ELECTRON_RENDERER_URL", "PATH"],
+  "globalEnv": ["ELECTRON_RENDERER_URL", "PATH", "DESKTO_FORCE_ONBOARDING", "DESKTO_SIMULATE_NO_AGENTS"],
   "globalPassThroughEnv": ["SHELL"],
   "ui": "tui",
   "tasks": {

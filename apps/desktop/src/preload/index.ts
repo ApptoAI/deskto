@@ -24,6 +24,11 @@ import {
 import type { DesktopApi } from "../shared/desktop-api.js"
 
 const api: DesktopApi = {
+  // Sandboxed preloads still see the process environment, which is how the
+  // dev-only force flag crosses into the renderer without an IPC round trip.
+  devFlags: {
+    forceOnboarding: process.env.DESKTO_FORCE_ONBOARDING === "1",
+  },
   runtime: {
     request: (request) => ipcRenderer.invoke(runtimeRequestChannel, request),
     subscribe: (listener) => {
