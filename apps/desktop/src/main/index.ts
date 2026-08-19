@@ -8,12 +8,14 @@ import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
 import {
   BrowserMcpServer,
   ClaudeAdapter,
+  claudeNotSignedInReason,
   CodexAdapter,
   createRuntime,
   type SessionToolProvider,
 } from "@deskto/runtime"
 
 import { configureCliPath } from "./cli-path.js"
+import { withForcedUnavailability } from "./dev-harness-stubs.js"
 import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
@@ -97,6 +99,11 @@ function packagedClaudeExecutable(): string | undefined {
 }
 
 async function openApplication(): Promise<void> {
+  // The sandboxed preload reads the environment it inherits from here, so
+  // clearing the dev-only flag is what keeps devFlags false in packaged
+  // builds even when the variable is exported in the launching shell.
+  if (app.isPackaged) delete process.env.DESKTO_FORCE_ONBOARDING
+
   // The PATH probe spawns a login shell and can take a few seconds, so it runs
   // while the window opens and the renderer loads. The runtime gets it as the
   // probe gate: no harness CLI is spawned before PATH is rebuilt.
@@ -127,6 +134,20 @@ async function openApplication(): Promise<void> {
     : new ClaudeAdapter({
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
+  // Separate from DESKTO_FORCE_ONBOARDING on purpose: forcing the wizard
+  // keeps real detection, so a machine with agents can walk the happy path;
+  // this flag adds the fresh-machine look where both cards stay red.
+  const simulateNoAgents =
+    !app.isPackaged && process.env.DESKTO_SIMULATE_NO_AGENTS === "1"
+  const harnesses = simulateNoAgents
+    ? [
+        withForcedUnavailability(claudeAdapter, claudeNotSignedInReason),
+        withForcedUnavailability(
+          new CodexAdapter(),
+          "Codex CLI was not found. Install Codex and sign in first."
+        ),
+      ]
+    : [claudeAdapter, new CodexAdapter()]
   const mcpServerRef: McpServerReference = { current: undefined }
   let runtime: ReturnType<typeof createRuntime>
   try {
@@ -134,7 +155,7 @@ async function openApplication(): Promise<void> {
       databasePath: path.join(app.getPath("userData"), "deskto.sqlite"),
       packsPath: path.join(app.getPath("userData"), "packs"),
       projectsPath: path.join(app.getPath("userData"), "projects"),
-      harnesses: [claudeAdapter, new CodexAdapter()],
+      harnesses,
       probeGate: cliPathConfigured,
       sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],
       fileActions: {

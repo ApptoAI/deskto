@@ -1,10 +1,15 @@
-import type { SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk"
+import type {
+  AccountInfo,
+  SDKMessage,
+  SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk"
 import type { HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   ClaudeAdapter,
+  claudeAccountSignedIn,
   claudeActivity,
   claudeAssistantFailure,
   claudePrompt,
@@ -1940,7 +1945,92 @@ function sdkMessage(
   return message as SDKMessage
 }
 
-function fakeQuery(messages: SDKMessage[]): ClaudeQuery {
+describe("Claude availability", () => {
+  async function availability(accountInfo: () => Promise<AccountInfo>) {
+    const fake = fakeQuery([], accountInfo)
+    queryMock.mockReturnValue(fake)
+    const result = await new ClaudeAdapter({
+      queryFactory: queryMock,
+    }).checkAvailability()
+    return { result, fake }
+  }
+
+  it("reports available for an OAuth login", async () => {
+    const { result } = await availability(() =>
+      Promise.resolve({ email: "dev@example.com", apiProvider: "firstParty" })
+    )
+    expect(result).toEqual({ status: "available" })
+  })
+
+  it("reports available for an API key", async () => {
+    const { result } = await availability(() =>
+      Promise.resolve({ apiKeySource: "user" })
+    )
+    expect(result).toEqual({ status: "available" })
+  })
+
+  it("trusts third-party providers to authenticate externally", async () => {
+    const { result } = await availability(() =>
+      Promise.resolve({ apiProvider: "bedrock" })
+    )
+    expect(result).toEqual({ status: "available" })
+  })
+
+  it("reports a signed-out first-party CLI as unavailable", async () => {
+    const { result } = await availability(() =>
+      Promise.resolve({ apiProvider: "firstParty" })
+    )
+    expect(result).toMatchObject({ status: "unavailable" })
+    if (result.status === "unavailable") {
+      expect(result.reason).toContain("not signed in")
+    }
+  })
+
+  it("reports an empty account as unavailable", async () => {
+    const { result } = await availability(() => Promise.resolve({}))
+    expect(result).toMatchObject({ status: "unavailable" })
+  })
+
+  it("falls back to available when the CLI cannot answer", async () => {
+    const { result } = await availability(() =>
+      Promise.reject(new Error("Unknown control request"))
+    )
+    expect(result).toEqual({ status: "available" })
+  })
+
+  it("closes the discovery query on every path", async () => {
+    const signedIn = await availability(() => Promise.resolve({}))
+    expect(signedIn.fake.close).toHaveBeenCalled()
+    const failed = await availability(() => Promise.reject(new Error("boom")))
+    expect(failed.fake.close).toHaveBeenCalled()
+  })
+})
+
+describe("claudeAccountSignedIn", () => {
+  it("accepts a token source without an email", () => {
+    expect(claudeAccountSignedIn({ tokenSource: "keychain" })).toBe(true)
+  })
+
+  it("ignores empty-string fields when a later field is set", () => {
+    expect(claudeAccountSignedIn({ email: "", apiKeySource: "user" })).toBe(
+      true
+    )
+  })
+
+  it("rejects an account made only of empty strings", () => {
+    expect(claudeAccountSignedIn({ email: "", tokenSource: "" })).toBe(false)
+  })
+
+  it("rejects a first-party account with no identity", () => {
+    expect(claudeAccountSignedIn({ apiProvider: "firstParty" })).toBe(false)
+  })
+})
+
+function fakeQuery(
+  messages: SDKMessage[],
+  accountInfo: () => Promise<AccountInfo> = () =>
+    Promise.resolve({ email: "dev@example.com" })
+): ClaudeQuery {
   return {
     async *[Symbol.asyncIterator]() {
       yield* messages
@@ -1949,5 +2039,6 @@ function fakeQuery(messages: SDKMessage[]): ClaudeQuery {
     interrupt: vi.fn(() => Promise.resolve(undefined)),
     supportedModels: vi.fn(() => Promise.resolve([])),
     getContextUsage: vi.fn(() => Promise.reject(new Error("Not available"))),
+    accountInfo: vi.fn(accountInfo),
   }
 }

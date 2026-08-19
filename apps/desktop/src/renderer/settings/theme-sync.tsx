@@ -6,6 +6,7 @@ import {
   applyInterfaceFontSize,
   rememberInterfaceFontSize,
 } from "../lib/interface-size.js"
+import { rememberOnboardingCompleted } from "../lib/onboarding.js"
 import { rememberWorkspaceLayout } from "../lib/workspace-layout.js"
 import { useSettings } from "./settings-context.js"
 
@@ -60,6 +61,19 @@ export function WorkspaceLayoutSync() {
     if (!snapshot) return
     rememberWorkspaceLayout(layout)
   }, [snapshot, layout])
+
+  return null
+}
+
+/** Refreshes the startup cache after the Runtime supplies its answer. */
+export function OnboardingCompletedSync() {
+  const { snapshot } = useSettings()
+  const completed = settingValue(snapshot, appSettings.onboardingCompleted)
+
+  useEffect(() => {
+    if (!snapshot) return
+    rememberOnboardingCompleted(completed)
+  }, [snapshot, completed])
 
   return null
 }

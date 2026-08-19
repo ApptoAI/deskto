@@ -140,6 +140,14 @@ export const appSettings = {
     schema: keybindingSchema,
     defaultValue: "mod+alt+arrowleft",
   }),
+  onboardingCompleted: defineSetting({
+    key: "onboarding.completed",
+    label: "Onboarding completed",
+    description: "Whether the first-run welcome wizard was finished or skipped.",
+    input: { kind: "hidden" },
+    schema: z.boolean(),
+    defaultValue: false,
+  }),
 }
 
 export const settingDefinitions: readonly SettingDefinition<SettingValue>[] =

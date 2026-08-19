@@ -6,6 +6,7 @@ import { RuntimeClientProvider } from "../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../settings/settings-context.js"
 import {
   InterfaceSizeSync,
+  OnboardingCompletedSync,
   ThemeSync,
   WorkspaceLayoutSync,
 } from "../settings/theme-sync.js"
@@ -36,6 +37,7 @@ export function App() {
         <ThemeSync />
         <InterfaceSizeSync />
         <WorkspaceLayoutSync />
+        <OnboardingCompletedSync />
         <Workbench />
       </SettingsProvider>
     </RuntimeClientProvider>

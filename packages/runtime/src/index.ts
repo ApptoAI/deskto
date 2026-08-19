@@ -1,6 +1,9 @@
 export { createRuntime, Runtime } from "./runtime.js"
 export type { RuntimeOptions } from "./runtime.js"
-export { ClaudeAdapter } from "./harnesses/claude/index.js"
+export {
+  ClaudeAdapter,
+  claudeNotSignedInReason,
+} from "./harnesses/claude/index.js"
 export { CodexAdapter } from "./harnesses/codex/index.js"
 export { BrowserMcpServer } from "./browser/browser-mcp-server.js"
 export type {
