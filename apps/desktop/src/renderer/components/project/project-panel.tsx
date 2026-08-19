@@ -68,7 +68,8 @@ export function ProjectPanel({
   const [templateError, setTemplateError] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
 
-  const ready = details.state.status === "ready" ? details.state.data : null
+  const loadedDetails =
+    details.state.status === "ready" ? details.state.data : null
   const loadError =
     details.state.status === "error" ? details.state.message : null
 
@@ -154,17 +155,19 @@ export function ProjectPanel({
         <PanelCard
           title="Instructions"
           editLabel="Edit project instructions"
-          hasContent={ready !== null && ready.instructions !== ""}
-          editDisabled={ready === null}
+          hasContent={
+            loadedDetails !== null && loadedDetails.instructions !== ""
+          }
+          editDisabled={loadedDetails === null}
           onEdit={() => setDialog("instructions")}
         >
-          {ready === null ? (
+          {loadedDetails === null ? (
             <p className="text-sm text-muted-foreground">
               {loadError ? "Instructions are unavailable." : "Loading…"}
             </p>
-          ) : ready.instructions ? (
+          ) : loadedDetails.instructions ? (
             <p className="line-clamp-4 text-sm whitespace-pre-wrap">
-              {ready.instructions}
+              {loadedDetails.instructions}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -244,10 +247,10 @@ export function ProjectPanel({
         </Card>
       </div>
 
-      {ready?.sourceTemplate ? (
+      {loadedDetails?.sourceTemplate ? (
         <p className="px-1 text-xs text-muted-foreground">
-          Created from {ready.sourceTemplate.name} in{" "}
-          {ready.sourceTemplate.packName}.
+          Created from {loadedDetails.sourceTemplate.name} in{" "}
+          {loadedDetails.sourceTemplate.packName}.
         </p>
       ) : null}
 
@@ -261,7 +264,7 @@ export function ProjectPanel({
         open={dialog === "instructions"}
         onOpenChange={(open) => setDialog(open ? "instructions" : null)}
         projectName={project.name}
-        instructions={ready?.instructions ?? ""}
+        instructions={loadedDetails?.instructions ?? ""}
         onSubmit={(instructions) => updateProject({ instructions })}
       />
       <SaveTemplateDialog
@@ -436,7 +439,12 @@ function AboutForm({
         </div>
         {error ? <InlineError message={error} /> : null}
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={busy || !name.trim()}>
@@ -533,7 +541,12 @@ function InstructionsForm({
         />
         {error ? <InlineError message={error} /> : null}
         <DialogFooter>
-          <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={busy}>

@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import { ScriptedHarness } from "@deskto/harness-sdk/testing"
 import { afterEach, describe, expect, it } from "vitest"
@@ -403,6 +403,47 @@ describe("managed projects and templates", () => {
         })
       ).instructions
     ).toBe("Keep it short.")
+  })
+
+  it("rejects moving a Project into or below the Deskto projects directory", async () => {
+    const { runtime } = await testRuntime()
+    const created = unwrap(
+      await runtime.request({
+        method: "project.create",
+        params: {
+          workspaceId: "personal",
+          name: "Stays managed",
+          location: { kind: "managed" },
+        },
+      })
+    ).project
+    const managedRoot = dirname(created.path)
+    const managedChild = join(managedRoot, "another-project")
+    const marker = join(created.path, "keep.txt")
+    await mkdir(managedChild)
+    await writeFile(marker, "keep\n")
+
+    for (const path of [managedRoot, managedChild]) {
+      const response = await runtime.request({
+        method: "project.relocate",
+        params: { projectId: created.id, path },
+      })
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: "invalid-project-path" },
+      })
+    }
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "project.get",
+          params: { projectId: created.id },
+        })
+      ).project
+    ).toMatchObject({ path: created.path, locationKind: "managed" })
+    await expect(realpath(created.path)).resolves.toBe(created.path)
+    await expect(readFile(marker, "utf8")).resolves.toBe("keep\n")
   })
 
   it("rejects a linked Project path that is a symbolic link", async () => {

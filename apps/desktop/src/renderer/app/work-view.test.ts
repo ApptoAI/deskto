@@ -15,6 +15,19 @@ describe("work view navigation", () => {
     })
   })
 
+  it("leaves an open new-task view untouched so a draft survives", () => {
+    const view: MainView = { kind: "new-task", projectId: "project-1" }
+
+    expect(toNewTask(view)).toBe(view)
+  })
+
+  it("keeps a new-task view's projectId across a scope change", () => {
+    const view: MainView = { kind: "new-task", projectId: "project-1" }
+
+    // A stale id is filtered later by lookup; the view just passes through.
+    expect(afterScopeChange(view)).toBe(view)
+  })
+
   it("rewrites the view behind Settings when starting a new task", () => {
     expect(
       toNewTask({

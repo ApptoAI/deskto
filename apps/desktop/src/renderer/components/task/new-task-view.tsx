@@ -26,6 +26,7 @@ import { Composer } from "../composer.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { HarnessMenu } from "../harness-menu.js"
 import { ProjectPanel } from "../project/project-panel.js"
+import { DesktoWordmark } from "./deskto-wordmark.js"
 
 /** How the project panel should show up before the user has chosen. */
 export type ProjectPanelPreference = "open" | "collapsed" | "auto"
@@ -135,12 +136,7 @@ export function NewTaskView({
               panelVisible ? "" : "-mt-10"
             }`}
           >
-            <div
-              aria-hidden
-              className="font-heading text-6xl leading-none font-normal tracking-[-0.04em] text-foreground/8 select-none sm:text-7xl"
-            >
-              deskto
-            </div>
+            <DesktoWordmark />
 
             {/* The one display moment in the app. Size and tight tracking
                 carry it; there is nothing to bold against on an empty
