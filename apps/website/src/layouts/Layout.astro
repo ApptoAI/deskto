@@ -3,6 +3,13 @@ import "@fontsource-variable/inter"
 import "@fontsource-variable/geist-mono"
 import "../styles/site.css"
 
+interface Props {
+  title?: string
+  description?: string
+}
+
+// Canonical and image metadata wait for a public origin; astro.config.mjs
+// intentionally has no site until that origin exists.
 const {
   title = "Deskto: Claude Cowork, but open source",
   description = "An open source Claude Cowork alternative running on Claude Code and Codex, on your computer and on the subscriptions you already pay for. An inbox for sales, GTM, ops, and research. Tasks go in, files come back.",

@@ -4,7 +4,7 @@ The marketing site for Deskto, built with Astro. Static output, no server.
 
 Run it from the repo root:
 
-```
+```sh
 pnpm website:dev
 pnpm --filter @deskto/website build
 pnpm --filter @deskto/website typecheck

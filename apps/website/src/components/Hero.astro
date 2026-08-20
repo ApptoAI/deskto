@@ -320,30 +320,44 @@ const agentsSentence = "Claude Code and Codex."
     }
     apply()
     if (document.fonts) document.fonts.ready.then(setWidth)
-    window.addEventListener("resize", setWidth)
+    let frame: number | undefined
+    window.addEventListener("resize", () => {
+      if (frame !== undefined) return
+      frame = window.requestAnimationFrame(() => {
+        frame = undefined
+        setWidth()
+      })
+    })
 
     // Auto-updating content needs a way to stop: readers who asked for
     // reduced motion keep the first entry, and a hidden tab stops the
     // timer so it does not come back mid-swap.
-    if (!reducedMotion.matches) {
-      let timer: number | undefined
-      const start = () => {
-        if (timer !== undefined) return
-        timer = window.setInterval(() => {
-          active = (active + 1) % words.length
-          apply()
-        }, 2600)
-      }
-      const stop = () => {
-        if (timer === undefined) return
-        window.clearInterval(timer)
-        timer = undefined
-      }
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden) stop()
-        else start()
-      })
-      start()
+    let timer: number | undefined
+    const start = () => {
+      if (timer !== undefined || document.hidden || reducedMotion.matches) return
+      timer = window.setInterval(() => {
+        active = (active + 1) % words.length
+        apply()
+      }, 2600)
     }
+    const stop = () => {
+      if (timer === undefined) return
+      window.clearInterval(timer)
+      timer = undefined
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stop()
+      else start()
+    })
+    reducedMotion.addEventListener("change", () => {
+      if (reducedMotion.matches) {
+        stop()
+        active = 0
+        apply()
+      } else {
+        start()
+      }
+    })
+    start()
   }
 </script>

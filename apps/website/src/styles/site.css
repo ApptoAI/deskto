@@ -1,18 +1,18 @@
 /* The desktop app's light ladder: the page is the canvas, framed regions
    step up to chrome, and the only divider is a hairline that is genuinely
-   visible. Indigo appears solely on mono labels, never on prose or
-   surfaces. The site is light only by choice; the app ships both palettes. */
+   visible. Mono labels use the app's muted text treatment. The site is
+   light only by choice; the app ships both palettes. */
 :root {
   --canvas: #ffffff;
   --chrome: #f4f4f7;
   --hairline: #d7d9df;
-  --ink: #101012;
-  --body-ink: #43464e;
-  --muted-ink: #676c77;
-  --label-ink: #4f46e5;
+  --ink: oklch(0.145 0 0);
+  --body-ink: oklch(0.332 0.01 260.7);
+  --muted-ink: oklch(0.487 0.012 262);
 
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "SFMono-Regular", "Menlo", monospace;
 
   --ease-out-quart: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
@@ -56,7 +56,7 @@ img {
 }
 
 :focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid currentcolor;
   outline-offset: 3px;
 }
 
@@ -69,7 +69,7 @@ img {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 400;
-  color: var(--label-ink);
+  color: var(--muted-ink);
 }
 
 /* Displays are never bold: size and negative tracking do the work. */

@@ -1,6 +1,6 @@
 # Website
 
-Static Astro site for deskto. One page, no framework components, no server.
+Static Astro site for Deskto. One page, no framework components, no server.
 
 ## Working here
 
