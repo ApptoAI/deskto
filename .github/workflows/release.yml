@@ -65,15 +65,10 @@ jobs:
         run: pnpm test
 
   build_macos:
-    name: Build macOS ${{ matrix.arch }}
+    name: Build macOS
     needs: [preflight, quality, build_linux, build_windows]
     runs-on: blacksmith-6vcpu-macos-26
     timeout-minutes: 45
-    strategy:
-      fail-fast: true
-      max-parallel: 1
-      matrix:
-        arch: [arm64, x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -154,15 +149,35 @@ jobs:
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --mac \
-            --${{ matrix.arch }}
+            --arm64 \
+            --x64 \
+            --publish never
+
+      - name: Verify macOS update assets
+        shell: bash
+        run: |
+          test -s apps/desktop/release/latest-mac.yml
+          compgen -G 'apps/desktop/release/*.dmg' > /dev/null
+          compgen -G 'apps/desktop/release/*.blockmap' > /dev/null
+
+          archives=(apps/desktop/release/*.zip)
+          if [[ ! -e "${archives[0]}" || ${#archives[@]} -ne 2 ]]; then
+            echo "Expected one macOS ZIP for each architecture." >&2
+            exit 1
+          fi
+          for archive in "${archives[@]}"; do
+            grep -Fq "$(basename "$archive")" apps/desktop/release/latest-mac.yml
+          done
 
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
-          name: deskto-macos-${{ matrix.arch }}
+          name: deskto-macos
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest-mac.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -197,7 +212,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve Windows signing
+      - name: Validate Windows signing
         shell: bash
         run: |
           required=(
@@ -209,18 +224,13 @@ jobs:
             WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME
             WINDOWS_SIGNING_PUBLISHER_NAME
           )
-          signing_enabled=true
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
-              signing_enabled=false
+              echo "Missing repository signing value: $name" >&2
+              exit 1
             fi
           done
-
-          if [[ "$signing_enabled" == true ]]; then
-            echo "Windows signing enabled (Microsoft Artifact Signing)."
-          else
-            echo "Windows signing disabled; building an unsigned installer."
-          fi
+          echo "Windows signing enabled (Microsoft Artifact Signing)."
 
       - name: Set application version
         run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
@@ -232,13 +242,41 @@ jobs:
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --win \
-            --x64
+            --x64 \
+            --publish never
+
+      - name: Verify Windows signature
+        shell: pwsh
+        run: |
+          $installers = Get-ChildItem "apps/desktop/release" -Filter "*.exe"
+          if ($installers.Count -eq 0) {
+            throw "The Windows installer was not created."
+          }
+          foreach ($installer in $installers) {
+            $signature = Get-AuthenticodeSignature $installer.FullName
+            if ($signature.Status -ne "Valid") {
+              throw "$($installer.Name) does not have a valid signature: $($signature.Status)"
+            }
+          }
+
+          if (-not (Test-Path "apps/desktop/release/latest.yml" -PathType Leaf)) {
+            throw "The Windows update feed was not created."
+          }
+          if ((Get-Item "apps/desktop/release/latest.yml").Length -eq 0) {
+            throw "The Windows update feed is empty."
+          }
+          if ((Get-ChildItem "apps/desktop/release" -Filter "*.blockmap").Count -eq 0) {
+            throw "The Windows update blockmap was not created."
+          }
 
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
           name: deskto-windows-x64
-          path: apps/desktop/release/*.exe
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -274,13 +312,24 @@ jobs:
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --linux \
-            --x64
+            --x64 \
+            --publish never
+
+      - name: Verify Linux update assets
+        shell: bash
+        run: |
+          test -s apps/desktop/release/latest-linux.yml
+          test -s apps/desktop/release/Deskto.AppImage
+          compgen -G 'apps/desktop/release/*.blockmap' > /dev/null
 
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
           name: deskto-linux-x64
-          path: apps/desktop/release/*.AppImage
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest-linux.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -299,6 +348,18 @@ jobs:
           merge-multiple: true
           path: release-assets
 
+      - name: Verify complete release
+        shell: bash
+        run: |
+          test -s release-assets/latest-mac.yml
+          test -s release-assets/latest.yml
+          test -s release-assets/latest-linux.yml
+          test -s release-assets/Deskto.AppImage
+          compgen -G 'release-assets/*.dmg' > /dev/null
+          compgen -G 'release-assets/*.zip' > /dev/null
+          compgen -G 'release-assets/*.exe' > /dev/null
+          compgen -G 'release-assets/*.blockmap' > /dev/null
+
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
@@ -306,7 +367,15 @@ jobs:
           target_commitish: ${{ needs.preflight.outputs.sha }}
           name: Deskto ${{ needs.preflight.outputs.tag }}
           generate_release_notes: true
+          draft: true
           prerelease: false
-          make_latest: true
+          make_latest: false
           files: release-assets/*
           fail_on_unmatched_files: true
+
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest

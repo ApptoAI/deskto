@@ -20,6 +20,10 @@ import {
   runtimeEventChannel,
   runtimeRequestChannel,
   saveFileCopyChannel,
+  updateCheckChannel,
+  updateEventChannel,
+  updateInstallChannel,
+  updateStateChannel,
 } from "../shared/channels.js"
 import type { DesktopApi } from "../shared/desktop-api.js"
 
@@ -40,6 +44,19 @@ const api: DesktopApi = {
       }
       ipcRenderer.on(runtimeEventChannel, handler)
       return () => ipcRenderer.removeListener(runtimeEventChannel, handler)
+    },
+  },
+  updates: {
+    state: () => ipcRenderer.invoke(updateStateChannel),
+    check: () => ipcRenderer.invoke(updateCheckChannel),
+    install: () => ipcRenderer.invoke(updateInstallChannel),
+    subscribe: (listener) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        value: Parameters<typeof listener>[0]
+      ) => listener(value)
+      ipcRenderer.on(updateEventChannel, handler)
+      return () => ipcRenderer.removeListener(updateEventChannel, handler)
     },
   },
   pickProject: () => ipcRenderer.invoke(pickProjectChannel),

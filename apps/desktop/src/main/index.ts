@@ -21,6 +21,9 @@ import { BrowserManager } from "./browser/browser-manager.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
 import { installContentSecurityPolicy } from "./security.js"
+import { createElectronUpdateDriver } from "./update-driver.js"
+import { registerUpdateIpc } from "./update-ipc.js"
+import { UpdateManager } from "./update-manager.js"
 import { createMainWindow } from "./window.js"
 import { browserEventChannel } from "../shared/channels.js"
 
@@ -200,7 +203,18 @@ async function openApplication(): Promise<void> {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
+  const updateManager = new UpdateManager(
+    app.getVersion(),
+    app.isPackaged ? createElectronUpdateDriver() : undefined
+  )
+  const unregisterUpdateIpc = registerUpdateIpc(
+    updateManager,
+    window.webContents
+  )
+  updateManager.start()
   closeRuntime = async () => {
+    updateManager.dispose()
+    unregisterUpdateIpc()
     unsubscribeBrowserRuntime()
     unregisterRuntimeIpc()
     await closeApplicationRuntime()

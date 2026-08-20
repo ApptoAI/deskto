@@ -46,6 +46,12 @@ export default {
     output: "release",
   },
   files: ["out/**/*", "package.json"],
+  publish: {
+    provider: "github",
+    owner: "ApptoAI",
+    repo: "deskto",
+    releaseType: "release",
+  },
   mac: {
     target: ["dmg", "zip"],
     icon: "resources/icon.icns",
@@ -59,5 +65,8 @@ export default {
     target: ["AppImage"],
     icon: "resources/icon.png",
     executableName: "deskto",
+    // AppImageUpdater replaces this path in place. A versioned filename would
+    // leave desktop shortcuts pointing at the deleted previous version.
+    artifactName: "Deskto.${ext}",
   },
 } satisfies Configuration
