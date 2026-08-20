@@ -5,6 +5,8 @@ const initialCheckDelayMs = 15_000
 const automaticCheckIntervalMs = 4 * 60 * 60 * 1_000
 const checkErrorMessage =
   "Deskto couldn't check for updates. Check your connection and try again."
+const downloadErrorMessage =
+  "Deskto couldn't download the update. Check your connection and try again."
 
 export class UpdateManager {
   private state: UpdateState
@@ -57,10 +59,14 @@ export class UpdateManager {
         }),
       error: (error) => {
         console.error("Desktop update failed", error)
+        const message =
+          this.state.status === "downloading"
+            ? downloadErrorMessage
+            : checkErrorMessage
         this.setState({
           status: "error",
           currentVersion,
-          message: checkErrorMessage,
+          message,
         })
       },
     })

@@ -24,7 +24,10 @@ class FakeUpdateDriver implements UpdateDriver {
   }
 }
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe("UpdateManager", () => {
   it("reports that development builds cannot update", async () => {
@@ -70,6 +73,24 @@ describe("UpdateManager", () => {
     await manager.check()
 
     expect(driver.checks).toBe(0)
+  })
+
+  it("reports a download failure after finding an update", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const driver = new FakeUpdateDriver()
+    const manager = new UpdateManager("0.1.4", driver)
+    const error = new Error("download failed")
+
+    driver.listeners?.available("0.1.5")
+    driver.listeners?.error(error)
+
+    expect(log).toHaveBeenCalledWith("Desktop update failed", error)
+    expect(manager.getState()).toEqual({
+      status: "error",
+      currentVersion: "0.1.4",
+      message:
+        "Deskto couldn't download the update. Check your connection and try again.",
+    })
   })
 
   it("checks after startup and on the recurring interval", async () => {
