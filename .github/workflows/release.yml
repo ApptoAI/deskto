@@ -155,12 +155,31 @@ jobs:
           echo "CSC_LINK=$certificate_path" >> "$GITHUB_ENV"
           echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Validate Apple notarization access
+      - name: Check Apple notarization queue
         run: |
+          history_path="$RUNNER_TEMP/notary-history.json"
           xcrun notarytool history \
             --key "$APPLE_API_KEY" \
             --key-id "$APPLE_API_KEY_ID" \
-            --issuer "$APPLE_API_ISSUER"
+            --issuer "$APPLE_API_ISSUER" \
+            --output-format json > "$history_path"
+
+          NOTARY_HISTORY_PATH="$history_path" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs"
+
+          const result = JSON.parse(
+            readFileSync(process.env.NOTARY_HISTORY_PATH, "utf8")
+          )
+          const pending = Array.isArray(result.history)
+            ? result.history.filter((submission) => submission.status === "In Progress")
+            : []
+          if (pending.length > 0) {
+            console.error(
+              `Apple is still processing ${pending.length} earlier notarization submission(s). Try the release again after they finish.`
+            )
+            process.exit(1)
+          }
+          NODE
 
       - name: Build, sign, and notarize
         run: |
