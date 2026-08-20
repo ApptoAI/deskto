@@ -30,7 +30,7 @@ const notes = [
 
 <Layout
   title="Download Deskto"
-  description="Deskto for macOS, Windows and Linux. Free and open source, running Claude Code and Codex on your computer with the subscriptions you already pay for."
+  description="Deskto for macOS, Windows and Linux. Free and open source. It runs Claude Code and Codex on your computer, on the subscriptions you already pay for."
 >
   <SiteNav />
   <main class="frame">
@@ -39,8 +39,9 @@ const notes = [
         <p class="eyebrow">download</p>
         <h1 class="display download-title">Deskto for your computer.</h1>
         <p class="download-sub">
-          Free and open source. Pick the build for your machine; every task
-          runs locally on the Claude or Codex subscription you already have.
+          Free and open source. Pick the build for your machine. Every task
+          runs on your computer, on the Claude or Codex subscription you
+          already have.
         </p>
         <p class="fine download-release" data-release-line>
           latest release on GitHub
@@ -152,8 +153,8 @@ const notes = [
     grid-template-columns: repeat(4, 1fr);
   }
 
-  /* The cell is the link: the whole tile is the target, and the hover
-     steps it up to chrome like a row in the app. */
+  /* The cell is the link, so the whole tile is the target. On hover the
+     background changes to chrome, like a row in the app. */
   .installer {
     display: flex;
     flex-direction: column;

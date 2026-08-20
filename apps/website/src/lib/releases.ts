@@ -135,16 +135,19 @@ export async function detectInstaller(): Promise<Installer | null> {
       const hints = await navigator.userAgentData?.getHighEntropyValues([
         "architecture",
       ])
+      if (hints?.architecture === "arm") return byId("macos-arm64")
       if (hints?.architecture === "x86") return byId("macos-x64")
     } catch {
-      // Older Chromium rejects the hint; fall through to the default.
+      // Older Chromium rejects the hint; treat it as unknown.
     }
-    // New Macs are Apple Silicon and Intel owners find theirs on /download.
-    return byId("macos-arm64")
+    // Without the hint the architecture is unknown (Safari says Intel on
+    // every Mac), so the button keeps pointing at the page with both builds.
+    return null
   }
   if (/Linux/.test(ua)) {
-    // Only an x86_64 AppImage ships; an ARM machine gets the page instead.
-    if (/aarch64|arm64|armv\d/i.test(ua)) return null
+    // Only an x86_64 AppImage ships; anything else, or a user agent that
+    // does not say, gets the page instead.
+    if (!/x86_64|amd64/i.test(ua)) return null
     return byId("linux-x64")
   }
   return null
