@@ -3,6 +3,7 @@ import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
+import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
 import SquarePenIcon from "lucide-react/dist/esm/icons/square-pen"
 import type { Thread, Project, Workspace } from "@deskto/protocol"
 import { appSettings, type WorkspaceLayout } from "@deskto/settings"
@@ -13,6 +14,7 @@ import { Kbd } from "@workspace/ui/components/kbd"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 import { useKeybindingLabel } from "../../settings/use-keybinding.js"
+import { useUpdates } from "../../updates/updates-context.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { ProjectSwitcher } from "./project-switcher.js"
 import { SidebarFrame } from "./sidebar-frame.js"
@@ -86,6 +88,11 @@ export function ProjectSidebar({
   inboxActions: InboxActions
   workspaceLayout: WorkspaceLayout
 }) {
+  const {
+    state: updateState,
+    actionError: updateActionError,
+    install: installUpdate,
+  } = useUpdates()
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
   // Every row here belongs to the open project, and the label still earns its
@@ -210,6 +217,21 @@ export function ProjectSidebar({
       </ScrollArea>
 
       <div className="no-drag space-y-0.5 px-2 pb-3">
+        {updateState?.status === "ready" ? (
+          <Button
+            variant="secondary"
+            className="w-full justify-start"
+            onClick={() => void installUpdate()}
+          >
+            <RefreshCwIcon data-icon="inline-start" />
+            Restart to update
+          </Button>
+        ) : null}
+        {updateActionError && updateState?.status === "ready" ? (
+          <p role="alert" className="px-2 py-1 text-xs text-destructive">
+            {updateActionError}
+          </p>
+        ) : null}
         <Button
           variant={projectsActive ? "secondary" : "ghost"}
           className="w-full justify-start text-muted-foreground"

@@ -44,6 +44,25 @@ export type BrowserEvent =
 
 export type BrowserAction = "back" | "forward" | "reload"
 
+type UpdateStateBase = {
+  currentVersion: string
+}
+
+export type UpdateState = UpdateStateBase &
+  (
+    | { status: "unavailable"; message: string }
+    | { status: "idle" }
+    | { status: "checking" }
+    | { status: "up-to-date" }
+    | {
+        status: "downloading"
+        availableVersion: string
+        percent?: number
+      }
+    | { status: "ready"; availableVersion: string }
+    | { status: "error"; message: string }
+  )
+
 export interface DesktopApi {
   /** Development-only switches; every flag is false in a packaged build. */
   devFlags: {
@@ -55,6 +74,12 @@ export interface DesktopApi {
       request: RequestFor<M>
     ): Promise<RuntimeResponse<M>>
     subscribe(listener: (event: RuntimeEvent) => void): () => void
+  }
+  updates: {
+    state(): Promise<UpdateState>
+    check(): Promise<void>
+    install(): Promise<void>
+    subscribe(listener: (state: UpdateState) => void): () => void
   }
   pickProject(): Promise<PickedProject | undefined>
   pickPack(): Promise<PickedProject | undefined>
