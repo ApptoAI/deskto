@@ -13,8 +13,9 @@
     "lint": "oxlint . && turbo lint",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
-    "test": "pnpm test:anti-slop && turbo test",
-    "test:anti-slop": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/oxlint/anti-slop/anti-slop.test.ts"
+    "test": "pnpm test:anti-slop && pnpm test:release-scripts && turbo test",
+    "test:anti-slop": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/oxlint/anti-slop/anti-slop.test.ts",
+    "test:release-scripts": "node --test .github/scripts/*.test.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "1.78.0",
