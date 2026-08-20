@@ -1,11 +1,8 @@
 import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
-import { createRequire } from "node:module"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 
 import type { AfterPackContext, Configuration } from "electron-builder"
 
-const require = createRequire(import.meta.url)
 // Packaging must prove pnpm's shared runtime dependencies survived app.asar collection before signing starts.
 const packagedRuntimeModules = [
   "@hono/node-server",
@@ -20,13 +17,24 @@ const packagedRuntimeModules = [
   "raw-body",
 ]
 
-function installedElectronPath() {
-  const packageDirectory = dirname(require.resolve("electron/package.json"))
-  const relativePath = readFileSync(
-    join(packageDirectory, "path.txt"),
-    "utf8"
-  ).trim()
-  return join(packageDirectory, "dist", relativePath)
+function packagedExecutablePath(context: AfterPackContext) {
+  const productFilename = context.packager.appInfo.productFilename
+
+  if (context.electronPlatformName === "darwin") {
+    return join(
+      context.appOutDir,
+      `${productFilename}.app`,
+      "Contents",
+      "MacOS",
+      productFilename
+    )
+  }
+
+  if (context.electronPlatformName === "win32") {
+    return join(context.appOutDir, `${productFilename}.exe`)
+  }
+
+  return join(context.appOutDir, productFilename)
 }
 
 function verifyPackagedRuntime(context: AfterPackContext) {
@@ -41,7 +49,7 @@ function verifyPackagedRuntime(context: AfterPackContext) {
       : join(context.appOutDir, "resources")
   const appArchive = join(resourcesDirectory, "app.asar")
   const verification = spawnSync(
-    installedElectronPath(),
+    packagedExecutablePath(context),
     [
       "-e",
       `const root = process.argv[1] + "/node_modules/"; require(root + "electron-updater"); for (const name of ${JSON.stringify(packagedRuntimeModules)}) require.resolve(root + name)`,
