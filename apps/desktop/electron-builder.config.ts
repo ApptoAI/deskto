@@ -1,5 +1,35 @@
 import type { Configuration } from "electron-builder"
 
+function windowsSigningOptions() {
+  const tenantId = process.env.AZURE_TENANT_ID
+  const clientId = process.env.AZURE_CLIENT_ID
+  const clientSecret = process.env.AZURE_CLIENT_SECRET
+  const endpoint = process.env.WINDOWS_SIGNING_ENDPOINT
+  const codeSigningAccountName = process.env.WINDOWS_SIGNING_ACCOUNT_NAME
+  const certificateProfileName =
+    process.env.WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME
+  const publisherName = process.env.WINDOWS_SIGNING_PUBLISHER_NAME
+
+  if (
+    !tenantId ||
+    !clientId ||
+    !clientSecret ||
+    !endpoint ||
+    !codeSigningAccountName ||
+    !certificateProfileName ||
+    !publisherName
+  ) {
+    return undefined
+  }
+
+  return {
+    endpoint,
+    codeSigningAccountName,
+    certificateProfileName,
+    publisherName,
+  }
+}
+
 export default {
   appId: "to.deskto.desktop",
   productName: "Deskto",
@@ -23,6 +53,7 @@ export default {
   win: {
     target: ["nsis"],
     icon: "resources/icon.ico",
+    azureSignOptions: windowsSigningOptions(),
   },
   linux: {
     target: ["AppImage"],
