@@ -11,6 +11,10 @@ The run:
 
 The website (`apps/website`) asks the GitHub API for `releases/latest` from the visitor's browser, so its download buttons point at the new files as soon as the release is public.
 
+## Checking Apple notarization
+
+The manual `Check Apple notarization` workflow reads Apple's recent submission history without uploading another build. Leave `submission_id` blank to list recent submissions, or enter a UUID to inspect one request. It uses the smallest Blacksmith macOS runner and stops after five minutes.
+
 ## What gets published
 
 `artifactName` in `apps/desktop/electron-builder.config.ts` fixes the file names. The website matches downloads by these names (`apps/website/src/lib/releases.ts`), so a change there is a change in both places.
