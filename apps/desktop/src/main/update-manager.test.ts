@@ -85,7 +85,10 @@ describe("UpdateManager", () => {
     driver.listeners?.notAvailable()
     await vi.advanceTimersByTimeAsync(4 * 60 * 60 * 1_000)
     expect(driver.checks).toBe(2)
+
     manager.dispose()
+    await vi.advanceTimersByTimeAsync(4 * 60 * 60 * 1_000)
+    expect(driver.checks).toBe(2)
   })
 
   it("keeps install behind the downloaded state", () => {

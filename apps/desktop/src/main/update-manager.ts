@@ -55,12 +55,14 @@ export class UpdateManager {
           currentVersion,
           message: "The update download stopped. Try checking again.",
         }),
-      error: () =>
+      error: (error) => {
+        console.error("Desktop update failed", error)
         this.setState({
           status: "error",
           currentVersion,
           message: checkErrorMessage,
-        }),
+        })
+      },
     })
   }
 

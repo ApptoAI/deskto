@@ -7,7 +7,7 @@ export type UpdateDriverListeners = {
   progress: (percent: number) => void
   downloaded: (version: string) => void
   cancelled: () => void
-  error: () => void
+  error: (error: Error) => void
 }
 
 export interface UpdateDriver {
@@ -36,7 +36,7 @@ export function createElectronUpdateDriver(): UpdateDriver {
       const onDownloaded = (info: { version: string }) =>
         listeners.downloaded(info.version)
       const onCancelled = () => listeners.cancelled()
-      const onError = () => listeners.error()
+      const onError = (error: Error) => listeners.error(error)
 
       autoUpdater.on("checking-for-update", onChecking)
       autoUpdater.on("update-available", onAvailable)
@@ -57,8 +57,7 @@ export function createElectronUpdateDriver(): UpdateDriver {
       }
     },
     async checkForUpdates() {
-      const result = await autoUpdater.checkForUpdates()
-      await result?.downloadPromise
+      await autoUpdater.checkForUpdates()
     },
     quitAndInstall() {
       autoUpdater.quitAndInstall(false, true)
