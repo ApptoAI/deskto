@@ -99,11 +99,12 @@ jobs:
 
   build_macos:
     name: Build macOS ${{ matrix.arch }}
-    needs: [preflight, quality]
+    needs: [preflight, quality, build_linux, build_windows]
     runs-on: blacksmith-6vcpu-macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
-      fail-fast: false
+      fail-fast: true
+      max-parallel: 1
       matrix:
         arch: [arm64, x64]
     steps:
@@ -154,6 +155,13 @@ jobs:
           echo "CSC_LINK=$certificate_path" >> "$GITHUB_ENV"
           echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
+      - name: Validate Apple notarization access
+        run: |
+          xcrun notarytool history \
+            --key "$APPLE_API_KEY" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER"
+
       - name: Build, sign, and notarize
         run: |
           pnpm --filter @deskto/desktop build
@@ -174,7 +182,7 @@ jobs:
 
   build_windows:
     name: Build Windows x64
-    needs: [preflight, quality]
+    needs: [preflight, quality, build_linux]
     runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 30
     env:
