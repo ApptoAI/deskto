@@ -1,4 +1,5 @@
 import type { RuntimeTransport } from "@deskto/protocol"
+import { z } from "zod"
 
 export type McpSessionContext = {
   threadId: string
@@ -15,19 +16,23 @@ export type DesktoMcpConnection = {
   required: boolean
 }
 
-export type ArtifactRuntimeDependencies = {
-  rootPath: string
-  nodeExecutable: string
-  nodeModulesPath: string
-  pythonExecutable: string
-  binaryPaths: string[]
-  versions: {
-    bundle: string
-    artifactTool: string
-    node: string
-    python: string
-  }
-}
+export const artifactRuntimeDependenciesSchema = z.object({
+  rootPath: z.string(),
+  nodeExecutable: z.string(),
+  nodeModulesPath: z.string(),
+  pythonExecutable: z.string(),
+  binaryPaths: z.array(z.string()),
+  versions: z.object({
+    bundle: z.string(),
+    artifactTool: z.string(),
+    node: z.string(),
+    python: z.string(),
+  }),
+})
+
+export type ArtifactRuntimeDependencies = z.infer<
+  typeof artifactRuntimeDependenciesSchema
+>
 
 export type DesktoMcpServerOptions = {
   runtime: RuntimeTransport

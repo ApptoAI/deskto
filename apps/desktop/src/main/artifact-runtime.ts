@@ -211,21 +211,34 @@ async function artifactRuntimeAt(
         ),
       ]),
     ])
-    await Promise.all([
-      execFileAsync(
-        nodeExecutable,
-        [
-          "--input-type=module",
-          "--eval",
-          "await import(process.argv[1])",
-          pathToFileURL(artifactEntryPath).href,
-        ],
-        { timeout: runtimeProbeTimeoutMs }
-      ),
+    const [nodeVersionResult, pythonVersionResult] = await Promise.all([
+      execFileAsync(nodeExecutable, ["--version"], {
+        timeout: runtimeProbeTimeoutMs,
+      }),
       execFileAsync(pythonExecutable, ["--version"], {
         timeout: runtimeProbeTimeoutMs,
       }),
     ])
+    const nodeVersion =
+      nodeVersionResult.stdout.trim() || nodeVersionResult.stderr.trim()
+    const pythonVersion =
+      pythonVersionResult.stdout.trim() || pythonVersionResult.stderr.trim()
+    if (
+      nodeVersion !== manifest.nodeVersion ||
+      pythonVersion !== `Python ${manifest.pythonVersion}`
+    ) {
+      return undefined
+    }
+    await execFileAsync(
+      nodeExecutable,
+      [
+        "--input-type=module",
+        "--eval",
+        "await import(process.argv[1])",
+        pathToFileURL(artifactEntryPath).href,
+      ],
+      { timeout: runtimeProbeTimeoutMs }
+    )
     return {
       dependencies: {
         rootPath,

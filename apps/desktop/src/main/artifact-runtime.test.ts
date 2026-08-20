@@ -112,6 +112,39 @@ describe("artifact runtime discovery", () => {
     }
   )
 
+  it.each([
+    {
+      executable: "node",
+      relativePath: ["node", "bin", "node"],
+      version: "v0.0.0",
+    },
+    {
+      executable: "python",
+      relativePath: ["python", "bin", "python3"],
+      version: "Python 0.0.0",
+    },
+  ])(
+    "does not advertise a runtime with the wrong $executable version",
+    async ({ relativePath, version }) => {
+      const temporaryRoot = await mkdtemp(join(tmpdir(), "deskto-artifacts-"))
+      temporaryRoots.push(temporaryRoot)
+      const runtimeRoot = join(temporaryRoot, "runtime")
+      await createRuntime(runtimeRoot)
+      await writeFile(
+        join(runtimeRoot, "dependencies", ...relativePath),
+        versionExecutable(version)
+      )
+
+      await expect(
+        discoverArtifactRuntime({
+          explicitRoot: runtimeRoot,
+          configPath: join(temporaryRoot, "missing.toml"),
+          cacheRoot: join(temporaryRoot, "empty-cache"),
+        })
+      ).resolves.toBeUndefined()
+    }
+  )
+
   it("rejects a runtime built for another platform", async () => {
     const temporaryRoot = await mkdtemp(join(tmpdir(), "deskto-artifacts-"))
     temporaryRoots.push(temporaryRoot)
@@ -278,7 +311,7 @@ async function createRuntime(
     ),
     writeFile(
       join(nodeDirectory, platform === "win32" ? "node.exe" : "node"),
-      executableBody
+      versionExecutable("v24.14.0")
     ),
     writeFile(
       join(
@@ -309,7 +342,7 @@ async function createRuntime(
     ),
     writeFile(
       join(pythonDirectory, platform === "win32" ? "python.exe" : "python3"),
-      executableBody
+      versionExecutable("Python 3.12.13")
     ),
     ...["pdfinfo", "pdftoppm", "soffice"].map((name) =>
       writeFile(
@@ -338,4 +371,8 @@ async function createRuntime(
       chmod(join(dependencies, "bin", "override", executableName(name)), 0o700)
     ),
   ])
+}
+
+function versionExecutable(version: string): string {
+  return `#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo ${JSON.stringify(version)}\nfi\nexit 0\n`
 }
