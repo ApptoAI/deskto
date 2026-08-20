@@ -22,10 +22,6 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-    defaults:
-      run:
-        working-directory: apps/website
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,6 +42,7 @@ jobs:
 
       - name: Check website
         run: pnpm typecheck
+        working-directory: apps/website
 
       - name: Install Vercel CLI
         run: pnpm add --global vercel@59.1.4
