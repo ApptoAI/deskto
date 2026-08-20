@@ -6,7 +6,7 @@ The run:
 
 1. Sets the version to `0.1.<run number>` and tags that commit `v0.1.<run number>`. Nobody edits `version` in `apps/desktop/package.json` by hand; `.github/scripts/set-desktop-version.mjs` writes it during the build.
 2. Runs lint, typecheck and tests on the release commit.
-3. Builds Linux, then Windows, then macOS (both architectures in one job), so a cheap failure stops the run before a macOS runner starts. macOS is signed and notarized, Windows is signed with Microsoft Artifact Signing, and a build without a valid signature fails the run.
+3. Builds Linux, then Windows, then macOS (both architectures in one job), so a cheap failure stops the run before a macOS runner starts. macOS is signed and notarized. Windows uses Microsoft Artifact Signing when all Azure values are configured and otherwise produces an unsigned installer. A partial Azure configuration fails before the Windows build.
 4. Publishes a draft GitHub release named `Deskto v0.1.<run number>` with generated notes, then publishes it and marks it latest once every asset is there. Installed copies pick it up through the update feeds (ADR 0021).
 
 The website (`apps/website`) asks the GitHub API for `releases/latest` from the visitor's browser, so its download buttons point at the new files as soon as the release is public.

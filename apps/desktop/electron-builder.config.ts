@@ -11,6 +11,18 @@ function windowsSigningOptions() {
   const publisherName = process.env.WINDOWS_SIGNING_PUBLISHER_NAME
 
   if (
+    !tenantId &&
+    !clientId &&
+    !clientSecret &&
+    !endpoint &&
+    !codeSigningAccountName &&
+    !certificateProfileName &&
+    !publisherName
+  ) {
+    return undefined
+  }
+
+  if (
     !tenantId ||
     !clientId ||
     !clientSecret ||
@@ -19,7 +31,9 @@ function windowsSigningOptions() {
     !certificateProfileName ||
     !publisherName
   ) {
-    return undefined
+    throw new Error(
+      "Windows signing values must be either all configured or all absent."
+    )
   }
 
   return {

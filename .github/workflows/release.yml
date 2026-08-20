@@ -212,7 +212,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Windows signing
+      - id: windows_signing
+        name: Configure Windows signing
         shell: bash
         run: |
           required=(
@@ -224,13 +225,26 @@ jobs:
             WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME
             WINDOWS_SIGNING_PUBLISHER_NAME
           )
+          configured=0
+          missing=()
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
-              echo "Missing repository signing value: $name" >&2
-              exit 1
+              missing+=("$name")
+            else
+              configured=$((configured + 1))
             fi
           done
-          echo "Windows signing enabled (Microsoft Artifact Signing)."
+
+          if (( configured == 0 )); then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Windows signing is not configured; building an unsigned installer."
+          elif (( configured == ${#required[@]} )); then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Windows signing enabled (Microsoft Artifact Signing)."
+          else
+            echo "Windows signing is partially configured. Missing: ${missing[*]}" >&2
+            exit 1
+          fi
 
       - name: Set application version
         run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
@@ -245,27 +259,39 @@ jobs:
             --x64 \
             --publish never
 
-      - name: Verify Windows signature
+      - name: Verify Windows package
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_ENABLED: ${{ steps.windows_signing.outputs.enabled }}
         run: |
-          $installers = Get-ChildItem "apps/desktop/release" -Filter "*.exe"
-          if ($installers.Count -eq 0) {
-            throw "The Windows installer was not created."
+          $installers = @(Get-ChildItem "apps/desktop/release" -Filter "*.exe")
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one Windows installer, found $($installers.Count)."
           }
-          foreach ($installer in $installers) {
+
+          $installer = $installers[0]
+          if ($env:WINDOWS_SIGNING_ENABLED -eq "true") {
             $signature = Get-AuthenticodeSignature $installer.FullName
             if ($signature.Status -ne "Valid") {
               throw "$($installer.Name) does not have a valid signature: $($signature.Status)"
             }
+          } else {
+            Write-Host "Windows signing is not configured; accepting the unsigned installer."
           }
 
-          if (-not (Test-Path "apps/desktop/release/latest.yml" -PathType Leaf)) {
+          $feed = "apps/desktop/release/latest.yml"
+          if (-not (Test-Path $feed -PathType Leaf)) {
             throw "The Windows update feed was not created."
           }
-          if ((Get-Item "apps/desktop/release/latest.yml").Length -eq 0) {
+          if ((Get-Item $feed).Length -eq 0) {
             throw "The Windows update feed is empty."
           }
-          if ((Get-ChildItem "apps/desktop/release" -Filter "*.blockmap").Count -eq 0) {
+          if (-not (Select-String -Path $feed -SimpleMatch $installer.Name -Quiet)) {
+            throw "The Windows update feed does not reference $($installer.Name)."
+          }
+
+          $blockmap = "$($installer.FullName).blockmap"
+          if (-not (Test-Path $blockmap -PathType Leaf)) {
             throw "The Windows update blockmap was not created."
           }
 
