@@ -1,0 +1,70 @@
+name: Deploy website to Vercel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref_name == github.event.repository.default_branch
+    name: Deploy production website
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    defaults:
+      run:
+        working-directory: apps/website
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Check website
+        run: pnpm typecheck
+
+      - name: Install Vercel CLI
+        run: pnpm add --global vercel@59.1.4
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build website
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy website
+        id: deploy
+        run: |
+          deployment_url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $deployment_url"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
