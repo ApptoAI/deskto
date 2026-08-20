@@ -1,9 +1,25 @@
 ---
+import { downloadPageUrl, releasesUrl, repoUrl } from "../lib/links"
+
 const year = new Date().getFullYear()
+const links = [
+  { label: "Download", href: downloadPageUrl },
+  { label: "Releases", href: releasesUrl },
+  { label: "GitHub", href: repoUrl },
+]
 ---
 
 <footer class="footer frame ruled">
   <p>© {year} deskto</p>
+  <ul class="footer-links">
+    {
+      links.map((link) => (
+        <li>
+          <a href={link.href}>{link.label}</a>
+        </li>
+      ))
+    }
+  </ul>
 </footer>
 
 <style>
@@ -13,10 +29,29 @@ const year = new Date().getFullYear()
     box-sizing: border-box;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 24px;
     padding: 24px var(--gutter);
     font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.06em;
     color: var(--muted-ink);
+  }
+
+  .footer-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 20px;
+  }
+  .footer-links a {
+    transition: color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .footer-links a:hover {
+      color: var(--ink);
+    }
   }
 </style>

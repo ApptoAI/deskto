@@ -52,6 +52,10 @@ export default {
     repo: "deskto",
     releaseType: "release",
   },
+  // Release assets are matched by this suffix: the website looks for
+  // "-arm64.dmg", "-x64.dmg" and "-x64.exe" in the latest release. Linux
+  // overrides it below. Changing the pattern changes what the site finds.
+  artifactName: "${productName}-${version}-${arch}.${ext}",
   mac: {
     target: ["dmg", "zip"],
     icon: "resources/icon.icns",

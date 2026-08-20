@@ -1,0 +1,221 @@
+---
+import Layout from "../layouts/Layout.astro"
+import SiteNav from "../components/SiteNav.astro"
+import SiteFooter from "../components/SiteFooter.astro"
+import { installers } from "../lib/releases"
+import { latestReleaseUrl } from "../lib/links"
+
+// Every card is a working link before any script runs: it opens the latest
+// release on GitHub. The script swaps in the direct file for each installer
+// the release carries, and fills the version line.
+const notes = [
+  {
+    title: "macOS",
+    body: "Open the .dmg and drag Deskto to Applications. Not sure which build? Open About This Mac from the Apple menu: a Chip line means Apple Silicon, a Processor line means Intel.",
+  },
+  {
+    title: "Windows",
+    body: "Run the installer. If SmartScreen shows a warning the first time, choose More info, then Run anyway.",
+  },
+  {
+    title: "Linux",
+    body: "Mark the AppImage as executable and run it. If it does not start, install your distribution's FUSE 2 package: libfuse2t64 on Ubuntu 24.04, libfuse2 on older releases.",
+  },
+  {
+    title: "What you need",
+    body: "Claude Code or Codex signed in on this computer. Deskto checks on first run and walks you through what is missing. No Deskto account, no server.",
+  },
+]
+---
+
+<Layout
+  title="Download Deskto"
+  description="Deskto for macOS, Windows and Linux. Free and open source. It runs Claude Code and Codex on your computer, on the subscriptions you already pay for."
+>
+  <SiteNav />
+  <main class="frame">
+    <section class="download ruled">
+      <div class="section-head download-head">
+        <p class="eyebrow">download</p>
+        <h1 class="display download-title">Deskto for your computer.</h1>
+        <p class="download-sub">
+          Free and open source. Pick the build for your machine. Every task
+          runs on your computer, on the Claude or Codex subscription you
+          already have.
+        </p>
+        <p class="fine download-release" data-release-line>
+          latest release on GitHub
+        </p>
+      </div>
+
+      <ul class="hairline-grid download-grid">
+        {
+          installers.map((installer, index) => (
+            <li data-reveal style={`--reveal-delay: ${index * 60}ms`}>
+              <a
+                class="installer"
+                href={latestReleaseUrl}
+                data-installer={installer.id}
+              >
+                <span class="eyebrow">{installer.os}</span>
+                <span class="installer-title">{installer.title}</span>
+                <span class="installer-format">{installer.format}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="notes ruled">
+      <ul class="hairline-grid notes-grid">
+        {
+          notes.map((note, index) => (
+            <li class="note" data-reveal style={`--reveal-delay: ${index * 60}ms`}>
+              <h2 class="note-title">{note.title}</h2>
+              <p class="note-body">{note.body}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </main>
+  <SiteFooter />
+</Layout>
+
+<script>
+  import { fetchLatestRelease, downloadUrl, installers } from "../lib/releases"
+  import { repoUrl } from "../lib/links"
+
+  const line = document.querySelector<HTMLElement>("[data-release-line]")
+  const setLine = (text: string, link?: { label: string; href: string }) => {
+    if (!line) return
+    line.textContent = text
+    if (!link) return
+    line.append(" · ")
+    const anchor = document.createElement("a")
+    anchor.href = link.href
+    anchor.textContent = link.label
+    line.append(anchor)
+  }
+
+  try {
+    const release = await fetchLatestRelease()
+    if (release) {
+      setLine(release.version, { label: "release notes", href: release.notesUrl })
+      for (const installer of installers) {
+        const url = downloadUrl(release, installer.id)
+        const card = document.querySelector<HTMLAnchorElement>(
+          `[data-installer="${installer.id}"]`
+        )
+        if (card && url) card.href = url
+      }
+    } else {
+      setLine("no release yet", { label: "watch the repository", href: repoUrl })
+    }
+  } catch {
+    // The cards already open the releases page; the line keeps saying so.
+  }
+</script>
+
+<style>
+  .download-head {
+    gap: 16px;
+    padding-block: clamp(56px, 8vw, 96px) clamp(40px, 5vw, 56px);
+  }
+
+  .download-title {
+    font-size: clamp(28px, 3.6vw, 40px);
+  }
+
+  .download-sub {
+    max-width: 520px;
+    font-size: 15px;
+    color: var(--muted-ink);
+  }
+
+  .download-release {
+    padding-top: 4px;
+  }
+  .download-release :global(a) {
+    color: var(--ink);
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 1px;
+    transition: border-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .download-release :global(a:hover) {
+      border-color: var(--ink);
+    }
+  }
+
+  .download-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* The cell is the link, so the whole tile is the target. On hover the
+     background changes to chrome, like a row in the app. */
+  .installer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: clamp(24px, 3vw, 36px);
+    transition: background-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .installer:hover {
+      background: var(--chrome);
+    }
+  }
+  .installer:focus-visible {
+    outline-offset: -3px;
+  }
+  .installer-title {
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.014em;
+    color: var(--ink);
+  }
+  .installer-format {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--muted-ink);
+  }
+
+  .notes-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .note {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: clamp(24px, 3vw, 36px);
+  }
+  .note-title {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+  }
+  .note-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--muted-ink);
+  }
+
+  @media (max-width: 960px) {
+    .download-grid,
+    .notes-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 560px) {
+    .download-grid,
+    .notes-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

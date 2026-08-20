@@ -6,7 +6,7 @@ import GitHubLogo from "../assets/github.svg"
 import ClaudeLogo from "../assets/claude.svg"
 import OpenAILogo from "../assets/openai.svg"
 import DownloadButtons from "./DownloadButtons.astro"
-import { releasesUrl, repoUrl } from "../lib/links"
+import { downloadPageUrl, repoUrl } from "../lib/links"
 
 // The rotating half of the headline lists the agents Deskto drives. Only
 // shipped adapters belong here: a logo in the hero is a promise the first
@@ -40,7 +40,7 @@ const agentsSentence = "Claude Code and Codex."
       <a class="nav-github" href={repoUrl} aria-label="Deskto on GitHub">
         <GitHubLogo width={20} height={20} aria-hidden="true" />
       </a>
-      <a class="pill pill--glass nav-cta" href={releasesUrl}>Download</a>
+      <a class="pill pill--glass nav-cta" href={downloadPageUrl}>Download</a>
     </div>
   </nav>
 
