@@ -15,7 +15,6 @@ concurrency:
 jobs:
   changes:
     name: Check for changes
-    if: github.event_name == 'schedule'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
@@ -30,6 +29,11 @@ jobs:
         name: Compare with the last release
         shell: bash
         run: |
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           last_tag="$(git tag --list 'v0.1.*' --sort=-version:refname | head -n 1)"
           if [[ -z "$last_tag" || "$(git rev-parse "$last_tag^{commit}")" != "$(git rev-parse HEAD)" ]]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -41,7 +45,7 @@ jobs:
   preflight:
     name: Resolve release
     needs: changes
-    if: ${{ !failure() && !cancelled() && (github.event_name != 'schedule' || needs.changes.outputs.has_changes == 'true') }}
+    if: needs.changes.outputs.has_changes == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
