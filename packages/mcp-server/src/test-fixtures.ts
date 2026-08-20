@@ -4,7 +4,7 @@ import type {
   ThreadView,
 } from "@deskto/protocol"
 
-import type { SessionBinding } from "./types.js"
+import type { ArtifactRuntimeDependencies, SessionBinding } from "./types.js"
 
 const now = "2026-08-17T10:00:00.000Z"
 
@@ -68,6 +68,20 @@ export const testBinding: SessionBinding = {
   projectId: "project-1",
   workspaceId: "personal",
   expiresAt: Number.MAX_SAFE_INTEGER,
+}
+
+export const artifactRuntime: ArtifactRuntimeDependencies = {
+  rootPath: "/runtime",
+  nodeExecutable: "/runtime/node/bin/node",
+  nodeModulesPath: "/runtime/node/node_modules",
+  pythonExecutable: "/runtime/python/bin/python3",
+  binaryPaths: ["/runtime/bin"],
+  versions: {
+    bundle: "26.805.11740",
+    artifactTool: "2.8.39",
+    node: "v24.14.0",
+    python: "3.12.13",
+  },
 }
 
 export function fakeRuntime(

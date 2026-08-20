@@ -14,10 +14,11 @@ import {
   type SessionToolProvider,
 } from "@deskto/runtime"
 
-import { configureCliPath } from "./cli-path.js"
+import { discoverArtifactRuntime } from "./artifact-runtime.js"
 import { withForcedUnavailability } from "./dev-harness-stubs.js"
 import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
+import { configureCliPath } from "./cli-path.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
 import { installContentSecurityPolicy } from "./security.js"
@@ -128,15 +129,19 @@ async function openApplication(): Promise<void> {
     throw error
   }
 
+  const artifactRuntime = await discoverArtifactRuntime()
   const claudeExecutable = packagedClaudeExecutable()
   const claudeAdapter = claudeExecutable
     ? new ClaudeAdapter({
         executablePath: claudeExecutable,
+        hostSkillRoots: artifactRuntime?.skillRoots,
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
     : new ClaudeAdapter({
+        hostSkillRoots: artifactRuntime?.skillRoots,
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
+  const codexAdapter = new CodexAdapter(undefined, artifactRuntime?.skillRoots)
   // Separate from DESKTO_FORCE_ONBOARDING on purpose: forcing the wizard
   // keeps real detection, so a machine with agents can walk the happy path;
   // this flag adds the fresh-machine look where both cards stay red.
@@ -146,11 +151,11 @@ async function openApplication(): Promise<void> {
     ? [
         withForcedUnavailability(claudeAdapter, claudeNotSignedInReason),
         withForcedUnavailability(
-          new CodexAdapter(),
+          codexAdapter,
           "Codex CLI was not found. Install Codex and sign in first."
         ),
       ]
-    : [claudeAdapter, new CodexAdapter()]
+    : [claudeAdapter, codexAdapter]
   const mcpServerRef: McpServerReference = { current: undefined }
   let runtime: ReturnType<typeof createRuntime>
   try {
@@ -178,7 +183,10 @@ async function openApplication(): Promise<void> {
   }
   let mcpServer: DesktoMcpServer
   try {
-    mcpServer = await startDesktoMcpServer({ runtime })
+    mcpServer = await startDesktoMcpServer({
+      runtime,
+      artifactRuntime: artifactRuntime?.dependencies,
+    })
     mcpServerRef.current = mcpServer
   } catch (error) {
     const close = closeRuntime

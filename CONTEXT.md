@@ -74,7 +74,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - `packages/settings` defines every user-configurable setting: its key, schema, default value, and editor kind. The Runtime stores only overrides; defaults stay in the registry.
 - `packages/client` wraps a transport with task-oriented methods for any Surface.
 - `packages/runtime` implements use cases, SQLite persistence, and built-in Harness Adapters.
-- `packages/mcp-server` exposes bounded thread orchestration and local full-text search to Harnesses through MCP. It calls the Runtime protocol and never owns persistence.
+- `packages/mcp-server` exposes bounded thread orchestration, local full-text search, and validated local capability paths to Harnesses through MCP. It calls the Runtime protocol and never owns persistence or dependencies.
 - `packages/ui` contains reusable DOM components. It does not call Electron or the Runtime.
 - `apps/desktop` hosts the Runtime in Electron main, exposes a narrow preload bridge, and composes the React Surface.
 

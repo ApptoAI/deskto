@@ -112,7 +112,8 @@ export class CodexAdapter implements HarnessAdapterFactory {
   readonly descriptor = { id: "codex", name: "Codex" }
 
   constructor(
-    private readonly clientFactory: CodexClientFactory = createCodexClient
+    private readonly clientFactory: CodexClientFactory = createCodexClient,
+    private readonly hostSkillRoots: SkillRoot[] = []
   ) {}
 
   async checkAvailability() {
@@ -183,7 +184,20 @@ export class CodexAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
-    return CodexSession.open(input, signal, this.clientFactory)
+    return CodexSession.open(
+      {
+        ...input,
+        customization: {
+          ...input.customization,
+          skillRoots: [
+            ...this.hostSkillRoots,
+            ...input.customization.skillRoots,
+          ],
+        },
+      },
+      signal,
+      this.clientFactory
+    )
   }
 
   generateText(

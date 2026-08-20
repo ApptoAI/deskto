@@ -196,6 +196,38 @@ describe("Codex skill provisioning", () => {
       method: "extra-root",
     })
   })
+
+  it("offers host artifact skills to every session", async () => {
+    const client = new RecordingCodexClient()
+    const session = await new CodexAdapter(
+      () => client,
+      [
+        {
+          id: "artifact-runtime-spreadsheets",
+          name: "Artifact runtime spreadsheets",
+          path: "/runtime/spreadsheets/skills",
+        },
+      ]
+    ).start(
+      {
+        ...runInputWithPack(),
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    expect(
+      client.requests.find(({ method }) => method === "skills/extraRoots/set")
+        ?.params
+    ).toEqual({ extraRoots: ["/runtime/spreadsheets/skills"] })
+    expect(session.skillProvisioning).toMatchObject([
+      {
+        rootId: "artifact-runtime-spreadsheets",
+        status: "configured",
+        method: "extra-root",
+      },
+    ])
+  })
 })
 
 describe("Codex MCP provisioning", () => {

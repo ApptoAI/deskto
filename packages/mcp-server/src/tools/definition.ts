@@ -2,11 +2,12 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server"
 import type { z } from "zod"
 
 import type { RuntimeClient } from "../runtime-client.js"
-import type { SessionBinding } from "../types.js"
+import type { ArtifactRuntimeDependencies, SessionBinding } from "../types.js"
 
 export type ToolContext = {
   client: RuntimeClient
   binding: SessionBinding
+  artifactRuntime?: ArtifactRuntimeDependencies
 }
 
 export type ToolResult<Output> = {

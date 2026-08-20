@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { z } from "zod"
 
 import { startDesktoMcpServer } from "./server.js"
-import { fakeRuntime } from "./test-fixtures.js"
+import { artifactRuntime, fakeRuntime } from "./test-fixtures.js"
 import type { DesktoMcpServer } from "./types.js"
 
 const listPayloadSchema = z.object({
@@ -16,6 +16,14 @@ const listPayloadSchema = z.object({
 const contextPayloadSchema = z.object({
   result: z.object({
     structuredContent: z.object({ thread: z.object({ id: z.string() }) }),
+  }),
+})
+const dependenciesPayloadSchema = z.object({
+  result: z.object({
+    structuredContent: z.object({
+      nodeModulesPath: z.string(),
+      versions: z.object({ artifactTool: z.string() }),
+    }),
   }),
 })
 
@@ -161,6 +169,54 @@ describe("Deskto MCP server", () => {
       await responsePayload(called)
     )
     expect(callPayload.result.structuredContent.thread.id).toBe("thread-1")
+  })
+
+  it("advertises the artifact runtime only when it is complete", async () => {
+    server = await startDesktoMcpServer({
+      runtime: fakeRuntime(),
+      artifactRuntime,
+    })
+    const connection = server.connectionFor({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      projectId: "project-1",
+      workspaceId: "personal",
+    })
+    await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1" },
+      },
+    })
+
+    const listed = await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    })
+    const listPayload = listPayloadSchema.parse(await responsePayload(listed))
+    expect(listPayload.result.tools.map((tool) => tool.name)).toContain(
+      "load_workspace_dependencies"
+    )
+
+    const called = await postMcp(server.url, connection.authorizationToken, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "load_workspace_dependencies", arguments: {} },
+    })
+    const payload = dependenciesPayloadSchema.parse(
+      await responsePayload(called)
+    )
+    expect(payload.result.structuredContent).toEqual({
+      nodeModulesPath: "/runtime/node/node_modules",
+      versions: { artifactTool: "2.8.39" },
+    })
   })
 
   it("serves the stateless 2026-07-28 protocol", async () => {
