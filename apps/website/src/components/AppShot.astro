@@ -1,0 +1,83 @@
+---
+import { Image } from "astro:assets"
+import screenshot from "../assets/app-screenshot.png"
+---
+
+<section class="stage dots">
+  <div class="stage-grid">
+    <div class="stage-copy" data-reveal>
+      <p class="eyebrow">the app</p>
+      <h2 class="display stage-title">Claude Code and Codex, one window.</h2>
+      <p class="stage-line">
+        Pick Claude Code or Codex for each task. A dot on every task shows
+        where it stands, and results come back as files in an inbox.
+      </p>
+    </div>
+    <div class="stage-window" data-reveal style="--reveal-delay: 80ms">
+      <Image
+        src={screenshot}
+        alt="The Deskto window: a task inbox in the sidebar, a project asking what to do next in the center"
+        widths={[720, 1200, 1740]}
+        sizes="(max-width: 900px) calc(130vw - 52px), (max-width: 1160px) 66vw, 760px"
+        loading="lazy"
+      />
+    </div>
+  </div>
+</section>
+
+<style>
+  .stage-grid {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: clamp(32px, 5vw, 64px);
+    align-items: center;
+    padding: clamp(48px, 7vw, 80px) var(--gutter);
+  }
+
+  .stage-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 380px;
+  }
+
+  .stage-title {
+    font-size: clamp(24px, 2.8vw, 32px);
+  }
+
+  .stage-line {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--muted-ink);
+  }
+
+  /* The window runs into the right rail and the rule below, and is cropped
+     to the sidebar and composer. The bleed is what keeps the app's empty
+     state from reading as empty page. */
+  .stage-window {
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--canvas);
+    box-shadow:
+      0 1px 2px rgba(16, 16, 18, 0.05),
+      0 20px 48px -20px rgba(16, 16, 18, 0.22);
+    /* Tighter than the app's own ratio on purpose: the 130% width zooms in
+       so the crop keeps the sidebar, the traffic lights, and the whole
+       composer, and drops the empty right and bottom of the window. */
+    aspect-ratio: 8 / 5;
+  }
+
+  .stage-window img {
+    display: block;
+    width: 130%;
+    max-width: none;
+    height: auto;
+  }
+
+  @media (max-width: 900px) {
+    .stage-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

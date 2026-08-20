@@ -1,0 +1,363 @@
+---
+import { Image } from "astro:assets"
+import header from "../assets/deskto-header.webp"
+import Lockup from "../assets/deskto-lockup.svg"
+import GitHubLogo from "../assets/github.svg"
+import ClaudeLogo from "../assets/claude.svg"
+import OpenAILogo from "../assets/openai.svg"
+import DownloadButtons from "./DownloadButtons.astro"
+import { releasesUrl, repoUrl } from "../lib/links"
+
+// The rotating half of the headline lists the agents Deskto drives. Only
+// shipped adapters belong here: a logo in the hero is a promise the first
+// run has to keep. Screen readers and the clipboard get the static
+// sentence in the sr-only span instead of the slot.
+const agents = [
+  { name: "Claude Code", Logo: ClaudeLogo },
+  { name: "Codex", Logo: OpenAILogo },
+]
+const agentsSentence = "Claude Code and Codex."
+---
+
+<header class="hero">
+  <Image
+    src={header}
+    alt=""
+    class="hero-art"
+    loading="eager"
+    fetchpriority="high"
+    quality={65}
+    widths={[960, 1280, 1600, 2048]}
+    sizes="100vw"
+  />
+  <div class="hero-scrim" aria-hidden="true"></div>
+
+  <nav class="nav">
+    <a href="/" aria-label="Deskto home">
+      <Lockup height={20} class="nav-lockup" />
+    </a>
+    <div class="nav-actions">
+      <a class="nav-github" href={repoUrl} aria-label="Deskto on GitHub">
+        <GitHubLogo width={20} height={20} aria-hidden="true" />
+      </a>
+      <a class="pill pill--glass nav-cta" href={releasesUrl}>Download</a>
+    </div>
+  </nav>
+
+  <div class="hero-copy">
+    <h1 class="hero-title">
+      <span class="hero-line">Claude Cowork, but open source</span>{" "}
+      <span class="hero-line">
+        running on{" "}
+        <span class="sr-only">{agentsSentence}</span>
+        <span class="word-slot" aria-hidden="true" data-word-slot>
+          {
+            agents.map(({ name, Logo }, index) => (
+              <span
+                class:list={["word", { "is-active": index === 0 }]}
+                data-word
+              >
+                <Logo class="word-logo" />
+                {name}.
+              </span>
+            ))
+          }
+        </span>
+      </span>
+    </h1>
+    <p class="hero-sub">
+      Deskto runs Claude Code and Codex on your computer, on the subscriptions
+      you already pay for, inside an inbox built for sales, GTM, ops, and
+      research, not for writing code. Tasks go in. Files come back.
+    </p>
+    <DownloadButtons onArt />
+    <p class="fine hero-fine">free · open source · runs on your machine</p>
+  </div>
+</header>
+
+<style>
+  .hero {
+    position: relative;
+    min-height: max(640px, 100svh);
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    overflow: clip;
+    color: #ffffff;
+  }
+
+  .hero-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+    z-index: -2;
+  }
+
+  /* Legibility only: a whisper of the sky's own blue behind nav and title. */
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(to bottom, rgba(12, 24, 58, 0.55), transparent 32%),
+      radial-gradient(
+        62% 56% at 50% 50%,
+        rgba(12, 24, 58, 0.5),
+        transparent 72%
+      );
+  }
+
+  .nav {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    max-width: var(--frame-width);
+    margin-inline: auto;
+    padding: 20px var(--gutter);
+  }
+  .nav-lockup {
+    display: block;
+    color: #ffffff;
+  }
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .nav-github {
+    display: flex;
+    color: rgba(255, 255, 255, 0.85);
+    transition: color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .nav-github:hover {
+      color: #ffffff;
+    }
+  }
+  .nav-cta {
+    height: 36px;
+    padding-inline: 18px;
+  }
+
+  .hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 24px;
+    padding-inline: var(--gutter);
+    max-width: 920px;
+  }
+
+  /* Sized so the first line stays one line down to about 900px; below
+     that it wraps on its own and the second line keeps its own break. */
+  .hero-title {
+    font-size: clamp(32px, 4.5vw, 56px);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    line-height: 1.16;
+  }
+  .hero-line {
+    display: block;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* A one-line slot machine: the active entry sits flush left, the one it
+     replaced lifts out the top, the rest wait below. Width follows the
+     active entry so the line never jumps, and the width only animates
+     after the first measurement so the load does not start with a slide.
+     Entries anchor left rather than center because "Claude Code" and
+     "Codex" differ by about 140px: a centered entry would overflow the slot
+     on both sides while the width catches up, and on the left that means
+     over the words before it. The slot is decoration, aria-hidden and
+     unselectable, while the sr-only copy above carries the sentence for
+     readers and clipboards. */
+  .word-slot {
+    display: inline-block;
+    position: relative;
+    height: 1.16em;
+    vertical-align: bottom;
+    width: var(--slot-width, 7.4em);
+    white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .word-slot.is-measured {
+    transition: width 500ms var(--ease-in-out-quart);
+  }
+  .word {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28em;
+    white-space: nowrap;
+    transform-origin: left center;
+    opacity: 0;
+    transform: translate(0, 60%) scale(0.92);
+    transition:
+      transform 500ms var(--ease-in-out-quart),
+      opacity 400ms var(--ease-in-out-quart);
+  }
+  .word.is-active {
+    opacity: 1;
+    transform: translate(0, -50%) scale(1);
+  }
+  .word.is-prev {
+    opacity: 0;
+    transform: translate(0, -160%) scale(0.92);
+  }
+  .word-logo {
+    width: 0.78em;
+    height: 0.78em;
+    flex: none;
+  }
+
+  /* On a phone "running on Claude Code." no longer fits one line while
+     "running on Codex." does, and the centered hero would jump every few
+     seconds as the line count changed. Give the slot its own line there. */
+  @media (max-width: 480px) {
+    .word-slot {
+      display: block;
+      margin-inline: auto;
+    }
+    .word {
+      left: 50%;
+      transform-origin: center;
+      transform: translate(-50%, 60%) scale(0.92);
+    }
+    .word.is-active {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .word.is-prev {
+      transform: translate(-50%, -160%) scale(0.92);
+    }
+  }
+
+  .hero-sub {
+    max-width: 600px;
+    font-size: 16px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  /* Sits on the busiest part of the art, so it gets a real size and a
+     solid shadow rather than the footer's whisper. */
+  .hero-fine {
+    font-size: 12px;
+    color: #ffffff;
+    text-shadow:
+      0 1px 2px rgba(12, 24, 58, 0.9),
+      0 0 14px rgba(12, 24, 58, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .word,
+    .word.is-active,
+    .word.is-prev {
+      transform: translate(0, -50%);
+      transition: opacity 300ms ease;
+    }
+    .word-slot,
+    .word-slot.is-measured {
+      transition: none;
+    }
+    @media (max-width: 480px) {
+      .word,
+      .word.is-active,
+      .word.is-prev {
+        transform: translate(-50%, -50%);
+      }
+    }
+  }
+</style>
+
+<script>
+  const slot = document.querySelector<HTMLElement>("[data-word-slot]")
+  const words = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-word]")
+  )
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
+
+  if (slot && words.length > 1) {
+    let active = 0
+    const setWidth = () => {
+      const word = words[active]
+      if (!word) return
+      // offsetWidth ignores the scale transform mid-flight, so the slot
+      // lands on the entry's resting width, not an interpolated one.
+      const width = word.offsetWidth
+      if (width > 0) {
+        slot.style.setProperty("--slot-width", `${width}px`)
+        slot.classList.add("is-measured")
+      }
+    }
+    const apply = () => {
+      words.forEach((word, index) => {
+        word.classList.toggle("is-active", index === active)
+        word.classList.toggle(
+          "is-prev",
+          index === (active - 1 + words.length) % words.length
+        )
+      })
+      setWidth()
+    }
+    apply()
+    if (document.fonts) document.fonts.ready.then(setWidth)
+    let frame: number | undefined
+    window.addEventListener("resize", () => {
+      if (frame !== undefined) return
+      frame = window.requestAnimationFrame(() => {
+        frame = undefined
+        setWidth()
+      })
+    })
+
+    // Auto-updating content needs a way to stop: readers who asked for
+    // reduced motion keep the first entry, and a hidden tab stops the
+    // timer so it does not come back mid-swap.
+    let timer: number | undefined
+    const start = () => {
+      if (timer !== undefined || document.hidden || reducedMotion.matches) return
+      timer = window.setInterval(() => {
+        active = (active + 1) % words.length
+        apply()
+      }, 2600)
+    }
+    const stop = () => {
+      if (timer === undefined) return
+      window.clearInterval(timer)
+      timer = undefined
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stop()
+      else start()
+    })
+    reducedMotion.addEventListener("change", () => {
+      if (reducedMotion.matches) {
+        stop()
+        active = 0
+        apply()
+      } else {
+        start()
+      }
+    })
+    start()
+  }
+</script>

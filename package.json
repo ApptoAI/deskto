@@ -7,6 +7,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "desktop:dev": "turbo dev --filter=@deskto/desktop",
+    "website:dev": "turbo dev --filter=@deskto/website",
     "desktop:dev:onboarding": "DESKTO_FORCE_ONBOARDING=1 turbo dev --filter=@deskto/desktop",
     "desktop:dev:onboarding:fresh": "DESKTO_FORCE_ONBOARDING=1 DESKTO_SIMULATE_NO_AGENTS=1 turbo dev --filter=@deskto/desktop",
     "lint": "oxlint . && turbo lint",

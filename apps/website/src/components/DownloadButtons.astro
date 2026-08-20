@@ -1,0 +1,20 @@
+---
+import { releasesUrl, repoUrl } from "../lib/links"
+
+// One button set for the hero and the closing call. Both point at the
+// latest release and the repo: there is no per-platform installer to link
+// yet, so a platform split would promise files that are not there.
+interface Props {
+  onArt?: boolean
+}
+const { onArt = false } = Astro.props
+---
+
+<div class="actions">
+  <a class:list={["pill", onArt ? "pill--paper" : "pill--ink"]} href={releasesUrl}>
+    Download
+  </a>
+  <a class:list={["pill", onArt ? "pill--outline" : "pill--ghost"]} href={repoUrl}>
+    View on GitHub
+  </a>
+</div>
