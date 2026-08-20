@@ -2,19 +2,22 @@ import { McpServer, type ToolCallback } from "@modelcontextprotocol/server"
 import type { z } from "zod"
 
 import type { RuntimeClient } from "../runtime-client.js"
-import type { SessionBinding } from "../types.js"
+import type { ArtifactRuntimeDependencies, SessionBinding } from "../types.js"
 import { cancelThreadsTool } from "./cancel-threads.js"
 import { createThreadsTool } from "./create-threads.js"
 import type { ToolContext, ToolDefinition } from "./definition.js"
 import { getContextTool } from "./get-context.js"
 import { listThreadsTool } from "./list-threads.js"
+import { loadWorkspaceDependenciesTool } from "./load-workspace-dependencies.js"
 import { readThreadTool } from "./read-thread.js"
 import { searchThreadsTool } from "./search-threads.js"
 import { startTurnTool } from "./start-turn.js"
 import { waitForThreadsTool } from "./wait-for-threads.js"
 
-const instructions =
+const orchestrationInstructions =
   "Use these tools to split independent work into background tasks. Create a small bounded batch, continue useful work, then wait for or read the results. Search is read-only and can find any task stored on this computer. Write tools are limited to the current task tree."
+const artifactInstructions =
+  "Use the dependency loader for local spreadsheet, document, presentation, and PDF work."
 
 function register<Input extends z.ZodType, Output extends z.ZodType>(
   server: McpServer,
@@ -31,13 +34,19 @@ function register<Input extends z.ZodType, Output extends z.ZodType>(
 
 export function createToolsServer(
   client: RuntimeClient,
-  binding: SessionBinding
+  binding: SessionBinding,
+  artifactRuntime?: ArtifactRuntimeDependencies
 ): McpServer {
   const server = new McpServer(
     { name: "deskto", version: "0.1.0" },
-    { instructions }
+    {
+      instructions: artifactRuntime
+        ? `${artifactInstructions} ${orchestrationInstructions}`
+        : orchestrationInstructions,
+    }
   )
-  const context: ToolContext = { client, binding }
+  const context: ToolContext = { client, binding, artifactRuntime }
+  if (artifactRuntime) register(server, context, loadWorkspaceDependenciesTool)
   register(server, context, getContextTool)
   register(server, context, createThreadsTool)
   register(server, context, listThreadsTool)

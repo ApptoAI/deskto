@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import type {
   AccountInfo,
   SDKMessage,
@@ -64,6 +68,57 @@ describe("Claude MCP provisioning", () => {
         headers: { Authorization: "Bearer secret-token" },
       },
     })
+  })
+
+  it("loads host artifact skills alongside the dependency loader", async () => {
+    const temporaryRoot = await mkdtemp(
+      join(tmpdir(), "deskto-claude-artifacts-")
+    )
+    try {
+      queryMock.mockReturnValue(fakeQuery([]))
+      await new ClaudeAdapter({
+        queryFactory: queryMock,
+        packShimsPath: join(temporaryRoot, "shims"),
+        hostSkillRoots: [
+          {
+            id: "artifact-runtime-spreadsheets",
+            name: "Artifact runtime spreadsheets",
+            path: join(temporaryRoot, "runtime", "spreadsheets", "skills"),
+          },
+        ],
+      }).start(
+        {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          projectPath: "/tmp/project",
+          prompt: "Create a spreadsheet",
+          references: [],
+          executionProfile: {
+            modelId: null,
+            effort: null,
+            permissionMode: "approval-required",
+          },
+          customization: {
+            skillRoots: [],
+            mcpServers: [
+              {
+                id: "deskto",
+                url: "http://127.0.0.1:4321/mcp",
+                authorization: { type: "bearer", token: "secret-token" },
+              },
+            ],
+          },
+        },
+        new AbortController().signal
+      )
+
+      expect(queryMock.mock.calls[0]?.[0]?.options?.plugins).toHaveLength(1)
+      expect(queryMock.mock.calls[0]?.[0]?.options?.mcpServers).toHaveProperty(
+        "deskto"
+      )
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true })
+    }
   })
 })
 

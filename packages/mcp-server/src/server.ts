@@ -50,7 +50,7 @@ export async function startDesktoMcpServer(
     if (!binding || binding.expiresAt <= Date.now()) {
       throw new Error("This Deskto session has expired")
     }
-    return createToolsServer(client, binding)
+    return createToolsServer(client, binding, options.artifactRuntime)
   })
   const nodeHandler = toNodeHandler(handler)
   const validateHost = localhostHostValidation()

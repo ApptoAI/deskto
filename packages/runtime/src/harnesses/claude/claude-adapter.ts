@@ -27,6 +27,7 @@ import {
   type TextGenerationInput,
   type SkillDiscoveryInput,
   type SkillProvisioningResult,
+  type SkillRoot,
 } from "@deskto/harness-sdk"
 import {
   jsonObjectSchema,
@@ -62,6 +63,8 @@ type ClaudeAdapterOptions = {
   discoveryCwd?: string
   /** Stable app-owned directory for generated pack plugin shims. */
   packShimsPath?: string
+  /** Host-provided skills available to every Claude session. */
+  hostSkillRoots?: SkillRoot[]
   queryFactory?: ClaudeQueryFactory
 }
 
@@ -268,6 +271,7 @@ class ClaudeSession implements HarnessSession {
     signal: AbortSignal,
     {
       executablePath,
+      hostSkillRoots = [],
       packShimsPath,
       queryFactory = query,
     }: ClaudeAdapterOptions
@@ -277,7 +281,7 @@ class ClaudeSession implements HarnessSession {
       once: true,
     })
     const provisionedPlugins = provisionClaudePlugins(
-      input.customization.skillRoots,
+      [...hostSkillRoots, ...input.customization.skillRoots],
       packShimsPath
     )
     const pluginShims = provisionedPlugins.plugins

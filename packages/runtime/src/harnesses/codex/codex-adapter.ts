@@ -88,6 +88,8 @@ export type CodexClientFactory = (
 type CodexAdapterOptions = {
   /** Folder used only by availability and model discovery processes. */
   discoveryCwd?: string
+  /** Host-provided skills available to every Codex session. */
+  hostSkillRoots?: SkillRoot[]
   versionReader?: (cwd: string) => Promise<string>
 }
 
@@ -198,7 +200,20 @@ export class CodexAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
-    return CodexSession.open(input, signal, this.clientFactory)
+    return CodexSession.open(
+      {
+        ...input,
+        customization: {
+          ...input.customization,
+          skillRoots: [
+            ...(this.options.hostSkillRoots ?? []),
+            ...input.customization.skillRoots,
+          ],
+        },
+      },
+      signal,
+      this.clientFactory
+    )
   }
 
   generateText(
