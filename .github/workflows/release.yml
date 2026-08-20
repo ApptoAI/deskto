@@ -65,10 +65,14 @@ jobs:
         run: pnpm test
 
   build_macos:
-    name: Build macOS
+    name: Build macOS ${{ matrix.arch }}
     needs: [preflight, quality, build_linux, build_windows]
-    runs-on: blacksmith-6vcpu-macos-26
+    runs-on: blacksmith-12vcpu-macos-26
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -123,35 +127,41 @@ jobs:
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --mac \
-            --arm64 \
-            --x64 \
+            --${{ matrix.arch }} \
             --publish never
 
       - name: Verify macOS update assets
         shell: bash
         run: |
           test -s apps/desktop/release/latest-mac.yml
-          compgen -G 'apps/desktop/release/*.dmg' > /dev/null
-          compgen -G 'apps/desktop/release/*.blockmap' > /dev/null
-
+          images=(apps/desktop/release/*.dmg)
           archives=(apps/desktop/release/*.zip)
-          if [[ ! -e "${archives[0]}" || ${#archives[@]} -ne 2 ]]; then
-            echo "Expected one macOS ZIP for each architecture." >&2
+          if [[ ! -e "${images[0]}" || ${#images[@]} -ne 1 ]]; then
+            echo "Expected exactly one macOS disk image for ${{ matrix.arch }}." >&2
             exit 1
           fi
-          for archive in "${archives[@]}"; do
-            grep -Fq "$(basename "$archive")" apps/desktop/release/latest-mac.yml
+          if [[ ! -e "${archives[0]}" || ${#archives[@]} -ne 1 ]]; then
+            echo "Expected exactly one macOS ZIP for ${{ matrix.arch }}." >&2
+            exit 1
+          fi
+          for package in "${images[0]}" "${archives[0]}"; do
+            [[ "$(basename "$package")" == *-${{ matrix.arch }}.* ]]
+            grep -Fq "$(basename "$package")" apps/desktop/release/latest-mac.yml
           done
+          test -s "${archives[0]}.blockmap"
+
+          mv apps/desktop/release/latest-mac.yml \
+            "apps/desktop/release/latest-mac-${{ matrix.arch }}.yml"
 
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
-          name: deskto-macos
+          name: deskto-macos-${{ matrix.arch }}
           path: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.zip
             apps/desktop/release/*.blockmap
-            apps/desktop/release/latest-mac.yml
+            apps/desktop/release/latest-mac-${{ matrix.arch }}.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -340,12 +350,24 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+
       - name: Download packages
         uses: actions/download-artifact@v8
         with:
           pattern: deskto-*
           merge-multiple: true
           path: release-assets
+
+      - name: Merge macOS update feeds
+        run: |
+          node .github/scripts/merge-mac-update-manifests.mjs \
+            release-assets/latest-mac-arm64.yml \
+            release-assets/latest-mac-x64.yml \
+            release-assets/latest-mac.yml
 
       - name: Verify complete release
         shell: bash
@@ -359,6 +381,21 @@ jobs:
           compgen -G 'release-assets/*.exe' > /dev/null
           compgen -G 'release-assets/*.blockmap' > /dev/null
 
+          images=(release-assets/*.dmg)
+          archives=(release-assets/*.zip)
+          if [[ ${#images[@]} -ne 2 || ${#archives[@]} -ne 2 ]]; then
+            echo "Expected one macOS DMG and ZIP for each architecture." >&2
+            exit 1
+          fi
+          for arch in arm64 x64; do
+            compgen -G "release-assets/*-${arch}.dmg" > /dev/null
+            compgen -G "release-assets/*-${arch}.zip" > /dev/null
+          done
+          for archive in "${archives[@]}"; do
+            grep -Fq "$(basename "$archive")" release-assets/latest-mac.yml
+            test -s "${archive}.blockmap"
+          done
+
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
@@ -369,7 +406,15 @@ jobs:
           draft: true
           prerelease: false
           make_latest: false
-          files: release-assets/*
+          files: |
+            release-assets/*.AppImage
+            release-assets/*.blockmap
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/*.zip
+            release-assets/latest-linux.yml
+            release-assets/latest-mac.yml
+            release-assets/latest.yml
           fail_on_unmatched_files: true
 
       - name: Publish complete release
