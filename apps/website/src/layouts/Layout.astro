@@ -5,7 +5,7 @@ import "../styles/site.css"
 
 const {
   title = "Deskto: Claude Cowork, but open source",
-  description = "Deskto is Claude Cowork, but open source, and it runs Claude Code and Codex. It runs on your computer, on the subscriptions you already pay for, with an inbox built for sales, GTM, ops, and research. Tasks go in. Files come back.",
+  description = "An open source Claude Cowork alternative running on Claude Code and Codex, on your computer and on the subscriptions you already pay for. An inbox for sales, GTM, ops, and research. Tasks go in, files come back.",
 } = Astro.props
 ---
 
@@ -16,6 +16,11 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta name="twitter:card" content="summary" />
     <title>{title}</title>
   </head>
   <body>
@@ -35,7 +40,7 @@ const {
         { rootMargin: "0px 0px -80px 0px", threshold: 0.1 }
       )
       for (const el of document.querySelectorAll("[data-reveal]")) {
-        // Already on screen at load: show it without the entrance.
+        // Content already in view at load should not animate in.
         const rect = el.getBoundingClientRect()
         if (rect.top < window.innerHeight * 0.9) {
           el.classList.add("is-visible")

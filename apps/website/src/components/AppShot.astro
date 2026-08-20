@@ -3,41 +3,29 @@ import { Image } from "astro:assets"
 import screenshot from "../assets/app-screenshot.png"
 ---
 
-<section class="stage">
+<section class="stage dots">
   <div class="stage-grid">
     <div class="stage-copy" data-reveal>
       <p class="eyebrow">the app</p>
-      <h2 class="display stage-title">
-        Every agent in one window.
-      </h2>
+      <h2 class="display stage-title">Claude Code and Codex, one window.</h2>
       <p class="stage-line">
-        Pick Claude Code or Codex for each task and switch whenever you like.
-        Progress shows on a quiet status dot, and results come back as files
-        in an inbox.
+        Pick Claude Code or Codex for each task. A dot on every task shows
+        where it stands, and results come back as files in an inbox.
       </p>
     </div>
     <div class="stage-window" data-reveal style="--reveal-delay: 80ms">
       <Image
         src={screenshot}
-        alt="The Deskto window: a task inbox in the sidebar, a project asking what to do next in the centre"
+        alt="The Deskto window: a task inbox in the sidebar, a project asking what to do next in the center"
         widths={[720, 1200, 1740]}
         sizes="(max-width: 900px) 100vw, 640px"
-        loading="eager"
+        loading="lazy"
       />
     </div>
   </div>
 </section>
 
 <style>
-  /* The window stands on the dotted paper, runs into the right rail and the
-     rule below, and is cropped to the sidebar and composer. The bleed is
-     what keeps the app's empty state from reading as empty page. */
-  .stage {
-    background-color: var(--chrome);
-    background-image: radial-gradient(var(--hairline) 1px, transparent 1px);
-    background-size: 14px 14px;
-  }
-
   .stage-grid {
     display: grid;
     grid-template-columns: 5fr 7fr;
@@ -63,6 +51,9 @@ import screenshot from "../assets/app-screenshot.png"
     color: var(--muted-ink);
   }
 
+  /* The window runs into the right rail and the rule below, and is cropped
+     to the sidebar and composer. The bleed is what keeps the app's empty
+     state from reading as empty page. */
   .stage-window {
     border: 1px solid var(--hairline);
     border-radius: 12px;

@@ -1,22 +1,14 @@
-## Development
+# Website
 
-When starting the dev server, use background mode:
+Static Astro site for deskto. One page, no framework components, no server.
 
-```
-astro dev --background
-```
+## Working here
 
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+- Start the dev server in background mode so it does not block the terminal: `astro dev --background`. Manage it with `astro dev stop`, `astro dev status`, and `astro dev logs`. Preview a build with `astro preview` from `dist/`.
+- `pnpm --filter @deskto/website build` must pass before a PR. `pnpm --filter @deskto/website typecheck` runs `astro check`.
+- Copy follows the root `AGENTS.md` voice: the reader runs a sales pipeline, not a terminal. Say "task" and "project", never Thread or Harness. Every claim on the page must be true of the product as documented in the root `README.md` and `CONTEXT.md`.
+- The hero lists only shipped agents. A logo on the page is a promise the first run has to keep.
+- Prose rules: no em dashes, no decorative emojis, sentence case headings, plain words, one idea per sentence.
+- Design tokens in `src/styles/site.css` mirror the desktop app's light palette from `packages/ui/src/styles/globals.css`. The site is light only by choice; the app is not.
 
-## Documentation
-
-Full documentation: https://docs.astro.build
-
-Consult these guides before working on related tasks:
-
-- [Adding pages, dynamic routes, or middleware](https://docs.astro.build/en/guides/routing/)
-- [Working with Astro components](https://docs.astro.build/en/basics/astro-components/)
-- [Using React, Vue, Svelte, or other framework components](https://docs.astro.build/en/guides/framework-components/)
-- [Adding or managing content](https://docs.astro.build/en/guides/content-collections/)
-- [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
-- [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)
+Astro docs: https://docs.astro.build

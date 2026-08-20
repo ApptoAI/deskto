@@ -5,9 +5,8 @@ import Lockup from "../assets/deskto-lockup.svg"
 import GitHubLogo from "../assets/github.svg"
 import ClaudeLogo from "../assets/claude.svg"
 import OpenAILogo from "../assets/openai.svg"
-
-const releases = "https://github.com/ApptoAI/deskto/releases"
-const repo = "https://github.com/ApptoAI/deskto"
+import DownloadButtons from "./DownloadButtons.astro"
+import { releasesUrl, repoUrl } from "../lib/links"
 
 // The rotating half of the headline lists the agents Deskto drives. Only
 // shipped adapters belong here: a logo in the hero is a promise the first
@@ -27,7 +26,8 @@ const agentsSentence = "Claude Code and Codex."
     class="hero-art"
     loading="eager"
     fetchpriority="high"
-    widths={[960, 1600, 2048]}
+    quality={65}
+    widths={[960, 1280, 1600, 2048]}
     sizes="100vw"
   />
   <div class="hero-scrim" aria-hidden="true"></div>
@@ -37,18 +37,18 @@ const agentsSentence = "Claude Code and Codex."
       <Lockup height={20} class="nav-lockup" />
     </a>
     <div class="nav-actions">
-      <a class="nav-github" href={repo} aria-label="Deskto on GitHub">
-        <GitHubLogo width={20} height={20} />
+      <a class="nav-github" href={repoUrl} aria-label="Deskto on GitHub">
+        <GitHubLogo width={20} height={20} aria-hidden="true" />
       </a>
-      <a class="pill pill--glass nav-cta" href={releases}>Download</a>
+      <a class="pill pill--glass nav-cta" href={releasesUrl}>Download</a>
     </div>
   </nav>
 
   <div class="hero-copy">
     <h1 class="hero-title">
-      <span class="hero-line">Claude Cowork, but open source</span>
+      <span class="hero-line">Claude Cowork, but open source</span>{" "}
       <span class="hero-line">
-        and it runs{" "}
+        running on{" "}
         <span class="sr-only">{agentsSentence}</span>
         <span class="word-slot" aria-hidden="true" data-word-slot>
           {
@@ -66,15 +66,12 @@ const agentsSentence = "Claude Code and Codex."
       </span>
     </h1>
     <p class="hero-sub">
-      Deskto runs the agent CLIs installed on your computer, on the
-      subscriptions you already pay for, inside an inbox built for sales,
-      GTM, ops, and research rather than code. Tasks go in. Files come back.
+      Deskto runs Claude Code and Codex on your computer, on the subscriptions
+      you already pay for, inside an inbox built for sales, GTM, ops, and
+      research, not for writing code. Tasks go in. Files come back.
     </p>
-    <div class="hero-actions">
-      <a class="pill pill--paper" href={releases}>Download for macOS</a>
-      <a class="pill pill--outline" href={releases}>Download for Windows</a>
-    </div>
-    <p class="hero-fine">free · open source · runs on your machine</p>
+    <DownloadButtons onArt />
+    <p class="fine hero-fine">free · open source · runs on your machine</p>
   </div>
 </header>
 
@@ -182,22 +179,26 @@ const agentsSentence = "Claude Code and Codex."
 
   /* A one-line slot machine: the active entry sits flush left, the one it
      replaced lifts out the top, the rest wait below. Width follows the
-     active entry so the line never jumps. Entries anchor left rather than
-     centre because "Claude Code" and "Codex" differ by 140px: a centred
-     entry would overflow the slot on both sides while the width catches
-     up, and on the left that means over "with". The slot is decoration,
-     aria-hidden and unselectable, while the sr-only copy above carries
-     the sentence for readers and clipboards. */
+     active entry so the line never jumps, and the width only animates
+     after the first measurement so the load does not start with a slide.
+     Entries anchor left rather than center because "Claude Code" and
+     "Codex" differ by about 140px: a centered entry would overflow the slot
+     on both sides while the width catches up, and on the left that means
+     over the words before it. The slot is decoration, aria-hidden and
+     unselectable, while the sr-only copy above carries the sentence for
+     readers and clipboards. */
   .word-slot {
     display: inline-block;
     position: relative;
     height: 1.16em;
     vertical-align: bottom;
-    width: var(--slot-width, 7em);
-    transition: width 500ms var(--ease-in-out-quart);
+    width: var(--slot-width, 7.4em);
     white-space: nowrap;
     user-select: none;
     -webkit-user-select: none;
+  }
+  .word-slot.is-measured {
+    transition: width 500ms var(--ease-in-out-quart);
   }
   .word {
     position: absolute;
@@ -228,6 +229,27 @@ const agentsSentence = "Claude Code and Codex."
     flex: none;
   }
 
+  /* On a phone "running on Claude Code." no longer fits one line while
+     "running on Codex." does, and the centered hero would jump every few
+     seconds as the line count changed. Give the slot its own line there. */
+  @media (max-width: 480px) {
+    .word-slot {
+      display: block;
+      margin-inline: auto;
+    }
+    .word {
+      left: 50%;
+      transform-origin: center;
+      transform: translate(-50%, 60%) scale(0.92);
+    }
+    .word.is-active {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .word.is-prev {
+      transform: translate(-50%, -160%) scale(0.92);
+    }
+  }
+
   .hero-sub {
     max-width: 600px;
     font-size: 16px;
@@ -235,29 +257,10 @@ const agentsSentence = "Claude Code and Codex."
     color: rgba(255, 255, 255, 0.9);
   }
 
-  .hero-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
-  }
-  .pill--outline {
-    border-color: rgba(255, 255, 255, 0.45);
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.06);
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .pill--outline:hover {
-      border-color: rgba(255, 255, 255, 0.8);
-    }
-  }
-
   /* Sits on the busiest part of the art, so it gets a real size and a
-     solid shadow rather than the 11px whisper the footer can afford. */
+     solid shadow rather than the footer's whisper. */
   .hero-fine {
-    font-family: var(--font-mono);
     font-size: 12px;
-    letter-spacing: 0.08em;
     color: #ffffff;
     text-shadow:
       0 1px 2px rgba(12, 24, 58, 0.9),
@@ -271,8 +274,16 @@ const agentsSentence = "Claude Code and Codex."
       transform: translate(0, -50%);
       transition: opacity 300ms ease;
     }
-    .word-slot {
+    .word-slot,
+    .word-slot.is-measured {
       transition: none;
+    }
+    @media (max-width: 480px) {
+      .word,
+      .word.is-active,
+      .word.is-prev {
+        transform: translate(-50%, -50%);
+      }
     }
   }
 </style>
@@ -282,13 +293,20 @@ const agentsSentence = "Claude Code and Codex."
   const words = Array.from(
     document.querySelectorAll<HTMLElement>("[data-word]")
   )
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
+
   if (slot && words.length > 1) {
     let active = 0
     const setWidth = () => {
+      const word = words[active]
+      if (!word) return
       // offsetWidth ignores the scale transform mid-flight, so the slot
-      // lands on the phrase's resting width, not an interpolated one.
-      const width = words[active]!.offsetWidth
-      if (width > 0) slot.style.setProperty("--slot-width", `${width}px`)
+      // lands on the entry's resting width, not an interpolated one.
+      const width = word.offsetWidth
+      if (width > 0) {
+        slot.style.setProperty("--slot-width", `${width}px`)
+        slot.classList.add("is-measured")
+      }
     }
     const apply = () => {
       words.forEach((word, index) => {
@@ -303,9 +321,29 @@ const agentsSentence = "Claude Code and Codex."
     apply()
     if (document.fonts) document.fonts.ready.then(setWidth)
     window.addEventListener("resize", setWidth)
-    setInterval(() => {
-      active = (active + 1) % words.length
-      apply()
-    }, 2600)
+
+    // Auto-updating content needs a way to stop: readers who asked for
+    // reduced motion keep the first entry, and a hidden tab stops the
+    // timer so it does not come back mid-swap.
+    if (!reducedMotion.matches) {
+      let timer: number | undefined
+      const start = () => {
+        if (timer !== undefined) return
+        timer = window.setInterval(() => {
+          active = (active + 1) % words.length
+          apply()
+        }, 2600)
+      }
+      const stop = () => {
+        if (timer === undefined) return
+        window.clearInterval(timer)
+        timer = undefined
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stop()
+        else start()
+      })
+      start()
+    }
   }
 </script>

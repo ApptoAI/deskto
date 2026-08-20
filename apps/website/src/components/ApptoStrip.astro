@@ -1,26 +1,25 @@
 ---
-const platform = [
+const apptoFeatures = [
   { name: "Projects", line: "Shared workspaces, not private chats" },
-  { name: "Slack & Teams", line: "Cowork where the team already talks" },
+  { name: "Slack & Teams", line: "Agents where the team already talks" },
   { name: "Knowledge base", line: "Your documents as everyone's context" },
   { name: "Routines", line: "Work that runs without being asked" },
 ]
 ---
 
 <section class="appto ruled">
-  <div class="appto-head" data-reveal>
+  <div class="section-head appto-head" data-reveal>
     <p class="eyebrow">appto.ai</p>
-    <h2 class="display appto-title">Looking for even more?</h2>
+    <h2 class="display appto-title">Need it for the whole company?</h2>
     <p class="appto-sub">
-      Deskto runs on your desk. Appto is the platform around it, built for
-      the whole company.
+      Deskto runs on your desk. Appto is the platform around it.
     </p>
-    <a class="appto-link" href="https://appto.ai">See appto.ai →</a>
+    <a class="appto-link" href="https://appto.ai">See appto.ai</a>
   </div>
 
-  <ul class="appto-grid">
+  <ul class="hairline-grid appto-grid">
     {
-      platform.map((item, index) => (
+      apptoFeatures.map((item, index) => (
         <li
           class="appto-cell"
           data-reveal
@@ -36,12 +35,7 @@ const platform = [
 
 <style>
   .appto-head {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 14px;
-    padding: clamp(64px, 9vw, 104px) var(--gutter) clamp(40px, 5vw, 56px);
+    padding-block: clamp(64px, 9vw, 104px) clamp(40px, 5vw, 56px);
   }
 
   .appto-title {
@@ -55,9 +49,8 @@ const platform = [
   }
 
   .appto-link {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: 0.04em;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--ink);
     border-bottom: 1px solid var(--hairline);
     padding-bottom: 2px;
@@ -70,18 +63,10 @@ const platform = [
   }
 
   .appto-grid {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--hairline);
-    border-top: 1px solid var(--hairline);
   }
 
   .appto-cell {
-    background: var(--canvas);
     padding: 24px clamp(20px, 2.4vw, 32px) 28px;
     display: flex;
     flex-direction: column;

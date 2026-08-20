@@ -1,38 +1,21 @@
 ---
 import Mark from "../assets/deskto-mark.svg"
-
-const releases = "https://github.com/ApptoAI/deskto/releases"
+import DownloadButtons from "./DownloadButtons.astro"
 ---
 
-<section class="cta ruled">
-  <div class="cta-inner" data-reveal>
+<section class="cta ruled dots">
+  <div class="section-head cta-inner" data-reveal>
     <Mark height={28} class="cta-mark" />
     <h2 class="display cta-title">Put it on your desk.</h2>
-    <div class="cta-actions">
-      <a class="pill pill--ink" href={releases}>Download for macOS</a>
-      <a class="pill pill--ghost" href={releases}>Download for Windows</a>
-    </div>
-    <p class="cta-fine">
-      open source · your own subscription · nothing leaves your machine
-    </p>
+    <DownloadButtons />
+    <p class="fine">open source · your own subscription · runs on your machine</p>
   </div>
 </section>
 
 <style>
-  .cta {
-    background-color: var(--chrome);
-    /* The dotted paper Entire sections stand on, in the chrome grey. */
-    background-image: radial-gradient(var(--hairline) 1px, transparent 1px);
-    background-size: 14px 14px;
-  }
-
   .cta-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
     gap: 20px;
-    padding: clamp(72px, 10vw, 128px) var(--gutter);
+    padding-block: clamp(72px, 10vw, 128px);
   }
 
   .cta-mark {
@@ -43,18 +26,7 @@ const releases = "https://github.com/ApptoAI/deskto/releases"
     font-size: clamp(28px, 3.6vw, 40px);
   }
 
-  .cta-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
+  .cta-inner :global(.actions) {
     padding-top: 4px;
-  }
-
-  .cta-fine {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    color: var(--muted-ink);
   }
 </style>

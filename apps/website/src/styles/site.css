@@ -1,11 +1,10 @@
-/* The desktop app's light ladder, verbatim intent: the page is the canvas,
-   framed regions step up to chrome, and the only divider is a hairline that
-   is genuinely visible. Indigo appears solely on mono labels — the machine
-   voice — never on prose or surfaces. */
+/* The desktop app's light ladder: the page is the canvas, framed regions
+   step up to chrome, and the only divider is a hairline that is genuinely
+   visible. Indigo appears solely on mono labels, never on prose or
+   surfaces. The site is light only by choice; the app ships both palettes. */
 :root {
   --canvas: #ffffff;
   --chrome: #f4f4f7;
-  --card: #ebecf0;
   --hairline: #d7d9df;
   --ink: #101012;
   --body-ink: #43464e;
@@ -24,7 +23,6 @@
 
 html {
   overflow-x: clip;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -57,8 +55,13 @@ img {
   height: auto;
 }
 
-/* The label voice from the app: uppercase mono, tracked open. Here it also
-   carries the page's single accent. */
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* The label voice from the app. Here it also carries the page's single
+   accent. */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -77,8 +80,17 @@ img {
   color: var(--ink);
 }
 
+/* Mono fine print under a call to action: a strip of tags, not a sentence,
+   so it keeps the machine voice. */
+.fine {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted-ink);
+}
+
 /* The framed column: vertical rails running the height of everything after
-   the hero, the Entire-style skeleton the sections hang from. */
+   the hero, the skeleton the sections hang from. */
 .frame {
   max-width: var(--frame-width);
   margin-inline: auto;
@@ -86,7 +98,7 @@ img {
 }
 
 /* Horizontal rules bleed across the whole viewport while content stays in
-   the frame — the crossing lines are the look, not a border on a box. */
+   the frame. The crossing lines are the look, not a border on a box. */
 .ruled {
   position: relative;
 }
@@ -101,7 +113,47 @@ img {
   background: var(--hairline);
 }
 
-/* Pills are the only interactive shape. Press feedback on everything. */
+/* Dotted paper for the chrome regions, so the app window and the download
+   call both stand on the same material. */
+.dots {
+  background-color: var(--chrome);
+  background-image: radial-gradient(var(--hairline) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+/* A centered section head: eyebrow, display, optional sub. */
+.section-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding-inline: var(--gutter);
+}
+
+/* The 1px gap over a hairline background draws the internal grid in one
+   move, so every seam is the same rule the frame is made of. */
+.hairline-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+  border-top: 1px solid var(--hairline);
+}
+.hairline-grid > li {
+  background: var(--canvas);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Pills are the only interactive shape. */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -142,6 +194,11 @@ img {
   background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
 }
+.pill--outline {
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+}
 @media (hover: hover) and (pointer: fine) {
   .pill--ink:hover {
     background: #2c2c31;
@@ -153,11 +210,14 @@ img {
   .pill--ghost:hover {
     border-color: var(--muted-ink);
   }
+  .pill--outline:hover {
+    border-color: rgba(255, 255, 255, 0.8);
+  }
 }
 
-/* Scroll reveal: fires once, rises 12px, stagger set per-element via
-   --reveal-delay. Before JS runs nothing is hidden — the hidden state is
-   applied by the observer script adding .reveal-ready. */
+/* Scroll reveal: fires once, rises 12px, stagger set per element via
+   --reveal-delay. Before JS runs nothing is hidden; the observer script
+   adds .reveal-ready and only then does the hidden state exist. */
 .reveal-ready [data-reveal] {
   opacity: 0;
   transform: translateY(12px);
@@ -172,9 +232,6 @@ img {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
   .reveal-ready [data-reveal] {
     transform: none;
     transition: opacity 300ms ease;

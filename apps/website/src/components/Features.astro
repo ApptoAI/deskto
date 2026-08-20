@@ -6,12 +6,12 @@ import OpenAILogo from "../assets/openai.svg"
 // they meet them: workspace, project, inbox, delegation, approvals, account.
 const features = [
   {
-    title: "Workspaces for each part of your work",
-    body: "Sales, ops, a side project: each gets its own workspace with its own projects and skill packs. Attach a pack once and every project inside it has the same playbooks.",
+    title: "A workspace for each part of your work",
+    body: "Sales and ops each get their own workspace, with their own projects and skill packs. Attach a pack once and every project inside has the same playbooks.",
   },
   {
     title: "Projects are folders on your disk",
-    body: "Open a folder you already have or let Deskto create one. Agents work inside it and nowhere else. Results land as files you can open, not paths in a transcript.",
+    body: "Open a folder you already have or let Deskto create one. Agents work inside it and nowhere else. Results land as files you can open.",
   },
   {
     title: "An inbox, not a chat list",
@@ -19,27 +19,27 @@ const features = [
   },
   {
     title: "One agent can hire more",
-    body: "Give an agent a big job and it can split it into child tasks, run them side by side on whichever agent fits, and search what you have done before. Every child is a real task with its own conversation, approvals, and files.",
+    body: "Give an agent a big job and it can split it into child tasks that run side by side, each on whichever agent fits. Every child is a real task with its own conversation and approvals, and it can search what you have done before.",
   },
   {
     title: "Approvals come to you",
-    body: "Agents ask before they touch anything that matters. A risky command waits in your inbox until you say yes, and a task waiting on you can never be hidden.",
+    body: "By default an agent stops before a command that could do damage. The request waits in your inbox until you answer, and a task waiting on you is never hidden.",
   },
   {
     title: "Your subscription, not another bill",
-    body: "Claude Code and Codex run on your machine, on the plans you already pay for. Sign in once and every task picks its agent, model, and permission mode.",
+    body: "Claude Code and Codex run on your machine, on the plans you already pay for. Sign in to each once. Every task picks its agent and model.",
     logos: true,
   },
 ]
 ---
 
-<section id="features" class="features ruled">
-  <div class="features-head" data-reveal>
+<section class="features ruled">
+  <div class="section-head features-head" data-reveal>
     <p class="eyebrow">what deskto does</p>
-    <h2 class="display features-title">Everything you delegate<br />comes back done.</h2>
+    <h2 class="display features-title">What you delegate<br />comes back as files.</h2>
   </div>
 
-  <ul class="features-grid">
+  <ul class="hairline-grid features-grid">
     {
       features.map((feature, index) => (
         <li
@@ -78,33 +78,19 @@ const features = [
   }
 
   .features-head {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
     gap: 16px;
-    padding: 0 var(--gutter) clamp(48px, 6vw, 72px);
+    padding-bottom: clamp(48px, 6vw, 72px);
   }
 
   .features-title {
     font-size: clamp(28px, 3.6vw, 40px);
   }
 
-  /* The 1px gap over a hairline background draws the internal grid in one
-     move — every seam is the same rule the frame is made of. */
   .features-grid {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--hairline);
-    border-top: 1px solid var(--hairline);
   }
 
   .feature {
-    background: var(--canvas);
     padding: clamp(24px, 3vw, 36px);
     display: flex;
     flex-direction: column;
