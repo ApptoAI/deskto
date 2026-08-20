@@ -58,5 +58,6 @@ export default {
   linux: {
     target: ["AppImage"],
     icon: "resources/icon.png",
+    executableName: "deskto",
   },
 } satisfies Configuration
