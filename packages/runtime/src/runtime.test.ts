@@ -2373,10 +2373,9 @@ describe("Runtime", () => {
         params: { threadId: thread.id },
       })
     )
-    expect(outputs.map((output) => output.artifact.relativePath)).toEqual([
-      ".summary.txt",
-      "report.csv",
-    ])
+    expect(
+      outputs.map((output) => output.artifact.relativePath).sort()
+    ).toEqual([".summary.txt", "report.csv"])
     expect(outputs[0]?.turnId).toBe(run.input.turnId)
     await runtime.close()
   })

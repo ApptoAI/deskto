@@ -6,11 +6,13 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   realpath,
   readdir,
   rename,
   rm,
   rmdir,
+  type FileHandle,
 } from "node:fs/promises"
 import { dirname, join, resolve, sep } from "node:path"
 
@@ -462,8 +464,12 @@ export async function copyDirectoryContentsNoClobber(
       await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
       createdEntries += 1
       const createdFile = await ownedRegularFile(destinationPath)
-      await hooks.afterCreate?.({ kind: "file", path: destinationPath })
-      await assertOwnedRegularFile(createdFile)
+      try {
+        await hooks.afterCreate?.({ kind: "file", path: destinationPath })
+        await assertOwnedRegularFile(createdFile)
+      } finally {
+        await createdFile.handle.close()
+      }
       await assertOwnedDirectory(destinationDirectory)
     }
   }
@@ -501,7 +507,13 @@ type OwnedEntry = {
 }
 
 type OwnedDirectory = OwnedEntry
-type OwnedRegularFile = OwnedEntry
+type OwnedRegularFile = {
+  path: string
+  handle: FileHandle
+  dev: bigint
+  ino: bigint
+  ctimeNs: bigint
+}
 
 async function ownedDirectory(path: string): Promise<OwnedDirectory> {
   const metadata = await lstat(path)
@@ -515,14 +527,26 @@ async function ownedDirectory(path: string): Promise<OwnedDirectory> {
 }
 
 async function ownedRegularFile(path: string): Promise<OwnedRegularFile> {
-  const metadata = await lstat(path)
-  if (!metadata.isFile() || metadata.isSymbolicLink()) {
-    throw new RuntimeError(
-      "project-move-recovery-failed",
-      `Deskto no longer owns the expected file: ${path}`
-    )
+  const handle = await open(path, "r")
+  try {
+    const metadata = await handle.stat({ bigint: true })
+    if (!metadata.isFile()) {
+      throw new RuntimeError(
+        "project-move-recovery-failed",
+        `Deskto no longer owns the expected file: ${path}`
+      )
+    }
+    return {
+      path,
+      handle,
+      dev: metadata.dev,
+      ino: metadata.ino,
+      ctimeNs: metadata.ctimeNs,
+    }
+  } catch (error) {
+    await handle.close()
+    throw error
   }
-  return { path, dev: metadata.dev, ino: metadata.ino }
 }
 
 async function assertOwnedDirectory(entry: OwnedDirectory): Promise<void> {
@@ -536,8 +560,14 @@ async function assertOwnedDirectory(entry: OwnedDirectory): Promise<void> {
 }
 
 async function assertOwnedRegularFile(entry: OwnedRegularFile): Promise<void> {
-  const current = await ownedRegularFile(entry.path)
-  if (current.dev !== entry.dev || current.ino !== entry.ino) {
+  const current = await lstat(entry.path, { bigint: true })
+  if (
+    !current.isFile() ||
+    current.isSymbolicLink() ||
+    current.dev !== entry.dev ||
+    current.ino !== entry.ino ||
+    current.ctimeNs !== entry.ctimeNs
+  ) {
     throw new RuntimeError(
       "project-move-recovery-failed",
       `Deskto no longer owns the expected file: ${entry.path}`
