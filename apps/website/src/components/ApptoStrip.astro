@@ -1,0 +1,114 @@
+---
+const platform = [
+  { name: "Projects", line: "Shared workspaces, not private chats" },
+  { name: "Slack & Teams", line: "Cowork where the team already talks" },
+  { name: "Knowledge base", line: "Your documents as everyone's context" },
+  { name: "Routines", line: "Work that runs without being asked" },
+]
+---
+
+<section class="appto ruled">
+  <div class="appto-head" data-reveal>
+    <p class="eyebrow">appto.ai</p>
+    <h2 class="display appto-title">Looking for even more?</h2>
+    <p class="appto-sub">
+      Deskto runs on your desk. Appto is the platform around it, built for
+      the whole company.
+    </p>
+    <a class="appto-link" href="https://appto.ai">See appto.ai →</a>
+  </div>
+
+  <ul class="appto-grid">
+    {
+      platform.map((item, index) => (
+        <li
+          class="appto-cell"
+          data-reveal
+          style={`--reveal-delay: ${index * 60}ms`}
+        >
+          <h3 class="appto-name">{item.name}</h3>
+          <p class="appto-line">{item.line}</p>
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<style>
+  .appto-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    padding: clamp(64px, 9vw, 104px) var(--gutter) clamp(40px, 5vw, 56px);
+  }
+
+  .appto-title {
+    font-size: clamp(24px, 3vw, 34px);
+  }
+
+  .appto-sub {
+    max-width: 440px;
+    font-size: 15px;
+    color: var(--muted-ink);
+  }
+
+  .appto-link {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 2px;
+    transition: border-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .appto-link:hover {
+      border-color: var(--ink);
+    }
+  }
+
+  .appto-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--hairline);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .appto-cell {
+    background: var(--canvas);
+    padding: 24px clamp(20px, 2.4vw, 32px) 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .appto-name {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .appto-line {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted-ink);
+  }
+
+  @media (max-width: 860px) {
+    .appto-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 480px) {
+    .appto-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

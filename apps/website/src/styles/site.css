@@ -1,0 +1,186 @@
+/* The desktop app's light ladder, verbatim intent: the page is the canvas,
+   framed regions step up to chrome, and the only divider is a hairline that
+   is genuinely visible. Indigo appears solely on mono labels — the machine
+   voice — never on prose or surfaces. */
+:root {
+  --canvas: #ffffff;
+  --chrome: #f4f4f7;
+  --card: #ebecf0;
+  --hairline: #d7d9df;
+  --ink: #101012;
+  --body-ink: #43464e;
+  --muted-ink: #676c77;
+  --label-ink: #4f46e5;
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --ease-out-quart: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+
+  --frame-width: 1160px;
+  --gutter: clamp(20px, 4vw, 48px);
+}
+
+html {
+  overflow-x: clip;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--body-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* The label voice from the app: uppercase mono, tracked open. Here it also
+   carries the page's single accent. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--label-ink);
+}
+
+/* Displays are never bold: size and negative tracking do the work. */
+.display {
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+/* The framed column: vertical rails running the height of everything after
+   the hero, the Entire-style skeleton the sections hang from. */
+.frame {
+  max-width: var(--frame-width);
+  margin-inline: auto;
+  border-inline: 1px solid var(--hairline);
+}
+
+/* Horizontal rules bleed across the whole viewport while content stays in
+   the frame — the crossing lines are the look, not a border on a box. */
+.ruled {
+  position: relative;
+}
+.ruled::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* Pills are the only interactive shape. Press feedback on everything. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding-inline: 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out-quart),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+.pill:active {
+  transform: scale(0.97);
+}
+.pill--ink {
+  background: var(--ink);
+  color: #ffffff;
+}
+.pill--paper {
+  background: #ffffff;
+  color: var(--ink);
+}
+.pill--ghost {
+  border-color: var(--hairline);
+  color: var(--ink);
+  background: transparent;
+}
+.pill--glass {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pill--ink:hover {
+    background: #2c2c31;
+  }
+  .pill--paper:hover,
+  .pill--glass:hover {
+    background: #ffffff;
+  }
+  .pill--ghost:hover {
+    border-color: var(--muted-ink);
+  }
+}
+
+/* Scroll reveal: fires once, rises 12px, stagger set per-element via
+   --reveal-delay. Before JS runs nothing is hidden — the hidden state is
+   applied by the observer script adding .reveal-ready. */
+.reveal-ready [data-reveal] {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 500ms var(--ease-out-quart),
+    transform 500ms var(--ease-out-quart);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal-ready [data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal-ready [data-reveal] {
+    transform: none;
+    transition: opacity 300ms ease;
+  }
+  .pill,
+  .pill:active {
+    transform: none;
+  }
+}

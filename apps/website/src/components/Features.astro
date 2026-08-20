@@ -1,0 +1,159 @@
+---
+import ClaudeLogo from "../assets/claude.svg"
+import OpenAILogo from "../assets/openai.svg"
+
+// One card per thing the person actually touches in the app, in the order
+// they meet them: workspace, project, inbox, delegation, approvals, account.
+const features = [
+  {
+    title: "Workspaces for each part of your work",
+    body: "Sales, ops, a side project: each gets its own workspace with its own projects and skill packs. Attach a pack once and every project inside it has the same playbooks.",
+  },
+  {
+    title: "Projects are folders on your disk",
+    body: "Open a folder you already have or let Deskto create one. Agents work inside it and nowhere else. Results land as files you can open, not paths in a transcript.",
+  },
+  {
+    title: "An inbox, not a chat list",
+    body: "Tasks run in the background and come back as things to review. Pin them, snooze them, mark them done. A failed task stays until you deal with it; a quiet one closes itself.",
+  },
+  {
+    title: "One agent can hire more",
+    body: "Give an agent a big job and it can split it into child tasks, run them side by side on whichever agent fits, and search what you have done before. Every child is a real task with its own conversation, approvals, and files.",
+  },
+  {
+    title: "Approvals come to you",
+    body: "Agents ask before they touch anything that matters. A risky command waits in your inbox until you say yes, and a task waiting on you can never be hidden.",
+  },
+  {
+    title: "Your subscription, not another bill",
+    body: "Claude Code and Codex run on your machine, on the plans you already pay for. Sign in once and every task picks its agent, model, and permission mode.",
+    logos: true,
+  },
+]
+---
+
+<section id="features" class="features ruled">
+  <div class="features-head" data-reveal>
+    <p class="eyebrow">what deskto does</p>
+    <h2 class="display features-title">Everything you delegate<br />comes back done.</h2>
+  </div>
+
+  <ul class="features-grid">
+    {
+      features.map((feature, index) => (
+        <li
+          class="feature"
+          data-reveal
+          style={`--reveal-delay: ${(index % 3) * 60}ms`}
+        >
+          <span class="feature-index">{String(index + 1).padStart(2, "0")}</span>
+          <h3 class="feature-title">{feature.title}</h3>
+          <p class="feature-body">{feature.body}</p>
+          {
+            feature.logos ? (
+              <span class="feature-logos">
+                <ClaudeLogo
+                  class="feature-logo feature-logo--claude"
+                  aria-label="Claude Code"
+                  role="img"
+                />
+                <OpenAILogo
+                  class="feature-logo"
+                  aria-label="Codex"
+                  role="img"
+                />
+              </span>
+            ) : null
+          }
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<style>
+  .features {
+    padding-top: clamp(64px, 9vw, 112px);
+  }
+
+  .features-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 0 var(--gutter) clamp(48px, 6vw, 72px);
+  }
+
+  .features-title {
+    font-size: clamp(28px, 3.6vw, 40px);
+  }
+
+  /* The 1px gap over a hairline background draws the internal grid in one
+     move — every seam is the same rule the frame is made of. */
+  .features-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--hairline);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .feature {
+    background: var(--canvas);
+    padding: clamp(24px, 3vw, 36px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .feature-index {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--label-ink);
+  }
+
+  .feature-title {
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.014em;
+    color: var(--ink);
+  }
+
+  .feature-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--muted-ink);
+  }
+
+  .feature-logos {
+    display: flex;
+    gap: 14px;
+    margin-top: auto;
+    padding-top: 4px;
+    color: var(--ink);
+  }
+  .feature-logo {
+    width: 18px;
+    height: 18px;
+  }
+  .feature-logo--claude {
+    color: #d97757;
+  }
+
+  @media (max-width: 960px) {
+    .features-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 640px) {
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

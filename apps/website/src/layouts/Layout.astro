@@ -1,0 +1,48 @@
+---
+import "@fontsource-variable/inter"
+import "@fontsource-variable/geist-mono"
+import "../styles/site.css"
+
+const {
+  title = "Deskto: Claude Cowork, but open source",
+  description = "Deskto is Claude Cowork, but open source, and it runs Claude Code and Codex. It runs on your computer, on the subscriptions you already pay for, with an inbox built for sales, GTM, ops, and research. Tasks go in. Files come back.",
+} = Astro.props
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+    <script>
+      // Scroll reveals fire once per element; the hidden state only exists
+      // once this class lands, so a no-JS visit reads a fully visible page.
+      document.documentElement.classList.add("reveal-ready")
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+            entry.target.classList.add("is-visible")
+            observer.unobserve(entry.target)
+          }
+        },
+        { rootMargin: "0px 0px -80px 0px", threshold: 0.1 }
+      )
+      for (const el of document.querySelectorAll("[data-reveal]")) {
+        // Already on screen at load: show it without the entrance.
+        const rect = el.getBoundingClientRect()
+        if (rect.top < window.innerHeight * 0.9) {
+          el.classList.add("is-visible")
+        } else {
+          observer.observe(el)
+        }
+      }
+    </script>
+  </body>
+</html>
