@@ -7,3 +7,10 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   msw: false
+
+supportedArchitectures:
+  cpu:
+    - current
+    - x64
+  os:
+    - current

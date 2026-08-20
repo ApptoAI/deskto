@@ -1,0 +1,314 @@
+name: Release
+
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Check for changes
+    if: github.event_name == 'schedule'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    outputs:
+      has_changes: ${{ steps.compare.outputs.has_changes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: compare
+        name: Compare with the last release
+        shell: bash
+        run: |
+          last_tag="$(git tag --list 'v0.1.*' --sort=-version:refname | head -n 1)"
+          if [[ -z "$last_tag" || "$(git rev-parse "$last_tag^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changes since $last_tag."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  preflight:
+    name: Resolve release
+    needs: changes
+    if: ${{ !failure() && !cancelled() && (github.event_name != 'schedule' || needs.changes.outputs.has_changes == 'true') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - id: release
+        name: Set release metadata
+        shell: bash
+        run: |
+          version="0.1.${GITHUB_RUN_NUMBER}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Verify release candidate
+    needs: preflight
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+  build_macos:
+    name: Build macOS ${{ matrix.arch }}
+    needs: [preflight, quality]
+    runs-on: blacksmith-6vcpu-macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set application version
+        run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
+
+      - name: Prepare Apple signing
+        shell: bash
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          required=(APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER CSC_LINK CSC_KEY_PASSWORD)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing repository secret: $name" >&2
+              exit 1
+            fi
+          done
+
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          certificate_path="$RUNNER_TEMP/deskto-developer-id.p12"
+          printf '%s' "$CSC_LINK" | base64 -D > "$certificate_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+          echo "CSC_LINK=$certificate_path" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build, sign, and notarize
+        run: |
+          pnpm --filter @deskto/desktop build
+          pnpm --dir apps/desktop exec electron-builder \
+            --config electron-builder.config.ts \
+            --mac \
+            --${{ matrix.arch }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: deskto-macos-${{ matrix.arch }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  build_windows:
+    name: Build Windows x64
+    needs: [preflight, quality]
+    runs-on: blacksmith-4vcpu-windows-2025
+    timeout-minutes: 30
+    env:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      WINDOWS_SIGNING_ENDPOINT: ${{ vars.WINDOWS_SIGNING_ENDPOINT }}
+      WINDOWS_SIGNING_ACCOUNT_NAME: ${{ vars.WINDOWS_SIGNING_ACCOUNT_NAME }}
+      WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME }}
+      WINDOWS_SIGNING_PUBLISHER_NAME: ${{ vars.WINDOWS_SIGNING_PUBLISHER_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Windows signing
+        shell: bash
+        run: |
+          required=(
+            AZURE_TENANT_ID
+            AZURE_CLIENT_ID
+            AZURE_CLIENT_SECRET
+            WINDOWS_SIGNING_ENDPOINT
+            WINDOWS_SIGNING_ACCOUNT_NAME
+            WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME
+            WINDOWS_SIGNING_PUBLISHER_NAME
+          )
+          signing_enabled=true
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              signing_enabled=false
+            fi
+          done
+
+          if [[ "$signing_enabled" == true ]]; then
+            echo "Windows signing enabled (Microsoft Artifact Signing)."
+          else
+            echo "Windows signing disabled; building an unsigned installer."
+          fi
+
+      - name: Set application version
+        run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
+
+      - name: Build Windows package
+        shell: bash
+        run: |
+          pnpm --filter @deskto/desktop build
+          pnpm --dir apps/desktop exec electron-builder \
+            --config electron-builder.config.ts \
+            --win \
+            --x64
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: deskto-windows-x64
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  build_linux:
+    name: Build Linux x64
+    needs: [preflight, quality]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set application version
+        run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
+
+      - name: Build
+        run: |
+          pnpm --filter @deskto/desktop build
+          pnpm --dir apps/desktop exec electron-builder \
+            --config electron-builder.config.ts \
+            --linux \
+            --x64
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: deskto-linux-x64
+          path: apps/desktop/release/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [preflight, build_macos, build_windows, build_linux]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: deskto-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.preflight.outputs.tag }}
+          target_commitish: ${{ needs.preflight.outputs.sha }}
+          name: Deskto ${{ needs.preflight.outputs.tag }}
+          generate_release_notes: true
+          prerelease: false
+          make_latest: true
+          files: release-assets/*
+          fail_on_unmatched_files: true
