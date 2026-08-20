@@ -43,7 +43,7 @@
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
     "electron": "43.4.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "26.10.0",
     "electron-vite": "5.0.0",
     "eslint": "^9",
     "jsdom": "^29.1.1",

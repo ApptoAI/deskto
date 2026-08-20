@@ -1,4 +1,64 @@
-import type { Configuration } from "electron-builder"
+import { spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
+
+import type { AfterPackContext, Configuration } from "electron-builder"
+
+const require = createRequire(import.meta.url)
+// Packaging must prove pnpm's shared runtime dependencies survived app.asar collection before signing starts.
+const packagedRuntimeModules = [
+  "@hono/node-server",
+  "ajv",
+  "ajv-formats",
+  "cors",
+  "cross-spawn",
+  "debug",
+  "eventsource",
+  "express",
+  "express-rate-limit",
+  "raw-body",
+]
+
+function installedElectronPath() {
+  const packageDirectory = dirname(require.resolve("electron/package.json"))
+  const relativePath = readFileSync(
+    join(packageDirectory, "path.txt"),
+    "utf8"
+  ).trim()
+  return join(packageDirectory, "dist", relativePath)
+}
+
+function verifyPackagedRuntime(context: AfterPackContext) {
+  const resourcesDirectory =
+    context.electronPlatformName === "darwin"
+      ? join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          "Contents",
+          "Resources"
+        )
+      : join(context.appOutDir, "resources")
+  const appArchive = join(resourcesDirectory, "app.asar")
+  const verification = spawnSync(
+    installedElectronPath(),
+    [
+      "-e",
+      `const root = process.argv[1] + "/node_modules/"; require(root + "electron-updater"); for (const name of ${JSON.stringify(packagedRuntimeModules)}) require.resolve(root + name)`,
+      appArchive,
+    ],
+    {
+      encoding: "utf8",
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    }
+  )
+
+  if (verification.status !== 0) {
+    const reason =
+      verification.error?.message || verification.stderr || verification.stdout
+    throw new Error(`Packaged runtime dependency check failed.\n${reason}`)
+  }
+}
 
 function windowsSigningOptions() {
   const tenantId = process.env.AZURE_TENANT_ID
@@ -59,6 +119,7 @@ export default {
     buildResources: "resources",
     output: "release",
   },
+  afterPack: verifyPackagedRuntime,
   files: ["out/**/*", "package.json"],
   publish: {
     provider: "github",
