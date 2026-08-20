@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+reviews:
+  review_status: false
+  slop_detection:
+    enabled: false
+  auto_review:
+    enabled: false
+    labels:
+      - review-ready
+
+chat:
+  allow_non_org_members: false
