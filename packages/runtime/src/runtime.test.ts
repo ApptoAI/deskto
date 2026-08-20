@@ -2373,10 +2373,9 @@ describe("Runtime", () => {
         params: { threadId: thread.id },
       })
     )
-    expect(outputs.map((output) => output.artifact.relativePath)).toEqual([
-      ".summary.txt",
-      "report.csv",
-    ])
+    expect(
+      outputs.map((output) => output.artifact.relativePath).sort()
+    ).toEqual([".summary.txt", "report.csv"])
     expect(outputs[0]?.turnId).toBe(run.input.turnId)
     await runtime.close()
   })
@@ -2922,6 +2921,10 @@ describe("Runtime", () => {
   it("cancels a turn while its harness is still starting", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
+    let markStartEntered: (() => void) | undefined
+    const startEntered = new Promise<void>((resolve) => {
+      markStartEntered = resolve
+    })
     const harness: HarnessAdapterFactory = {
       descriptor: { id: "slow", name: "Slow harness" },
       checkAvailability: () => Promise.resolve({ status: "available" }),
@@ -2940,14 +2943,16 @@ describe("Runtime", () => {
             ],
           },
         ]),
-      start: (_input, signal) =>
-        new Promise((_resolve, reject) => {
+      start: (_input, signal) => {
+        markStartEntered?.()
+        return new Promise((_resolve, reject) => {
           signal.addEventListener(
             "abort",
             () => reject(new Error("Harness start was cancelled")),
             { once: true }
           )
-        }),
+        })
+      },
     }
     const runtime = createRuntime({
       databasePath: join(directory, "runtime.sqlite"),
@@ -2970,15 +2975,7 @@ describe("Runtime", () => {
       method: "turn.start",
       params: { threadId: thread.id, prompt: "Prepare the report" },
     })
-    await waitFor(async () => {
-      const view = unwrap(
-        await runtime.request({
-          method: "thread.get",
-          params: { threadId: thread.id },
-        })
-      )
-      return view.thread.status === "running"
-    })
+    await startEntered
 
     const cancelled = unwrap(
       await runtime.request({

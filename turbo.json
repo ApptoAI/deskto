@@ -1,7 +1,21 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["ELECTRON_RENDERER_URL", "PATH", "DESKTO_FORCE_ONBOARDING", "DESKTO_SIMULATE_NO_AGENTS"],
-  "globalPassThroughEnv": ["SHELL"],
+  "globalEnv": [
+    "ELECTRON_RENDERER_URL",
+    "PATH",
+    "DESKTO_FORCE_ONBOARDING",
+    "DESKTO_SIMULATE_NO_AGENTS"
+  ],
+  "globalPassThroughEnv": [
+    "SHELL",
+    "AZURE_TENANT_ID",
+    "AZURE_CLIENT_ID",
+    "AZURE_CLIENT_SECRET",
+    "WINDOWS_SIGNING_ENDPOINT",
+    "WINDOWS_SIGNING_ACCOUNT_NAME",
+    "WINDOWS_SIGNING_CERTIFICATE_PROFILE_NAME",
+    "WINDOWS_SIGNING_PUBLISHER_NAME"
+  ],
   "ui": "tui",
   "tasks": {
     "build": {

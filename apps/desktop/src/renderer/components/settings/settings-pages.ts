@@ -1,6 +1,7 @@
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ContrastIcon from "lucide-react/dist/esm/icons/contrast"
 import KeyboardIcon from "lucide-react/dist/esm/icons/keyboard"
+import InfoIcon from "lucide-react/dist/esm/icons/info"
 import SparklesIcon from "lucide-react/dist/esm/icons/sparkles"
 import type { ComponentType, SVGProps } from "react"
 
@@ -12,6 +13,7 @@ export const settingsPageOrder = [
   "models",
   "appearance",
   "shortcuts",
+  "about",
 ] as const
 
 export type SettingsPageId = (typeof settingsPageOrder)[number]
@@ -43,6 +45,11 @@ export const settingsPages = {
     label: "Keyboard shortcuts",
     description: "Click a shortcut, then press the new key combination.",
     icon: KeyboardIcon,
+  },
+  about: {
+    label: "About",
+    description: "See your Deskto version and manage application updates.",
+    icon: InfoIcon,
   },
 } satisfies Record<SettingsPageId, SettingsPage>
 

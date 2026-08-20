@@ -2,6 +2,7 @@ import type { ReactElement } from "react"
 import type { Harness } from "@deskto/protocol"
 
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
+import { AboutSettings } from "./about-settings.js"
 import { AppearanceSettings } from "./appearance-settings.js"
 import { HarnessModelSettings } from "./harness-model-settings.js"
 import { HarnessSettings } from "./harness-settings.js"
@@ -55,5 +56,7 @@ function SettingsPane({
       return <AppearanceSettings />
     case "shortcuts":
       return <ShortcutSettings />
+    case "about":
+      return <AboutSettings />
   }
 }
