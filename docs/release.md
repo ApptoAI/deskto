@@ -22,7 +22,7 @@ The website (`apps/website`) asks the GitHub API for `releases/latest` from the 
 | `Deskto-<version>-x64.exe`   | Windows 10 and 11   |
 | `Deskto.AppImage`            | Linux x86_64        |
 
-The Linux file carries no version on purpose: the updater replaces it in place, and a versioned name would leave desktop shortcuts pointing at a deleted file. The macOS zips, the blockmaps and the `latest*.yml` update feeds go up with the same release for the in-app updater.
+The Linux file carries no version on purpose: the updater replaces it in place, and a versioned name would leave desktop shortcuts pointing at a deleted file. Its blockmap is embedded in the AppImage. The macOS zips, the Windows and macOS blockmaps, and the `latest*.yml` update feeds go up with the same release for the in-app updater.
 
 ## Trying a build locally
 

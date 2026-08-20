@@ -320,7 +320,7 @@ jobs:
         run: |
           test -s apps/desktop/release/latest-linux.yml
           test -s apps/desktop/release/Deskto.AppImage
-          compgen -G 'apps/desktop/release/*.blockmap' > /dev/null
+          grep -Fq "Deskto.AppImage" apps/desktop/release/latest-linux.yml
 
       - name: Upload package
         uses: actions/upload-artifact@v7
@@ -328,7 +328,6 @@ jobs:
           name: deskto-linux-x64
           path: |
             apps/desktop/release/*.AppImage
-            apps/desktop/release/*.blockmap
             apps/desktop/release/latest-linux.yml
           if-no-files-found: error
           retention-days: 14
