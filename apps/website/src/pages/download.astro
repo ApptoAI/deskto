@@ -10,20 +10,20 @@ import { latestReleaseUrl } from "../lib/links"
 // the release carries, and fills the version line.
 const notes = [
   {
-    title: "First open on macOS",
-    body: "Drag Deskto to Applications. The build is not signed yet, so macOS blocks it once: open System Settings, go to Privacy & Security, find the Deskto message and choose Open Anyway.",
+    title: "macOS",
+    body: "Open the .dmg and drag Deskto to Applications. Not sure which build? Open About This Mac from the Apple menu: a Chip line means Apple Silicon, a Processor line means Intel.",
   },
   {
-    title: "First open on Windows",
-    body: "SmartScreen warns about the same thing. Choose More info, then Run anyway. After that it opens like any other app.",
+    title: "Windows",
+    body: "Run the installer. If SmartScreen shows a warning the first time, choose More info, then Run anyway.",
   },
   {
     title: "Linux",
-    body: "Mark the AppImage as executable and run it. If it does not start, install libfuse2 from your distribution.",
+    body: "Mark the AppImage as executable and run it. If it does not start, install your distribution's FUSE 2 package: libfuse2t64 on Ubuntu 24.04, libfuse2 on older releases.",
   },
   {
     title: "What you need",
-    body: "Claude Code or Codex signed in on this computer. Deskto checks on first run and walks you through what is missing. No account, no server.",
+    body: "Claude Code or Codex signed in on this computer. Deskto checks on first run and walks you through what is missing. No Deskto account, no server.",
   },
 ]
 ---

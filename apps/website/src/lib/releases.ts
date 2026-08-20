@@ -2,7 +2,8 @@ import { latestReleaseApiUrl } from "./links"
 
 // One entry per installer the Release workflow publishes. The suffixes
 // follow artifactName in apps/desktop/electron-builder.config.ts; the two
-// have to move together.
+// have to move together. Linux ships as "Deskto.AppImage" without a version,
+// so the updater can replace it in place.
 export interface Installer {
   id: "macos-arm64" | "macos-x64" | "windows-x64" | "linux-x64"
   os: "macOS" | "Windows" | "Linux"
@@ -38,7 +39,7 @@ export const installers: readonly Installer[] = [
     os: "Linux",
     title: "x86_64",
     format: "AppImage",
-    suffix: "-x86_64.AppImage",
+    suffix: ".AppImage",
   },
 ]
 
@@ -141,6 +142,10 @@ export async function detectInstaller(): Promise<Installer | null> {
     // New Macs are Apple Silicon and Intel owners find theirs on /download.
     return byId("macos-arm64")
   }
-  if (/Linux/.test(ua)) return byId("linux-x64")
+  if (/Linux/.test(ua)) {
+    // Only an x86_64 AppImage ships; an ARM machine gets the page instead.
+    if (/aarch64|arm64|armv\d/i.test(ua)) return null
+    return byId("linux-x64")
+  }
   return null
 }
