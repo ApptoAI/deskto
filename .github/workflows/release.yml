@@ -122,13 +122,20 @@ jobs:
           echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build, sign, and notarize
+        shell: bash
         run: |
+          set -o pipefail
           pnpm --filter @deskto/desktop build
+          builder_log="$RUNNER_TEMP/electron-builder.log"
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --mac \
             --${{ matrix.arch }} \
-            --publish never
+            --publish never 2>&1 | tee "$builder_log"
+          if grep -Fq "cannot find path for dependency" "$builder_log"; then
+            echo "electron-builder omitted a production dependency." >&2
+            exit 1
+          fi
 
       - name: Verify macOS update assets
         shell: bash
@@ -236,12 +243,18 @@ jobs:
       - name: Build Windows package
         shell: bash
         run: |
+          set -o pipefail
           pnpm --filter @deskto/desktop build
+          builder_log="$RUNNER_TEMP/electron-builder.log"
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --win \
             --x64 \
-            --publish never
+            --publish never 2>&1 | tee "$builder_log"
+          if grep -Fq "cannot find path for dependency" "$builder_log"; then
+            echo "electron-builder omitted a production dependency." >&2
+            exit 1
+          fi
 
       - name: Verify Windows package
         shell: pwsh
@@ -317,13 +330,20 @@ jobs:
         run: node .github/scripts/set-desktop-version.mjs "${{ needs.preflight.outputs.version }}"
 
       - name: Build
+        shell: bash
         run: |
+          set -o pipefail
           pnpm --filter @deskto/desktop build
+          builder_log="$RUNNER_TEMP/electron-builder.log"
           pnpm --dir apps/desktop exec electron-builder \
             --config electron-builder.config.ts \
             --linux \
             --x64 \
-            --publish never
+            --publish never 2>&1 | tee "$builder_log"
+          if grep -Fq "cannot find path for dependency" "$builder_log"; then
+            echo "electron-builder omitted a production dependency." >&2
+            exit 1
+          fi
 
       - name: Verify Linux update assets
         shell: bash
