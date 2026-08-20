@@ -1,0 +1,73 @@
+name: Check Apple notarization
+
+on:
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: Optional submission UUID; leave blank to list recent submissions
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Apple notarization
+    runs-on: blacksmith-6vcpu-macos-26
+    timeout-minutes: 5
+    steps:
+      - name: Prepare Apple API key
+        shell: bash
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          required=(APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing repository secret: $name" >&2
+              exit 1
+            fi
+          done
+
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+
+      - name: Read notarization status
+        shell: bash
+        env:
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          auth=(
+            --key "$APPLE_API_KEY_PATH"
+            --key-id "$APPLE_API_KEY_ID"
+            --issuer "$APPLE_API_ISSUER"
+          )
+          result_path="$RUNNER_TEMP/notarization-status.json"
+
+          if [[ -n "$SUBMISSION_ID" ]]; then
+            if [[ ! "$SUBMISSION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+              echo "Submission ID must be a UUID." >&2
+              exit 1
+            fi
+            title="Apple notarization submission $SUBMISSION_ID"
+            xcrun notarytool info "$SUBMISSION_ID" "${auth[@]}" \
+              --output-format json | tee "$result_path"
+          else
+            title="Recent Apple notarization submissions"
+            xcrun notarytool history "${auth[@]}" \
+              --output-format json | tee "$result_path"
+          fi
+
+          {
+            echo "## $title"
+            echo '```json'
+            cat "$result_path"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
