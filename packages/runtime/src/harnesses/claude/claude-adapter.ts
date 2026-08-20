@@ -58,6 +58,8 @@ export type ClaudeQueryFactory = (
 
 type ClaudeAdapterOptions = {
   executablePath?: string
+  /** Folder used only by account and model discovery processes. */
+  discoveryCwd?: string
   /** Stable app-owned directory for generated pack plugin shims. */
   packShimsPath?: string
   queryFactory?: ClaudeQueryFactory
@@ -126,8 +128,9 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
 
   async checkAvailability() {
     try {
-      const account = await this.#discover(availabilityDeadlineMs, (discovery) =>
-        discovery.accountInfo()
+      const account = await this.#discover(
+        availabilityDeadlineMs,
+        (discovery) => discovery.accountInfo()
       )
       return claudeAccountSignedIn(account)
         ? { status: "available" as const }
@@ -169,6 +172,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
     const abortController = new AbortController()
     const prompt = new AsyncQueue<SDKUserMessage>()
     const options: Options = { abortController }
+    if (this.options.discoveryCwd) options.cwd = this.options.discoveryCwd
     if (this.options.executablePath) {
       options.pathToClaudeCodeExecutable = this.options.executablePath
     }

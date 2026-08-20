@@ -85,6 +85,12 @@ export type CodexClientFactory = (
   options?: JsonlClientOptions
 ) => CodexClient
 
+type CodexAdapterOptions = {
+  /** Folder used only by availability and model discovery processes. */
+  discoveryCwd?: string
+  versionReader?: (cwd: string) => Promise<string>
+}
+
 const createCodexClient: CodexClientFactory = (command, cwd, options) =>
   new JsonlClient(command, cwd, options)
 type PendingApproval = {
@@ -112,12 +118,18 @@ export class CodexAdapter implements HarnessAdapterFactory {
   readonly descriptor = { id: "codex", name: "Codex" }
 
   constructor(
-    private readonly clientFactory: CodexClientFactory = createCodexClient
+    private readonly clientFactory: CodexClientFactory = createCodexClient,
+    private readonly options: CodexAdapterOptions = {}
   ) {}
 
   async checkAvailability() {
     try {
-      return { status: "available" as const, version: await readVersion() }
+      return {
+        status: "available" as const,
+        version: await (this.options.versionReader ?? readVersion)(
+          this.options.discoveryCwd ?? process.cwd()
+        ),
+      }
     } catch {
       return {
         status: "unavailable" as const,
@@ -127,7 +139,10 @@ export class CodexAdapter implements HarnessAdapterFactory {
   }
 
   async listModels(): Promise<HarnessModelOption[]> {
-    const client = this.clientFactory("codex", process.cwd())
+    const client = this.clientFactory(
+      "codex",
+      this.options.discoveryCwd ?? process.cwd()
+    )
     try {
       await initialize(client)
       const models: HarnessModelOption[] = []
@@ -1215,9 +1230,10 @@ function codexProvisioning(
   return result
 }
 
-function readVersion(): Promise<string> {
+function readVersion(cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn("codex", ["--version"], {
+      cwd,
       env: process.env,
       stdio: ["ignore", "pipe", "ignore"],
     })

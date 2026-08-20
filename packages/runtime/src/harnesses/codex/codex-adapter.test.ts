@@ -82,6 +82,19 @@ class RecordingCodexClient extends FakeCodexClient {
   }
 }
 
+class EmptyModelCodexClient extends FakeCodexClient {
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    if (method === "model/list") {
+      return Promise.resolve(schema.parse({ data: [] }))
+    }
+    return super.request(method, params, schema)
+  }
+}
+
 const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
@@ -162,6 +175,22 @@ describe("Codex MCP launch options", () => {
       'shell_environment_policy.set.DESKTO_MCP_0_TOKEN=""',
     ])
     expect(options.env?.DESKTO_MCP_0_TOKEN).toBe("secret-token")
+  })
+})
+
+describe("Codex discovery", () => {
+  it("runs model discovery outside the inherited launch directory", async () => {
+    let cwd: string | undefined
+    const factory: CodexClientFactory = (_command, clientCwd) => {
+      cwd = clientCwd
+      return new EmptyModelCodexClient()
+    }
+
+    await new CodexAdapter(factory, {
+      discoveryCwd: "/app-data/harness-discovery",
+    }).listModels()
+
+    expect(cwd).toBe("/app-data/harness-discovery")
   })
 })
 
