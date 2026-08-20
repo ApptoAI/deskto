@@ -25,6 +25,10 @@ Deskto is for the other kind of agent work: preparing an outbound campaign, digg
 
 **Projects with real folders.** Every project is a folder on disk, either managed by Deskto or linked to a folder you already have. Projects carry a description and shared instructions, and reusable Packs of agent skills can be attached across a whole workspace. Agents work inside the project folder, ask for approval when they need it, and their results show up as previewable files, not paths in a transcript.
 
+## Install it
+
+Installers for macOS, Windows and Linux are on the [releases page](https://github.com/ApptoAI/deskto/releases/latest). How a release is cut is in [`docs/release.md`](./docs/release.md).
+
 ## Run it locally
 
 Requirements:

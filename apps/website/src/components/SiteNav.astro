@@ -1,0 +1,43 @@
+---
+import Lockup from "../assets/deskto-lockup.svg"
+import GitHubLogo from "../assets/github.svg"
+import { repoUrl } from "../lib/links"
+
+// The nav for pages without hero art: the same layout as the hero's, in ink
+// on the canvas.
+---
+
+<nav class="site-nav">
+  <a href="/" aria-label="Deskto home">
+    <Lockup height={20} class="site-nav-lockup" />
+  </a>
+  <a class="site-nav-github" href={repoUrl} aria-label="Deskto on GitHub">
+    <GitHubLogo width={20} height={20} aria-hidden="true" />
+  </a>
+</nav>
+
+<style>
+  .site-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    max-width: var(--frame-width);
+    margin-inline: auto;
+    padding: 20px var(--gutter);
+  }
+  .site-nav-lockup {
+    display: block;
+    color: var(--ink);
+  }
+  .site-nav-github {
+    display: flex;
+    color: var(--muted-ink);
+    transition: color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .site-nav-github:hover {
+      color: var(--ink);
+    }
+  }
+</style>

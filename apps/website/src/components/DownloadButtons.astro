@@ -1,20 +1,63 @@
 ---
-import { releasesUrl, repoUrl } from "../lib/links"
+import { downloadPageUrl, repoUrl } from "../lib/links"
 
-// One button set for the hero and the closing call. Both point at the
-// latest release and the repo: there is no per-platform installer to link
-// yet, so a platform split would promise files that are not there.
+// One button set for the hero and the closing call. The first pill starts
+// as a link to the download page, which works without JavaScript and before
+// the first release. Once the script knows the visitor's platform and finds
+// that installer in the latest release, the pill becomes the direct file.
 interface Props {
   onArt?: boolean
+  secondary?: "github" | "platforms"
 }
-const { onArt = false } = Astro.props
+const { onArt = false, secondary = "github" } = Astro.props
 ---
 
 <div class="actions">
-  <a class:list={["pill", onArt ? "pill--paper" : "pill--ink"]} href={releasesUrl}>
-    Download
+  <a
+    class:list={["pill", onArt ? "pill--paper" : "pill--ink"]}
+    href={downloadPageUrl}
+    data-download-link
+  >
+    <span data-download-label>Download</span>
   </a>
-  <a class:list={["pill", onArt ? "pill--outline" : "pill--ghost"]} href={repoUrl}>
-    View on GitHub
-  </a>
+  {
+    secondary === "github" ? (
+      <a class:list={["pill", onArt ? "pill--outline" : "pill--ghost"]} href={repoUrl}>
+        View on GitHub
+      </a>
+    ) : (
+      <a
+        class:list={["pill", onArt ? "pill--outline" : "pill--ghost"]}
+        href={downloadPageUrl}
+      >
+        All platforms
+      </a>
+    )
+  }
 </div>
+
+<script>
+  import { detectInstaller, downloadUrl, fetchLatestRelease } from "../lib/releases"
+
+  const links = document.querySelectorAll<HTMLAnchorElement>("[data-download-link]")
+  if (links.length > 0) {
+    const installer = await detectInstaller()
+    if (installer) {
+      try {
+        const release = await fetchLatestRelease()
+        const url = release ? downloadUrl(release, installer.id) : null
+        // The label only changes together with the target: "Download for
+        // macOS" always means the file itself, never the page.
+        if (url) {
+          for (const link of links) {
+            link.href = url
+            const label = link.querySelector("[data-download-label]")
+            if (label) label.textContent = `Download for ${installer.os}`
+          }
+        }
+      } catch {
+        // The static link to the download page stays.
+      }
+    }
+  }
+</script>
