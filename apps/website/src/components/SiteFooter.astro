@@ -1,0 +1,22 @@
+---
+const year = new Date().getFullYear()
+---
+
+<footer class="footer frame ruled">
+  <p>© {year} deskto</p>
+</footer>
+
+<style>
+  /* The frame measures content-box; the footer carries its own gutter, so
+     it has to size border-box to share the rails with main. */
+  .footer {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 24px var(--gutter);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted-ink);
+  }
+</style>
