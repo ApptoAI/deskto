@@ -82,6 +82,19 @@ class RecordingCodexClient extends FakeCodexClient {
   }
 }
 
+class EmptyModelCodexClient extends FakeCodexClient {
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    if (method === "model/list") {
+      return Promise.resolve(schema.parse({ data: [] }))
+    }
+    return super.request(method, params, schema)
+  }
+}
+
 const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
@@ -165,6 +178,22 @@ describe("Codex MCP launch options", () => {
   })
 })
 
+describe("Codex discovery", () => {
+  it("runs model discovery outside the inherited launch directory", async () => {
+    let cwd: string | undefined
+    const factory: CodexClientFactory = (_command, clientCwd) => {
+      cwd = clientCwd
+      return new EmptyModelCodexClient()
+    }
+
+    await new CodexAdapter(factory, {
+      discoveryCwd: "/app-data/harness-discovery",
+    }).listModels()
+
+    expect(cwd).toBe("/app-data/harness-discovery")
+  })
+})
+
 describe("Codex skill provisioning", () => {
   it("reports accepted extra roots", async () => {
     const session = await new CodexAdapter(clientFactory).start(
@@ -199,16 +228,15 @@ describe("Codex skill provisioning", () => {
 
   it("offers host artifact skills to every session", async () => {
     const client = new RecordingCodexClient()
-    const session = await new CodexAdapter(
-      () => client,
-      [
+    const session = await new CodexAdapter(() => client, {
+      hostSkillRoots: [
         {
           id: "artifact-runtime-spreadsheets",
           name: "Artifact runtime spreadsheets",
           path: "/runtime/spreadsheets/skills",
         },
-      ]
-    ).start(
+      ],
+    }).start(
       {
         ...runInputWithPack(),
         customization: { skillRoots: [] },

@@ -2017,6 +2017,23 @@ describe("Claude availability", () => {
     expect(result).toEqual({ status: "available" })
   })
 
+  it("runs account discovery outside the inherited launch directory", async () => {
+    queryMock.mockReturnValue(
+      fakeQuery([], () =>
+        Promise.resolve({ email: "dev@example.com", apiProvider: "firstParty" })
+      )
+    )
+
+    await new ClaudeAdapter({
+      discoveryCwd: "/app-data/harness-discovery",
+      queryFactory: queryMock,
+    }).checkAvailability()
+
+    expect(queryMock.mock.calls[0]?.[0]?.options?.cwd).toBe(
+      "/app-data/harness-discovery"
+    )
+  })
+
   it("reports available for an API key", async () => {
     const { result } = await availability(() =>
       Promise.resolve({ apiKeySource: "user" })

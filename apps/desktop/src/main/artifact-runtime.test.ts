@@ -99,7 +99,7 @@ describe("artifact runtime discovery", () => {
       await createRuntime(runtimeRoot)
       await writeFile(
         join(runtimeRoot, "dependencies", "node", "bin", "node"),
-        ""
+        "#!/definitely/missing/interpreter\n"
       )
 
       await expect(

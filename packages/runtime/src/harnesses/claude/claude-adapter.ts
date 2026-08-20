@@ -59,6 +59,8 @@ export type ClaudeQueryFactory = (
 
 type ClaudeAdapterOptions = {
   executablePath?: string
+  /** Folder used only by account and model discovery processes. */
+  discoveryCwd?: string
   /** Stable app-owned directory for generated pack plugin shims. */
   packShimsPath?: string
   /** Host-provided skills available to every Claude session. */
@@ -173,6 +175,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
     const abortController = new AbortController()
     const prompt = new AsyncQueue<SDKUserMessage>()
     const options: Options = { abortController }
+    if (this.options.discoveryCwd) options.cwd = this.options.discoveryCwd
     if (this.options.executablePath) {
       options.pathToClaudeCodeExecutable = this.options.executablePath
     }

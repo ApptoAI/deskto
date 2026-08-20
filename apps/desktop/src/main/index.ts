@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs"
+import { mkdir } from "node:fs/promises"
 import path from "node:path"
 
 import { app, BrowserWindow, dialog, protocol, shell } from "electron"
@@ -108,9 +109,17 @@ async function openApplication(): Promise<void> {
   // builds even when the variable is exported in the launching shell.
   if (app.isPackaged) delete process.env.DESKTO_FORCE_ONBOARDING
 
-  // The PATH probe spawns a login shell and can take a few seconds, so it runs
-  // while the window opens and the renderer loads. The runtime gets it as the
-  // probe gate: no harness CLI is spawned before PATH is rebuilt.
+  // Discovery processes must not inherit a launch directory such as the
+  // person's home folder. A CLI inspecting it would make macOS ask Deskto
+  // for unrelated Desktop, Documents, or Downloads access.
+  const harnessDiscoveryPath = path.join(
+    app.getPath("userData"),
+    "harness-discovery"
+  )
+  await mkdir(harnessDiscoveryPath, { recursive: true, mode: 0o700 })
+
+  // PATH discovery can inspect version-manager directories, so it runs while
+  // the window opens. No harness CLI starts before the rebuilt PATH is ready.
   const cliPathConfigured = configureCliPath()
 
   installContentSecurityPolicy()
@@ -135,13 +144,18 @@ async function openApplication(): Promise<void> {
     ? new ClaudeAdapter({
         executablePath: claudeExecutable,
         hostSkillRoots: artifactRuntime?.skillRoots,
+        discoveryCwd: harnessDiscoveryPath,
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
     : new ClaudeAdapter({
         hostSkillRoots: artifactRuntime?.skillRoots,
+        discoveryCwd: harnessDiscoveryPath,
         packShimsPath: path.join(app.getPath("userData"), "claude-pack-shims"),
       })
-  const codexAdapter = new CodexAdapter(undefined, artifactRuntime?.skillRoots)
+  const codexAdapter = new CodexAdapter(undefined, {
+    discoveryCwd: harnessDiscoveryPath,
+    hostSkillRoots: artifactRuntime?.skillRoots,
+  })
   // Separate from DESKTO_FORCE_ONBOARDING on purpose: forcing the wizard
   // keeps real detection, so a machine with agents can walk the happy path;
   // this flag adds the fresh-machine look where both cards stay red.
