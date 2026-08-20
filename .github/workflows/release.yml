@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  schedule:
-    - cron: "17 */4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,39 +11,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  changes:
-    name: Check for changes
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 5
-    outputs:
-      has_changes: ${{ steps.compare.outputs.has_changes }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - id: compare
-        name: Compare with the last release
-        shell: bash
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          last_tag="$(git tag --list 'v0.1.*' --sort=-version:refname | head -n 1)"
-          if [[ -z "$last_tag" || "$(git rev-parse "$last_tag^{commit}")" != "$(git rev-parse HEAD)" ]]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No changes since $last_tag."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          fi
-
   preflight:
     name: Resolve release
-    needs: changes
-    if: needs.changes.outputs.has_changes == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
@@ -99,11 +66,12 @@ jobs:
 
   build_macos:
     name: Build macOS ${{ matrix.arch }}
-    needs: [preflight, quality]
+    needs: [preflight, quality, build_linux, build_windows]
     runs-on: blacksmith-6vcpu-macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
-      fail-fast: false
+      fail-fast: true
+      max-parallel: 1
       matrix:
         arch: [arm64, x64]
     steps:
@@ -154,6 +122,32 @@ jobs:
           echo "CSC_LINK=$certificate_path" >> "$GITHUB_ENV"
           echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
+      - name: Check Apple notarization queue
+        run: |
+          history_path="$RUNNER_TEMP/notary-history.json"
+          xcrun notarytool history \
+            --key "$APPLE_API_KEY" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER" \
+            --output-format json > "$history_path"
+
+          NOTARY_HISTORY_PATH="$history_path" node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs"
+
+          const result = JSON.parse(
+            readFileSync(process.env.NOTARY_HISTORY_PATH, "utf8")
+          )
+          const pending = Array.isArray(result.history)
+            ? result.history.filter((submission) => submission.status === "In Progress")
+            : []
+          if (pending.length > 0) {
+            console.error(
+              `Apple is still processing ${pending.length} earlier notarization submission(s). Try the release again after they finish.`
+            )
+            process.exit(1)
+          }
+          NODE
+
       - name: Build, sign, and notarize
         run: |
           pnpm --filter @deskto/desktop build
@@ -174,7 +168,7 @@ jobs:
 
   build_windows:
     name: Build Windows x64
-    needs: [preflight, quality]
+    needs: [preflight, quality, build_linux]
     runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 30
     env:
