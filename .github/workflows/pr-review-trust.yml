@@ -1,0 +1,54 @@
+name: PR review trust
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  label:
+    name: Classify PR author
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Sync review label
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: pullRequest.user.login,
+            });
+            const trustedPermissions = new Set(["admin", "maintain", "write"]);
+            const trusted = trustedPermissions.has(data.permission);
+            const label = "review-ready";
+            const labels = pullRequest.labels.map(({ name }) => name);
+
+            if (trusted && !labels.includes(label)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pullRequest.number,
+                labels: [label],
+              });
+            }
+
+            if (!trusted && labels.includes(label)) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pullRequest.number,
+                name: label,
+              });
+            }
+
+            core.info(`${pullRequest.user.login}: ${data.permission}`);

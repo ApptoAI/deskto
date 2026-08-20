@@ -42,7 +42,7 @@ pnpm lint
 pnpm test
 ```
 
-For pull requests from forks, CI and automated code review stay paused until a maintainer marks the change as ready for review. This is expected; you do not need to close and reopen the pull request.
+For pull requests from forks, CI and automated code review stay paused until a maintainer marks the change as ready for review. Team pull requests run both automatically. This is expected; you do not need to close and reopen the pull request.
 
 The domain glossary lives in [`CONTEXT.md`](./CONTEXT.md) and past design decisions in [`docs/adr`](./docs/adr). PRs that contradict an accepted ADR need to argue with the ADR, not ignore it.
 
