@@ -16,17 +16,8 @@ import type { BrowserViewState } from "../../../shared/desktop-api.js"
 
 import { Button } from "@workspace/ui/components/button"
 
-import {
-  browserState,
-  cancelBrowserElementSelection,
-  hideBrowser,
-  navigateBrowser,
-  runBrowserAction,
-  selectBrowserElement,
-  showBrowser,
-  subscribeBrowser,
-} from "../../lib/desktop.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
+import { useSurface } from "../../surface/surface-context.js"
 import { InlineError } from "../inline-error.js"
 
 export function BrowserPanel({
@@ -38,6 +29,7 @@ export function BrowserPanel({
   selectedElementCount: number
   onSelectElement: (context: BrowserElementContext) => void
 }) {
+  const surface = useSurface()
   const slotRef = useRef<HTMLDivElement>(null)
   const addressFocused = useRef(false)
   const [state, setState] = useState<BrowserViewState>()
@@ -48,7 +40,8 @@ export function BrowserPanel({
 
   useEffect(() => {
     let active = true
-    void browserState(threadId)
+    void surface.browser
+      .state(threadId)
       .then((next) => {
         if (!active) return
         setState(next)
@@ -57,7 +50,7 @@ export function BrowserPanel({
       .catch((reason) => {
         if (active) setError(describedErrorSchema.parse(reason))
       })
-    const unsubscribe = subscribeBrowser((event) => {
+    const unsubscribe = surface.browser.subscribe((event) => {
       if (event.type !== "state" || event.state.threadId !== threadId) return
       setState(event.state)
       if (!addressFocused.current) setAddress(event.state.url)
@@ -66,25 +59,26 @@ export function BrowserPanel({
       active = false
       unsubscribe()
     }
-  }, [threadId])
+  }, [surface.browser, threadId])
 
   const placeBrowser = useCallback(() => {
     const slot = slotRef.current
     if (!slot) return
     const bounds = slot.getBoundingClientRect()
     if (bounds.width < 1 || bounds.height < 1) return
-    void showBrowser(threadId, {
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.round(bounds.width),
-      height: Math.round(bounds.height),
-    })
+    void surface.browser
+      .place(threadId, {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+      })
       .then((next) => {
         setError(undefined)
         setState(next)
       })
       .catch((reason) => setError(describedErrorSchema.parse(reason)))
-  }, [threadId])
+  }, [surface.browser, threadId])
 
   useLayoutEffect(() => {
     const slot = slotRef.current
@@ -97,16 +91,18 @@ export function BrowserPanel({
       selectionSequence.current += 1
       observer.disconnect()
       window.removeEventListener("resize", placeBrowser)
-      void cancelBrowserElementSelection(threadId).catch(() => undefined)
-      void hideBrowser(threadId)
+      void surface.browser
+        .cancelElementSelection(threadId)
+        .catch(() => undefined)
+      void surface.browser.hide(threadId)
     }
-  }, [placeBrowser, threadId])
+  }, [placeBrowser, surface.browser, threadId])
 
   async function navigate(event: FormEvent) {
     event.preventDefault()
     setError(undefined)
     try {
-      setState(await navigateBrowser(threadId, address))
+      setState(await surface.browser.navigate(threadId, address))
     } catch (reason) {
       setError(describedErrorSchema.parse(reason))
     }
@@ -115,7 +111,7 @@ export function BrowserPanel({
   async function action(value: "back" | "forward" | "reload") {
     setError(undefined)
     try {
-      setState(await runBrowserAction(threadId, value))
+      setState(await surface.browser.action(threadId, value))
     } catch (reason) {
       setError(describedErrorSchema.parse(reason))
     }
@@ -128,7 +124,7 @@ export function BrowserPanel({
     if (selecting) {
       setSelecting(false)
       try {
-        await cancelBrowserElementSelection(threadId)
+        await surface.browser.cancelElementSelection(threadId)
       } catch (reason) {
         if (selectionSequence.current === sequence) {
           setError(describedErrorSchema.parse(reason))
@@ -139,7 +135,7 @@ export function BrowserPanel({
 
     setSelecting(true)
     try {
-      const context = await selectBrowserElement(threadId)
+      const context = await surface.browser.selectElement(threadId)
       if (selectionSequence.current === sequence && context) {
         onSelectElement(context)
       }

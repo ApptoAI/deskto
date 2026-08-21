@@ -4,6 +4,7 @@ import { StatusPanel } from "../components/status-panel.js"
 import { IpcRuntimeTransport } from "../runtime/ipc-runtime-transport.js"
 import { RuntimeClientProvider } from "../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../settings/settings-context.js"
+import { SurfaceProvider } from "../surface/surface-context.js"
 import { UpdatesProvider } from "../updates/updates-context.js"
 import {
   InterfaceSizeSync,
@@ -34,15 +35,17 @@ export function App() {
 
   return (
     <RuntimeClientProvider client={client}>
-      <SettingsProvider>
-        <UpdatesProvider>
-          <ThemeSync />
-          <InterfaceSizeSync />
-          <WorkspaceLayoutSync />
-          <OnboardingCompletedSync />
-          <Workbench />
-        </UpdatesProvider>
-      </SettingsProvider>
+      <SurfaceProvider>
+        <SettingsProvider>
+          <UpdatesProvider>
+            <ThemeSync />
+            <InterfaceSizeSync />
+            <WorkspaceLayoutSync />
+            <OnboardingCompletedSync />
+            <Workbench />
+          </UpdatesProvider>
+        </SettingsProvider>
+      </SurfaceProvider>
     </RuntimeClientProvider>
   )
 }

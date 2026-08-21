@@ -31,11 +31,6 @@ import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 import { z } from "zod"
 
-import {
-  openResultFile,
-  revealResultFile,
-  saveResultCopy,
-} from "../../lib/desktop.js"
 import { useLocalStorage } from "../../lib/use-local-storage.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -43,6 +38,7 @@ import {
   useRuntimeQuery,
   type QueryState,
 } from "../../runtime/use-runtime-query.js"
+import { useSurface, useTaskPanelState } from "../../surface/surface-context.js"
 import { InlineError } from "../inline-error.js"
 import { ActivityPanel } from "./activity-panel.js"
 import { BrowserPanel } from "./browser-panel.js"
@@ -69,16 +65,6 @@ import {
   minimumConversationWidth,
   minimumTaskPanelWidth,
 } from "./task-panel-size.js"
-import {
-  keepFolder,
-  selectFiles,
-  showActivities,
-  showBrowser,
-  showFile,
-  showFilesOverview,
-  showFolder,
-  usePanelState,
-} from "./task-panel-state.js"
 
 const taskPanelWidthSchema = z
   .number()
@@ -92,8 +78,6 @@ export function TaskPanel({
   activities,
   childThreads,
   files,
-  onOpenThread,
-  onClose,
   browserContexts,
   onSelectBrowserElement,
 }: {
@@ -101,13 +85,12 @@ export function TaskPanel({
   activities: Activity[]
   childThreads: Thread[]
   files: QueryState<TurnOutput[]>
-  onOpenThread: (threadId: string) => void
-  onClose: () => void
   browserContexts: readonly BrowserElementContext[]
   onSelectBrowserElement: (context: BrowserElementContext) => void
 }) {
+  const surface = useSurface()
   const outputs = files.status === "ready" ? files.data : undefined
-  const panel = usePanelState(threadId)
+  const panel = useTaskPanelState(threadId)
   const byId = useMemo(
     () => new Map(outputs?.map((output) => [output.artifact.id, output])),
     [outputs]
@@ -125,8 +108,8 @@ export function TaskPanel({
       ? resolveFolder(outputs, panel.folderPath)
       : panel.folderPath
   useEffect(() => {
-    if (outputs) keepFolder(threadId, folder)
-  }, [outputs, threadId, folder])
+    if (outputs) surface.files.keepFolder(threadId, folder)
+  }, [outputs, surface.files, threadId, folder])
   const activitySummary = useMemo(
     () => summarizeActivities(activities),
     [activities]
@@ -278,23 +261,23 @@ export function TaskPanel({
           <FilesTab
             active={panel.surface === "files"}
             count={outputs?.length ?? 0}
-            onSelect={() => selectFiles(threadId)}
+            onSelect={() => surface.files.openPanel(threadId)}
           />
           <ActivityTab
             active={panel.surface === "activities"}
             runningAgents={runningAgents}
-            onSelect={() => showActivities(threadId)}
+            onSelect={() => surface.activities.open(threadId)}
           />
           <BrowserTab
             active={panel.surface === "browser"}
-            onSelect={() => showBrowser(threadId)}
+            onSelect={() => surface.browser.open(threadId)}
           />
         </div>
         <div className="flex shrink-0 items-center">
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={onClose}
+            onClick={() => surface.panel.close(threadId)}
             aria-label="Close the panel"
           >
             <XIcon />
@@ -312,8 +295,8 @@ export function TaskPanel({
         <ActivityPanel
           summary={activitySummary}
           childThreads={childThreads}
-          onOpenThread={onOpenThread}
-          onOpenFiles={() => showFilesOverview(threadId)}
+          onOpenThread={surface.navigation.openTask}
+          onOpenFiles={() => surface.files.overview(threadId)}
         />
       ) : files.status === "error" ? (
         <div className="p-3">
@@ -327,7 +310,7 @@ export function TaskPanel({
             output={active}
             // Back to where the file lives, not to the top: a file opened
             // from the conversation lands the user in its folder.
-            onBack={() => showFolder(threadId, folder)}
+            onBack={() => surface.files.openFolder(threadId, folder)}
           />
         </ResultPreviewBoundary>
       ) : (
@@ -335,8 +318,8 @@ export function TaskPanel({
           loading={files.status !== "ready"}
           outputs={outputs ?? []}
           folder={folder}
-          onOpenFolder={(path) => showFolder(threadId, path)}
-          onSelect={(artifactId) => showFile(threadId, artifactId)}
+          onOpenFolder={(path) => surface.files.openFolder(threadId, path)}
+          onSelect={(artifactId) => surface.files.open(threadId, artifactId)}
         />
       )}
     </aside>
@@ -626,6 +609,7 @@ function FilePreview({
   onBack: () => void
 }) {
   const client = useRuntimeClient()
+  const surface = useSurface()
   const artifact = output.artifact
   const [session, setSession] = useState<EditSession | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -735,7 +719,7 @@ function FilePreview({
           title="Save a copy"
           onClick={() =>
             void runAction(async () => {
-              await saveResultCopy(fileAction, artifact.name)
+              await surface.files.saveCopy(fileAction, artifact.name)
             })
           }
         >
@@ -746,7 +730,7 @@ function FilePreview({
           size="icon-sm"
           aria-label="Show in folder"
           title="Show in folder"
-          onClick={() => void runAction(() => revealResultFile(fileAction))}
+          onClick={() => void runAction(() => surface.files.reveal(fileAction))}
         >
           <FolderOpenIcon />
         </Button>
@@ -756,7 +740,9 @@ function FilePreview({
             size="icon-sm"
             aria-label="Open in its own application"
             title="Open in its own application"
-            onClick={() => void runAction(() => openResultFile(fileAction))}
+            onClick={() =>
+              void runAction(() => surface.files.openExternally(fileAction))
+            }
           >
             <ExternalLinkIcon />
           </Button>

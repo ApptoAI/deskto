@@ -1,13 +1,4 @@
 /** Desktop-only capabilities, kept apart from the Runtime protocol. */
-import type { BrowserElementContext } from "@deskto/protocol"
-
-import type {
-  BrowserAction,
-  BrowserBounds,
-  BrowserEvent,
-  BrowserViewState,
-  ResultRef,
-} from "../../shared/desktop-api.js"
 
 export function openExternal(url: string): void {
   void window.deskto.openExternal(url)
@@ -15,21 +6,6 @@ export function openExternal(url: string): void {
 
 export function openFolder(path: string): Promise<void> {
   return window.deskto.openFolder(path)
-}
-
-export function openResultFile(result: ResultRef): Promise<void> {
-  return window.deskto.openFile(result)
-}
-
-export function revealResultFile(result: ResultRef): Promise<void> {
-  return window.deskto.revealFile(result)
-}
-
-export function saveResultCopy(
-  result: ResultRef,
-  suggestedName: string
-): Promise<boolean> {
-  return window.deskto.saveFileCopy(result, suggestedName)
 }
 
 export function pickProjectFolder() {
@@ -42,53 +18,4 @@ export function pickPackFolder() {
 
 export function pickPackArchive() {
   return window.deskto.pickPackArchive()
-}
-
-export function showBrowser(
-  threadId: string,
-  bounds: BrowserBounds
-): Promise<BrowserViewState> {
-  return window.deskto.browser.show(threadId, bounds)
-}
-
-export function hideBrowser(threadId: string): Promise<void> {
-  return window.deskto.browser.hide(threadId)
-}
-
-export function browserState(threadId: string): Promise<BrowserViewState> {
-  return window.deskto.browser.state(threadId)
-}
-
-export function navigateBrowser(
-  threadId: string,
-  url: string
-): Promise<BrowserViewState> {
-  return window.deskto.browser.navigate(threadId, url)
-}
-
-export function runBrowserAction(
-  threadId: string,
-  action: BrowserAction
-): Promise<BrowserViewState> {
-  return window.deskto.browser.action(threadId, action)
-}
-
-export function openBrowserArtifact(
-  result: ResultRef
-): Promise<BrowserViewState> {
-  return window.deskto.browser.openArtifact(result)
-}
-
-export function selectBrowserElement(
-  threadId: string
-): Promise<BrowserElementContext | undefined> {
-  return window.deskto.browser.selectElement(threadId)
-}
-
-export function cancelBrowserElementSelection(threadId: string): Promise<void> {
-  return window.deskto.browser.cancelElementSelection(threadId)
-}
-
-export function subscribeBrowser(listener: (event: BrowserEvent) => void) {
-  return window.deskto.browser.subscribe(listener)
 }
