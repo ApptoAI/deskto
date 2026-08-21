@@ -4,6 +4,7 @@ import { SurfaceNavigationApi } from "./navigation.js"
 import {
   ActivitiesSurfaceApi,
   FilesSurfaceApi,
+  SideSurfaceApi,
   TaskPanelApi,
   type TaskPanelCapability,
 } from "./task-panel.js"
@@ -15,6 +16,7 @@ export class SurfaceApi {
   readonly files: FilesSurfaceApi
   readonly activities: ActivitiesSurfaceApi
   readonly browser: BrowserSurfaceApi
+  readonly side: SideSurfaceApi
 
   constructor() {
     const panel = new TaskPanelApi()
@@ -22,5 +24,6 @@ export class SurfaceApi {
     this.files = new FilesSurfaceApi(panel)
     this.activities = new ActivitiesSurfaceApi(panel)
     this.browser = new BrowserSurfaceApi(panel)
+    this.side = new SideSurfaceApi(panel)
   }
 }

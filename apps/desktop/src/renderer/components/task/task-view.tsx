@@ -56,6 +56,14 @@ export function TaskView({
   const [profileError, setProfileError] = useState<string | null>(null)
   const panel = useTaskPanelState(threadId)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  // Each /side command press bumps the request; the side panel acknowledges
+  // once its view is ready and the count returns to zero, so no later mount
+  // can re-steal the keyboard. Opening the panel from the tab never bumps it:
+  // a click should not move the keyboard.
+  const [sideFocusRequest, setSideFocusRequest] = useState(0)
+  const handleSideFocusHandled = useCallback(() => {
+    setSideFocusRequest(0)
+  }, [])
   const [browserContexts, setBrowserContexts] = useState<
     BrowserElementContext[]
   >([])
@@ -192,8 +200,14 @@ export function TaskView({
     )
   }
 
-  const { thread, childThreads, messages, activities, pendingApproval } =
-    state.data
+  const {
+    thread,
+    childThreads,
+    sideThread,
+    messages,
+    activities,
+    pendingApproval,
+  } = state.data
   const options = harnesses.status === "ready" ? harnesses.data : []
   // Resolved from the thread rather than the sidebar selection: in the
   // all-projects view the open task can belong to a different project.
@@ -231,6 +245,43 @@ export function TaskView({
     } catch (error) {
       setTaskActionError(describedErrorSchema.parse(error))
     }
+  }
+
+  async function handleOpenSide(options: { focusComposer?: boolean } = {}) {
+    setTaskActionError(null)
+    if (sideThread) {
+      if (options.focusComposer) {
+        setSideFocusRequest((request) => request + 1)
+      }
+      surface.side.open(thread.id)
+      return
+    }
+    // An existing side chat opens any time; creating one while the parent is
+    // mid-response cannot fork cleanly, so say so instead of a failed request.
+    if (!sideThread && active) {
+      setTaskActionError(
+        "The agent is responding. A side chat can start once it settles."
+      )
+      return
+    }
+    try {
+      replace(await client.createSideThread(thread.id))
+      // Only after creation succeeded: a failed request must not leave a
+      // pending focus for an unrelated later open.
+      if (options.focusComposer) {
+        setSideFocusRequest((request) => request + 1)
+      }
+      surface.side.open(thread.id)
+    } catch (error) {
+      setTaskActionError(describedErrorSchema.parse(error))
+    }
+  }
+
+  async function handleDiscardSide() {
+    if (!sideThread) return
+    await client.deleteThread(sideThread.id)
+    surface.files.openPanel(thread.id)
+    revalidate()
   }
 
   return (
@@ -362,6 +413,12 @@ export function TaskView({
                   onCancel={async () => {
                     replace(await client.cancelTurn(thread.id))
                   }}
+                  {...(!active
+                    ? {
+                        onOpenSideChat: () =>
+                          void handleOpenSide({ focusComposer: true }),
+                      }
+                    : {})}
                   toolbar={
                     models.length > 0 ? (
                       <ExecutionProfileToolbar
@@ -404,6 +461,11 @@ export function TaskView({
           threadId={threadId}
           activities={activities}
           childThreads={childThreads}
+          {...(sideThread ? { sideThread } : {})}
+          parentTitle={thread.title}
+          projectPath={projectPath}
+          {...(sideFocusRequest ? { focusRequest: sideFocusRequest } : {})}
+          onFocusHandled={handleSideFocusHandled}
           files={files.state}
           browserContexts={browserContexts}
           onSelectBrowserElement={(context) =>
@@ -414,6 +476,8 @@ export function TaskView({
                 : [...current, context]
             )
           }
+          onOpenSide={() => void handleOpenSide()}
+          onDiscardSide={handleDiscardSide}
         />
       ) : null}
     </div>

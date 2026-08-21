@@ -374,6 +374,12 @@ export class RequestRouter {
         }
         return thread
       }
+      case "thread.createSide": {
+        const threadId = request.params.threadId
+        this.store.threads.createSide(threadId)
+        this.events.threadChanged(threadId)
+        return this.turns.view(threadId)
+      }
       case "thread.search":
         return this.store.threads.search(
           request.params.originThreadId,

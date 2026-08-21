@@ -23,6 +23,7 @@ import {
 
 import { appendBrowserPromptContext } from "./browser/browser-prompt-context.js"
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
+import { isThreadRowActive } from "./storage/records.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { ProjectOutputSweep } from "./project-outputs.js"
@@ -184,6 +185,25 @@ export class TurnCoordinator {
     this.events.changed(threadId)
   }
 
+  /**
+   * Checked when the side turn begins and again immediately before the
+   * adapter is invoked: forking a parent that is mid-response would base the
+   * side chat on a half-written turn. Between the second check and the spawn
+   * no await remains, so what is left of the race is a same-tick conflict,
+   * which ADR 0026 records as accepted.
+   */
+  #requireParentQuiet(threadId: string): void {
+    const parentId = this.store.threads.parentId(threadId)
+    if (!parentId) return
+    const parent = this.store.threads.getRow(parentId)
+    if (isThreadRowActive(parent.status)) {
+      throw new RuntimeError(
+        "fork-parent-active",
+        "Wait for the main task's response before sending here"
+      )
+    }
+  }
+
   #settleRun(threadId: string, run: StartingRun | ActiveRun): void {
     if (this.#runs.get(threadId) !== run) return
     this.#runs.delete(threadId)
@@ -251,6 +271,7 @@ export class TurnCoordinator {
     this.#changed(threadId)
 
     try {
+      if (turn.forkProviderSession) this.#requireParentQuiet(threadId)
       const tools = await SessionToolLeases.open(
         this.sessionTools,
         {
@@ -293,11 +314,22 @@ export class TurnCoordinator {
       if (turn.providerSessionId) {
         runInput.providerSessionId = turn.providerSessionId
       }
+      if (turn.forkProviderSession) runInput.forkProviderSession = true
       // Before the Harness starts, so the files it writes are new to it.
       const outputs = await ProjectOutputSweep.begin(
         turn.projectPath,
         (paths) => this.#captureSweptOutputs(threadId, turn.turnId, paths)
       )
+      // Last possible moment before forking: the setup above awaited twice,
+      // and the parent may have begun responding during it.
+      if (turn.forkProviderSession) {
+        try {
+          this.#requireParentQuiet(threadId)
+        } catch (error) {
+          outputs?.close()
+          throw error
+        }
+      }
       const session = await harness.start(runInput, starting.controller.signal)
       try {
         this.store.skillProvisioning.record(

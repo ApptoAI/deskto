@@ -28,7 +28,9 @@ class FakeCodexClient implements CodexClient {
     schema: ZodType<T>
   ): Promise<T> {
     const response: JsonValue =
-      method === "thread/start" || method === "thread/resume"
+      method === "thread/start" ||
+      method === "thread/resume" ||
+      method === "thread/fork"
         ? { thread: { id: "thread-1" } }
         : method === "turn/start"
           ? { turn: { id: "turn-1" } }
@@ -383,6 +385,25 @@ describe("Codex MCP provisioning", () => {
 })
 
 describe("Codex Project instructions", () => {
+  it("forks the source thread for a side chat", async () => {
+    const client = new RecordingCodexClient()
+    await new CodexAdapter(() => client).start(
+      {
+        ...runInputWithPack(),
+        providerSessionId: "codex-thread-1",
+        forkProviderSession: true,
+      },
+      new AbortController().signal
+    )
+
+    expect(
+      client.requests.find(({ method }) => method === "thread/fork")?.params
+    ).toMatchObject({ threadId: "codex-thread-1" })
+    expect(
+      client.requests.some(({ method }) => method === "thread/resume")
+    ).toBe(false)
+  })
+
   it("passes shared instructions as app-server developer instructions", async () => {
     const client = new RecordingCodexClient()
     await new CodexAdapter(() => client).start(

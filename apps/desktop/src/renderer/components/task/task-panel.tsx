@@ -17,14 +17,17 @@ import ExternalLinkIcon from "lucide-react/dist/esm/icons/external-link"
 import FilesIcon from "lucide-react/dist/esm/icons/files"
 import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
+import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
+import MessagesSquareIcon from "lucide-react/dist/esm/icons/messages-square"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type {
-  Activity,
-  Artifact,
-  BrowserElementContext,
-  Thread,
-  TurnOutput,
+import {
+  isActivityBlocked,
+  type Activity,
+  type Artifact,
+  type BrowserElementContext,
+  type Thread,
+  type TurnOutput,
 } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -57,6 +60,7 @@ import {
 } from "./file-listing.js"
 import { PreviewFailure, PreviewLoading } from "./preview-states.js"
 import { ResultPreviewBoundary } from "./result-preview-boundary.js"
+import { SideChatPanel } from "./side-chat-panel.js"
 import {
   clampTaskPanelWidth,
   defaultTaskPanelWidth,
@@ -77,16 +81,30 @@ export function TaskPanel({
   threadId,
   activities,
   childThreads,
+  sideThread,
+  parentTitle,
+  projectPath,
+  focusRequest,
+  onFocusHandled,
   files,
   browserContexts,
   onSelectBrowserElement,
+  onOpenSide,
+  onDiscardSide,
 }: {
   threadId: string
   activities: Activity[]
   childThreads: Thread[]
+  sideThread?: Thread
+  parentTitle?: string
+  projectPath?: string
+  focusRequest?: number
+  onFocusHandled?: () => void
   files: QueryState<TurnOutput[]>
   browserContexts: readonly BrowserElementContext[]
   onSelectBrowserElement: (context: BrowserElementContext) => void
+  onOpenSide: () => void
+  onDiscardSide: () => Promise<void>
 }) {
   const surface = useSurface()
   const outputs = files.status === "ready" ? files.data : undefined
@@ -272,6 +290,11 @@ export function TaskPanel({
             active={panel.surface === "browser"}
             onSelect={() => surface.browser.open(threadId)}
           />
+          <SideTab
+            active={panel.surface === "side"}
+            running={sideThread ? isActivityBlocked(sideThread) : false}
+            onSelect={onOpenSide}
+          />
         </div>
         <div className="flex shrink-0 items-center">
           <Button
@@ -285,7 +308,23 @@ export function TaskPanel({
         </div>
       </div>
 
-      {panel.surface === "browser" ? (
+      {panel.surface === "side" ? (
+        sideThread ? (
+          <SideChatPanel
+            thread={sideThread}
+            parentTitle={parentTitle}
+            {...(projectPath ? { projectPath } : {})}
+            {...(focusRequest ? { focusRequest } : {})}
+            {...(onFocusHandled ? { onFocusHandled } : {})}
+            onDiscard={onDiscardSide}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <GitBranchIcon aria-hidden className="size-4 animate-pulse" />
+            Starting side chat…
+          </div>
+        )
+      ) : panel.surface === "browser" ? (
         <BrowserPanel
           threadId={threadId}
           selectedElementCount={browserContexts.length}
@@ -323,6 +362,34 @@ export function TaskPanel({
         />
       )}
     </aside>
+  )
+}
+
+function SideTab({
+  active,
+  running,
+  onSelect,
+}: {
+  active: boolean
+  running: boolean
+  onSelect: () => void
+}) {
+  return (
+    <PanelTab
+      active={active}
+      onSelect={onSelect}
+      title="Ask a side question with the current context"
+    >
+      <MessagesSquareIcon aria-hidden className="size-3.5 shrink-0" />
+      <span>Side</span>
+      {running ? (
+        <span
+          role="img"
+          className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-pulse"
+          aria-label="Side chat is working"
+        />
+      ) : null}
+    </PanelTab>
   )
 }
 
@@ -599,7 +666,9 @@ type EditSession = {
   content: string
 }
 
-function FilePreview({
+/** One artifact's preview, editor, and file actions. Shared with the side
+    chat, which previews its own outputs in place of the conversation. */
+export function FilePreview({
   threadId,
   output,
   onBack,

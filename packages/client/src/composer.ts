@@ -24,7 +24,7 @@ export type ComposerCandidate =
   | {
       id: string
       kind: "app-command"
-      command: "model"
+      command: "model" | "side"
       label: string
       description: string
     }

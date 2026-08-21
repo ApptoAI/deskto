@@ -385,7 +385,7 @@ class CodexSession implements HarnessSession {
     }
     const response = this.input.providerSessionId
       ? await this.client.request(
-          "thread/resume",
+          this.input.forkProviderSession ? "thread/fork" : "thread/resume",
           { ...params, threadId: this.input.providerSessionId },
           codexThreadResponseSchema
         )

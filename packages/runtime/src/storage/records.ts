@@ -44,6 +44,8 @@ export type ThreadRow = {
   id: string
   project_id: string
   parent_thread_id: string | null
+  is_side: number
+  fork_provider_session: number
   title: string
   harness_id: string
   status: Thread["status"]
@@ -178,6 +180,13 @@ export function toProject(row: ProjectRow): Project {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+/** Work the agent is doing or waiting on, read from a stored row. Mirrors
+    the protocol's isActivityBlocked so storage guards cannot drift from the
+    client-side rule. */
+export function isThreadRowActive(status: Thread["status"]): boolean {
+  return status === "running" || status === "waiting-approval"
 }
 
 export function toThread(row: ThreadRow): Thread {

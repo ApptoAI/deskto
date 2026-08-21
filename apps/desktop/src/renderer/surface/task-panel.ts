@@ -1,6 +1,6 @@
 import type { ResultRef } from "../../shared/desktop-api.js"
 
-export type TaskPanelSurface = "files" | "activities" | "browser"
+export type TaskPanelSurface = "files" | "activities" | "browser" | "side"
 
 export type TaskPanelState = {
   readonly open: boolean
@@ -164,5 +164,13 @@ export class ActivitiesSurfaceApi {
 
   open(threadId: string): void {
     this.panel.open({ threadId, surface: "activities" })
+  }
+}
+
+export class SideSurfaceApi {
+  constructor(private readonly panel: TaskPanelApi) {}
+
+  open(threadId: string): void {
+    this.panel.open({ threadId, surface: "side" })
   }
 }

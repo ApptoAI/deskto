@@ -278,6 +278,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     }),
   }),
   z.object({
+    method: z.literal("thread.createSide"),
+    params: z.object({ threadId: z.string().min(1) }),
+  }),
+  z.object({
     method: z.literal("thread.search"),
     params: z.object({
       originThreadId: z.string().min(1),
@@ -434,6 +438,7 @@ export interface RuntimeResponses {
   "project.searchEntries": z.infer<typeof projectEntrySchema>[]
   "thread.list": z.infer<typeof threadSchema>[]
   "thread.create": z.infer<typeof threadSchema>
+  "thread.createSide": z.infer<typeof threadViewSchema>
   "thread.search": z.infer<typeof threadSearchResultSchema>[]
   "thread.configure": z.infer<typeof threadViewSchema>
   "thread.get": z.infer<typeof threadViewSchema>

@@ -32,6 +32,35 @@ const emptyAssistantUsage = {
 
 beforeEach(() => queryMock.mockReset())
 
+describe("Claude session forks", () => {
+  it("forks rather than mutating the resumed session", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+    await new ClaudeAdapter({ queryFactory: queryMock }).start(
+      {
+        threadId: "side-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Side question",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+        providerSessionId: "session-main",
+        forkProviderSession: true,
+      },
+      new AbortController().signal
+    )
+
+    expect(queryMock.mock.calls[0]?.[0]?.options).toMatchObject({
+      resume: "session-main",
+      forkSession: true,
+    })
+  })
+})
+
 describe("Claude MCP provisioning", () => {
   it("passes a turn-scoped HTTP server directly to the SDK", async () => {
     queryMock.mockReturnValue(fakeQuery([]))

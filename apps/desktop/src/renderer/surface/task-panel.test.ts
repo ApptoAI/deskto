@@ -35,6 +35,26 @@ describe("TaskPanelApi", () => {
     })
   })
 
+  it("opens the side surface and keeps its place when closed", () => {
+    const surface = new SurfaceApi()
+    const threadId = "panel-side-thread"
+
+    surface.side.open(threadId)
+    expect(surface.panel.state(threadId)).toEqual({
+      open: true,
+      surface: "side",
+      folderPath: "",
+    })
+
+    surface.panel.close(threadId)
+    surface.side.open(threadId)
+    expect(surface.panel.state(threadId)).toEqual({
+      open: true,
+      surface: "side",
+      folderPath: "",
+    })
+  })
+
   it("keeps the open folder while a file is read and drops it for overview", () => {
     const surface = new SurfaceApi()
     const threadId = "panel-folder-thread"

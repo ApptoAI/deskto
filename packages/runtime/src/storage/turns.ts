@@ -6,13 +6,19 @@ import type {
   ExecutionProfile,
   HarnessFailure,
   Message,
+  Thread,
   TurnInput,
 } from "@deskto/protocol"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import { decodeImageAttachment } from "./image-attachment-data.js"
-import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
+import {
+  toMessage,
+  isThreadRowActive,
+  type MessageRow,
+  type ThreadRow,
+} from "./records.js"
 import { newThreadTitle } from "./threads.js"
 
 export type ActiveTurnRecord = {
@@ -20,6 +26,7 @@ export type ActiveTurnRecord = {
   assistantMessageId: string
   prompt: string
   providerSessionId?: string
+  forkProviderSession?: boolean
   projectPath: string
   workspaceId: string
   harnessId: string
@@ -39,23 +46,35 @@ export class Turns {
       data: decodeImageAttachment(attachment),
     }))
     // SAFETY: the query selects a complete ThreadRow plus the three named
-    // project and EXISTS fields declared in this intersection.
+    // project and EXISTS fields declared in this intersection. The subquery
+    // reads the parent's status for fork turns, whose provider session must
+    // not be branched while the parent is still writing to it.
     const context = this.database
       .prepare(
-        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
+        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns, (SELECT parent.status FROM threads parent WHERE parent.id = t.parent_thread_id) AS parent_status FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
       )
       .get(threadId) as
       | (ThreadRow & {
           project_path: string
           workspace_id: string
           has_turns: number
+          parent_status: Thread["status"] | null
         })
       | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
-    if (context.status === "running" || context.status === "waiting-approval") {
+    if (isThreadRowActive(context.status)) {
       throw new RuntimeError(
         "turn-active",
         "This task already has an active turn"
+      )
+    }
+    if (
+      context.fork_provider_session === 1 &&
+      isThreadRowActive(context.parent_status ?? "idle")
+    ) {
+      throw new RuntimeError(
+        "fork-parent-active",
+        "Wait for the main task's response before sending here"
       )
     }
 
@@ -134,6 +153,9 @@ export class Turns {
     if (context.provider_session_id) {
       activeTurn.providerSessionId = context.provider_session_id
     }
+    if (context.fork_provider_session === 1) {
+      activeTurn.forkProviderSession = true
+    }
     return activeTurn
   }
 
@@ -145,7 +167,7 @@ export class Turns {
     transaction(this.database, () => {
       this.database
         .prepare(
-          "UPDATE threads SET provider_session_id = ?, updated_at = ? WHERE id = ?"
+          "UPDATE threads SET provider_session_id = ?, fork_provider_session = 0, updated_at = ? WHERE id = ?"
         )
         .run(providerSessionId, new Date().toISOString(), threadId)
       this.database

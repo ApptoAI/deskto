@@ -3093,6 +3093,129 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("forks one hidden side chat from the current harness session", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const parent = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: parent.id, prompt: "Review the proposal" },
+      })
+    )
+    harness.runs[0]!.emit({
+      type: "session.started",
+      providerSessionId: "claude-session-1",
+    })
+    harness.runs[0]!.emit({ type: "turn.completed" })
+    harness.runs[0]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: parent.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    const withSide = unwrap(
+      await runtime.request({
+        method: "thread.createSide",
+        params: { threadId: parent.id },
+      })
+    )
+    const side = withSide.sideThread!
+    expect(withSide.childThreads).toEqual([])
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "thread.list",
+          params: { projectId: project.id },
+        })
+      ).map((thread) => thread.id)
+    ).toEqual([parent.id])
+
+    // The fork happens on the side chat's first turn, so that turn is the one
+    // that must refuse to branch while the parent is mid-response.
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: parent.id, prompt: "Second pass" },
+      })
+    )
+    const blockedFork = await runtime.request({
+      method: "turn.start",
+      params: { threadId: side.id, prompt: "Too early" },
+    })
+    if (blockedFork.ok) throw new Error("The fork should have been refused")
+    expect(blockedFork.error.code).toBe("fork-parent-active")
+    harness.runs[1]!.emit({ type: "turn.completed" })
+    harness.runs[1]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: parent.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: side.id, prompt: "What assumption is weakest?" },
+      })
+    )
+    expect(harness.runs[2]?.input).toMatchObject({
+      providerSessionId: "claude-session-1",
+      forkProviderSession: true,
+    })
+    harness.runs[2]!.emit({
+      type: "session.started",
+      providerSessionId: "claude-session-side",
+    })
+    harness.runs[2]!.emit({ type: "turn.completed" })
+    harness.runs[2]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: side.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: side.id, prompt: "Explain that further" },
+      })
+    )
+    expect(harness.runs[3]?.input.providerSessionId).toBe("claude-session-side")
+    expect(harness.runs[3]?.input.forkProviderSession).toBeUndefined()
+    await runtime.close()
+  })
+
   it("enforces background task fan-out and depth inside storage", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)

@@ -284,6 +284,10 @@ export class RuntimeClient {
     })
   }
 
+  createSideThread(threadId: string) {
+    return this.request({ method: "thread.createSide", params: { threadId } })
+  }
+
   searchThreads(
     originThreadId: string,
     query: string,

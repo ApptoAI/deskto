@@ -56,15 +56,46 @@ import { ComposerAttachments } from "./composer-attachments.js"
 
 const noBrowserContexts: readonly BrowserElementContext[] = []
 
-const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
-  {
-    id: "command:model",
+type AppCommandName = Extract<
+  ComposerCandidate,
+  { kind: "app-command" }
+>["command"]
+
+/** A command runs on its exact label alone; "/side explain X" is a message,
+    not a command with an argument the handler would silently drop. */
+function slashCommandMatches(label: string): (text: string) => boolean {
+  return (text) => text.trim() === label
+}
+
+/**
+ * One slash command, whole: the suggestion row, the typed form that selects
+ * it, whether it has somewhere to go in the current view, and what it does.
+ * Nothing about a command lives anywhere else.
+ */
+type AppCommandDefinition = {
+  command: AppCommandName
+  label: string
+  description: string
+  enabled: boolean
+  unavailableText: string
+  /** With draft images attached the command stays literal text; the images
+      belong to the message being composed, not to the command. */
+  onlyWithoutAttachments?: boolean
+  matches: (text: string) => boolean
+  run: () => void
+}
+
+function toComposerCandidate(
+  definition: AppCommandDefinition
+): Extract<ComposerCandidate, { kind: "app-command" }> {
+  return {
+    id: `command:${definition.command}`,
     kind: "app-command",
-    command: "model",
-    label: "/model",
-    description: "Choose the model for this task",
-  },
-]
+    command: definition.command,
+    label: definition.label,
+    description: definition.description,
+  }
+}
 
 type SkillCache = {
   /** The `$` this list was read for, not just the project it came from. */
@@ -91,6 +122,8 @@ export function Composer({
   onSend,
   onCancel,
   onOpenModelPicker,
+  onOpenSideChat,
+  focusToken,
   running = false,
   blockedReason,
   toolbar,
@@ -107,6 +140,9 @@ export function Composer({
   onSend: (input: TurnInput) => Promise<void>
   onCancel?: () => Promise<void>
   onOpenModelPicker?: () => void
+  onOpenSideChat?: () => void
+  /** Bump to move the keyboard into this composer; see the effect below. */
+  focusToken?: number
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
@@ -146,7 +182,45 @@ export function Composer({
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
+  // A focus request is a number the caller bumps when it wants the keyboard,
+  // and returns to zero once handled. The ref tracks it through that cycle:
+  // dropping to zero re-arms it, so a caller that always asks for 1 still
+  // focuses every time, while zero itself never steals focus on a remount.
+  const lastFocusToken = useRef(0)
+  useEffect(() => {
+    if (!focusToken) {
+      lastFocusToken.current = 0
+      return
+    }
+    if (focusToken === lastFocusToken.current) return
+    lastFocusToken.current = focusToken
+    textareaRef.current?.focus()
+  }, [focusToken])
+
   const blocked = blockedReason !== undefined
+  // Commands close over this render's props: availability and action both
+  // depend on what the enclosing view passed in.
+  const appCommands: AppCommandDefinition[] = [
+    {
+      command: "model",
+      label: "/model",
+      description: "Choose the model for this task",
+      enabled: onOpenModelPicker !== undefined,
+      unavailableText: "No model options are available for this task.",
+      onlyWithoutAttachments: true,
+      matches: slashCommandMatches("/model"),
+      run: () => onOpenModelPicker?.(),
+    },
+    {
+      command: "side",
+      label: "/side",
+      description: "Ask a side question with this task's context",
+      enabled: onOpenSideChat !== undefined,
+      unavailableText: "A side chat is not available for this task yet.",
+      matches: slashCommandMatches("/side"),
+      run: () => onOpenSideChat?.(),
+    },
+  ]
   const hasContent =
     prompt.trim().length > 0 ||
     attachments.length > 0 ||
@@ -179,13 +253,20 @@ export function Composer({
       : null
   const candidates =
     trigger?.kind === "command"
-      ? (onOpenModelPicker ? appCommands : []).filter(
-          (candidate) =>
-            candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
-            candidate.description
-              .toLocaleLowerCase()
-              .includes(trigger.query.toLocaleLowerCase())
-        )
+      ? appCommands
+          .filter(
+            (definition) =>
+              definition.enabled &&
+              !(definition.onlyWithoutAttachments && attachments.length > 0)
+          )
+          .map(toComposerCandidate)
+          .filter(
+            (candidate) =>
+              candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
+              candidate.description
+                .toLocaleLowerCase()
+                .includes(trigger.query.toLocaleLowerCase())
+          )
       : trigger?.kind === "project-entry" && !trigger.query.trim()
         ? []
         : shortlist
@@ -311,16 +392,21 @@ export function Composer({
 
     const text = prompt.trim()
     const currentReferences = reconcilePromptReferences(text, references)
-    if (attachments.length === 0 && /^\/model(?:\s|$)/.test(text)) {
+    const matchedCommand = appCommands.find(
+      (definition) =>
+        !(definition.onlyWithoutAttachments && attachments.length > 0) &&
+        definition.matches(text)
+    )
+    if (matchedCommand) {
       setError(null)
-      if (onOpenModelPicker) {
-        setPrompt("")
-        setReferences([])
-        setTrigger(null)
-        onOpenModelPicker()
-      } else {
-        setError("No model options are available for this task.")
+      if (!matchedCommand.enabled) {
+        setError(matchedCommand.unavailableText)
+        return
       }
+      setPrompt("")
+      setReferences([])
+      setTrigger(null)
+      matchedCommand.run()
       return
     }
     const submittedAttachmentIds = new Set(
@@ -386,7 +472,9 @@ export function Composer({
       const next = replaceComposerTrigger(prompt, currentTrigger, "")
       updatePrompt(next.text, next.cursor)
       setTrigger(null)
-      onOpenModelPicker?.()
+      appCommands
+        .find((definition) => definition.command === candidate.command)
+        ?.run()
       return
     }
 
