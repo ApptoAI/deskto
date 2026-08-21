@@ -114,6 +114,7 @@ export function Composer({
   onCancel,
   onOpenModelPicker,
   onOpenSideChat,
+  focusToken,
   running = false,
   blockedReason,
   toolbar,
@@ -131,6 +132,8 @@ export function Composer({
   onCancel?: () => Promise<void>
   onOpenModelPicker?: () => void
   onOpenSideChat?: () => void
+  /** Bump to move the keyboard into this composer; see the effect below. */
+  focusToken?: number
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
@@ -169,6 +172,18 @@ export function Composer({
   const skillRequest = useRef<SkillRequest | null>(null)
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
+
+  // A focus request is a number the caller bumps when it wants the keyboard.
+  // Zero means nothing was asked, so a remount cannot re-steal focus; the
+  // caller resets it to zero once handled. autoFocus alone cannot cover this
+  // because it fires only on mount and an already-mounted composer would
+  // ignore the request.
+  const lastFocusToken = useRef(0)
+  useEffect(() => {
+    if (!focusToken || focusToken === lastFocusToken.current) return
+    lastFocusToken.current = focusToken
+    textareaRef.current?.focus()
+  }, [focusToken])
 
   const blocked = blockedReason !== undefined
   // Commands close over this render's props: availability and action both

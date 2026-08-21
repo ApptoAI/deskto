@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import Trash2Icon from "lucide-react/dist/esm/icons/trash-2"
 import {
@@ -25,15 +25,27 @@ import { MessageStream } from "./message-stream.js"
 export function SideChatPanel({
   thread,
   parentTitle,
+  focusRequest = 0,
+  onFocusHandled,
   onDiscard,
 }: {
   thread: Thread
   parentTitle?: string
+  /** How many times the person asked for this composer's keyboard (via
+      /side). The panel acknowledges through `onFocusHandled` once the view is
+      ready, so a later remount cannot focus again. */
+  focusRequest?: number
+  onFocusHandled?: () => void
   onDiscard: () => Promise<void>
 }) {
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(thread.id)
   const [discardError, setDiscardError] = useState<string | null>(null)
+
+  const viewReady = state.status === "ready"
+  useEffect(() => {
+    if (viewReady && focusRequest > 0) onFocusHandled?.()
+  }, [focusRequest, onFocusHandled, viewReady])
 
   async function discard() {
     setDiscardError(null)
@@ -139,6 +151,7 @@ export function SideChatPanel({
           thread={view.thread}
           active={active}
           blocked={approval !== undefined}
+          focusToken={focusRequest}
           replace={replace}
         />
       </div>
@@ -172,11 +185,13 @@ function SideComposer({
   thread,
   active,
   blocked,
+  focusToken,
   replace,
 }: {
   thread: Thread
   active: boolean
   blocked: boolean
+  focusToken?: number
   replace: (view: ThreadView) => void
 }) {
   const client = useRuntimeClient()
@@ -187,6 +202,7 @@ function SideComposer({
       label="Side question"
       placeholder={active ? "The agent is working…" : "Ask a side question"}
       running={active}
+      focusToken={focusToken}
       {...(blocked
         ? {
             blockedReason:

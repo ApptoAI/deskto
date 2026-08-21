@@ -83,6 +83,8 @@ export function TaskPanel({
   childThreads,
   sideThread,
   parentTitle,
+  focusRequest,
+  onFocusHandled,
   files,
   browserContexts,
   onSelectBrowserElement,
@@ -94,6 +96,8 @@ export function TaskPanel({
   childThreads: Thread[]
   sideThread?: Thread
   parentTitle?: string
+  focusRequest?: number
+  onFocusHandled?: () => void
   files: QueryState<TurnOutput[]>
   browserContexts: readonly BrowserElementContext[]
   onSelectBrowserElement: (context: BrowserElementContext) => void
@@ -307,6 +311,8 @@ export function TaskPanel({
           <SideChatPanel
             thread={sideThread}
             parentTitle={parentTitle}
+            {...(focusRequest ? { focusRequest } : {})}
+            {...(onFocusHandled ? { onFocusHandled } : {})}
             onDiscard={onDiscardSide}
           />
         ) : (
