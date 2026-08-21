@@ -94,7 +94,7 @@ export function BrowserPanel({
       void surface.browser
         .cancelElementSelection(threadId)
         .catch(() => undefined)
-      void surface.browser.hide(threadId)
+      void surface.browser.hide(threadId).catch(() => undefined)
     }
   }, [placeBrowser, surface.browser, threadId])
 
