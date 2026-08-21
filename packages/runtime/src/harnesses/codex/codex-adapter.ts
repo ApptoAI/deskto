@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -12,6 +11,7 @@ import {
   type ChangedFile,
   type ContextUsage,
   type HarnessAdapterFactory,
+  type HarnessAvailability,
   type HarnessEvent,
   type HarnessModelOption,
   type HarnessRunInput,
@@ -53,6 +53,20 @@ const codexModelListSchema = z.object({
 })
 type CodexModelListResponse = z.infer<typeof codexModelListSchema>
 
+const codexInitializeResponseSchema = z.object({
+  userAgent: z.string().optional(),
+})
+
+const codexAccountSchema = z.object({
+  account: jsonObjectSchema.nullable().optional(),
+  requiresOpenaiAuth: z.boolean().optional(),
+})
+
+type CodexAvailabilityProbe = {
+  version?: string
+  accountStatus: "ready" | "signed-out"
+}
+
 const codexLimitSlotSchema = z.object({
   usedPercent: z.number().optional(),
   used_percent: z.number().optional(),
@@ -90,8 +104,20 @@ type CodexAdapterOptions = {
   discoveryCwd?: string
   /** Host-provided skills available to every Codex session. */
   hostSkillRoots?: SkillRoot[]
-  versionReader?: (cwd: string) => Promise<string>
+  /** Maximum total time for the availability app-server probe. */
+  availabilityDeadlineMs?: number
+  availabilityProbe?: (cwd: string) => Promise<CodexAvailabilityProbe>
 }
+
+export const codexNotInstalledReason =
+  "Codex CLI was not found. Open Terminal and run `npm install -g @openai/codex`."
+export const codexNotSignedInReason =
+  "Codex is not signed in. Open Terminal, run `codex login`, and follow the sign-in steps."
+const codexAccountCheckFailedReason =
+  "Codex could not verify your account. Open Terminal, run `npm install -g @openai/codex@latest`, then try again."
+
+const availabilityDeadlineMs = 8_000
+const commandNotFoundSchema = z.object({ code: z.literal("ENOENT") })
 
 const createCodexClient: CodexClientFactory = (command, cwd, options) =>
   new JsonlClient(command, cwd, options)
@@ -125,19 +151,39 @@ export class CodexAdapter implements HarnessAdapterFactory {
   ) {}
 
   async checkAvailability() {
+    let probe: CodexAvailabilityProbe
     try {
-      return {
-        status: "available" as const,
-        version: await (this.options.versionReader ?? readVersion)(
-          this.options.discoveryCwd ?? process.cwd()
-        ),
-      }
-    } catch {
+      probe = await (
+        this.options.availabilityProbe ??
+        ((cwd) =>
+          readAvailability(
+            this.clientFactory,
+            cwd,
+            this.options.availabilityDeadlineMs ?? availabilityDeadlineMs
+          ))
+      )(this.options.discoveryCwd ?? process.cwd())
+    } catch (error) {
       return {
         status: "unavailable" as const,
-        reason: "Codex CLI was not found. Install Codex and sign in first.",
+        reason: commandNotFoundSchema.safeParse(error).success
+          ? codexNotInstalledReason
+          : codexAccountCheckFailedReason,
       }
     }
+
+    if (probe.accountStatus === "signed-out") {
+      return {
+        status: "unavailable" as const,
+        reason: codexNotSignedInReason,
+      }
+    }
+
+    const availability: Extract<HarnessAvailability, { status: "available" }> =
+      {
+        status: "available",
+      }
+    if (probe.version) availability.version = probe.version
+    return availability
   }
 
   async listModels(): Promise<HarnessModelOption[]> {
@@ -799,16 +845,17 @@ export function codexMcpLaunchOptions(
   return { args, env }
 }
 
-async function initialize(client: CodexClient): Promise<void> {
-  await client.request(
+async function initialize(client: CodexClient): Promise<string | undefined> {
+  const response = await client.request(
     "initialize",
     {
       clientInfo: { name: "deskto", title: "Deskto", version: "0.0.1" },
       capabilities: { experimentalApi: false, requestAttestation: false },
     },
-    jsonValueSchema
+    codexInitializeResponseSchema
   )
   client.notify("initialized")
+  return response.userAgent?.match(/\/([^\s]+)/)?.[1]
 }
 
 function codexModel(value: JsonValue): HarnessModelOption | undefined {
@@ -1245,21 +1292,37 @@ function codexProvisioning(
   return result
 }
 
-function readVersion(cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("codex", ["--version"], {
-      cwd,
-      env: process.env,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    let output = ""
-    child.stdout.on("data", (chunk: Buffer) => {
-      output += chunk.toString()
-    })
-    child.once("error", reject)
-    child.once("exit", (code) => {
-      if (code === 0) resolve(output.trim())
-      else reject(new Error("Codex CLI is unavailable"))
-    })
+async function readAvailability(
+  clientFactory: CodexClientFactory,
+  cwd: string,
+  deadlineMs: number
+): Promise<CodexAvailabilityProbe> {
+  const client = clientFactory("codex", cwd, { requestTimeoutMs: deadlineMs })
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    deadline = setTimeout(() => {
+      client.close()
+      reject(new Error("Codex availability probe timed out"))
+    }, deadlineMs)
+    deadline.unref?.()
   })
+  try {
+    return await Promise.race([probeAvailability(client), timedOut])
+  } finally {
+    if (deadline) clearTimeout(deadline)
+    client.close()
+  }
+}
+
+async function probeAvailability(
+  client: CodexClient
+): Promise<CodexAvailabilityProbe> {
+  const version = await initialize(client)
+  const response = await client.request("account/read", {}, codexAccountSchema)
+  const availability: CodexAvailabilityProbe = {
+    accountStatus:
+      !response.account && response.requiresOpenaiAuth ? "signed-out" : "ready",
+  }
+  if (version) availability.version = version
+  return availability
 }

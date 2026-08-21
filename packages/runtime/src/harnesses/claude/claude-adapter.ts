@@ -61,10 +61,14 @@ type ClaudeAdapterOptions = {
   executablePath?: string
   /** Folder used only by account and model discovery processes. */
   discoveryCwd?: string
+  /** Maximum total time for the account availability probe. */
+  availabilityDeadlineMs?: number
   /** Stable app-owned directory for generated pack plugin shims. */
   packShimsPath?: string
   /** Host-provided skills available to every Claude session. */
   hostSkillRoots?: SkillRoot[]
+  /** Maximum wait for the Claude process to emit its first SDK message. */
+  startupDeadlineMs?: number
   queryFactory?: ClaudeQueryFactory
 }
 
@@ -73,13 +77,18 @@ const claudeErrorMessageSchema = createErrorMessageSchema(
 )
 
 export const claudeNotSignedInReason =
-  "Claude Code is not signed in. Run `claude` in a terminal and sign in, or set ANTHROPIC_API_KEY."
+  "Claude Code is not signed in. Open Terminal, run `claude`, and follow the sign-in steps."
+const claudeAccountCheckFailedReason =
+  "Claude Code could not verify your account. Open Terminal, run `claude`, and confirm that it works, then try again."
+const claudeStartupFailureMessage =
+  "Claude Code did not start. Open Terminal, run `claude`, and confirm that it is signed in, then try again."
 
 // Local deadlines for discovery spawns. The registry's own timeouts only
 // abandon the promise; aborting here is what actually stops the CLI, so a
 // hung install cannot leak one process per probe.
-const availabilityDeadlineMs = 10_000
+const defaultAvailabilityDeadlineMs = 8_000
 const modelListDeadlineMs = 30_000
+const startupDeadlineMs = 30_000
 
 /**
  * Whether the CLI reports a usable identity. Third-party providers (Bedrock,
@@ -132,17 +141,17 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
   async checkAvailability() {
     try {
       const account = await this.#discover(
-        availabilityDeadlineMs,
+        this.options.availabilityDeadlineMs ?? defaultAvailabilityDeadlineMs,
         (discovery) => discovery.accountInfo()
       )
       return claudeAccountSignedIn(account)
         ? { status: "available" as const }
         : { status: "unavailable" as const, reason: claudeNotSignedInReason }
     } catch {
-      // A CLI that cannot answer the control request gets the benefit of the
-      // doubt: listModels stays the arbiter there, and a false "available" is
-      // cheaper than bricking a working install with a false "unavailable".
-      return { status: "available" as const }
+      return {
+        status: "unavailable" as const,
+        reason: claudeAccountCheckFailedReason,
+      }
     }
   }
 
@@ -180,15 +189,27 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
       options.pathToClaudeCodeExecutable = this.options.executablePath
     }
     const discovery = (this.options.queryFactory ?? query)({ prompt, options })
-    const deadline = setTimeout(() => abortController.abort(), deadlineMs)
-    deadline.unref?.()
-    try {
-      return await run(discovery)
-    } finally {
-      clearTimeout(deadline)
+    let closed = false
+    const closeDiscovery = () => {
+      if (closed) return
+      closed = true
       abortController.abort()
       prompt.close()
       discovery.close()
+    }
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      deadline = setTimeout(() => {
+        closeDiscovery()
+        reject(new Error("Claude discovery timed out"))
+      }, deadlineMs)
+      deadline.unref?.()
+    })
+    try {
+      return await Promise.race([run(discovery), timedOut])
+    } finally {
+      if (deadline) clearTimeout(deadline)
+      closeDiscovery()
     }
   }
 
@@ -253,6 +274,7 @@ class ClaudeSession implements HarnessSession {
   readonly #query: ClaudeQuery
   readonly events = this.#queue
   readonly skillProvisioning: SkillProvisioningResult[]
+  #startupDeadline?: ReturnType<typeof setTimeout>
   #activeApproval?: PendingApproval
   #closed = false
   #drainingApprovals = false
@@ -273,6 +295,7 @@ class ClaudeSession implements HarnessSession {
       executablePath,
       hostSkillRoots = [],
       packShimsPath,
+      startupDeadlineMs: configuredStartupDeadlineMs = startupDeadlineMs,
       queryFactory = query,
     }: ClaudeAdapterOptions
   ) {
@@ -396,10 +419,22 @@ class ClaudeSession implements HarnessSession {
     if (input.providerSessionId) options.resume = input.providerSessionId
     this.#query = queryFactory({ prompt: claudeQueryPrompt(input), options })
 
+    this.#startupDeadline = setTimeout(() => {
+      if (this.#abortController.signal.aborted) {
+        this.#finish()
+        return
+      }
+      this.#failStartup()
+      this.#abortController.abort()
+      this.#finish()
+    }, configuredStartupDeadlineMs)
+    this.#startupDeadline.unref?.()
+
     void this.#consume()
   }
 
   async cancel(): Promise<void> {
+    if (this.#closed) return
     this.#abortController.abort()
     this.#denyPending()
     try {
@@ -421,7 +456,14 @@ class ClaudeSession implements HarnessSession {
 
   async #consume(): Promise<void> {
     try {
-      for await (const message of this.#query) this.#mapMessage(message)
+      for await (const message of this.#query) {
+        this.#clearStartupDeadline()
+        this.#mapMessage(message)
+      }
+      if (this.#startupDeadline) {
+        if (!this.#abortController.signal.aborted) this.#failStartup()
+        return
+      }
       // A single-shot Claude query can close after background work settles
       // without producing a second result frame. Release the earlier success
       // even if the last task-level signal is stale: a clean stream end cannot
@@ -861,11 +903,25 @@ class ClaudeSession implements HarnessSession {
   #finish(): void {
     if (this.#closed) return
     this.#closed = true
+    this.#clearStartupDeadline()
     this.#denyPending()
     this.#streamedToolActivities.clear()
     this.#streamedToolsByIndex.clear()
     this.#query.close()
     this.#queue.close()
+  }
+
+  #failStartup(): void {
+    this.#emitTerminal({
+      type: "turn.failed",
+      failure: harnessFailure(claudeStartupFailureMessage),
+    })
+  }
+
+  #clearStartupDeadline(): void {
+    if (!this.#startupDeadline) return
+    clearTimeout(this.#startupDeadline)
+    this.#startupDeadline = undefined
   }
 }
 

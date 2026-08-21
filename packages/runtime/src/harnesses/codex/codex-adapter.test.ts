@@ -95,10 +95,100 @@ class EmptyModelCodexClient extends FakeCodexClient {
   }
 }
 
+class SignedOutCodexClient extends RecordingCodexClient {
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    this.requests.push({ method, params })
+    if (method === "account/read") {
+      return Promise.resolve(
+        schema.parse({ account: null, requiresOpenaiAuth: true })
+      )
+    }
+    return Promise.resolve(schema.parse({}))
+  }
+}
+
+class ReadyCodexClient extends RecordingCodexClient {
+  override request<T extends JsonValue>(
+    method: string,
+    params: JsonObject,
+    schema: ZodType<T>
+  ): Promise<T> {
+    this.requests.push({ method, params })
+    const response: JsonValue =
+      method === "initialize"
+        ? { userAgent: "codex-cli/1.2.3" }
+        : method === "account/read"
+          ? { account: { type: "chatgpt" }, requiresOpenaiAuth: true }
+          : {}
+    return Promise.resolve(schema.parse(response))
+  }
+}
+
+class HangingCodexClient extends FakeCodexClient {
+  closed = false
+
+  override request<T extends JsonValue>(): Promise<T> {
+    return new Promise<T>(() => {})
+  }
+
+  override close(): void {
+    this.closed = true
+  }
+}
+
 const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
   delete clientState.notification
+})
+
+describe("Codex account discovery", () => {
+  it("checks the app-server account used by real turns", async () => {
+    const client = new SignedOutCodexClient()
+
+    await expect(
+      new CodexAdapter(() => client).checkAvailability()
+    ).resolves.toEqual({
+      status: "unavailable",
+      reason:
+        "Codex is not signed in. Open Terminal, run `codex login`, and follow the sign-in steps.",
+    })
+    expect(client.requests.map((request) => request.method)).toEqual([
+      "initialize",
+      "account/read",
+    ])
+  })
+
+  it("gets the version and account from one app-server process", async () => {
+    const client = new ReadyCodexClient()
+
+    await expect(
+      new CodexAdapter(() => client).checkAvailability()
+    ).resolves.toEqual({ status: "available", version: "1.2.3" })
+    expect(client.requests.map((request) => request.method)).toEqual([
+      "initialize",
+      "account/read",
+    ])
+  })
+
+  it("closes an app-server that exceeds the total availability deadline", async () => {
+    const client = new HangingCodexClient()
+
+    await expect(
+      new CodexAdapter(() => client, {
+        availabilityDeadlineMs: 5,
+      }).checkAvailability()
+    ).resolves.toEqual({
+      status: "unavailable",
+      reason:
+        "Codex could not verify your account. Open Terminal, run `npm install -g @openai/codex@latest`, then try again.",
+    })
+    expect(client.closed).toBe(true)
+  })
 })
 
 describe("codexTurnInput", () => {

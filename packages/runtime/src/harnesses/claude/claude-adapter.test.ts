@@ -2063,11 +2063,32 @@ describe("Claude availability", () => {
     expect(result).toMatchObject({ status: "unavailable" })
   })
 
-  it("falls back to available when the CLI cannot answer", async () => {
+  it("requires sign-in when the CLI cannot confirm an account", async () => {
     const { result } = await availability(() =>
       Promise.reject(new Error("Unknown control request"))
     )
-    expect(result).toEqual({ status: "available" })
+    expect(result).toEqual({
+      status: "unavailable",
+      reason:
+        "Claude Code could not verify your account. Open Terminal, run `claude`, and confirm that it works, then try again.",
+    })
+  })
+
+  it("closes a discovery query that exceeds the availability deadline", async () => {
+    const fake = fakeQuery([], () => new Promise<AccountInfo>(() => {}))
+    queryMock.mockReturnValue(fake)
+
+    await expect(
+      new ClaudeAdapter({
+        availabilityDeadlineMs: 5,
+        queryFactory: queryMock,
+      }).checkAvailability()
+    ).resolves.toEqual({
+      status: "unavailable",
+      reason:
+        "Claude Code could not verify your account. Open Terminal, run `claude`, and confirm that it works, then try again.",
+    })
+    expect(fake.close).toHaveBeenCalledOnce()
   })
 
   it("closes the discovery query on every path", async () => {
@@ -2075,6 +2096,167 @@ describe("Claude availability", () => {
     expect(signedIn.fake.close).toHaveBeenCalled()
     const failed = await availability(() => Promise.reject(new Error("boom")))
     expect(failed.fake.close).toHaveBeenCalled()
+  })
+})
+
+describe("Claude startup", () => {
+  it("does not report a startup failure after cancellation", async () => {
+    let endIterator = () => {}
+    const iteratorDone = new Promise<IteratorResult<SDKMessage>>((resolve) => {
+      endIterator = () => resolve({ done: true, value: undefined })
+    })
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => ({ next: () => iteratorDone })
+    query.interrupt = vi.fn(() => {
+      endIterator()
+      return Promise.resolve(undefined)
+    })
+    queryMock.mockReturnValue(query)
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 1_000,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    await session.cancel()
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([])
+    expect(query.close).toHaveBeenCalledOnce()
+  })
+
+  it("closes a silent cancelled stream at the startup deadline", async () => {
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => ({
+      next: () => new Promise<IteratorResult<SDKMessage>>(() => {}),
+    })
+    queryMock.mockReturnValue(query)
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 5,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    await session.cancel()
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([])
+    expect(query.close).toHaveBeenCalledOnce()
+  })
+
+  it("fails with sign-in guidance when the CLI emits no messages", async () => {
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => ({
+      next: () => new Promise<IteratorResult<SDKMessage>>(() => {}),
+    })
+    query.close = vi.fn()
+    query.interrupt = vi.fn(() => new Promise<never>(() => {}))
+    queryMock.mockReturnValue(query)
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 1,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "turn.failed",
+        failure: {
+          kind: "error",
+          message:
+            "Claude Code did not start. Open Terminal, run `claude`, and confirm that it is signed in, then try again.",
+        },
+      },
+    ])
+    expect(query.close).toHaveBeenCalled()
+    await expect(session.cancel()).resolves.toBeUndefined()
+    expect(query.interrupt).not.toHaveBeenCalled()
+  })
+
+  it("fails when the CLI closes before emitting its first message", async () => {
+    queryMock.mockReturnValue(fakeQuery([]))
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 1_000,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([
+      {
+        type: "turn.failed",
+        failure: {
+          kind: "error",
+          message:
+            "Claude Code did not start. Open Terminal, run `claude`, and confirm that it is signed in, then try again.",
+        },
+      },
+    ])
   })
 })
 
