@@ -2100,6 +2100,82 @@ describe("Claude availability", () => {
 })
 
 describe("Claude startup", () => {
+  it("does not report a startup failure after cancellation", async () => {
+    let endIterator = () => {}
+    const iteratorDone = new Promise<IteratorResult<SDKMessage>>((resolve) => {
+      endIterator = () => resolve({ done: true, value: undefined })
+    })
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => ({ next: () => iteratorDone })
+    query.interrupt = vi.fn(() => {
+      endIterator()
+      return Promise.resolve(undefined)
+    })
+    queryMock.mockReturnValue(query)
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 1_000,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    await session.cancel()
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([])
+    expect(query.close).toHaveBeenCalledOnce()
+  })
+
+  it("closes a silent cancelled stream at the startup deadline", async () => {
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => ({
+      next: () => new Promise<IteratorResult<SDKMessage>>(() => {}),
+    })
+    queryMock.mockReturnValue(query)
+
+    const session = await new ClaudeAdapter({
+      queryFactory: queryMock,
+      startupDeadlineMs: 5,
+    }).start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Hello",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    await session.cancel()
+    const events: HarnessEvent[] = []
+    for await (const event of session.events) events.push(event)
+
+    expect(events).toEqual([])
+    expect(query.close).toHaveBeenCalledOnce()
+  })
+
   it("fails with sign-in guidance when the CLI emits no messages", async () => {
     const query = fakeQuery([])
     query[Symbol.asyncIterator] = () => ({

@@ -420,6 +420,10 @@ class ClaudeSession implements HarnessSession {
     this.#query = queryFactory({ prompt: claudeQueryPrompt(input), options })
 
     this.#startupDeadline = setTimeout(() => {
+      if (this.#abortController.signal.aborted) {
+        this.#finish()
+        return
+      }
       this.#failStartup()
       this.#abortController.abort()
       this.#finish()
@@ -457,7 +461,7 @@ class ClaudeSession implements HarnessSession {
         this.#mapMessage(message)
       }
       if (this.#startupDeadline) {
-        this.#failStartup()
+        if (!this.#abortController.signal.aborted) this.#failStartup()
         return
       }
       // A single-shot Claude query can close after background work settles
