@@ -10,10 +10,9 @@ describe("TaskPanelApi", () => {
     surface.files.open(threadId, "report")
     surface.activities.open(threadId)
     surface.browser.open(threadId)
-    surface.side.open(threadId)
     expect(surface.panel.state(threadId)).toEqual({
       open: true,
-      surface: "side",
+      surface: "browser",
       selectedArtifactId: "report",
       folderPath: "",
     })
@@ -32,6 +31,26 @@ describe("TaskPanelApi", () => {
     expect(surface.panel.state(threadId)).toEqual({
       open: true,
       surface: "activities",
+      folderPath: "",
+    })
+  })
+
+  it("opens the side surface and keeps its place when closed", () => {
+    const surface = new SurfaceApi()
+    const threadId = "panel-side-thread"
+
+    surface.side.open(threadId)
+    expect(surface.panel.state(threadId)).toEqual({
+      open: true,
+      surface: "side",
+      folderPath: "",
+    })
+
+    surface.panel.close(threadId)
+    surface.side.open(threadId)
+    expect(surface.panel.state(threadId)).toEqual({
+      open: true,
+      surface: "side",
       folderPath: "",
     })
   })

@@ -21,12 +21,13 @@ import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import MessagesSquareIcon from "lucide-react/dist/esm/icons/messages-square"
 import XIcon from "lucide-react/dist/esm/icons/x"
-import type {
-  Activity,
-  Artifact,
-  BrowserElementContext,
-  Thread,
-  TurnOutput,
+import {
+  isActivityBlocked,
+  type Activity,
+  type Artifact,
+  type BrowserElementContext,
+  type Thread,
+  type TurnOutput,
 } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -285,10 +286,7 @@ export function TaskPanel({
           />
           <SideTab
             active={panel.surface === "side"}
-            running={
-              sideThread?.status === "running" ||
-              sideThread?.status === "waiting-approval"
-            }
+            running={sideThread ? isActivityBlocked(sideThread) : false}
             onSelect={onOpenSide}
           />
         </div>

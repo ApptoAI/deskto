@@ -3153,22 +3153,48 @@ describe("Runtime", () => {
       ).map((thread) => thread.id)
     ).toEqual([parent.id])
 
+    // The fork happens on the side chat's first turn, so that turn is the one
+    // that must refuse to branch while the parent is mid-response.
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: parent.id, prompt: "Second pass" },
+      })
+    )
+    const blockedFork = await runtime.request({
+      method: "turn.start",
+      params: { threadId: side.id, prompt: "Too early" },
+    })
+    if (blockedFork.ok) throw new Error("The fork should have been refused")
+    expect(blockedFork.error.code).toBe("fork-parent-active")
+    harness.runs[1]!.emit({ type: "turn.completed" })
+    harness.runs[1]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: parent.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
     unwrap(
       await runtime.request({
         method: "turn.start",
         params: { threadId: side.id, prompt: "What assumption is weakest?" },
       })
     )
-    expect(harness.runs[1]?.input).toMatchObject({
+    expect(harness.runs[2]?.input).toMatchObject({
       providerSessionId: "claude-session-1",
       forkProviderSession: true,
     })
-    harness.runs[1]!.emit({
+    harness.runs[2]!.emit({
       type: "session.started",
       providerSessionId: "claude-session-side",
     })
-    harness.runs[1]!.emit({ type: "turn.completed" })
-    harness.runs[1]!.finish()
+    harness.runs[2]!.emit({ type: "turn.completed" })
+    harness.runs[2]!.finish()
     await waitFor(async () => {
       const view = unwrap(
         await runtime.request({
@@ -3185,8 +3211,8 @@ describe("Runtime", () => {
         params: { threadId: side.id, prompt: "Explain that further" },
       })
     )
-    expect(harness.runs[2]?.input.providerSessionId).toBe("claude-session-side")
-    expect(harness.runs[2]?.input.forkProviderSession).toBeUndefined()
+    expect(harness.runs[3]?.input.providerSessionId).toBe("claude-session-side")
+    expect(harness.runs[3]?.input.forkProviderSession).toBeUndefined()
     await runtime.close()
   })
 

@@ -338,7 +338,9 @@ export function Composer({
       }
       return
     }
-    if (attachments.length === 0 && /^\/side(?:\s|$)/.test(text)) {
+    // /side opens the panel rather than sending. Draft images stay attached
+    // here: they belong to this composer's next real message.
+    if (/^\/side(?:\s|$)/.test(text)) {
       setError(null)
       if (onOpenSideChat) {
         setPrompt("")

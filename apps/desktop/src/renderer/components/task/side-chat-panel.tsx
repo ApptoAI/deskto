@@ -1,7 +1,11 @@
 import { useState } from "react"
 import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import Trash2Icon from "lucide-react/dist/esm/icons/trash-2"
-import type { Thread, ThreadView } from "@deskto/protocol"
+import {
+  isActivityBlocked,
+  type Thread,
+  type ThreadView,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -61,9 +65,9 @@ export function SideChatPanel({
 
   const view = state.data
   const approval = view.pendingApproval
-  const active =
-    view.thread.status === "running" ||
-    view.thread.status === "waiting-approval"
+  // The shared guard keeps this panel's disable rules in step with the
+  // Runtime's rejection rules.
+  const active = isActivityBlocked(view.thread)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

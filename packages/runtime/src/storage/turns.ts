@@ -6,6 +6,7 @@ import type {
   ExecutionProfile,
   HarnessFailure,
   Message,
+  Thread,
   TurnInput,
 } from "@deskto/protocol"
 
@@ -40,16 +41,19 @@ export class Turns {
       data: decodeImageAttachment(attachment),
     }))
     // SAFETY: the query selects a complete ThreadRow plus the three named
-    // project and EXISTS fields declared in this intersection.
+    // project and EXISTS fields declared in this intersection. The subquery
+    // reads the parent's status for fork turns, whose provider session must
+    // not be branched while the parent is still writing to it.
     const context = this.database
       .prepare(
-        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
+        "SELECT t.*, p.path AS project_path, p.workspace_id AS workspace_id, EXISTS(SELECT 1 FROM turns existing WHERE existing.thread_id = t.id) AS has_turns, (SELECT parent.status FROM threads parent WHERE parent.id = t.parent_thread_id) AS parent_status FROM threads t JOIN projects p ON p.id = t.project_id WHERE t.id = ?"
       )
       .get(threadId) as
       | (ThreadRow & {
           project_path: string
           workspace_id: string
           has_turns: number
+          parent_status: Thread["status"] | null
         })
       | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
@@ -57,6 +61,16 @@ export class Turns {
       throw new RuntimeError(
         "turn-active",
         "This task already has an active turn"
+      )
+    }
+    if (
+      context.fork_provider_session === 1 &&
+      (context.parent_status === "running" ||
+        context.parent_status === "waiting-approval")
+    ) {
+      throw new RuntimeError(
+        "fork-parent-active",
+        "Wait for the main task's response before sending here"
       )
     }
 

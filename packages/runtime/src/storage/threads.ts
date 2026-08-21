@@ -191,6 +191,8 @@ export class Threads {
         {
           parentThreadId,
           title: "Side chat",
+          // side implies forking the parent's session on the first turn; the
+          // flag must be set here or the first turn would resume the parent.
           side: true,
           providerSessionId: parent.provider_session_id,
         }
