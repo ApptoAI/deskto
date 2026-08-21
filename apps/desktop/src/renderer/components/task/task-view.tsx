@@ -13,12 +13,7 @@ import type {
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
-import {
-  browserState,
-  openBrowserArtifact,
-  openFolder,
-  subscribeBrowser,
-} from "../../lib/desktop.js"
+import { openFolder } from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -28,6 +23,7 @@ import {
   type QueryState,
 } from "../../runtime/use-runtime-query.js"
 import { useThreadView } from "../../runtime/use-thread-view.js"
+import { useSurface, useTaskPanelState } from "../../surface/surface-context.js"
 import { Composer } from "../composer.js"
 import { ContextUsageMeter } from "../context-usage-meter.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
@@ -41,13 +37,6 @@ import { MessageStream } from "./message-stream.js"
 import { FilesProvider } from "./files-context.js"
 import { TaskPanel } from "./task-panel.js"
 import { conversationMeasureClassName } from "./task-panel-size.js"
-import {
-  retainSelectedFile,
-  showActivities,
-  showFile,
-  showBrowser,
-  showFolder,
-} from "./task-panel-state.js"
 
 const noOutputs: TurnOutput[] = []
 
@@ -55,18 +44,17 @@ export function TaskView({
   threadId,
   harnesses,
   projects,
-  onOpenThread,
 }: {
   threadId: string
   harnesses: QueryState<Harness[]>
   projects: Project[]
-  onOpenThread: (threadId: string) => void
 }) {
   const client = useRuntimeClient()
+  const surface = useSurface()
   const { state, revalidate, replace } = useThreadView(threadId)
   const [taskActionError, setTaskActionError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const panel = useTaskPanelState(threadId)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [browserContexts, setBrowserContexts] = useState<
     BrowserElementContext[]
@@ -75,15 +63,15 @@ export function TaskView({
   useEffect(() => {
     let active = true
     const openBrowser = () => {
-      setPanelOpen(true)
-      showBrowser(threadId)
+      surface.browser.open(threadId)
     }
-    void browserState(threadId)
+    void surface.browser
+      .state(threadId)
       .then((state) => {
         if (active && state.openRequested) openBrowser()
       })
       .catch(() => undefined)
-    const unsubscribe = subscribeBrowser((event) => {
+    const unsubscribe = surface.browser.subscribe((event) => {
       if (event.type === "open-requested" && event.threadId === threadId) {
         openBrowser()
       }
@@ -92,7 +80,12 @@ export function TaskView({
       active = false
       unsubscribe()
     }
-  }, [threadId])
+  }, [surface.browser, threadId])
+
+  useEffect(
+    () => () => surface.panel.close(threadId),
+    [surface.panel, threadId]
+  )
 
   // Looking at the task clears its indicators (unread completion, "came
   // back" from Later). The stamp fires only when there is something to
@@ -137,18 +130,17 @@ export function TaskView({
   const fileList = files.state.status === "ready" ? files.state.data : undefined
   useEffect(() => {
     if (fileList) {
-      retainSelectedFile(
+      surface.files.retainAvailable(
         threadId,
         fileList.map((output) => output.artifact.id)
       )
     }
-  }, [fileList, threadId])
+  }, [fileList, surface.files, threadId])
   const outputHistory =
     turnOutputs.state.status === "ready" ? turnOutputs.state.data : noOutputs
 
   const openFile = useCallback(
     (artifactId: string) => {
-      setPanelOpen(true)
       const artifact =
         fileList?.find((output) => output.artifact.id === artifactId)
           ?.artifact ??
@@ -158,30 +150,29 @@ export function TaskView({
         artifact &&
         defaultArtifactOpenSurface(artifact.previewKind) === "browser"
       ) {
-        showBrowser(threadId)
         setTaskActionError(null)
-        void openBrowserArtifact({ threadId, artifactId }).catch((error) =>
-          setTaskActionError(describedErrorSchema.parse(error))
-        )
+        void surface.browser
+          .openArtifact({ threadId, artifactId })
+          .catch((error) =>
+            setTaskActionError(describedErrorSchema.parse(error))
+          )
         return
       }
-      showFile(threadId, artifactId)
+      surface.files.open(threadId, artifactId)
     },
-    [fileList, outputHistory, threadId]
+    [fileList, outputHistory, surface.browser, surface.files, threadId]
   )
   // An answer's overflow opens the folder its files share, so "Show all 5"
   // shows five files rather than the one folder row they hide behind.
   const openFiles = useCallback(
     (outputs: TurnOutput[]) => {
-      setPanelOpen(true)
-      showFolder(threadId, sharedFolder(outputs))
+      surface.files.openFolder(threadId, sharedFolder(outputs))
     },
-    [threadId]
+    [surface.files, threadId]
   )
   const openActivity = useCallback(() => {
-    setPanelOpen(true)
-    showActivities(threadId)
-  }, [threadId])
+    surface.activities.open(threadId)
+  }, [surface.activities, threadId])
 
   if (state.status === "loading" || state.status === "idle") {
     return <StatusPanel title="Opening the task…" />
@@ -266,8 +257,8 @@ export function TaskView({
             variant="ghost"
             size="sm"
             className="no-drag text-muted-foreground"
-            aria-pressed={panelOpen}
-            onClick={() => setPanelOpen((open) => !open)}
+            aria-pressed={panel.open}
+            onClick={() => surface.panel.toggle({ threadId })}
           >
             <PanelRightIcon data-icon="inline-start" />
             Panel
@@ -398,24 +389,22 @@ export function TaskView({
             information at full width, so the column steps aside rather than
             repeating it. It folds away entirely on a narrow window, where
             the conversation needs the room more. */}
-          {!panelOpen ? (
+          {!panel.open ? (
             <ActivityAside
               activities={activities}
               childThreads={childThreads}
               onOpen={openActivity}
-              onOpenThread={onOpenThread}
+              onOpenThread={surface.navigation.openTask}
             />
           ) : null}
         </div>
       </div>
-      {panelOpen ? (
+      {panel.open ? (
         <TaskPanel
           threadId={threadId}
           activities={activities}
           childThreads={childThreads}
           files={files.state}
-          onOpenThread={onOpenThread}
-          onClose={() => setPanelOpen(false)}
           browserContexts={browserContexts}
           onSelectBrowserElement={(context) =>
             setBrowserContexts((current) =>

@@ -4,7 +4,13 @@ import { appSettings, settingValue } from "@deskto/settings"
 import { personalWorkspaceId } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
+import { surfaceCommandIds } from "../commands/surface-commands.js"
 import { InlineError } from "../components/inline-error.js"
+import {
+  useSurfaceCommand,
+  useSurface,
+  useSurfaceNavigation,
+} from "../surface/surface-context.js"
 import { OnboardingView } from "../components/onboarding/onboarding-view.js"
 import { ProjectDialog } from "../components/project/project-dialog.js"
 import { ProjectsView } from "../components/project/projects-view.js"
@@ -54,6 +60,7 @@ type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
 export function Workbench() {
   const client = useRuntimeClient()
+  const surface = useSurface()
   const { snapshot: settingsSnapshot, update: updateSettings } = useSettings()
   const [rememberedWorkspaceLayout] = useState(readRememberedWorkspaceLayout)
   const workspaceLayout = settingsSnapshot
@@ -205,35 +212,9 @@ export function Workbench() {
     )
   )
 
-  // Settings covers the whole window, so a shortcut that quietly changed the
-  // screen behind it would land the user somewhere they never chose. Both
-  // shortcuts below stand down until Go back.
-  useKeybinding(
-    appSettings.newTaskKeybinding,
-    useCallback(
-      () =>
-        setView((current) =>
-          current.kind === "settings" || hasOpenModal || showOnboarding
-            ? current
-            : toNewTask(current)
-        ),
-      [hasOpenModal, showOnboarding]
-    )
-  )
-
   const inSettings = view.kind === "settings"
   const cycleWorkspace = useCallback(
     (direction: number) => {
-      // The workspace switcher is off screen under Settings; switching there
-      // would write the new selection with nothing on screen to show for it.
-      // The same goes for the whole workbench under the welcome wizard.
-      if (
-        inSettings ||
-        hasOpenModal ||
-        showOnboarding ||
-        workspaces.length < 2
-      )
-        return
       const index = workspaces.findIndex(
         (workspace) => workspace.id === activeWorkspaceId
       )
@@ -241,37 +222,75 @@ export function Workbench() {
         workspaces[(index + direction + workspaces.length) % workspaces.length]!
       selectWorkspace(next.id)
     },
-    [
-      inSettings,
-      hasOpenModal,
-      showOnboarding,
-      workspaces,
-      activeWorkspaceId,
-      selectWorkspace,
-    ]
+    [workspaces, activeWorkspaceId, selectWorkspace]
+  )
+
+  const commandsBlocked = inSettings || hasOpenModal || showOnboarding
+  const newTaskCommand = useMemo(
+    () => ({
+      id: surfaceCommandIds.newTask,
+      title: "New task",
+      enabled: () => !commandsBlocked,
+      run: () => surface.navigation.newTask(),
+    }),
+    [commandsBlocked, surface.navigation]
+  )
+  const nextWorkspaceCommand = useMemo(
+    () => ({
+      id: surfaceCommandIds.nextWorkspace,
+      title: "Next workspace",
+      enabled: () => !commandsBlocked && workspaces.length > 1,
+      run: () => surface.navigation.nextWorkspace(),
+    }),
+    [commandsBlocked, surface.navigation, workspaces.length]
+  )
+  const previousWorkspaceCommand = useMemo(
+    () => ({
+      id: surfaceCommandIds.previousWorkspace,
+      title: "Previous workspace",
+      enabled: () => !commandsBlocked && workspaces.length > 1,
+      run: () => surface.navigation.previousWorkspace(),
+    }),
+    [commandsBlocked, surface.navigation, workspaces.length]
+  )
+  useSurfaceCommand(newTaskCommand)
+  useSurfaceCommand(nextWorkspaceCommand)
+  useSurfaceCommand(previousWorkspaceCommand)
+
+  // Settings and modal screens stand down until the person returns to the
+  // workbench. The command owns that policy so every future trigger agrees.
+  useKeybinding(
+    appSettings.newTaskKeybinding,
+    useCallback(() => {
+      void surface.commands.execute(surfaceCommandIds.newTask)
+    }, [surface.commands])
   )
 
   useKeybinding(
     appSettings.nextWorkspaceKeybinding,
-    useCallback(() => cycleWorkspace(1), [cycleWorkspace])
+    useCallback(() => {
+      void surface.commands.execute(surfaceCommandIds.nextWorkspace)
+    }, [surface.commands])
   )
   useKeybinding(
     appSettings.previousWorkspaceKeybinding,
-    useCallback(() => cycleWorkspace(-1), [cycleWorkspace])
+    useCallback(() => {
+      void surface.commands.execute(surfaceCommandIds.previousWorkspace)
+    }, [surface.commands])
   )
 
   // Opening Settings unmounts the button that was clicked; closing it puts
   // focus back there rather than on the body.
   const [focusSettingsButton, setFocusSettingsButton] = useState(false)
 
-  function openSettings() {
+  const openSettings = useCallback(() => {
     setFocusSettingsButton(false)
     setView((current) =>
       current.kind === "settings"
         ? current
         : { kind: "settings", page: firstSettingsPage, returnTo: current }
     )
-  }
+  }, [])
 
   function selectSettingsPage(page: SettingsPageId) {
     setView((current) =>
@@ -286,17 +305,31 @@ export function Workbench() {
     )
   }
 
-  function openThread(threadId: string) {
+  const openThread = useCallback((threadId: string) => {
     setView({ kind: "task", threadId })
-  }
+  }, [])
 
-  function openSkills() {
+  const openSkills = useCallback(() => {
     setView({ kind: "skills", filter: firstSkillsFilter })
-  }
+  }, [])
 
-  function openProjects() {
+  const openProjects = useCallback(() => {
     setView({ kind: "projects" })
-  }
+  }, [])
+
+  const navigationHost = useMemo(
+    () => ({
+      newTask: () => setView(toNewTask),
+      openTask: openThread,
+      openProjects,
+      openSkills,
+      openSettings,
+      nextWorkspace: () => cycleWorkspace(1),
+      previousWorkspace: () => cycleWorkspace(-1),
+    }),
+    [cycleWorkspace, openProjects, openSettings, openSkills, openThread]
+  )
+  useSurfaceNavigation(navigationHost)
 
   function selectSkillsFilter(filter: SkillsFilter) {
     setView((current) =>
@@ -420,7 +453,6 @@ export function Workbench() {
           threadId={openThreadId}
           harnesses={harnesses.state}
           projects={projects}
-          onOpenThread={openThread}
         />
       )
     }
@@ -438,7 +470,7 @@ export function Workbench() {
         project={newTaskProject}
         harnesses={harnesses.state}
         onTaskCreated={revalidateThreads}
-        onTaskStarted={openThread}
+        onTaskStarted={surface.navigation.openTask}
         panelPreference={panelPreference}
         onPanelCollapsedChange={setPanelCollapsed}
       />
@@ -517,14 +549,16 @@ export function Workbench() {
             threads={threads.state}
             workspaceThreads={workspaceThreads.state}
             openThreadId={openThreadId}
-            onOpenThread={openThread}
-            onNewTask={() => setView(toNewTask)}
+            onOpenThread={surface.navigation.openTask}
+            onNewTask={() => {
+              void surface.commands.execute(surfaceCommandIds.newTask)
+            }}
             onRetryThreads={revalidateThreads}
-            onOpenProjects={openProjects}
+            onOpenProjects={surface.navigation.openProjects}
             projectsActive={view.kind === "projects"}
-            onOpenSkills={openSkills}
+            onOpenSkills={surface.navigation.openSkills}
             skillsActive={view.kind === "skills"}
-            onOpenSettings={openSettings}
+            onOpenSettings={surface.navigation.openSettings}
             focusSettings={focusSettingsButton}
             inboxActions={inboxActions}
             workspaceLayout={workspaceLayout}
