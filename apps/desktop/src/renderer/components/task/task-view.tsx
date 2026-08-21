@@ -249,15 +249,28 @@ export function TaskView({
 
   async function handleOpenSide(options: { focusComposer?: boolean } = {}) {
     setTaskActionError(null)
-    if (options.focusComposer) {
-      setSideFocusRequest((request) => request + 1)
-    }
     if (sideThread) {
+      if (options.focusComposer) {
+        setSideFocusRequest((request) => request + 1)
+      }
       surface.side.open(thread.id)
+      return
+    }
+    // An existing side chat opens any time; creating one while the parent is
+    // mid-response cannot fork cleanly, so say so instead of a failed request.
+    if (!sideThread && active) {
+      setTaskActionError(
+        "The agent is responding. A side chat can start once it settles."
+      )
       return
     }
     try {
       replace(await client.createSideThread(thread.id))
+      // Only after creation succeeded: a failed request must not leave a
+      // pending focus for an unrelated later open.
+      if (options.focusComposer) {
+        setSideFocusRequest((request) => request + 1)
+      }
       surface.side.open(thread.id)
     } catch (error) {
       setTaskActionError(describedErrorSchema.parse(error))
@@ -450,6 +463,7 @@ export function TaskView({
           childThreads={childThreads}
           {...(sideThread ? { sideThread } : {})}
           parentTitle={thread.title}
+          projectPath={projectPath}
           {...(sideFocusRequest ? { focusRequest: sideFocusRequest } : {})}
           onFocusHandled={handleSideFocusHandled}
           files={files.state}

@@ -23,6 +23,7 @@ import {
 
 import { appendBrowserPromptContext } from "./browser/browser-prompt-context.js"
 import { RuntimeError, runtimeErrorMessageSchema } from "./errors.js"
+import { isThreadRowActive } from "./storage/records.js"
 import type { HarnessRegistry } from "./harness-registry.js"
 import { existingSkillRoots } from "./packs/pack-files.js"
 import { ProjectOutputSweep } from "./project-outputs.js"
@@ -184,6 +185,24 @@ export class TurnCoordinator {
     this.events.changed(threadId)
   }
 
+  /**
+   * Re-checked at fork time, not just when the side chat was created: between
+   * the two the parent may have begun responding, and forking then would base
+   * the side chat on a half-written turn. The check and the adapter spawn are
+   * still two steps; ADR 0026 records the remaining window as accepted.
+   */
+  #requireParentQuiet(threadId: string): void {
+    const parentId = this.store.threads.parentId(threadId)
+    if (!parentId) return
+    const parent = this.store.threads.getRow(parentId)
+    if (isThreadRowActive(parent.status)) {
+      throw new RuntimeError(
+        "fork-parent-active",
+        "Wait for the main task's response before sending here"
+      )
+    }
+  }
+
   #settleRun(threadId: string, run: StartingRun | ActiveRun): void {
     if (this.#runs.get(threadId) !== run) return
     this.#runs.delete(threadId)
@@ -251,6 +270,7 @@ export class TurnCoordinator {
     this.#changed(threadId)
 
     try {
+      if (turn.forkProviderSession) this.#requireParentQuiet(threadId)
       const tools = await SessionToolLeases.open(
         this.sessionTools,
         {

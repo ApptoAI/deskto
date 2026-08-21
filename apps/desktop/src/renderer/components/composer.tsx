@@ -61,10 +61,10 @@ type AppCommandName = Extract<
   { kind: "app-command" }
 >["command"]
 
-/** The typed form of a command is its label at the start of a draft. */
+/** A command runs on its exact label alone; "/side explain X" is a message,
+    not a command with an argument the handler would silently drop. */
 function slashCommandMatches(label: string): (text: string) => boolean {
-  const pattern = new RegExp(`^${label}(?:\\s|$)`)
-  return (text) => pattern.test(text)
+  return (text) => text.trim() === label
 }
 
 /**
@@ -254,7 +254,11 @@ export function Composer({
   const candidates =
     trigger?.kind === "command"
       ? appCommands
-          .filter((definition) => definition.enabled)
+          .filter(
+            (definition) =>
+              definition.enabled &&
+              !(definition.onlyWithoutAttachments && attachments.length > 0)
+          )
           .map(toComposerCandidate)
           .filter(
             (candidate) =>

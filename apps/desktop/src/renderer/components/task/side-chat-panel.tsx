@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import Trash2Icon from "lucide-react/dist/esm/icons/trash-2"
 import {
@@ -11,10 +11,15 @@ import { Button } from "@workspace/ui/components/button"
 
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
+import { useRuntimeEvent } from "../../runtime/use-runtime-event.js"
+import { useRuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { useThreadView } from "../../runtime/use-thread-view.js"
 import { Composer } from "../composer.js"
 import { InlineError } from "../inline-error.js"
 import { ApprovalPanel } from "./approval-panel.js"
+import { ResultPreviewBoundary } from "./result-preview-boundary.js"
+import { FilePreview } from "./task-panel.js"
+import { FilesProvider } from "./files-context.js"
 import { MessageStream } from "./message-stream.js"
 
 /**
@@ -25,12 +30,16 @@ import { MessageStream } from "./message-stream.js"
 export function SideChatPanel({
   thread,
   parentTitle,
+  projectPath = "",
   focusRequest = 0,
   onFocusHandled,
   onDiscard,
 }: {
   thread: Thread
   parentTitle?: string
+  /** The side chat writes into the same Project as its parent task; file
+      chips and previews resolve paths against it. */
+  projectPath?: string
   /** How many times the person asked for this composer's keyboard (via
       /side). The panel acknowledges through `onFocusHandled` once the view is
       ready, so a later remount cannot focus again. */
@@ -41,11 +50,38 @@ export function SideChatPanel({
   const client = useRuntimeClient()
   const { state, revalidate, replace } = useThreadView(thread.id)
   const [discardError, setDiscardError] = useState<string | null>(null)
+  const [openArtifactId, setOpenArtifactId] = useState<string | null>(null)
 
   const viewReady = state.status === "ready"
   useEffect(() => {
     if (viewReady && focusRequest > 0) onFocusHandled?.()
   }, [focusRequest, onFocusHandled, viewReady])
+
+  // A side Turn can produce files like any other. They load here rather than
+  // from the parent task's list, which only knows the parent's own outputs.
+  const loadOutputs = useCallback(
+    () => client.listTurnOutputs(thread.id),
+    [client, thread.id]
+  )
+  const turnOutputs = useRuntimeQuery(loadOutputs)
+  const revalidateTurnOutputs = turnOutputs.revalidate
+  useRuntimeEvent(
+    "artifact.changed",
+    useCallback(
+      (event) => {
+        if (event.threadId !== thread.id) return
+        revalidateTurnOutputs()
+      },
+      [revalidateTurnOutputs, thread.id]
+    )
+  )
+  const outputs =
+    turnOutputs.state.status === "ready" ? turnOutputs.state.data : []
+  // One file open at a time, in place of the conversation — the narrow side
+  // surface has no room for a second column of chrome.
+  const openOutput = outputs.find(
+    (output) => output.artifact.id === openArtifactId
+  )
 
   async function discard() {
     setDiscardError(null)
@@ -121,17 +157,38 @@ export function SideChatPanel({
         <InlineError className="m-3 mb-0" message={discardError} />
       ) : null}
 
-      {view.messages.length === 0 && !active && !approval ? (
+      {openOutput ? (
+        <ResultPreviewBoundary key={openOutput.artifact.id}>
+          <FilePreview
+            key={openOutput.artifact.id}
+            threadId={thread.id}
+            output={openOutput}
+            onBack={() => setOpenArtifactId(null)}
+          />
+        </ResultPreviewBoundary>
+      ) : view.messages.length === 0 && !active && !approval ? (
         <EmptySideChat />
       ) : (
-        <MessageStream
-          messages={view.messages}
-          activities={view.activities}
-          running={active}
-          {...(view.progress ? { progress: view.progress } : {})}
-          outputs={[]}
-          label="Side conversation"
-        />
+        <FilesProvider
+          outputs={outputs}
+          projectPath={projectPath}
+          onOpen={setOpenArtifactId}
+          // The narrow surface shows one preview at a time, so "show all"
+          // opens the first file rather than pretending to list a folder.
+          onOpenAll={(group) => {
+            const first = group[0]
+            if (first) setOpenArtifactId(first.artifact.id)
+          }}
+        >
+          <MessageStream
+            messages={view.messages}
+            activities={view.activities}
+            running={active}
+            {...(view.progress ? { progress: view.progress } : {})}
+            outputs={outputs}
+            label="Side conversation"
+          />
+        </FilesProvider>
       )}
 
       <div className="shrink-0 px-3 pb-3">

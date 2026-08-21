@@ -30,14 +30,20 @@ parent is not running. The same rule holds at the fork itself: the first Turn
 is refused while the parent is still working, so a fork point never lands in
 the middle of a parent Turn that is being written.
 
-The fork copies the provider session as it stands when the Side chat is
-created. Parent Turns sent later are not pulled into it; the person opened the
-side chat to ask about the context they were reading.
+The fork happens when the side chat's first Turn starts, because both
+providers fork at request time: Claude branches the resumed session as the
+query begins, Codex copies the source thread inside `thread/fork`. The base is
+therefore the parent's session including every parent Turn completed before
+that moment. The first Turn refuses to start while the parent is running, and
+the Runtime checks again just before it invokes the adapter; the small window
+between that check and the spawn remains accepted for a single-person desktop
+app, where its worst case is a side chat based on a turn that was mid-flight
+for milliseconds.
 
 If the first Turn fails before the provider reports its new session, the next
-Turn forks again from the same creation snapshot. The failed attempt's prompt
-stays visible in the side conversation but is not part of the agent's context,
-which keeps recovery simple and never touches the parent's history.
+Turn forks again from the same base. The failed attempt's prompt stays visible
+in the side conversation but is not part of the agent's context, which keeps
+recovery simple and never touches the parent's history.
 
 Deskto stores the Side chat so closing and reopening the panel does not lose an
 answer. It is temporary product state: it is excluded from task lists,

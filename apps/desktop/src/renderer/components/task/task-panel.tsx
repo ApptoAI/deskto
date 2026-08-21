@@ -83,6 +83,7 @@ export function TaskPanel({
   childThreads,
   sideThread,
   parentTitle,
+  projectPath,
   focusRequest,
   onFocusHandled,
   files,
@@ -96,6 +97,7 @@ export function TaskPanel({
   childThreads: Thread[]
   sideThread?: Thread
   parentTitle?: string
+  projectPath?: string
   focusRequest?: number
   onFocusHandled?: () => void
   files: QueryState<TurnOutput[]>
@@ -311,6 +313,7 @@ export function TaskPanel({
           <SideChatPanel
             thread={sideThread}
             parentTitle={parentTitle}
+            {...(projectPath ? { projectPath } : {})}
             {...(focusRequest ? { focusRequest } : {})}
             {...(onFocusHandled ? { onFocusHandled } : {})}
             onDiscard={onDiscardSide}
@@ -663,7 +666,9 @@ type EditSession = {
   content: string
 }
 
-function FilePreview({
+/** One artifact's preview, editor, and file actions. Shared with the side
+    chat, which previews its own outputs in place of the conversation. */
+export function FilePreview({
   threadId,
   output,
   onBack,
