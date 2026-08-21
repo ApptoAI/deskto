@@ -61,11 +61,20 @@ export function createMainWindow(): BrowserWindow {
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
   window.webContents.on("will-navigate", (event) => event.preventDefault())
 
+  return window
+}
+
+export interface LoadableMainWindow {
+  loadFile(filePath: string): Promise<void>
+  loadURL(url: string): Promise<void>
+}
+
+/** Loads the Surface only after the main process has registered every IPC
+    handler it can call during its first render. */
+export function loadMainWindow(window: LoadableMainWindow): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void window.loadFile(path.join(bundleDirectory, "../renderer/index.html"))
   }
-
-  return window
 }

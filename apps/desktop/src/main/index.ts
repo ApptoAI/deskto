@@ -27,7 +27,7 @@ import { installContentSecurityPolicy } from "./security.js"
 import { createElectronUpdateDriver } from "./update-driver.js"
 import { registerUpdateIpc } from "./update-ipc.js"
 import { UpdateManager } from "./update-manager.js"
-import { createMainWindow } from "./window.js"
+import { createMainWindow, loadMainWindow } from "./window.js"
 import { browserEventChannel } from "../shared/channels.js"
 
 const runtimeCloseTimeoutMs = 5_000
@@ -239,6 +239,7 @@ async function openApplication(): Promise<void> {
     unregisterRuntimeIpc()
     await closeApplicationRuntime()
   }
+  loadMainWindow(window)
 }
 
 function showFatalStartupError(detail: string): void {
