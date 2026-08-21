@@ -10,9 +10,10 @@ describe("TaskPanelApi", () => {
     surface.files.open(threadId, "report")
     surface.activities.open(threadId)
     surface.browser.open(threadId)
+    surface.side.open(threadId)
     expect(surface.panel.state(threadId)).toEqual({
       open: true,
-      surface: "browser",
+      surface: "side",
       selectedArtifactId: "report",
       folderPath: "",
     })

@@ -3093,6 +3093,103 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("forks one hidden side chat from the current harness session", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const harness = new ScriptedHarness({ id: "claude", name: "Claude" })
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const parent = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: parent.id, prompt: "Review the proposal" },
+      })
+    )
+    harness.runs[0]!.emit({
+      type: "session.started",
+      providerSessionId: "claude-session-1",
+    })
+    harness.runs[0]!.emit({ type: "turn.completed" })
+    harness.runs[0]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: parent.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    const withSide = unwrap(
+      await runtime.request({
+        method: "thread.createSide",
+        params: { threadId: parent.id },
+      })
+    )
+    const side = withSide.sideThread!
+    expect(withSide.childThreads).toEqual([])
+    expect(
+      unwrap(
+        await runtime.request({
+          method: "thread.list",
+          params: { projectId: project.id },
+        })
+      ).map((thread) => thread.id)
+    ).toEqual([parent.id])
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: side.id, prompt: "What assumption is weakest?" },
+      })
+    )
+    expect(harness.runs[1]?.input).toMatchObject({
+      providerSessionId: "claude-session-1",
+      forkProviderSession: true,
+    })
+    harness.runs[1]!.emit({
+      type: "session.started",
+      providerSessionId: "claude-session-side",
+    })
+    harness.runs[1]!.emit({ type: "turn.completed" })
+    harness.runs[1]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: side.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: side.id, prompt: "Explain that further" },
+      })
+    )
+    expect(harness.runs[2]?.input.providerSessionId).toBe("claude-session-side")
+    expect(harness.runs[2]?.input.forkProviderSession).toBeUndefined()
+    await runtime.close()
+  })
+
   it("enforces background task fan-out and depth inside storage", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)

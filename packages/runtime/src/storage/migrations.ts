@@ -349,6 +349,15 @@ const migrations = [
       ON projects(workspace_id, pinned_at DESC, updated_at DESC);
   `,
   `ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT '';`,
+  `
+    ALTER TABLE threads ADD COLUMN is_side INTEGER NOT NULL DEFAULT 0
+      CHECK (is_side IN (0, 1));
+    ALTER TABLE threads ADD COLUMN fork_provider_session INTEGER NOT NULL DEFAULT 0
+      CHECK (fork_provider_session IN (0, 1));
+
+    CREATE UNIQUE INDEX threads_one_side_idx
+      ON threads(parent_thread_id) WHERE is_side = 1;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

@@ -658,6 +658,8 @@ export type Approval = z.infer<typeof approvalSchema>
 export const threadViewSchema = z.object({
   thread: threadSchema,
   childThreads: z.array(threadSchema),
+  /** A temporary conversation branched from this Thread's Harness context. */
+  sideThread: threadSchema.optional(),
   messages: z.array(messageSchema),
   activities: z.array(activitySchema),
   /** Present only while this process owns the active Turn. */

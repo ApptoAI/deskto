@@ -44,6 +44,8 @@ export type ThreadRow = {
   id: string
   project_id: string
   parent_thread_id: string | null
+  is_side: number
+  fork_provider_session: number
   title: string
   harness_id: string
   status: Thread["status"]

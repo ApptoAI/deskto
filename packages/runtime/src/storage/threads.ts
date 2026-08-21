@@ -53,7 +53,7 @@ export class Threads {
     // query selects complete rows.
     const rows = this.database
       .prepare(
-        "SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC"
+        "SELECT * FROM threads WHERE project_id = ? AND is_side = 0 ORDER BY updated_at DESC"
       )
       .all(projectId) as ThreadRow[]
     return rows.map(toThread)
@@ -63,7 +63,12 @@ export class Threads {
     projectId: string,
     harnessId: string,
     executionProfile: ExecutionProfile,
-    options: { parentThreadId?: string; title?: string } = {}
+    options: {
+      parentThreadId?: string
+      title?: string
+      side?: boolean
+      providerSessionId?: string
+    } = {}
   ): Thread {
     this.projects.get(projectId)
     const now = new Date().toISOString()
@@ -88,8 +93,14 @@ export class Threads {
       updatedAt: now,
     }
     transaction(this.database, () => {
-      if (options.parentThreadId) {
+      if (options.parentThreadId && !options.side) {
         const parent = this.getRow(options.parentThreadId)
+        if (parent.is_side === 1) {
+          throw new RuntimeError(
+            "invalid-parent-thread",
+            "A side chat cannot create background tasks"
+          )
+        }
         if (parent.project_id !== projectId) {
           throw new RuntimeError(
             "invalid-parent-thread",
@@ -111,7 +122,7 @@ export class Threads {
         // SAFETY: COUNT(*) always returns one numeric count column.
         const count = this.database
           .prepare(
-            "SELECT COUNT(*) AS child_count FROM threads WHERE parent_thread_id = ?"
+            "SELECT COUNT(*) AS child_count FROM threads WHERE parent_thread_id = ? AND is_side = 0"
           )
           .get(options.parentThreadId) as { child_count: number }
         if (count.child_count >= maximumThreadChildren) {
@@ -123,15 +134,18 @@ export class Threads {
       }
       this.database
         .prepare(
-          "INSERT INTO threads (id, project_id, parent_thread_id, title, harness_id, status, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO threads (id, project_id, parent_thread_id, is_side, fork_provider_session, title, harness_id, status, provider_session_id, model_id, effort, permission_mode, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .run(
           thread.id,
           thread.projectId,
           thread.parentThreadId,
+          options.side ? 1 : 0,
+          options.side ? 1 : 0,
           thread.title,
           thread.harnessId,
           thread.status,
+          options.providerSessionId ?? null,
           executionProfile.modelId,
           executionProfile.effort,
           executionProfile.permissionMode,
@@ -140,6 +154,48 @@ export class Threads {
         )
     })
     return thread
+  }
+
+  createSide(parentThreadId: string): Thread {
+    return transaction(this.database, () => {
+      const existing = this.side(parentThreadId)
+      if (existing) return existing
+
+      const parent = this.getRow(parentThreadId)
+      if (parent.is_side === 1) {
+        throw new RuntimeError(
+          "invalid-side-thread",
+          "Open the main task before starting a side chat"
+        )
+      }
+      if (parent.status === "running" || parent.status === "waiting-approval") {
+        throw new RuntimeError(
+          "thread-active",
+          "Wait for the current response before starting a side chat"
+        )
+      }
+      if (!parent.provider_session_id) {
+        throw new RuntimeError(
+          "thread-context-unavailable",
+          "Send a message in this task before starting a side chat"
+        )
+      }
+      return this.create(
+        parent.project_id,
+        parent.harness_id,
+        {
+          modelId: parent.model_id,
+          effort: parent.effort,
+          permissionMode: parent.permission_mode,
+        },
+        {
+          parentThreadId,
+          title: "Side chat",
+          side: true,
+          providerSessionId: parent.provider_session_id,
+        }
+      )
+    })
   }
 
   search(
@@ -180,6 +236,7 @@ export class Threads {
         JOIN workspaces ON workspaces.id = projects.workspace_id
         WHERE thread_search MATCH ?
           AND threads.id <> ?
+          AND threads.is_side = 0
           ${scopeSql}
         ORDER BY bm25(thread_search), threads.updated_at DESC
         LIMIT ?`
@@ -203,10 +260,21 @@ export class Threads {
     // query selects complete rows.
     const rows = this.database
       .prepare(
-        "SELECT * FROM threads WHERE parent_thread_id = ? ORDER BY created_at, rowid"
+        "SELECT * FROM threads WHERE parent_thread_id = ? AND is_side = 0 ORDER BY created_at, rowid"
       )
       .all(id) as ThreadRow[]
     return rows.map(toThread)
+  }
+
+  side(id: string): Thread | undefined {
+    this.getRow(id)
+    // SAFETY: the partial unique index allows at most one side row.
+    const row = this.database
+      .prepare(
+        "SELECT * FROM threads WHERE parent_thread_id = ? AND is_side = 1"
+      )
+      .get(id) as ThreadRow | undefined
+    return row ? toThread(row) : undefined
   }
 
   descendantIds(id: string): string[] {
@@ -435,6 +503,8 @@ export class Threads {
       activities: activities.map(toActivity),
       seq: this.sequences.current(id),
     }
+    const sideThread = this.side(id)
+    if (sideThread) view.sideThread = sideThread
     if (approval) view.pendingApproval = toApproval(approval)
     return view
   }

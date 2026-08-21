@@ -18,6 +18,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Project Template**: A Pack-owned snapshot of starter files and shared Project instructions. Applying a template creates independent Project content; later template changes do not propagate.
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.
+- **Side chat**: A temporary Thread opened by a person from another Thread. It branches the current Harness session, stays out of task lists and search, and appears only in the parent task's panel.
 - **Turn**: One user request and one Harness execution in a Thread.
 - **Message Attachment**: An image supplied with a user Message. The Runtime owns its bytes and metadata, deletes it with the Message, exposes only metadata in Thread views, and returns image data on demand for previews.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
@@ -43,6 +44,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Deleting a Workspace moves its Projects to the Personal Workspace. Nothing on disk is touched.
 - A Thread uses one Harness. Its provider session identifier stays in Runtime storage and never becomes a Client concern.
 - A Background task is a normal durable Thread. Write access through MCP stays inside the current Thread tree; read-only search may span all local Threads.
+- A Side chat uses the parent Thread's Harness and Project. Its first Turn forks the parent's provider session so neither conversation changes the other's context; discarding it deletes only the side conversation and never touches Project files.
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
 - The Runtime persists user messages before starting a Harness.
@@ -52,7 +54,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Tool activity shown in a Thread is a bounded summary, not a transcript or an audit log.
 - A Thread shows prose and the tool calls that produced it; a settled Turn folds that work behind one disclosure. A plan and its subagents are the task's state, not its transcript: they render beside the conversation and never inside it, along with any work done within a subagent.
 - Artifact contents are read on demand through Runtime queries. They do not live in Activities, Thread views, or Runtime events.
-- A task's panel has stable Files, Activities, and Browser surfaces. Producing a file never opens the panel or replaces what the user is viewing; settled answers link to the files attributed to their Turn.
+- A task's panel has stable Files, Activities, Browser, and Side surfaces. Producing a file never opens the panel or replaces what the user is viewing; settled answers link to the files attributed to their Turn.
 - Conversation links open page-like HTML and PDF files in Browser by default. Files remains the default for other formats and for browsing the task's Artifact collection.
 - Browser tools are provider-neutral session customization. Each Harness Adapter translates the same private HTTP MCP connection to its native configuration.
 - Browser Element Context stays in the Surface draft. On send, the Runtime adds it to the Harness prompt as explicitly untrusted page data while the persisted user Message keeps the person's original text.

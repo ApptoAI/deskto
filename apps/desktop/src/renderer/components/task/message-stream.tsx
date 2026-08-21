@@ -57,12 +57,14 @@ export function MessageStream({
   running,
   progress,
   outputs,
+  label = "Task conversation",
 }: {
   messages: Message[]
   activities: Activity[]
   running: boolean
   progress?: TurnProgress | undefined
   outputs: TurnOutput[]
+  label?: string
 }) {
   const sinceTail = lastUserMessageAt(messages)
   const rows = useMemo(
@@ -79,7 +81,7 @@ export function MessageStream({
         ref={listRef}
         onViewportChange={setViewport}
         className="px-6"
-        aria-label="Task conversation"
+        aria-label={label}
       >
         {/* The column is the reading measure: everything in it — prose,
             tables, rules, code — shares one right edge, and the width is set

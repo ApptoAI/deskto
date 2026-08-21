@@ -293,6 +293,7 @@ export class TurnCoordinator {
       if (turn.providerSessionId) {
         runInput.providerSessionId = turn.providerSessionId
       }
+      if (turn.forkProviderSession) runInput.forkProviderSession = true
       // Before the Harness starts, so the files it writes are new to it.
       const outputs = await ProjectOutputSweep.begin(
         turn.projectPath,

@@ -64,6 +64,13 @@ const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
     label: "/model",
     description: "Choose the model for this task",
   },
+  {
+    id: "command:side",
+    kind: "app-command",
+    command: "side",
+    label: "/side",
+    description: "Ask a side question with this task's context",
+  },
 ]
 
 type SkillCache = {
@@ -91,6 +98,7 @@ export function Composer({
   onSend,
   onCancel,
   onOpenModelPicker,
+  onOpenSideChat,
   running = false,
   blockedReason,
   toolbar,
@@ -107,6 +115,7 @@ export function Composer({
   onSend: (input: TurnInput) => Promise<void>
   onCancel?: () => Promise<void>
   onOpenModelPicker?: () => void
+  onOpenSideChat?: () => void
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
@@ -179,13 +188,19 @@ export function Composer({
       : null
   const candidates =
     trigger?.kind === "command"
-      ? (onOpenModelPicker ? appCommands : []).filter(
-          (candidate) =>
-            candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
-            candidate.description
-              .toLocaleLowerCase()
-              .includes(trigger.query.toLocaleLowerCase())
-        )
+      ? appCommands
+          .filter(
+            (candidate) =>
+              (candidate.command === "model" && onOpenModelPicker) ||
+              (candidate.command === "side" && onOpenSideChat)
+          )
+          .filter(
+            (candidate) =>
+              candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
+              candidate.description
+                .toLocaleLowerCase()
+                .includes(trigger.query.toLocaleLowerCase())
+          )
       : trigger?.kind === "project-entry" && !trigger.query.trim()
         ? []
         : shortlist
@@ -323,6 +338,18 @@ export function Composer({
       }
       return
     }
+    if (attachments.length === 0 && /^\/side(?:\s|$)/.test(text)) {
+      setError(null)
+      if (onOpenSideChat) {
+        setPrompt("")
+        setReferences([])
+        setTrigger(null)
+        onOpenSideChat()
+      } else {
+        setError("A side chat is not available for this task yet.")
+      }
+      return
+    }
     const submittedAttachmentIds = new Set(
       attachments.map((attachment) => attachment.id)
     )
@@ -386,7 +413,8 @@ export function Composer({
       const next = replaceComposerTrigger(prompt, currentTrigger, "")
       updatePrompt(next.text, next.cursor)
       setTrigger(null)
-      onOpenModelPicker?.()
+      if (candidate.command === "model") onOpenModelPicker?.()
+      if (candidate.command === "side") onOpenSideChat?.()
       return
     }
 

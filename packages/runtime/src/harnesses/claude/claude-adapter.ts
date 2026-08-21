@@ -417,6 +417,7 @@ class ClaudeSession implements HarnessSession {
     }
     if (executablePath) options.pathToClaudeCodeExecutable = executablePath
     if (input.providerSessionId) options.resume = input.providerSessionId
+    if (input.forkProviderSession) options.forkSession = true
     this.#query = queryFactory({ prompt: claudeQueryPrompt(input), options })
 
     this.#startupDeadline = setTimeout(() => {

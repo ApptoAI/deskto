@@ -20,6 +20,7 @@ export type ActiveTurnRecord = {
   assistantMessageId: string
   prompt: string
   providerSessionId?: string
+  forkProviderSession?: boolean
   projectPath: string
   workspaceId: string
   harnessId: string
@@ -134,6 +135,9 @@ export class Turns {
     if (context.provider_session_id) {
       activeTurn.providerSessionId = context.provider_session_id
     }
+    if (context.fork_provider_session === 1) {
+      activeTurn.forkProviderSession = true
+    }
     return activeTurn
   }
 
@@ -145,7 +149,7 @@ export class Turns {
     transaction(this.database, () => {
       this.database
         .prepare(
-          "UPDATE threads SET provider_session_id = ?, updated_at = ? WHERE id = ?"
+          "UPDATE threads SET provider_session_id = ?, fork_provider_session = 0, updated_at = ? WHERE id = ?"
         )
         .run(providerSessionId, new Date().toISOString(), threadId)
       this.database

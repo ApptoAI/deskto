@@ -122,6 +122,8 @@ export type HarnessRunInput = {
   executionProfile: ExecutionProfile
   customization: SessionCustomization
   providerSessionId?: string
+  /** Branch from providerSessionId instead of continuing it. */
+  forkProviderSession?: boolean
 }
 
 /** One stateless model call for small app-owned text, such as a Thread title. */

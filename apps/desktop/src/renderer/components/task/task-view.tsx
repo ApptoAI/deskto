@@ -192,8 +192,14 @@ export function TaskView({
     )
   }
 
-  const { thread, childThreads, messages, activities, pendingApproval } =
-    state.data
+  const {
+    thread,
+    childThreads,
+    sideThread,
+    messages,
+    activities,
+    pendingApproval,
+  } = state.data
   const options = harnesses.status === "ready" ? harnesses.data : []
   // Resolved from the thread rather than the sidebar selection: in the
   // all-projects view the open task can belong to a different project.
@@ -231,6 +237,27 @@ export function TaskView({
     } catch (error) {
       setTaskActionError(describedErrorSchema.parse(error))
     }
+  }
+
+  async function handleOpenSide() {
+    setTaskActionError(null)
+    if (sideThread) {
+      surface.side.open(thread.id)
+      return
+    }
+    try {
+      replace(await client.createSideThread(thread.id))
+      surface.side.open(thread.id)
+    } catch (error) {
+      setTaskActionError(describedErrorSchema.parse(error))
+    }
+  }
+
+  async function handleDiscardSide() {
+    if (!sideThread) return
+    await client.deleteThread(sideThread.id)
+    surface.files.openPanel(thread.id)
+    revalidate()
   }
 
   return (
@@ -362,6 +389,9 @@ export function TaskView({
                   onCancel={async () => {
                     replace(await client.cancelTurn(thread.id))
                   }}
+                  {...(!active
+                    ? { onOpenSideChat: () => void handleOpenSide() }
+                    : {})}
                   toolbar={
                     models.length > 0 ? (
                       <ExecutionProfileToolbar
@@ -404,6 +434,8 @@ export function TaskView({
           threadId={threadId}
           activities={activities}
           childThreads={childThreads}
+          {...(sideThread ? { sideThread } : {})}
+          parentTitle={thread.title}
           files={files.state}
           browserContexts={browserContexts}
           onSelectBrowserElement={(context) =>
@@ -414,6 +446,8 @@ export function TaskView({
                 : [...current, context]
             )
           }
+          onOpenSide={() => void handleOpenSide()}
+          onDiscardSide={handleDiscardSide}
         />
       ) : null}
     </div>

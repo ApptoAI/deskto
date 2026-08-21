@@ -25,6 +25,38 @@ afterEach(() => {
 })
 
 describe("Composer", () => {
+  it("opens a side chat from the slash command", () => {
+    vi.stubGlobal("CSS", { escape: (value: string) => value })
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const onOpenSideChat = vi.fn()
+    render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+          onOpenSideChat={onOpenSideChat}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+    fireEvent.change(textarea, {
+      target: { value: "/side", selectionStart: 5 },
+    })
+    const form = textarea.closest("form")
+    if (!form) throw new Error("Composer form was not rendered")
+    fireEvent.submit(form)
+
+    expect(onOpenSideChat).toHaveBeenCalledOnce()
+    expect(textarea.value).toBe("")
+  })
+
   it("sends selected browser elements and clears them after success", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined)
     const onClearBrowserContexts = vi.fn()
