@@ -186,10 +186,11 @@ export class TurnCoordinator {
   }
 
   /**
-   * Re-checked at fork time, not just when the side chat was created: between
-   * the two the parent may have begun responding, and forking then would base
-   * the side chat on a half-written turn. The check and the adapter spawn are
-   * still two steps; ADR 0026 records the remaining window as accepted.
+   * Checked when the side turn begins and again immediately before the
+   * adapter is invoked: forking a parent that is mid-response would base the
+   * side chat on a half-written turn. Between the second check and the spawn
+   * no await remains, so what is left of the race is a same-tick conflict,
+   * which ADR 0026 records as accepted.
    */
   #requireParentQuiet(threadId: string): void {
     const parentId = this.store.threads.parentId(threadId)
@@ -319,6 +320,16 @@ export class TurnCoordinator {
         turn.projectPath,
         (paths) => this.#captureSweptOutputs(threadId, turn.turnId, paths)
       )
+      // Last possible moment before forking: the setup above awaited twice,
+      // and the parent may have begun responding during it.
+      if (turn.forkProviderSession) {
+        try {
+          this.#requireParentQuiet(threadId)
+        } catch (error) {
+          outputs?.close()
+          throw error
+        }
+      }
       const session = await harness.start(runInput, starting.controller.signal)
       try {
         this.store.skillProvisioning.record(
