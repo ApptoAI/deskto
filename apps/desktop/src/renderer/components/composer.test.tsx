@@ -57,6 +57,31 @@ describe("Composer", () => {
     expect(textarea.value).toBe("")
   })
 
+  it("explains when a typed slash command has nowhere to go", () => {
+    render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+    fireEvent.change(textarea, {
+      target: { value: "/side", selectionStart: 5 },
+    })
+    fireEvent.submit(textarea.closest("form")!)
+
+    expect(
+      screen.getByText("A side chat is not available for this task yet.")
+    ).toBeTruthy()
+    expect(textarea.value).toBe("/side")
+  })
+
   it("sends selected browser elements and clears them after success", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined)
     const onClearBrowserContexts = vi.fn()

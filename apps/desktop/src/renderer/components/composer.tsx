@@ -56,22 +56,37 @@ import { ComposerAttachments } from "./composer-attachments.js"
 
 const noBrowserContexts: readonly BrowserElementContext[] = []
 
-const appCommands: Extract<ComposerCandidate, { kind: "app-command" }>[] = [
-  {
-    id: "command:model",
+type AppCommandName = Extract<
+  ComposerCandidate,
+  { kind: "app-command" }
+>["command"]
+
+/**
+ * One slash command, whole: the suggestion row, the typed form that selects
+ * it, whether it has somewhere to go in the current view, and what it does.
+ * Nothing about a command lives anywhere else.
+ */
+type AppCommandDefinition = {
+  command: AppCommandName
+  label: string
+  description: string
+  enabled: boolean
+  unavailableText: string
+  matches: (text: string) => boolean
+  run: () => void
+}
+
+function toComposerCandidate(
+  definition: AppCommandDefinition
+): Extract<ComposerCandidate, { kind: "app-command" }> {
+  return {
+    id: `command:${definition.command}`,
     kind: "app-command",
-    command: "model",
-    label: "/model",
-    description: "Choose the model for this task",
-  },
-  {
-    id: "command:side",
-    kind: "app-command",
-    command: "side",
-    label: "/side",
-    description: "Ask a side question with this task's context",
-  },
-]
+    command: definition.command,
+    label: definition.label,
+    description: definition.description,
+  }
+}
 
 type SkillCache = {
   /** The `$` this list was read for, not just the project it came from. */
@@ -156,6 +171,29 @@ export function Composer({
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
   const blocked = blockedReason !== undefined
+  // Commands close over this render's props: availability and action both
+  // depend on what the enclosing view passed in.
+  const appCommands: AppCommandDefinition[] = [
+    {
+      command: "model",
+      label: "/model",
+      description: "Choose the model for this task",
+      enabled: onOpenModelPicker !== undefined,
+      unavailableText: "No model options are available for this task.",
+      matches: (text) => /^\/model(?:\s|$)/.test(text),
+      run: () => onOpenModelPicker?.(),
+    },
+    {
+      command: "side",
+      label: "/side",
+      description: "Ask a side question with this task's context",
+      enabled: onOpenSideChat !== undefined,
+      unavailableText: "A side chat is not available for this task yet.",
+      // /side opens the panel rather than sending, so draft images stay here.
+      matches: (text) => /^\/side(?:\s|$)/.test(text),
+      run: () => onOpenSideChat?.(),
+    },
+  ]
   const hasContent =
     prompt.trim().length > 0 ||
     attachments.length > 0 ||
@@ -189,11 +227,8 @@ export function Composer({
   const candidates =
     trigger?.kind === "command"
       ? appCommands
-          .filter(
-            (candidate) =>
-              (candidate.command === "model" && onOpenModelPicker) ||
-              (candidate.command === "side" && onOpenSideChat)
-          )
+          .filter((definition) => definition.enabled)
+          .map(toComposerCandidate)
           .filter(
             (candidate) =>
               candidate.command.includes(trigger.query.toLocaleLowerCase()) ||
@@ -326,30 +361,19 @@ export function Composer({
 
     const text = prompt.trim()
     const currentReferences = reconcilePromptReferences(text, references)
-    if (attachments.length === 0 && /^\/model(?:\s|$)/.test(text)) {
+    const matchedCommand = appCommands.find((definition) =>
+      definition.matches(text)
+    )
+    if (matchedCommand) {
       setError(null)
-      if (onOpenModelPicker) {
-        setPrompt("")
-        setReferences([])
-        setTrigger(null)
-        onOpenModelPicker()
-      } else {
-        setError("No model options are available for this task.")
+      if (!matchedCommand.enabled) {
+        setError(matchedCommand.unavailableText)
+        return
       }
-      return
-    }
-    // /side opens the panel rather than sending. Draft images stay attached
-    // here: they belong to this composer's next real message.
-    if (/^\/side(?:\s|$)/.test(text)) {
-      setError(null)
-      if (onOpenSideChat) {
-        setPrompt("")
-        setReferences([])
-        setTrigger(null)
-        onOpenSideChat()
-      } else {
-        setError("A side chat is not available for this task yet.")
-      }
+      setPrompt("")
+      setReferences([])
+      setTrigger(null)
+      matchedCommand.run()
       return
     }
     const submittedAttachmentIds = new Set(
@@ -415,8 +439,9 @@ export function Composer({
       const next = replaceComposerTrigger(prompt, currentTrigger, "")
       updatePrompt(next.text, next.cursor)
       setTrigger(null)
-      if (candidate.command === "model") onOpenModelPicker?.()
-      if (candidate.command === "side") onOpenSideChat?.()
+      appCommands
+        .find((definition) => definition.command === candidate.command)
+        ?.run()
       return
     }
 
