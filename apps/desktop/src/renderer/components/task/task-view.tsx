@@ -56,9 +56,10 @@ export function TaskView({
   const [profileError, setProfileError] = useState<string | null>(null)
   const panel = useTaskPanelState(threadId)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  // Each /side press bumps the request; the side panel acknowledges once its
-  // view is ready and the count returns to zero, so no later mount can
-  // re-steal the keyboard. A tab click never bumps it.
+  // Each /side command press bumps the request; the side panel acknowledges
+  // once its view is ready and the count returns to zero, so no later mount
+  // can re-steal the keyboard. Opening the panel from the tab never bumps it:
+  // a click should not move the keyboard.
   const [sideFocusRequest, setSideFocusRequest] = useState(0)
   const handleSideFocusHandled = useCallback(() => {
     setSideFocusRequest(0)
@@ -246,9 +247,11 @@ export function TaskView({
     }
   }
 
-  async function handleOpenSide() {
+  async function handleOpenSide(options: { focusComposer?: boolean } = {}) {
     setTaskActionError(null)
-    setSideFocusRequest((request) => request + 1)
+    if (options.focusComposer) {
+      setSideFocusRequest((request) => request + 1)
+    }
     if (sideThread) {
       surface.side.open(thread.id)
       return
@@ -398,7 +401,10 @@ export function TaskView({
                     replace(await client.cancelTurn(thread.id))
                   }}
                   {...(!active
-                    ? { onOpenSideChat: () => void handleOpenSide() }
+                    ? {
+                        onOpenSideChat: () =>
+                          void handleOpenSide({ focusComposer: true }),
+                      }
                     : {})}
                   toolbar={
                     models.length > 0 ? (

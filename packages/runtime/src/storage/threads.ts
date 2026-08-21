@@ -18,6 +18,7 @@ import { RuntimeError } from "../errors.js"
 import type { ThreadSequences } from "../thread-sequences.js"
 import { transaction } from "./database.js"
 import {
+  isThreadRowActive,
   toApproval,
   toActivity,
   toMessage,
@@ -168,7 +169,7 @@ export class Threads {
           "Open the main task before starting a side chat"
         )
       }
-      if (parent.status === "running" || parent.status === "waiting-approval") {
+      if (isThreadRowActive(parent.status)) {
         throw new RuntimeError(
           "thread-active",
           "Wait for the current response before starting a side chat"

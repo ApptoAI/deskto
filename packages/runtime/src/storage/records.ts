@@ -182,6 +182,13 @@ export function toProject(row: ProjectRow): Project {
   }
 }
 
+/** Work the agent is doing or waiting on, read from a stored row. Mirrors
+    the protocol's isActivityBlocked so storage guards cannot drift from the
+    client-side rule. */
+export function isThreadRowActive(status: Thread["status"]): boolean {
+  return status === "running" || status === "waiting-approval"
+}
+
 export function toThread(row: ThreadRow): Thread {
   let contextUsage: Thread["contextUsage"]
   if (row.context_used_tokens !== null) {

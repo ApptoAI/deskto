@@ -61,6 +61,12 @@ type AppCommandName = Extract<
   { kind: "app-command" }
 >["command"]
 
+/** The typed form of a command is its label at the start of a draft. */
+function slashCommandMatches(label: string): (text: string) => boolean {
+  const pattern = new RegExp(`^${label}(?:\\s|$)`)
+  return (text) => pattern.test(text)
+}
+
 /**
  * One slash command, whole: the suggestion row, the typed form that selects
  * it, whether it has somewhere to go in the current view, and what it does.
@@ -72,6 +78,9 @@ type AppCommandDefinition = {
   description: string
   enabled: boolean
   unavailableText: string
+  /** With draft images attached the command stays literal text; the images
+      belong to the message being composed, not to the command. */
+  onlyWithoutAttachments?: boolean
   matches: (text: string) => boolean
   run: () => void
 }
@@ -173,14 +182,17 @@ export function Composer({
   const hintId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
-  // A focus request is a number the caller bumps when it wants the keyboard.
-  // Zero means nothing was asked, so a remount cannot re-steal focus; the
-  // caller resets it to zero once handled. autoFocus alone cannot cover this
-  // because it fires only on mount and an already-mounted composer would
-  // ignore the request.
+  // A focus request is a number the caller bumps when it wants the keyboard,
+  // and returns to zero once handled. The ref tracks it through that cycle:
+  // dropping to zero re-arms it, so a caller that always asks for 1 still
+  // focuses every time, while zero itself never steals focus on a remount.
   const lastFocusToken = useRef(0)
   useEffect(() => {
-    if (!focusToken || focusToken === lastFocusToken.current) return
+    if (!focusToken) {
+      lastFocusToken.current = 0
+      return
+    }
+    if (focusToken === lastFocusToken.current) return
     lastFocusToken.current = focusToken
     textareaRef.current?.focus()
   }, [focusToken])
@@ -195,7 +207,8 @@ export function Composer({
       description: "Choose the model for this task",
       enabled: onOpenModelPicker !== undefined,
       unavailableText: "No model options are available for this task.",
-      matches: (text) => /^\/model(?:\s|$)/.test(text),
+      onlyWithoutAttachments: true,
+      matches: slashCommandMatches("/model"),
       run: () => onOpenModelPicker?.(),
     },
     {
@@ -204,8 +217,7 @@ export function Composer({
       description: "Ask a side question with this task's context",
       enabled: onOpenSideChat !== undefined,
       unavailableText: "A side chat is not available for this task yet.",
-      // /side opens the panel rather than sending, so draft images stay here.
-      matches: (text) => /^\/side(?:\s|$)/.test(text),
+      matches: slashCommandMatches("/side"),
       run: () => onOpenSideChat?.(),
     },
   ]
@@ -376,8 +388,10 @@ export function Composer({
 
     const text = prompt.trim()
     const currentReferences = reconcilePromptReferences(text, references)
-    const matchedCommand = appCommands.find((definition) =>
-      definition.matches(text)
+    const matchedCommand = appCommands.find(
+      (definition) =>
+        !(definition.onlyWithoutAttachments && attachments.length > 0) &&
+        definition.matches(text)
     )
     if (matchedCommand) {
       setError(null)

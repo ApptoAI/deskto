@@ -13,7 +13,12 @@ import type {
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import { decodeImageAttachment } from "./image-attachment-data.js"
-import { toMessage, type MessageRow, type ThreadRow } from "./records.js"
+import {
+  toMessage,
+  isThreadRowActive,
+  type MessageRow,
+  type ThreadRow,
+} from "./records.js"
 import { newThreadTitle } from "./threads.js"
 
 export type ActiveTurnRecord = {
@@ -57,7 +62,7 @@ export class Turns {
         })
       | undefined
     if (!context) throw new RuntimeError("thread-not-found", "Task not found")
-    if (context.status === "running" || context.status === "waiting-approval") {
+    if (isThreadRowActive(context.status)) {
       throw new RuntimeError(
         "turn-active",
         "This task already has an active turn"
@@ -65,8 +70,7 @@ export class Turns {
     }
     if (
       context.fork_provider_session === 1 &&
-      (context.parent_status === "running" ||
-        context.parent_status === "waiting-approval")
+      isThreadRowActive(context.parent_status ?? "idle")
     ) {
       throw new RuntimeError(
         "fork-parent-active",

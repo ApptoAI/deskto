@@ -57,6 +57,70 @@ describe("Composer", () => {
     expect(textarea.value).toBe("")
   })
 
+  it("focuses the composer again on each new focus request", () => {
+    const composer = (focusToken?: number) => (
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+          {...(focusToken ? { focusToken } : {})}
+        />
+      </RuntimeClientProvider>
+    )
+    const view = render(composer())
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+
+    view.rerender(composer(1))
+    expect(document.activeElement).toBe(textarea)
+
+    // The panel acknowledges by returning the request to zero. A later
+    // request carrying the same number must still move the keyboard back.
+    view.rerender(composer())
+    textarea.blur()
+    view.rerender(composer(1))
+    expect(document.activeElement).toBe(textarea)
+  })
+
+  it("sends /model as text when draft images are attached", async () => {
+    vi.stubGlobal("CSS", { escape: (value: string) => value })
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={onSend}
+          onOpenModelPicker={vi.fn()}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        files: [new File(["pixels"], "screen.png", { type: "image/png" })],
+      },
+    })
+    await screen.findByAltText("screen.png")
+    fireEvent.change(textarea, {
+      target: { value: "/model", selectionStart: 6 },
+    })
+    fireEvent.submit(textarea.closest("form")!)
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce())
+    expect(onSend.mock.calls[0]?.[0]).toMatchObject({ text: "/model" })
+  })
+
   it("explains when a typed slash command has nowhere to go", () => {
     render(
       <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
