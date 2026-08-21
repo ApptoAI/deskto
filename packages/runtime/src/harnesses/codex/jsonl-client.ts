@@ -1,6 +1,11 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import {
+  execFile,
+  type ChildProcessWithoutNullStreams,
+} from "node:child_process"
 import { createInterface } from "node:readline"
+import path from "node:path"
 import { jsonValueSchema } from "@deskto/protocol"
+import crossSpawn from "cross-spawn"
 import { z } from "zod"
 
 import type {
@@ -27,10 +32,52 @@ export type JsonlClientOptions = {
   env?: NodeJS.ProcessEnv
   /** Fails a silent app-server request instead of leaving the UI running forever. */
   requestTimeoutMs?: number
+  terminateProcess?: (target: ProcessTreeTarget) => void
 }
 
 const defaultRequestTimeoutMs = 30_000
 const maximumStderrTailLength = 8_192
+
+export type ProcessTreeTarget = {
+  pid?: number
+  kill(): boolean
+}
+
+type TaskkillRunner = (pid: number) => Promise<void>
+
+export function terminateProcessTree(
+  target: ProcessTreeTarget,
+  platform: NodeJS.Platform = process.platform,
+  taskkill: TaskkillRunner = runWindowsTaskkill
+): void {
+  if (platform !== "win32" || !target.pid) {
+    target.kill()
+    return
+  }
+  void taskkill(target.pid).catch(() => {
+    target.kill()
+  })
+}
+
+function runWindowsTaskkill(pid: number): Promise<void> {
+  const systemRoot = Object.entries(process.env).find(
+    ([key, value]) => key.toUpperCase() === "SYSTEMROOT" && value
+  )?.[1]
+  const command = systemRoot
+    ? path.win32.join(systemRoot, "System32/taskkill.exe")
+    : "taskkill.exe"
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      ["/PID", String(pid), "/T", "/F"],
+      { timeout: 5_000, windowsHide: true },
+      (error) => {
+        if (error) reject(error)
+        else resolve()
+      }
+    )
+  })
+}
 
 export class JsonlClient {
   readonly #process: ChildProcessWithoutNullStreams
@@ -41,17 +88,24 @@ export class JsonlClient {
   readonly #requestListeners = new Set<(request: CodexServerRequest) => void>()
   readonly #failureListeners = new Set<(error: Error) => void>()
   readonly #requestTimeoutMs: number
+  readonly #terminateProcess: (target: ProcessTreeTarget) => void
   #stderrTail = ""
   #nextId = 1
   #closed = false
+  #processTerminated = false
 
   constructor(command: string, cwd: string, options: JsonlClientOptions = {}) {
     this.#requestTimeoutMs = options.requestTimeoutMs ?? defaultRequestTimeoutMs
-    this.#process = spawn(command, ["app-server", ...(options.args ?? [])], {
-      cwd,
-      env: options.env ?? process.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    })
+    this.#terminateProcess = options.terminateProcess ?? terminateProcessTree
+    this.#process = crossSpawn.spawn(
+      command,
+      ["app-server", ...(options.args ?? [])],
+      {
+        cwd,
+        env: options.env ?? process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      }
+    )
 
     const lines = createInterface({ input: this.#process.stdout })
     this.#process.stderr.on("data", (chunk: Buffer) => {
@@ -144,12 +198,13 @@ export class JsonlClient {
   }
 
   close(): void {
-    if (this.#closed) return
-    this.#closed = true
-    const error = new Error("Codex app-server was closed")
-    for (const pending of this.#pending.values()) pending.reject(error)
-    this.#pending.clear()
-    this.#process.kill()
+    if (!this.#closed) {
+      this.#closed = true
+      const error = new Error("Codex app-server was closed")
+      for (const pending of this.#pending.values()) pending.reject(error)
+      this.#pending.clear()
+    }
+    this.#terminate()
   }
 
   #write(message: JsonObject): void {
@@ -203,7 +258,14 @@ export class JsonlClient {
     this.#closed = true
     for (const pending of this.#pending.values()) pending.reject(error)
     this.#pending.clear()
+    this.#terminate()
     for (const listener of this.#failureListeners) listener(error)
+  }
+
+  #terminate(): void {
+    if (this.#processTerminated) return
+    this.#processTerminated = true
+    this.#terminateProcess(this.#process)
   }
 
   #stderrDiagnostic(): string {

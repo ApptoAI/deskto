@@ -11,6 +11,7 @@ import {
   ClaudeAdapter,
   claudeNotSignedInReason,
   CodexAdapter,
+  codexNotInstalledReason,
   createRuntime,
   type SessionToolProvider,
 } from "@deskto/runtime"
@@ -164,10 +165,7 @@ async function openApplication(): Promise<void> {
   const harnesses = simulateNoAgents
     ? [
         withForcedUnavailability(claudeAdapter, claudeNotSignedInReason),
-        withForcedUnavailability(
-          codexAdapter,
-          "Codex CLI was not found. Install Codex and sign in first."
-        ),
+        withForcedUnavailability(codexAdapter, codexNotInstalledReason),
       ]
     : [claudeAdapter, codexAdapter]
   const mcpServerRef: McpServerReference = { current: undefined }

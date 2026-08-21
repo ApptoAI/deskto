@@ -1,1 +1,5 @@
-export { CodexAdapter } from "./codex-adapter.js"
+export {
+  CodexAdapter,
+  codexNotInstalledReason,
+  codexNotSignedInReason,
+} from "./codex-adapter.js"
