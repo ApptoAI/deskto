@@ -420,7 +420,9 @@ export function TaskView({
                         aria-hidden
                         className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-pulse"
                       />
-                      Working
+                      {thread.status === "waiting-approval"
+                        ? "Needs input"
+                        : "Working"}
                     </span>
                   ) : null}
                   {projectPath ? (

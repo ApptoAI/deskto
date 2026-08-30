@@ -37,7 +37,12 @@ function canvasColor(): string {
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...defaultWindowSize(),
-    minWidth: 900,
+    // Wide enough for the layout to keep its own promises: the task list at
+    // 288, the conversation's declared floor at 520, and the task panel's
+    // minimum at 280. Below this the conversation is squeezed under the width
+    // its composer needs, which is how its controls ended up on top of one
+    // another. Keep in step with task-panel-size.ts.
+    minWidth: 1088,
     minHeight: 620,
     center: true,
     show: false,

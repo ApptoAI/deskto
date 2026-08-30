@@ -249,26 +249,52 @@ export function Workbench() {
   // A deleted task has nothing left to reload, so the pane closes on the event
   // rather than after the request resolves — otherwise the open view refetches
   // the missing thread first and flashes an error.
+  // A deleted task has to leave the history, not just the open view. Replacing
+  // only the current entry left every earlier visit to that task in the stack,
+  // so Back walked straight back into a thread that no longer exists.
+  const forgetThread = useCallback((threadId: string) => {
+    setHistory((current) => {
+      const rewritten = current.stack.map((entry): MainView => {
+        if (entry.kind === "task" && entry.threadId === threadId) {
+          return toNewTask(entry)
+        }
+        // Settings stays open, but Go back cannot land on a task that is gone.
+        if (
+          entry.kind === "settings" &&
+          entry.returnTo.kind === "task" &&
+          entry.returnTo.threadId === threadId
+        ) {
+          // returnTo is never a settings view, so the blank task is the
+          // only thing it can fall back to.
+          return { ...entry, returnTo: { kind: "new-task" } }
+        }
+        return entry
+      })
+      // Rewriting can leave the same screen twice in a row, and a Back that
+      // appears to do nothing is worse than a shorter history.
+      const stack: MainView[] = []
+      let index = 0
+      rewritten.forEach((entry, at) => {
+        const previous = stack[stack.length - 1]
+        if (
+          previous === undefined ||
+          JSON.stringify(previous) !== JSON.stringify(entry)
+        ) {
+          stack.push(entry)
+        }
+        if (at === current.index) index = stack.length - 1
+      })
+      return { stack, index }
+    })
+  }, [])
+
   useThreadDeleted(
     useCallback(
       (threadId: string) => {
-        setView((current) => {
-          if (current.kind === "task" && current.threadId === threadId) {
-            return toNewTask(current)
-          }
-          // Settings stays open, but Go back cannot land on a task that is gone.
-          if (
-            current.kind === "settings" &&
-            current.returnTo.kind === "task" &&
-            current.returnTo.threadId === threadId
-          ) {
-            return toNewTask(current)
-          }
-          return current
-        })
+        forgetThread(threadId)
         revalidateThreadsSoon()
       },
-      [revalidateThreadsSoon, setView]
+      [forgetThread, revalidateThreadsSoon]
     )
   )
 

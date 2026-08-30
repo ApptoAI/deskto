@@ -11,6 +11,14 @@ export const maximumTaskPanelWidth = 1_024
 export const minimumConversationWidth = 520
 
 /**
+ * The narrowest window in which every minimum above can be honoured at once:
+ * the task list, this floor, and the panel's own minimum. `createMainWindow`
+ * holds the native window to it, so the three constraints never have to be
+ * resolved by squeezing the conversation.
+ */
+export const minimumWindowWidth = 288 + minimumConversationWidth + minimumTaskPanelWidth
+
+/**
  * The two measures long-form text is held to. They live beside the panel
  * widths because they are the same geometry: how wide the panel opens only
  * matters against the measure the document inside it is trying to reach.
