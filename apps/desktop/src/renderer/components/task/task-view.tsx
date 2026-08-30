@@ -408,7 +408,12 @@ export function TaskView({
                     location rather than as a sentence. */}
                 <div className="flex h-11 shrink-0 items-center gap-2.5 text-caption text-muted-foreground">
                   <FolderIcon className="size-3.5 shrink-0" />
-                  <span>Managed by Deskto</span>
+                  {/* The label is a fixed phrase and the path is the part that
+                      can give ground, so the label never wraps and the path
+                      truncates from the front-heavy end instead. */}
+                  <span className="shrink-0 whitespace-nowrap">
+                    Managed by Deskto
+                  </span>
                   {active ? (
                     <span className="flex items-center gap-2 pl-3">
                       <span
@@ -419,7 +424,7 @@ export function TaskView({
                     </span>
                   ) : null}
                   {projectPath ? (
-                    <span className="ml-auto truncate pl-4 font-mono text-micro">
+                    <span className="ml-auto min-w-0 truncate pl-4 font-mono text-micro">
                       {projectPath}
                     </span>
                   ) : null}

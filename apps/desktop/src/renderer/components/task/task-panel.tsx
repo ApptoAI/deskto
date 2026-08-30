@@ -20,7 +20,6 @@ import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import MessagesSquareIcon from "lucide-react/dist/esm/icons/messages-square"
-import XIcon from "lucide-react/dist/esm/icons/x"
 import {
   isActivityBlocked,
   type Activity,
@@ -297,14 +296,7 @@ export function TaskPanel({
           />
         </div>
         <div className="flex shrink-0 items-center">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => surface.panel.close(threadId)}
-            aria-label="Close the panel"
-          >
-            <XIcon />
-          </Button>
+          
         </div>
       </div>
 

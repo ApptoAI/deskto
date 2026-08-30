@@ -366,7 +366,6 @@
 @utility glass-window {
   background: var(--glass-window);
   backdrop-filter: blur(72px) saturate(150%);
-  -webkit-backdrop-filter: blur(72px) saturate(150%);
 }
 
 /* A surface inside the window that should read as set back from it — the
@@ -377,7 +376,6 @@
 @utility glass-panel {
   background: var(--glass-panel-dark);
   backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
 }
 
 /* A surface that should read as lifted off the window: the composer. Paired
@@ -385,7 +383,6 @@
 @utility glass-composer {
   background: var(--glass-composer);
   backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
   box-shadow:
     0 0 0 1px var(--edge),
     inset 0 1px 0 var(--bevel);
@@ -396,7 +393,6 @@
 @utility glass-popover {
   background: var(--popover);
   backdrop-filter: blur(40px) saturate(140%);
-  -webkit-backdrop-filter: blur(40px) saturate(140%);
   box-shadow:
     0 0 0 1px var(--edge-strong),
     inset 0 1px 0 var(--bevel),

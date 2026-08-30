@@ -1,10 +1,14 @@
 // Wide enough on first open that a document preview reaches its own reading
 // measure. A panel that opens under it makes every file look narrow, and the
 // user has to drag before reading anything.
-export const defaultTaskPanelWidth = 720
+export const defaultTaskPanelWidth = 480
 export const minimumTaskPanelWidth = 280
 export const maximumTaskPanelWidth = 1_024
-export const minimumConversationWidth = 288
+// The composer's controls set this floor, not the text. Below roughly this
+// width the toolbar has nowhere to put a harness, a model, a thinking level, a
+// permission mode and Send, and they start overlapping each other rather than
+// wrapping — which reads as an app whose buttons do not work.
+export const minimumConversationWidth = 520
 
 /**
  * The two measures long-form text is held to. They live beside the panel

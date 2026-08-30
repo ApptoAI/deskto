@@ -520,7 +520,7 @@ function TaskRow({
           </span>
           <span
             className={cn(
-              "flex h-5 shrink-0 items-center gap-1.5 transition-opacity duration-150 group-hover:opacity-0 group-has-focus-visible:opacity-0",
+              "flex h-5 shrink-0 items-center justify-end gap-1.5 transition-opacity duration-150 group-hover:opacity-0 group-has-focus-visible:opacity-0",
               popupOpen && "opacity-0"
             )}
           >
@@ -531,7 +531,9 @@ function TaskRow({
             />
             <span
               className={cn(
-                "text-micro tabular-nums",
+                // Fixed column: without it the timestamp starts at a different
+                // x on every row depending on whether a status glyph is there.
+                "w-8 shrink-0 text-right text-micro tabular-nums",
                 isWakeLabel
                   ? "text-foreground"
                   : "text-muted-foreground/70"
@@ -814,7 +816,7 @@ function RowIndicator({
     <span
       key={kind}
       aria-hidden
-      className="flex size-3.5 items-center justify-center transition-[opacity,scale] duration-200 ease-(--ease-out-quart) motion-reduce:transition-none starting:scale-50 starting:opacity-0"
+      className="flex size-3.5 shrink-0 items-center justify-center transition-[opacity,scale] duration-200 ease-(--ease-out-quart) motion-reduce:transition-none starting:scale-50 starting:opacity-0"
     >
       {kind === "running" ? (
         <PieGlyph className="text-muted-foreground" />

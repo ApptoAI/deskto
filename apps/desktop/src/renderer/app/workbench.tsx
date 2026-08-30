@@ -455,25 +455,26 @@ export function Workbench() {
       {activeThreadProject?.path ? (
         <Button
           variant="ghost"
-          size="sm"
+          size="icon-sm"
           className="text-muted-foreground"
-          title={activeThreadProject.path}
+          title={`Open folder — ${activeThreadProject.path}`}
+          aria-label="Open folder"
           onClick={() =>
             runAction(() => openFolder(activeThreadProject.path))
           }
         >
-          <FolderOpenIcon data-icon="inline-start" />
-          Open folder
+          <FolderOpenIcon />
         </Button>
       ) : null}
       <Button
         variant="ghost"
-        size="sm"
+        size="icon-sm"
         className="text-muted-foreground"
+        title="Show or hide the task panel"
+        aria-label="Show or hide the task panel"
         onClick={() => surface.panel.toggle({ threadId: activeThread.id })}
       >
-        <PanelRightIcon data-icon="inline-start" />
-        Panel
+        <PanelRightIcon />
       </Button>
     </>
   ) : null

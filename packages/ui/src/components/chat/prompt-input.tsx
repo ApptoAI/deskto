@@ -67,7 +67,12 @@ function PromptInputToolbar({
   return (
     <div
       data-slot="prompt-input-toolbar"
-      className={cn("flex items-center gap-2 px-2", className)}
+      className={cn(
+        // Wrap rather than overlap: when the column is narrow the controls
+        // must find a second line, not sit on top of one another.
+        "flex flex-wrap items-center gap-2 px-2",
+        className
+      )}
       {...props}
     />
   )

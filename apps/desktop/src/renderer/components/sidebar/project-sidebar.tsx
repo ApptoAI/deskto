@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useRef } from "react"
 import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
@@ -95,16 +95,11 @@ export function ProjectSidebar({
   } = useUpdates()
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
-  // Every row here belongs to the open project, and the label still earns its
-  // place: it sets the row's second line, which is what gives the list its
-  // rhythm whether or not the project could have been anything else.
-  const openProjectName = useMemo(
-    () =>
-      activeProject
-        ? new Map([[activeProject.id, activeProject.name]])
-        : undefined,
-    [activeProject]
-  )
+  // In single-project scope every row belongs to the project already named in
+  // the titlebar, so repeating it under each task says nothing and costs the
+  // title a line of width. The all-projects list keeps it, where it is the
+  // only thing telling two rows apart.
+  const openProjectName = undefined
   useEffect(() => {
     if (focusSettings) settingsButton.current?.focus()
   }, [focusSettings])
@@ -252,20 +247,15 @@ export function ProjectSidebar({
           <PuzzleIcon data-icon="inline-start" />
           Skills
         </Button>
-        <button
+        <Button
           ref={settingsButton}
-          type="button"
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground"
           onClick={onOpenSettings}
-          className="mt-1.5 flex w-full items-center gap-2.5 rounded-[10px] bg-fill-chip px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-fill-chip-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fill-chip-hover text-muted-foreground">
-            <SettingsIcon className="size-3" />
-          </span>
-          <span className="text-caption text-foreground">Settings</span>
-          {/* Where the work runs. The design puts an account here; Deskto has
-              no accounts, and this is the fact that row would be carrying. */}
-          <span className="ml-auto eyebrow text-muted-foreground">Local</span>
-        </button>
+          <SettingsIcon data-icon="inline-start" />
+          Settings
+        </Button>
       </div>
     </SidebarFrame>
   )
