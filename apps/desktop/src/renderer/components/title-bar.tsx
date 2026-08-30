@@ -38,39 +38,45 @@ export function TitleBar({
   trailing?: ReactNode
 }) {
   return (
-    <header className="drag-region flex h-13 shrink-0 items-center gap-4 px-4">
+    <header className="drag-region flex h-13 shrink-0 items-center px-4">
       {/* macOS draws its traffic lights over the top-left of the content with
           `titleBarStyle: hiddenInset`, so the row starts clear of them. Other
           platforms keep their own frame and simply see a little more air. */}
-      <span aria-hidden className="w-[68px] shrink-0" />
+      {/* Lights start at x=16 and span ~52px; the spacer must clear their
+          right edge (~68px) plus a visible gap before the first control. */}
+      <span aria-hidden className="w-[80px] shrink-0" />
 
-      <nav aria-label="Window" className="no-drag flex items-center gap-1.5">
-        <TitleBarButton
-          label={sidebarOpen ? "Hide the task list" : "Show the task list"}
-          pressed={sidebarOpen}
-          onClick={onToggleSidebar}
-        >
-          <PanelLeftIcon />
-        </TitleBarButton>
-        <span aria-hidden className="w-1.5" />
-        <TitleBarButton label="Go back" disabled={!canGoBack} onClick={onBack}>
-          <ArrowLeftIcon />
-        </TitleBarButton>
-        <TitleBarButton
-          label="Go forward"
-          disabled={!canGoForward}
-          onClick={onForward}
-        >
-          <ArrowRightIcon />
-        </TitleBarButton>
-        <span aria-hidden className="w-1.5" />
-        <TitleBarButton label="New task" onClick={onNewTask}>
-          <PlusIcon />
-        </TitleBarButton>
+      <nav aria-label="Window" className="no-drag flex items-center gap-3">
+        <span className="flex items-center">
+          <TitleBarButton
+            label={sidebarOpen ? "Hide the task list" : "Show the task list"}
+            pressed={sidebarOpen}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeftIcon />
+          </TitleBarButton>
+        </span>
+        <span className="flex items-center gap-1">
+          <TitleBarButton label="Go back" disabled={!canGoBack} onClick={onBack}>
+            <ArrowLeftIcon />
+          </TitleBarButton>
+          <TitleBarButton
+            label="Go forward"
+            disabled={!canGoForward}
+            onClick={onForward}
+          >
+            <ArrowRightIcon />
+          </TitleBarButton>
+        </span>
+        <span className="flex items-center">
+          <TitleBarButton label="New task" onClick={onNewTask}>
+            <PlusIcon />
+          </TitleBarButton>
+        </span>
       </nav>
 
       {children ? (
-        <div className="flex min-w-0 items-center gap-2.5">{children}</div>
+        <div className="ml-3 flex min-w-0 items-center gap-1.5">{children}</div>
       ) : null}
 
       {trailing ? (

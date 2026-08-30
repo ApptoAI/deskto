@@ -43,6 +43,52 @@
   -webkit-app-region: drag;
 }
 
+/* Theme changes are rare and deliberate. Limit the transition to structural
+   surfaces instead of making every descendant animate every CSS property. */
+.theme-transition {
+  body,
+  .glass-window,
+  .glass-panel,
+  .glass-composer,
+  .glass-popover,
+  main,
+  aside,
+  header {
+    transition-property: background-color, color, border-color;
+    transition-duration: 200ms;
+    transition-timing-function: var(--ease-in-out-quart);
+  }
+}
+
+@utility loaded-list-enter {
+  animation: loaded-list-fade 150ms var(--ease-out-quart) both;
+}
+
+@keyframes loaded-list-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loaded-list-enter {
+    animation: none;
+  }
+
+  .theme-transition {
+    body,
+    .glass-window,
+    .glass-panel,
+    .glass-composer,
+    .glass-popover,
+    main,
+    aside,
+    header {
+      transition: none;
+    }
+  }
+}
+
 /* Fade-and-rise entrance for content that streams in. Uses @starting-style so
    the transition runs on first paint without a mounted-state effect. */
 @utility enter-rise {

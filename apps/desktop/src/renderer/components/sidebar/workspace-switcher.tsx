@@ -30,7 +30,7 @@ export function WorkspaceTile({
     <span
       className={cn(
         "flex shrink-0 items-center justify-center rounded-md text-white",
-        small ? "size-5" : "size-6",
+        "size-5",
         workspaceSwatch(workspace.color)
       )}
     >
@@ -50,7 +50,9 @@ export function WorkspaceHeaderLabel({
 }) {
   return (
     <>
-      {workspace ? <WorkspaceTile workspace={workspace} /> : null}
+      <span className="flex w-5 shrink-0 items-center justify-center">
+        {workspace ? <WorkspaceTile workspace={workspace} /> : null}
+      </span>
       <span className="min-w-0 flex-1 truncate text-left text-ui font-semibold tracking-tight">
         {workspace?.name ?? "Workspace"}
       </span>
@@ -96,7 +98,7 @@ export function WorkspaceSwitcher({
           <Button
             variant="ghost"
             size="lg"
-            className="w-full justify-start gap-2"
+            className="w-full justify-start gap-2 bg-fill-card px-2 hover:bg-fill-chip"
             aria-label={`Switch workspace, current: ${workspace?.name ?? "none"}`}
           />
         }
@@ -107,7 +109,12 @@ export function WorkspaceSwitcher({
           className="text-muted-foreground"
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="p-1.5" align="start">
+      <DropdownMenuContent
+        className="p-1.5"
+        side="bottom"
+        align="start"
+        sideOffset={2}
+      >
         <DropdownMenuRadioGroup
           value={workspace?.id ?? ""}
           onValueChange={(value) => onSelect(String(value))}

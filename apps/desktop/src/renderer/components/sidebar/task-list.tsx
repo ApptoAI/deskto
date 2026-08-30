@@ -248,7 +248,8 @@ export function TaskList({
     <div id={taskListFocusTargetId} tabIndex={-1} className="px-2">
       {partition.pinned.length > 0 ? (
         <section>
-          <div className="flex items-center px-2 pt-5 pb-2 eyebrow text-muted-foreground">
+          <div className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-2 pt-5 pb-2 eyebrow text-muted-foreground">
+            <span aria-hidden />
             <span>Pinned</span>
             <span className="ml-auto tabular-nums opacity-60">
               {partition.pinned.length}
@@ -262,7 +263,8 @@ export function TaskList({
 
       {partition.active.length > 0 ? (
         <section>
-          <div className="flex items-center px-2 pt-5 pb-2 eyebrow text-muted-foreground">
+          <div className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-2 pt-5 pb-2 eyebrow text-muted-foreground">
+            <span aria-hidden />
             <span>Inbox</span>
             <span className="ml-auto tabular-nums opacity-60">
               {partition.active.length}
@@ -463,8 +465,8 @@ function TaskRow({
           // Shift+F10 or the Menu key, so say out loud that one exists.
           aria-haspopup="menu"
           className={cn(
-            "flex w-full items-start gap-2.5 rounded-row px-2 py-1.5 pr-7 text-left text-caption",
-            "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
+            "flex w-full items-center gap-2 rounded-row px-2 py-1.5 text-left text-caption",
+            "transition-[background-color,box-shadow,scale] duration-120 ease-(--ease-out-quart) outline-none",
             "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",
             isOpen ? sidebarRowSelected : sidebarRowIdle,
@@ -473,7 +475,7 @@ function TaskRow({
         >
           <span
             className={cn(
-              "flex h-5 shrink-0 items-center",
+              "flex h-5 w-5 shrink-0 items-center justify-center",
               dimmed && !isOpen && "opacity-60"
             )}
           >
@@ -531,12 +533,8 @@ function TaskRow({
             />
             <span
               className={cn(
-                // Fixed column: without it the timestamp starts at a different
-                // x on every row depending on whether a status glyph is there.
                 "w-8 shrink-0 text-right text-micro tabular-nums",
-                isWakeLabel
-                  ? "text-foreground"
-                  : "text-muted-foreground/70"
+                isWakeLabel ? "text-foreground" : "text-muted-foreground/70"
               )}
               title={timeTitle}
             >
@@ -553,7 +551,7 @@ function TaskRow({
         </button>
         {/* Transparent to the pointer so the gaps between the buttons still
               belong to the row underneath. */}
-        <span className="pointer-events-none absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-1">
+        <span className="pointer-events-none absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
           {section === "done" ? (
             <RowActionButton
               action="Restore"

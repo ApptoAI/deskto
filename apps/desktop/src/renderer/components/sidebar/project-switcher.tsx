@@ -68,15 +68,14 @@ export function ProjectSwitcher({
           render={
             <Button
               variant="ghost"
-              className="min-w-0 flex-1 justify-start"
+              className="min-w-0 flex-1 justify-start gap-2 bg-fill-card px-2 hover:bg-fill-chip"
               title={allProjects ? undefined : activeProject?.path}
             />
           }
         >
-          <ScopeIcon
-            data-icon="inline-start"
-            className="text-muted-foreground"
-          />
+          <span className="flex w-5 shrink-0 items-center justify-center">
+            <ScopeIcon className="size-4 text-muted-foreground" />
+          </span>
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           <ChevronDownIcon
             data-icon="inline-end"
@@ -167,8 +166,7 @@ export function ProjectSwitcher({
       </DropdownMenu>
       <Button
         variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
+        className="w-8 justify-end px-2 text-muted-foreground"
         aria-label="Create project"
         onClick={onAddProject}
         disabled={adding}

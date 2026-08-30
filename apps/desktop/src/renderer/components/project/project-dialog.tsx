@@ -3,6 +3,11 @@ import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import ChevronRightIcon from "lucide-react/dist/esm/icons/chevron-right"
 
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@workspace/ui/components/collapsible"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
@@ -215,17 +220,23 @@ function ProjectForm({
 
         {/* Deskto manages the folder unless someone asks otherwise, so the
             filesystem question stays folded away from first-time users. */}
-        <div className="space-y-3">
+        <Collapsible
+          className="space-y-3"
+          open={advancedOpen}
+          onOpenChange={setAdvancedOpen}
+        >
           <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground"
-              aria-expanded={advancedOpen}
-              onClick={() => setAdvancedOpen((current) => !current)}
+            <CollapsibleTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground transition-colors duration-120 outline-none hover:text-foreground focus-visible:text-foreground"
+                />
+              }
             >
               <AdvancedChevron className="size-3.5" />
               Advanced
-            </button>
+            </CollapsibleTrigger>
             {/* Folding the section must not hide what it changed: a chosen
                 template or linked folder stays summarized on the fold line. */}
             {!advancedOpen && collapsedSummary ? (
@@ -235,8 +246,8 @@ function ProjectForm({
             ) : null}
           </div>
 
-          {advancedOpen ? (
-            <div className="space-y-5">
+          <CollapsibleContent>
+            <div className="space-y-5 pt-px">
               <div className="space-y-2">
                 <Label id="project-template-label">Template</Label>
                 <DropdownMenu>
@@ -329,8 +340,8 @@ function ProjectForm({
                 </div>
               </fieldset>
             </div>
-          ) : null}
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* The template list failing must stay visible with Advanced folded,
             or "Blank project" quietly becomes the only choice. */}

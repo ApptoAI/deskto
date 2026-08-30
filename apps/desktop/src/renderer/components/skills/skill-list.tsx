@@ -63,8 +63,11 @@ export function SkillList({
       {[...groups.entries()].map(([group, groupItems]) => (
         <section key={group} aria-labelledby={`skill-group-${group}`}>
           {/* Sticky so a long folder never scrolls away from the name of the
-              folder it belongs to. */}
-          <div className="sticky top-0 z-10 flex items-center gap-3 bg-background pt-6 pb-2">
+              folder it belongs to. It already sits on the window's glass, so
+              painting the glass tint here would composite it twice and read as
+              a black band — it blurs what scrolls beneath instead, and tints
+              only at fill strength. */}
+          <div className="sticky top-0 z-10 flex items-center gap-3 bg-fill-card px-2 pt-6 pb-2 backdrop-blur-2xl">
             <h2
               id={`skill-group-${group}`}
               className="eyebrow text-muted-foreground"
@@ -124,7 +127,7 @@ function SkillRow({
       <button
         type="button"
         className={cn(
-          "group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "group flex w-full items-center gap-3 rounded-lg px-2 py-3 text-left transition-colors duration-150 ease-out outline-none focus-visible:ring-2 focus-visible:ring-ring",
           selected ? "bg-muted/60" : "hover:bg-muted/50 dark:hover:bg-muted/40"
         )}
         onClick={() => onSelect(item)}
@@ -138,7 +141,7 @@ function SkillRow({
         <span className="w-52 shrink-0 truncate text-sm font-medium">
           {item.name}
         </span>
-        <span className="min-w-0 flex-1 truncate text-ui text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-muted-foreground">
           {item.description ?? "Description could not be read."}
         </span>
         {/* Trouble sits on the right rail with the other row metadata, so the
@@ -154,7 +157,7 @@ function SkillRow({
         </span>
         <ChevronRightIcon
           aria-hidden="true"
-          className="size-3.5 shrink-0 text-muted-foreground/40 transition-colors duration-150 ease-out group-hover:text-muted-foreground"
+          className="size-3.5 shrink-0 self-center text-muted-foreground/40 transition-colors duration-150 ease-out group-hover:text-muted-foreground"
         />
       </button>
     </li>

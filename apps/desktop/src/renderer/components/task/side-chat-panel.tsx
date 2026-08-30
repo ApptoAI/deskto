@@ -260,6 +260,8 @@ function SideComposer({
       placeholder={active ? "The agent is working…" : "Ask a side question"}
       running={active}
       focusToken={focusToken}
+      textareaClassName="min-h-12 py-3"
+      textareaRows={1}
       {...(blocked
         ? {
             blockedReason:

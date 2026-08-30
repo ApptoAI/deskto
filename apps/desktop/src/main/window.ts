@@ -31,7 +31,7 @@ function defaultWindowSize() {
     paints the wallpaper and floats glass on it, so the deepest thing behind
     everything is what a torn frame should show. Keep in step with --wp-base. */
 function canvasColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#232327" : "#e8e8ec"
+  return nativeTheme.shouldUseDarkColors ? "#202024" : "#d6d6e0"
 }
 
 export function createMainWindow(): BrowserWindow {
@@ -47,6 +47,7 @@ export function createMainWindow(): BrowserWindow {
     center: true,
     show: false,
     titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 20 },
     // The Surface draws its own titlebar. macOS already keeps its menu in the
     // system bar, but Windows and Linux would otherwise stack a native menu
     // strip on top of ours, which is two rows of chrome for one window. Alt

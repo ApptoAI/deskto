@@ -16,6 +16,7 @@ import { type ThemePreference } from "@deskto/settings"
  */
 
 const storageKey = "deskto.appearance.theme"
+let themeTransitionTimer: number | undefined
 
 export function rememberTheme(theme: ThemePreference): void {
   try {
@@ -37,6 +38,20 @@ function prefersDark(): boolean {
 export function applyTheme(theme: ThemePreference): void {
   const dark = theme === "dark" || (theme === "system" && prefersDark())
   const root = document.documentElement
+  const paletteChanged = root.classList.contains("dark") !== dark
+
+  if (
+    paletteChanged &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    root.classList.add("theme-transition")
+    root.getBoundingClientRect()
+    window.clearTimeout(themeTransitionTimer)
+    themeTransitionTimer = window.setTimeout(() => {
+      root.classList.remove("theme-transition")
+    }, 200)
+  }
+
   root.classList.toggle("dark", dark)
   root.style.colorScheme = dark ? "dark" : "light"
 }

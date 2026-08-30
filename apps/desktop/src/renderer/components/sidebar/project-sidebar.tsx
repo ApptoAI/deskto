@@ -25,6 +25,8 @@ import {
 } from "./workspace-switcher.js"
 import { WorkspaceThreadList } from "./workspace-thread-list.js"
 
+const sidebarRowClass = "w-full justify-start gap-2 px-2"
+
 export function ProjectSidebar({
   workspace,
   workspaces,
@@ -95,11 +97,11 @@ export function ProjectSidebar({
   } = useUpdates()
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
-  // In single-project scope every row belongs to the project already named in
-  // the titlebar, so repeating it under each task says nothing and costs the
-  // title a line of width. The all-projects list keeps it, where it is the
-  // only thing telling two rows apart.
-  const openProjectName = undefined
+  // The secondary folder line uses the same lookup in both single-project and
+  // all-project scopes, keeping its title axis aligned with the task above.
+  const openProjectNames = activeProject
+    ? new Map([[activeProject.id, activeProject.name]])
+    : undefined
   useEffect(() => {
     if (focusSettings) settingsButton.current?.focus()
   }, [focusSettings])
@@ -111,7 +113,7 @@ export function ProjectSidebar({
           <Button
             variant="ghost"
             size="lg"
-            className="w-full justify-start gap-2"
+            className={sidebarRowClass}
             onClick={onEditWorkspace}
             disabled={!workspace}
             aria-label={`Workspace settings for ${workspace?.name ?? "workspace"}`}
@@ -137,14 +139,13 @@ export function ProjectSidebar({
         <Button
           variant="ghost"
           size="lg"
-          className="w-full justify-start"
+          className={sidebarRowClass}
           onClick={onNewTask}
           disabled={!activeProject}
         >
-          <SquarePenIcon
-            data-icon="inline-start"
-            className="text-muted-foreground"
-          />
+          <span className="flex w-5 shrink-0 items-center justify-center">
+            <SquarePenIcon className="size-4 text-muted-foreground" />
+          </span>
           New task
           {newTaskShortcut ? (
             <Kbd data-icon="inline-end" className="ml-auto">
@@ -205,7 +206,7 @@ export function ProjectSidebar({
               onOpenThread={onOpenThread}
               onRetry={onRetryThreads}
               actions={inboxActions}
-              projectNameById={openProjectName}
+              projectNameById={openProjectNames}
             />
           )}
         </div>
@@ -213,14 +214,17 @@ export function ProjectSidebar({
 
       {/* A rule above the foot, as in the design: the nav is a different kind
           of thing from the task list and needs saying so. */}
-      <div className="no-drag space-y-0.5 border-t border-border px-2 pt-1.5 pb-3">
+      <div className="no-drag space-y-0.5 border-t border-edge px-2 pt-1.5 pb-3">
         {updateState?.status === "ready" ? (
           <Button
             variant="secondary"
-            className="w-full justify-start"
+            size="lg"
+            className={sidebarRowClass}
             onClick={() => void installUpdate()}
           >
-            <RefreshCwIcon data-icon="inline-start" />
+            <span className="flex w-5 shrink-0 items-center justify-center">
+              <RefreshCwIcon className="size-4" />
+            </span>
             Restart to update
           </Button>
         ) : null}
@@ -231,29 +235,38 @@ export function ProjectSidebar({
         ) : null}
         <Button
           variant={projectsActive ? "secondary" : "ghost"}
-          className="w-full justify-start text-muted-foreground"
+          size="lg"
+          className={`${sidebarRowClass} text-muted-foreground`}
           onClick={onOpenProjects}
           aria-current={projectsActive ? "page" : undefined}
         >
-          <FolderIcon data-icon="inline-start" />
+          <span className="flex w-5 shrink-0 items-center justify-center">
+            <FolderIcon className="size-4" />
+          </span>
           Projects
         </Button>
         <Button
           variant={skillsActive ? "secondary" : "ghost"}
-          className="w-full justify-start text-muted-foreground"
+          size="lg"
+          className={`${sidebarRowClass} text-muted-foreground`}
           onClick={onOpenSkills}
           aria-current={skillsActive ? "page" : undefined}
         >
-          <PuzzleIcon data-icon="inline-start" />
+          <span className="flex w-5 shrink-0 items-center justify-center">
+            <PuzzleIcon className="size-4" />
+          </span>
           Skills
         </Button>
         <Button
           ref={settingsButton}
           variant="ghost"
-          className="w-full justify-start text-muted-foreground"
+          size="lg"
+          className={`${sidebarRowClass} text-muted-foreground`}
           onClick={onOpenSettings}
         >
-          <SettingsIcon data-icon="inline-start" />
+          <span className="flex w-5 shrink-0 items-center justify-center">
+            <SettingsIcon className="size-4" />
+          </span>
           Settings
         </Button>
       </div>

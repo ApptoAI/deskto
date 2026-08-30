@@ -20,6 +20,7 @@ describe("SaveTemplateDialog", () => {
       <SaveTemplateDialog
         open
         onOpenChange={vi.fn()}
+        onOpenChangeComplete={vi.fn()}
         project={project()}
         files={[]}
         loading={false}
@@ -46,6 +47,7 @@ describe("SaveTemplateDialog", () => {
       <SaveTemplateDialog
         open
         onOpenChange={vi.fn()}
+        onOpenChangeComplete={vi.fn()}
         project={project()}
         files={[
           { path: "README.md", sizeBytes: 8 },
@@ -77,6 +79,7 @@ describe("SaveTemplateDialog", () => {
       <SaveTemplateDialog
         open
         onOpenChange={vi.fn()}
+        onOpenChangeComplete={vi.fn()}
         project={project("x".repeat(projectNameMaxLength))}
         files={[]}
         loading={false}

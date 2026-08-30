@@ -197,8 +197,11 @@ export function AppearanceSettings() {
               {fontSize}px
             </output>
           </div>
-          <div className="mt-4 flex items-center gap-3">
-            <span aria-hidden className="text-xs text-muted-foreground">
+          <div className="mt-4 grid grid-cols-[0.75rem_minmax(0,1fr)_1.125rem] items-center gap-3">
+            <span
+              aria-hidden
+              className="text-center text-xs text-muted-foreground"
+            >
               A
             </span>
             <input
@@ -210,7 +213,7 @@ export function AppearanceSettings() {
               value={fontSize}
               aria-label="Text size"
               aria-valuetext={`${fontSize} pixels`}
-              className="settings-range min-w-0 flex-1"
+              className="settings-range min-w-0 w-full"
               style={rangeStyle}
               onChange={(event) =>
                 setPendingFontSize(Number(event.currentTarget.value))
@@ -225,14 +228,34 @@ export function AppearanceSettings() {
                 commitFontSize(Number(event.currentTarget.value))
               }
             />
-            <span aria-hidden className="text-lg text-muted-foreground">
+            <span
+              aria-hidden
+              className="text-center text-lg text-muted-foreground"
+            >
               A
             </span>
           </div>
-          <div className="mt-1 flex justify-between px-6 font-mono text-tiny text-muted-foreground">
-            <span>{minInterfaceFontSize}px</span>
-            <span>{defaultInterfaceFontSize}px</span>
-            <span>{maxInterfaceFontSize}px</span>
+          <div className="mt-1 grid grid-cols-[0.75rem_minmax(0,1fr)_1.125rem] gap-3 font-mono text-tiny text-muted-foreground">
+            <span aria-hidden />
+            <div className="relative h-4">
+              <span className="absolute left-0">
+                {minInterfaceFontSize}px
+              </span>
+              <span
+                className="absolute -translate-x-1/2"
+                style={{
+                  left: `${
+                    ((defaultInterfaceFontSize - minInterfaceFontSize) /
+                      (maxInterfaceFontSize - minInterfaceFontSize)) *
+                    100
+                  }%`,
+                }}
+              >
+                {defaultInterfaceFontSize}px
+              </span>
+              <span className="absolute right-0">{maxInterfaceFontSize}px</span>
+            </div>
+            <span aria-hidden />
           </div>
         </div>
       </fieldset>

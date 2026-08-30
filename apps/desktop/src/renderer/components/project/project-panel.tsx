@@ -63,7 +63,8 @@ export function ProjectPanel({
   details: RuntimeQuery<ProjectDetails>
 }) {
   const client = useRuntimeClient()
-  const [dialog, setDialog] = useState<PanelDialog>(null)
+  const [mountedDialog, setMountedDialog] = useState<PanelDialog>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
@@ -75,12 +76,21 @@ export function ProjectPanel({
 
   const loadTemplateFiles = useMemo(
     () =>
-      dialog === "template"
+      mountedDialog === "template"
         ? () => client.listProjectTemplateFiles(project.id)
         : null,
-    [client, dialog, project.id]
+    [client, mountedDialog, project.id]
   )
   const templateFiles = useRuntimeQuery(loadTemplateFiles)
+
+  function openDialog(dialog: Exclude<PanelDialog, null>) {
+    setMountedDialog(dialog)
+    setDialogOpen(true)
+  }
+
+  function finishDialogChange(open: boolean) {
+    if (!open) setMountedDialog(null)
+  }
 
   async function updateProject(patch: {
     name?: string
@@ -141,7 +151,7 @@ export function ProjectPanel({
           title="About"
           editLabel="Edit name and description"
           hasContent={project.description !== ""}
-          onEdit={() => setDialog("about")}
+          onEdit={() => openDialog("about")}
         >
           {project.description ? (
             <p className="line-clamp-4 text-sm">{project.description}</p>
@@ -159,7 +169,7 @@ export function ProjectPanel({
             loadedDetails !== null && loadedDetails.instructions !== ""
           }
           editDisabled={loadedDetails === null}
-          onEdit={() => setDialog("instructions")}
+          onEdit={() => openDialog("instructions")}
         >
           {loadedDetails === null ? (
             <p className="text-sm text-muted-foreground">
@@ -195,7 +205,7 @@ export function ProjectPanel({
                   <EllipsisVerticalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setDialog("template")}>
+                  <DropdownMenuItem onClick={() => openDialog("template")}>
                     Save as template…
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -254,54 +264,65 @@ export function ProjectPanel({
         </p>
       ) : null}
 
-      <AboutDialog
-        open={dialog === "about"}
-        onOpenChange={(open) => setDialog(open ? "about" : null)}
-        project={project}
-        onSubmit={(draft) => updateProject(draft)}
-      />
-      <InstructionsDialog
-        open={dialog === "instructions"}
-        onOpenChange={(open) => setDialog(open ? "instructions" : null)}
-        projectName={project.name}
-        instructions={loadedDetails?.instructions ?? ""}
-        onSubmit={(instructions) => updateProject({ instructions })}
-      />
-      <SaveTemplateDialog
-        open={dialog === "template"}
-        onOpenChange={(open) => {
-          setDialog(open ? "template" : null)
-          if (!open) setTemplateError(null)
-        }}
-        project={project}
-        files={
-          templateFiles.state.status === "ready" ? templateFiles.state.data : []
-        }
-        loading={
-          templateFiles.state.status === "idle" ||
-          templateFiles.state.status === "loading"
-        }
-        loadError={
-          templateFiles.state.status === "error"
-            ? templateFiles.state.message
-            : null
-        }
-        actionError={templateError}
-        onRetry={templateFiles.revalidate}
-        onSubmit={async (draft) => {
-          setTemplateError(null)
-          try {
-            await client.saveTemplateFromProject({
-              projectId: project.id,
-              ...draft,
-            })
-          } catch (error) {
-            // The dialog stays open; this is the error it shows.
-            setTemplateError(describedErrorSchema.parse(error))
-            throw error
+      {mountedDialog === "about" ? (
+        <AboutDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onOpenChangeComplete={finishDialogChange}
+          project={project}
+          onSubmit={(draft) => updateProject(draft)}
+        />
+      ) : null}
+      {mountedDialog === "instructions" ? (
+        <InstructionsDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onOpenChangeComplete={finishDialogChange}
+          projectName={project.name}
+          instructions={loadedDetails?.instructions ?? ""}
+          onSubmit={(instructions) => updateProject({ instructions })}
+        />
+      ) : null}
+      {mountedDialog === "template" ? (
+        <SaveTemplateDialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open)
+            if (!open) setTemplateError(null)
+          }}
+          onOpenChangeComplete={finishDialogChange}
+          project={project}
+          files={
+            templateFiles.state.status === "ready"
+              ? templateFiles.state.data
+              : []
           }
-        }}
-      />
+          loading={
+            templateFiles.state.status === "idle" ||
+            templateFiles.state.status === "loading"
+          }
+          loadError={
+            templateFiles.state.status === "error"
+              ? templateFiles.state.message
+              : null
+          }
+          actionError={templateError}
+          onRetry={templateFiles.revalidate}
+          onSubmit={async (draft) => {
+            setTemplateError(null)
+            try {
+              await client.saveTemplateFromProject({
+                projectId: project.id,
+                ...draft,
+              })
+            } catch (error) {
+              // The dialog stays open; this is the error it shows.
+              setTemplateError(describedErrorSchema.parse(error))
+              throw error
+            }
+          }}
+        />
+      ) : null}
     </section>
   )
 }
@@ -347,24 +368,28 @@ function PanelCard({
 function AboutDialog({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   project,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onOpenChangeComplete: (open: boolean) => void
   project: Project
   onSubmit: (draft: { name: string; description: string }) => Promise<void>
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
+    >
       <DialogContent className="sm:max-w-lg">
-        {open ? (
-          <AboutForm
-            project={project}
-            onSubmit={onSubmit}
-            onClose={() => onOpenChange(false)}
-          />
-        ) : null}
+        <AboutForm
+          project={project}
+          onSubmit={onSubmit}
+          onClose={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -459,27 +484,31 @@ function AboutForm({
 function InstructionsDialog({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   projectName,
   instructions,
   onSubmit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onOpenChangeComplete: (open: boolean) => void
   projectName: string
   instructions: string
   onSubmit: (instructions: string) => Promise<void>
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
+    >
       <DialogContent className="sm:max-w-xl">
-        {open ? (
-          <InstructionsForm
-            projectName={projectName}
-            instructions={instructions}
-            onSubmit={onSubmit}
-            onClose={() => onOpenChange(false)}
-          />
-        ) : null}
+        <InstructionsForm
+          projectName={projectName}
+          instructions={instructions}
+          onSubmit={onSubmit}
+          onClose={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   )

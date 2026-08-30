@@ -32,6 +32,7 @@ export type SaveTemplateDraft = {
 export function SaveTemplateDialog({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   project,
   files,
   loading,
@@ -42,6 +43,7 @@ export function SaveTemplateDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onOpenChangeComplete: (open: boolean) => void
   project: Project | null
   files: ProjectTemplateFile[]
   loading: boolean
@@ -68,9 +70,10 @@ export function SaveTemplateDialog({
       onOpenChange={(nextOpen) => {
         if (!busy) onOpenChange(nextOpen)
       }}
+      onOpenChangeComplete={onOpenChangeComplete}
     >
       <DialogContent className="sm:max-w-xl" showCloseButton={!busy}>
-        {open && project ? (
+        {project ? (
           <SaveTemplateForm
             key={project.id}
             project={project}

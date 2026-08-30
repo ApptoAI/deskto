@@ -350,7 +350,7 @@ export function TaskView({
                   harnessId={thread.harnessId}
                   label={`Message for ${thread.title}`}
                   placeholder={
-                    active ? "The agent is working…" : "Ask for the next step"
+                    active ? "The agent is working…" : "Do anything…"
                   }
                   running={active}
                   browserContexts={browserContexts}

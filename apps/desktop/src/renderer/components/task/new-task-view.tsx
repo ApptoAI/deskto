@@ -31,7 +31,6 @@ import { DesktoWordmark } from "./deskto-wordmark.js"
 /** How the project panel should show up before the user has chosen. */
 export type ProjectPanelPreference = "open" | "collapsed" | "auto"
 
-
 export function NewTaskView({
   project,
   harnesses,
@@ -188,9 +187,8 @@ export function NewTaskView({
               />
             </div>
 
-
-            {/* Settings live under the composer, out of the way: a quiet
-                toggle on the right, cards beneath it when open. */}
+            {/* Settings share the composer's outer edge; cards still open
+                beneath it. */}
             <div className="flex w-full max-w-[700px] justify-end">
               <Button
                 type="button"
