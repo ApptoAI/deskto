@@ -55,7 +55,7 @@ import { usePackActions } from "./use-pack-actions.js"
 import { useProjectActions } from "./use-project-actions.js"
 import { useThreadQueries } from "./use-thread-queries.js"
 import { useWorkspaceSelection } from "./use-workspace-selection.js"
-import { toNewTask, type MainView } from "./work-view.js"
+import { toNewTask, toProject, type MainView } from "./work-view.js"
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
@@ -98,7 +98,7 @@ export function Workbench() {
     useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
   )
 
-  const [view, setView] = useState<MainView>({ kind: "new-task" })
+  const [view, setView] = useState<MainView>({ kind: "project" })
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
@@ -182,7 +182,7 @@ export function Workbench() {
   const openProjectFromGrid = useCallback(
     (projectId: string) => {
       selectProject(projectId)
-      setView(toNewTask)
+      setView(toProject)
     },
     [selectProject]
   )
@@ -195,7 +195,7 @@ export function Workbench() {
       (threadId: string) => {
         setView((current) => {
           if (current.kind === "task" && current.threadId === threadId) {
-            return toNewTask(current)
+            return toProject(current)
           }
           // Settings stays open, but Go back cannot land on a task that is gone.
           if (
@@ -203,7 +203,7 @@ export function Workbench() {
             current.returnTo.kind === "task" &&
             current.returnTo.threadId === threadId
           ) {
-            return toNewTask(current)
+            return toProject(current)
           }
           return current
         })
@@ -374,7 +374,7 @@ export function Workbench() {
     return tryAction(async () => {
       if (!activeWorkspace) return
       await client.deleteWorkspace(activeWorkspace.id)
-      setView(toNewTask)
+      setView(toProject)
       revalidateSelection()
     })
   }
@@ -470,10 +470,11 @@ export function Workbench() {
         />
       )
     }
-    // A project with work in it opens on that work. The centered composer is
-    // for the project that has none yet, where a table would be a header row
+    // A project with work in it rests on that work. New task asked for a
+    // blank composer, so it gets one; the centered screen is also what a
+    // project with no tasks yet shows, where a table would be a header row
     // over an empty space.
-    if (projectThreads.length > 0) {
+    if (view.kind !== "new-task" && projectThreads.length > 0) {
       return (
         <ProjectTasksView
           key={newTaskProject.id}

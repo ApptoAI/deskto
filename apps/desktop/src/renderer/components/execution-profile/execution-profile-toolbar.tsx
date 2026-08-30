@@ -50,12 +50,17 @@ export function ExecutionProfileToolbar({
       description: "However much this model thinks on its own.",
       icon: <DefaultThinkingIcon />,
     },
-    ...model.supportedEfforts.map((effort) => ({
-      value: effort,
-      label: effortLabel(effort),
-      description: thinkingDescription(effort, model.supportedEfforts),
-      icon: <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />,
-    })),
+    ...model.supportedEfforts.map((effort) => {
+      const description = thinkingDescription(effort, model.supportedEfforts)
+      return {
+        value: effort,
+        label: effortLabel(effort),
+        ...(description ? { description } : {}),
+        icon: (
+          <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />
+        ),
+      }
+    }),
   ]
 
   const permissionModeOptions = permissionOptions.filter((option) =>
@@ -138,17 +143,22 @@ function Divider() {
 }
 
 /**
- * What more thinking buys, in the terms the person paid in: time. The rung
- * is read off the harness's own order rather than the effort's name, for the
- * same reason the icon is — providers invent their own top rung.
+ * What more thinking buys, in the terms the person paid in: time. Only the
+ * ends of the scale get a line — one sentence repeated down three middle
+ * rungs would claim they are the same choice, and the bars beside them
+ * already say which is deeper. Position is read off the harness's own order
+ * rather than the effort's name, since providers invent their own top rung.
  */
 function thinkingDescription(
   effort: string,
   efforts: readonly string[]
-): string {
+): string | undefined {
   if (effort === "none") return "No extra reasoning. Fastest."
-  const rank = effortRank(effort, efforts)
-  if (rank <= 1) return "A quick pass. Best for small, clear tasks."
-  if (rank <= 3) return "More reasoning before acting. Slower."
-  return "The most reasoning this model offers. Slowest."
+  const ranked = efforts.filter((candidate) => candidate !== "none")
+  if (ranked.length < 2) return undefined
+  if (effort === ranked[0]) return "A quick pass. Best for small, clear tasks."
+  if (effort === ranked[ranked.length - 1]) {
+    return "The most reasoning this model offers. Slowest."
+  }
+  return undefined
 }

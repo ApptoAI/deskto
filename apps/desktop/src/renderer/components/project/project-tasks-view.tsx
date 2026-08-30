@@ -131,7 +131,7 @@ export function ProjectTasksView({
         </div>
       </ScrollArea>
 
-      <div className="shrink-0 px-6 pb-5">
+      <div className="shrink-0 bg-background px-6 pt-2 pb-5">
         <ProjectLocationStrip project={project} />
         <Composer
           projectId={project.id}
@@ -187,11 +187,15 @@ function TaskRow({
 }) {
   const status = describeThreadStatus(thread.status)
   const harness = findHarness(harnesses, thread.harnessId)
-  const model = findModel(
-    harness?.models ?? [],
-    thread.executionProfile.modelId
-  )
   const updatedAt = taskUpdatedAt(thread)
+  // The column answers "who ran this". A task that never picked a model is
+  // answered by its agent; naming the default entry would print the same
+  // "Default (recommended)" down the whole column and say nothing.
+  const model = findModel(harness?.models ?? [], thread.executionProfile.modelId)
+  const agent =
+    model && !model.isDefault
+      ? model.name
+      : (harness?.name ?? thread.harnessId)
 
   return (
     <li>
@@ -222,9 +226,7 @@ function TaskRow({
             </span>
           ) : null}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {model?.name ?? harness?.name ?? thread.harnessId}
-        </span>
+        <span className="truncate text-xs text-muted-foreground">{agent}</span>
         <span
           className="text-right font-mono text-micro text-muted-foreground"
           title={formatExactTime(updatedAt)}
