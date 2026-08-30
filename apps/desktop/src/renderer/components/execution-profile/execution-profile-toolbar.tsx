@@ -9,7 +9,7 @@ import {
 } from "../../lib/execution-profile.js"
 import { HarnessLogo } from "../brand-logos.js"
 import { permissionOptions, toPermissionMode } from "./permission-modes.js"
-import { ProfileMenu } from "./profile-menu.js"
+import { ProfileMenu, type ProfileOption } from "./profile-menu.js"
 import {
   DefaultThinkingIcon,
   effortRank,
@@ -43,7 +43,7 @@ export function ExecutionProfileToolbar({
 
   // Every option says what it changes, because the trigger cannot: a row of
   // bare values is four words with nothing to say which question each answers.
-  const thinkingOptions = [
+  const thinkingOptions: ProfileOption[] = [
     {
       value: DEFAULT_EFFORT,
       label: effortLabel(DEFAULT_EFFORT),
@@ -51,15 +51,17 @@ export function ExecutionProfileToolbar({
       icon: <DefaultThinkingIcon />,
     },
     ...model.supportedEfforts.map((effort) => {
-      const description = thinkingDescription(effort, model.supportedEfforts)
-      return {
+      const option: ProfileOption = {
         value: effort,
         label: effortLabel(effort),
-        ...(description ? { description } : {}),
         icon: (
           <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />
         ),
       }
+      // Only the ends of the scale carry one; the middle rungs stay bare.
+      const description = thinkingDescription(effort, model.supportedEfforts)
+      if (description) option.description = description
+      return option
     }),
   ]
 
