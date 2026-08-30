@@ -27,6 +27,32 @@ export const themePreferenceSchema = z.enum(["system", "light", "dark"])
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>
 
+/**
+ * Where the app's one accent comes from. "monochrome" is the design's own
+ * answer: hierarchy is carried by opacity and shape, and the filled pill is
+ * whatever the canvas is not. "workspace" borrows the colour the person
+ * already chose for the Workspace they are in, so the accent identifies where
+ * they are working rather than decorating the chrome. See ADR 0027.
+ */
+export const accentSourceSchema = z.enum(["monochrome", "workspace"])
+
+export type AccentSource = z.infer<typeof accentSourceSchema>
+
+export const defaultAccentSource: AccentSource = "monochrome"
+
+export const accentSourceOptions: readonly SettingChoice<AccentSource>[] = [
+  {
+    value: "monochrome",
+    label: "Monochrome",
+    description: "Filled controls take the opposite of the canvas.",
+  },
+  {
+    value: "workspace",
+    label: "Workspace colour",
+    description: "Filled controls take the colour of the current workspace.",
+  },
+]
+
 /** How workspaces are arranged in the main window. */
 export const workspaceLayoutSchema = z.enum(["workspace", "slack"])
 
@@ -84,6 +110,14 @@ export const appSettings = {
     input: { kind: "choice" },
     schema: themePreferenceSchema,
     defaultValue: "system",
+  }),
+  accentSource: defineSetting({
+    key: "appearance.accent-source",
+    label: "Accent",
+    description: "Where the colour on filled controls comes from.",
+    input: { kind: "choice" },
+    schema: accentSourceSchema,
+    defaultValue: defaultAccentSource,
   }),
   workspaceLayout: defineSetting({
     key: "appearance.workspace-layout",

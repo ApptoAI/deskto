@@ -35,12 +35,17 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
   }
 
   return (
-    // No paper metaphor: a Word file is read here the same way a Markdown one
-    // is, on the canvas and held to the same measure. A drop-shadowed white
-    // sheet would be the one object in the app pretending to be physical.
+    // The paper metaphor, deliberately. Every other surface in the app is
+    // translucent glass over the wallpaper; this one is opaque and lifted, and
+    // that break is the whole point of it. It is the difference between the
+    // agent talking about a file and Deskto showing you the file, and a reader
+    // should be able to tell those apart before reading a word. See ADR 0027.
     <ScrollArea className="flex-1">
       <article
-        className={cn("mx-auto w-full px-8 py-8", documentMeasureClassName)}
+        className={cn(
+          "paper mx-auto my-8 w-full rounded-card px-10 py-10",
+          documentMeasureClassName
+        )}
       >
         {/* The same prose rules the agent's own output is set in, so a Word
             file and an answer are one voice rather than two. Only the images

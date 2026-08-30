@@ -722,7 +722,7 @@ function AgentCard({ harness }: { harness: Harness }) {
             <span
               aria-hidden
               className={cn(
-                "absolute inset-0 rounded-full bg-emerald-500",
+                "absolute inset-0 rounded-full bg-foreground",
                 "motion-safe:animate-[status-ping_600ms_var(--ease-out-quart)_both]"
               )}
             />

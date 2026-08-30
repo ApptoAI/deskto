@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useRef } from "react"
 import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
@@ -95,16 +95,11 @@ export function ProjectSidebar({
   } = useUpdates()
   const newTaskShortcut = useKeybindingLabel(appSettings.newTaskKeybinding)
   const settingsButton = useRef<HTMLButtonElement>(null)
-  // Every row here belongs to the open project, and the label still earns its
-  // place: it sets the row's second line, which is what gives the list its
-  // rhythm whether or not the project could have been anything else.
-  const openProjectName = useMemo(
-    () =>
-      activeProject
-        ? new Map([[activeProject.id, activeProject.name]])
-        : undefined,
-    [activeProject]
-  )
+  // In single-project scope every row belongs to the project already named in
+  // the titlebar, so repeating it under each task says nothing and costs the
+  // title a line of width. The all-projects list keeps it, where it is the
+  // only thing telling two rows apart.
+  const openProjectName = undefined
   useEffect(() => {
     if (focusSettings) settingsButton.current?.focus()
   }, [focusSettings])
@@ -216,7 +211,9 @@ export function ProjectSidebar({
         </div>
       </ScrollArea>
 
-      <div className="no-drag space-y-0.5 px-2 pb-3">
+      {/* A rule above the foot, as in the design: the nav is a different kind
+          of thing from the task list and needs saying so. */}
+      <div className="no-drag space-y-0.5 border-t border-border px-2 pt-1.5 pb-3">
         {updateState?.status === "ready" ? (
           <Button
             variant="secondary"

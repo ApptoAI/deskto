@@ -15,10 +15,12 @@ import {
   minInterfaceFontSize,
   settingValue,
   themeOptions,
+  accentSourceOptions,
   workspaceLayoutOptions,
   type InterfaceFontSize,
   type SettingChoice,
   type SettingDefinition,
+  type AccentSource,
   type ThemePreference,
   type WorkspaceLayout,
 } from "@deskto/settings"
@@ -39,6 +41,7 @@ export function AppearanceSettings() {
   const [pendingLayout, setPendingLayout] = useState<WorkspaceLayout | null>(
     null
   )
+  const [pendingAccent, setPendingAccent] = useState<AccentSource | null>(null)
   const [pendingFontSize, setPendingFontSize] =
     useState<InterfaceFontSize | null>(null)
   const latestWrites = useRef<Record<string, number>>({})
@@ -48,12 +51,14 @@ export function AppearanceSettings() {
 
   const persistedTheme = settingValue(snapshot, appSettings.theme)
   const persistedLayout = settingValue(snapshot, appSettings.workspaceLayout)
+  const persistedAccent = settingValue(snapshot, appSettings.accentSource)
   const persistedFontSize = settingValue(
     snapshot,
     appSettings.interfaceFontSize
   )
   const theme = pendingTheme ?? persistedTheme
   const layout = pendingLayout ?? persistedLayout
+  const accent = pendingAccent ?? persistedAccent
   const fontSize = pendingFontSize ?? persistedFontSize
 
   useEffect(() => {
@@ -147,6 +152,18 @@ export function AppearanceSettings() {
           void apply(appSettings.theme, value, setPendingTheme)
         }
         renderPreview={(value) => <ThemePreview value={value} />}
+      />
+
+      <ChoiceCardGroup
+        name="accent-source"
+        legend="Accent"
+        options={accentSourceOptions}
+        selected={accent}
+        onSelect={(value) =>
+          void apply(appSettings.accentSource, value, setPendingAccent)
+        }
+        renderPreview={(value) => <AccentPreview value={value} />}
+        optionClassName="w-48"
       />
 
       <ChoiceCardGroup
@@ -295,6 +312,30 @@ function ChoiceCardGroup<T extends string>({
         })}
       </div>
     </fieldset>
+  )
+}
+
+/** Filled controls, shown as they land with and without a Workspace colour. */
+function AccentPreview({ value }: { value: AccentSource }) {
+  const filled =
+    value === "workspace"
+      ? { background: "oklch(0.7 0.15 254)", color: "oklch(0.16 0.01 286)" }
+      : undefined
+  return (
+    <span aria-hidden className="flex h-20 flex-col justify-center gap-2 p-3">
+      <span className="flex items-center gap-2">
+        <span
+          className={cn(
+            "h-5 w-12 rounded-full",
+            value === "workspace" ? "" : "bg-primary"
+          )}
+          style={filled}
+        />
+        <span className="h-1 w-10 rounded-full bg-foreground/25" />
+      </span>
+      <span className="h-1 w-3/4 rounded-full bg-foreground/15" />
+      <span className="h-1 w-1/2 rounded-full bg-foreground/10" />
+    </span>
   )
 }
 

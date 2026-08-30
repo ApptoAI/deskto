@@ -29,7 +29,7 @@ export function describeHarnessHealth(harness: Harness): HarnessHealth {
   if (harness.availability.status === "available") {
     const version = harness.availability.version
     return {
-      dotClassName: "bg-emerald-500",
+      dotClassName: "bg-foreground",
       detail: version ? `Ready · version ${version}` : "Ready",
     }
   }

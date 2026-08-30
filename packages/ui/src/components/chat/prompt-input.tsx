@@ -8,9 +8,10 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
     <form
       data-slot="prompt-input"
       className={cn(
-        // A hairline and a raised surface, no shadow: a soft drop under a grey
-        // well reads as smudge on a light canvas, and as nothing on a dark one.
-        "flex w-full flex-col rounded-2xl bg-card pb-2 ring-1 ring-border transition-shadow duration-200 ease-out focus-within:ring-ring",
+        // The composer is the one surface that reads as lifted off the window
+        // rather than set into it: its own glass, a hairline, and the bevel
+        // along the top edge that says the light is above it.
+        "glass-composer flex w-full flex-col rounded-panel pb-2 transition-shadow duration-200 ease-out focus-within:ring-3 focus-within:ring-ring",
         // The toolbar inside answers to this box, not to the window: the
         // conversation column narrows when the panel opens while the window
         // stays as wide as it was.
@@ -36,7 +37,9 @@ function PromptInputTextarea({
         // short screen a fixed 16rem draft leaves the conversation a strip,
         // and a composer that owns half the window reads as the wrong thing
         // being in charge.
-        "max-h-[min(16rem,30svh)] min-h-14 resize-none overflow-y-auto rounded-2xl border-0 bg-transparent px-4 py-3 text-base focus-visible:ring-0 md:text-sm dark:bg-transparent",
+        // Set at the conversation step, not the UI step: what a person types
+        // here is read back to them in the transcript at the same size.
+        "max-h-[min(16rem,30svh)] min-h-14 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-5 py-4 text-conversation focus-visible:ring-0",
         className
       )}
       onKeyDown={(event) => {
@@ -64,7 +67,12 @@ function PromptInputToolbar({
   return (
     <div
       data-slot="prompt-input-toolbar"
-      className={cn("flex items-center gap-2 px-2", className)}
+      className={cn(
+        // Wrap rather than overlap: when the column is narrow the controls
+        // must find a second line, not sit on top of one another.
+        "flex flex-wrap items-center gap-2 px-2",
+        className
+      )}
       {...props}
     />
   )

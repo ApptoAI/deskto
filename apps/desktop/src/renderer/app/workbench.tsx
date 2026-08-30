@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react"
 import { appSettings, settingValue } from "@deskto/settings"
 
-import { personalWorkspaceId } from "@deskto/protocol"
+import { personalWorkspaceId, type Thread } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
 
 import { surfaceCommandIds } from "../commands/surface-commands.js"
@@ -55,6 +55,17 @@ import { useProjectActions } from "./use-project-actions.js"
 import { useThreadQueries } from "./use-thread-queries.js"
 import { useWorkspaceSelection } from "./use-workspace-selection.js"
 import { toNewTask, type MainView } from "./work-view.js"
+import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
+import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
+
+import { DesktoMark } from "../components/deskto-logo.js"
+import { useAccentSync } from "../settings/accent-sync.js"
+import { openFolder } from "../lib/desktop.js"
+import { TitleBar, TitleBarTask } from "../components/title-bar.js"
+import {
+  readRememberedSidebarOpen,
+  rememberSidebarOpen,
+} from "../lib/sidebar-visibility.js"
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
@@ -97,7 +108,47 @@ export function Workbench() {
     useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
   )
 
-  const [view, setView] = useState<MainView>({ kind: "new-task" })
+  // The titlebar's arrows need somewhere to go, so the view is a history
+  // rather than a single value. Screens are compared by their serialized
+  // shape: re-selecting the screen you are already on is not a journey, and
+  // pushing it would make Back appear to do nothing.
+  const [history, setHistory] = useState<{
+    stack: MainView[]
+    index: number
+  }>(() => ({ stack: [{ kind: "new-task" }], index: 0 }))
+  const view = history.stack[history.index]!
+  const setView = useCallback((update: (current: MainView) => MainView) => {
+    setHistory((current) => {
+      const here = current.stack[current.index]!
+      const next = update(here)
+      if (JSON.stringify(next) === JSON.stringify(here)) return current
+      const stack = [
+        ...current.stack.slice(0, current.index + 1),
+        next,
+      ].slice(-50)
+      return { stack, index: stack.length - 1 }
+    })
+  }, [])
+  const canGoBack = history.index > 0
+  const canGoForward = history.index < history.stack.length - 1
+  const goBack = useCallback(() => {
+    setHistory((c) => (c.index > 0 ? { ...c, index: c.index - 1 } : c))
+  }, [])
+  const goForward = useCallback(() => {
+    setHistory((c) =>
+      c.index < c.stack.length - 1 ? { ...c, index: c.index + 1 } : c
+    )
+  }, [])
+
+  // The task list is summoned rather than always present, so whether it is out
+  // is a preference the window has to remember between launches.
+  const [sidebarOpen, setSidebarOpen] = useState(readRememberedSidebarOpen)
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((open) => {
+      rememberSidebarOpen(!open)
+      return !open
+    })
+  }, [])
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
@@ -121,6 +172,15 @@ export function Workbench() {
     retryLists,
     revalidateSelection,
   } = useWorkspaceSelection(client, setView, runAction)
+
+  // The accent follows the Workspace the person is standing in, and only when
+  // they asked for one.
+  useAccentSync(
+    settingsSnapshot
+      ? settingValue(settingsSnapshot, appSettings.accentSource)
+      : "monochrome",
+    activeWorkspace
+  )
 
   const {
     threads,
@@ -174,41 +234,67 @@ export function Workbench() {
 
   const openProjectPanel = useCallback(() => {
     if (!activeProject) return
-    setView({ kind: "new-task", projectId: activeProject.id })
+    setView(() => ({ kind: "new-task", projectId: activeProject.id }))
     forcePanelOpen(activeProject.id)
-  }, [activeProject, forcePanelOpen])
+  }, [activeProject, forcePanelOpen, setView])
 
   const openProjectFromGrid = useCallback(
     (projectId: string) => {
       selectProject(projectId)
       setView(toNewTask)
     },
-    [selectProject]
+    [selectProject, setView]
   )
 
   // A deleted task has nothing left to reload, so the pane closes on the event
   // rather than after the request resolves — otherwise the open view refetches
   // the missing thread first and flashes an error.
+  // A deleted task has to leave the history, not just the open view. Replacing
+  // only the current entry left every earlier visit to that task in the stack,
+  // so Back walked straight back into a thread that no longer exists.
+  const forgetThread = useCallback((threadId: string) => {
+    setHistory((current) => {
+      const rewritten = current.stack.map((entry): MainView => {
+        if (entry.kind === "task" && entry.threadId === threadId) {
+          return toNewTask(entry)
+        }
+        // Settings stays open, but Go back cannot land on a task that is gone.
+        if (
+          entry.kind === "settings" &&
+          entry.returnTo.kind === "task" &&
+          entry.returnTo.threadId === threadId
+        ) {
+          // returnTo is never a settings view, so the blank task is the
+          // only thing it can fall back to.
+          return { ...entry, returnTo: { kind: "new-task" } }
+        }
+        return entry
+      })
+      // Rewriting can leave the same screen twice in a row, and a Back that
+      // appears to do nothing is worse than a shorter history.
+      const stack: MainView[] = []
+      let index = 0
+      rewritten.forEach((entry, at) => {
+        const previous = stack[stack.length - 1]
+        if (
+          previous === undefined ||
+          JSON.stringify(previous) !== JSON.stringify(entry)
+        ) {
+          stack.push(entry)
+        }
+        if (at === current.index) index = stack.length - 1
+      })
+      return { stack, index }
+    })
+  }, [])
+
   useThreadDeleted(
     useCallback(
       (threadId: string) => {
-        setView((current) => {
-          if (current.kind === "task" && current.threadId === threadId) {
-            return toNewTask(current)
-          }
-          // Settings stays open, but Go back cannot land on a task that is gone.
-          if (
-            current.kind === "settings" &&
-            current.returnTo.kind === "task" &&
-            current.returnTo.threadId === threadId
-          ) {
-            return toNewTask(current)
-          }
-          return current
-        })
+        forgetThread(threadId)
         revalidateThreadsSoon()
       },
-      [revalidateThreadsSoon]
+      [forgetThread, revalidateThreadsSoon]
     )
   )
 
@@ -290,7 +376,7 @@ export function Workbench() {
         ? current
         : { kind: "settings", page: firstSettingsPage, returnTo: current }
     )
-  }, [])
+  }, [setView])
 
   function selectSettingsPage(page: SettingsPageId) {
     setView((current) =>
@@ -306,16 +392,16 @@ export function Workbench() {
   }
 
   const openThread = useCallback((threadId: string) => {
-    setView({ kind: "task", threadId })
-  }, [])
+    setView(() => ({ kind: "task", threadId }))
+  }, [setView])
 
   const openSkills = useCallback(() => {
-    setView({ kind: "skills", filter: firstSkillsFilter })
-  }, [])
+    setView(() => ({ kind: "skills", filter: firstSkillsFilter }))
+  }, [setView])
 
   const openProjects = useCallback(() => {
-    setView({ kind: "projects" })
-  }, [])
+    setView(() => ({ kind: "projects" }))
+  }, [setView])
 
   const navigationHost = useMemo(
     () => ({
@@ -327,7 +413,7 @@ export function Workbench() {
       nextWorkspace: () => cycleWorkspace(1),
       previousWorkspace: () => cycleWorkspace(-1),
     }),
-    [cycleWorkspace, openProjects, openSettings, openSkills, openThread]
+    [cycleWorkspace, openProjects, openSettings, openSkills, openThread, setView]
   )
   useSurfaceNavigation(navigationHost)
 
@@ -379,6 +465,84 @@ export function Workbench() {
   }
 
   const openThreadId = view.kind === "task" ? view.threadId : null
+
+  // The titlebar says what the window is showing. A task names itself and the
+  // project it belongs to; every other screen just names itself, because the
+  // screen is the thing rather than a thing inside something else.
+  // In all-projects scope the workspace query groups threads by project, so
+  // the open one can be in either shape depending on the current scope.
+  const readyThreads: Thread[] = [
+    ...(threads.state.status === "ready" ? threads.state.data : []),
+    ...(workspaceThreads.state.status === "ready"
+      ? Object.values(workspaceThreads.state.data).flat()
+      : []),
+  ]
+  const activeThread = openThreadId
+    ? (readyThreads.find((thread) => thread.id === openThreadId) ?? null)
+    : null
+  const activeThreadProject = activeThread
+    ? (projects.find((project) => project.id === activeThread.projectId) ?? null)
+    : null
+
+  // The open screen's own actions ride in the titlebar rather than in a second
+  // strip beneath it: one row of window chrome, not two.
+  const titleActions = activeThread ? (
+    <>
+      {activeThreadProject?.path ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          title={`Open folder — ${activeThreadProject.path}`}
+          aria-label="Open folder"
+          onClick={() =>
+            runAction(() => openFolder(activeThreadProject.path))
+          }
+        >
+          <FolderOpenIcon />
+        </Button>
+      ) : null}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        title="Show or hide the task panel"
+        aria-label="Show or hide the task panel"
+        onClick={() => surface.panel.toggle({ threadId: activeThread.id })}
+      >
+        <PanelRightIcon />
+      </Button>
+    </>
+  ) : null
+
+  const titleContext =
+    view.kind === "settings" ? (
+      <TitleBarTask mark={null} title="Settings" />
+    ) : view.kind === "projects" ? (
+      <TitleBarTask mark={null} title="Projects" />
+    ) : view.kind === "skills" ? (
+      <TitleBarTask mark={null} title="Skills" />
+    ) : activeThread ? (
+      <TitleBarTask
+        mark={
+          <DesktoMark className="h-[15px] w-4 shrink-0 text-foreground/90" />
+        }
+        title={activeThread.title}
+        {...(activeThreadProject
+          ? { subtitle: `${activeThreadProject.name} @ local` }
+          : {})}
+      />
+    ) : newTaskProject ? (
+      <TitleBarTask
+        mark={
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full bg-foreground/75"
+          />
+        }
+        title={newTaskProject.name}
+      />
+    ) : null
 
   // One branch per screen the main pane can show, from the most modal state
   // (Settings) down to the default new-task composer.
@@ -460,7 +624,7 @@ export function Workbench() {
       return (
         <NewTaskProjectPicker
           projects={workspaceProjects}
-          onSelect={(projectId) => setView({ kind: "new-task", projectId })}
+          onSelect={(projectId) => setView(() => ({ kind: "new-task", projectId }))}
         />
       )
     }
@@ -497,7 +661,7 @@ export function Workbench() {
   // strips, and every screen until the user finishes or skips.
   if (showOnboarding) {
     return (
-      <div className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
+      <div className="glass-window flex h-dvh w-full flex-col overflow-hidden text-foreground">
         <OnboardingView
           harnesses={harnesses}
           workspaceReady={activeWorkspaceId !== null}
@@ -512,7 +676,23 @@ export function Workbench() {
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+    <div className="glass-window flex h-dvh w-full flex-col overflow-hidden text-foreground">
+      <TitleBar
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={toggleSidebar}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
+        onBack={goBack}
+        onForward={goForward}
+        onNewTask={() => {
+          void surface.commands.execute(surfaceCommandIds.newTask)
+        }}
+        trailing={titleActions}
+      >
+        {titleContext}
+      </TitleBar>
+
+      <div className="flex min-h-0 flex-1">
       {view.kind === "settings" ? (
         <SettingsSidebar
           page={view.page}
@@ -520,7 +700,7 @@ export function Workbench() {
           onSelectPage={selectSettingsPage}
           onGoBack={leaveSettings}
         />
-      ) : (
+      ) : sidebarOpen ? (
         <>
           {workspaceLayout === "slack" ? (
             <WorkspaceRail
@@ -564,7 +744,7 @@ export function Workbench() {
             workspaceLayout={workspaceLayout}
           />
         </>
-      )}
+      ) : null}
 
       {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
           whole — by focus, not by the wheel — which drags the window chrome
@@ -590,6 +770,7 @@ export function Workbench() {
 
         {renderMain()}
       </main>
+      </div>
 
       <WorkspaceDialog
         open={workspaceDialog !== null}
@@ -606,12 +787,7 @@ export function Workbench() {
   )
 }
 
-/** Adds the window drag strip that the task screens draw themselves. */
+/** A full-height screen. The window's drag strip is the titlebar above it. */
 function Screen({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <div className="drag-region h-10 shrink-0" />
-      {children}
-    </>
-  )
+  return <>{children}</>
 }

@@ -38,9 +38,9 @@ export function TurnFailureNotice({ failure }: { failure: HarnessFailure }) {
   return (
     <div
       role="alert"
-      className="flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-amber-950 dark:text-amber-100"
+      className="flex gap-3 rounded-card border border-edge-strong bg-fill-card px-3.5 py-3 text-foreground"
     >
-      <GaugeIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+      <GaugeIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-medium">Usage limit reached</p>
         <p className="text-sm text-current/75">{failure.message}</p>

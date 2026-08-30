@@ -40,7 +40,7 @@ function BackgroundStatus({ state }: { state: BackgroundState }) {
     return (
       <CircleEllipsisIcon
         aria-label={state === "needs-input" ? "Needs input" : "Working"}
-        className="size-3.5 animate-pulse text-blue-500"
+        className="size-3.5 animate-pulse text-muted-foreground"
       />
     )
   }
@@ -48,7 +48,7 @@ function BackgroundStatus({ state }: { state: BackgroundState }) {
     return (
       <CircleCheckIcon
         aria-label="Finished"
-        className="size-3.5 text-emerald-500"
+        className="size-3.5 text-foreground"
       />
     )
   if (state === "stopped")

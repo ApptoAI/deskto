@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
-import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
+import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import { hasUnreadCompletion, threadCameBack } from "@deskto/client"
 import type {
   BrowserElementContext,
@@ -13,7 +12,6 @@ import type {
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
-import { openFolder } from "../../lib/desktop.js"
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
@@ -238,14 +236,6 @@ export function TaskView({
     }
   }
 
-  async function handleOpenFolder(path: string) {
-    setTaskActionError(null)
-    try {
-      await openFolder(path)
-    } catch (error) {
-      setTaskActionError(describedErrorSchema.parse(error))
-    }
-  }
 
   async function handleOpenSide(options: { focusComposer?: boolean } = {}) {
     setTaskActionError(null)
@@ -287,34 +277,6 @@ export function TaskView({
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Bare drag strip: the task title and its status already read from
-          the sidebar row, so the header carries one action and no rule. It
-          spans the activity column too, so its actions stay in the window's
-          corner rather than sliding left when that column appears. */}
-        <header className="drag-region flex h-10 shrink-0 items-center justify-end gap-1 px-3">
-          {projectPath ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="no-drag text-muted-foreground"
-              onClick={() => void handleOpenFolder(projectPath)}
-              title={projectPath}
-            >
-              <FolderOpenIcon data-icon="inline-start" />
-              Open folder
-            </Button>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="no-drag text-muted-foreground"
-            aria-pressed={panel.open}
-            onClick={() => surface.panel.toggle({ threadId })}
-          >
-            <PanelRightIcon data-icon="inline-start" />
-            Panel
-          </Button>
-        </header>
 
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
@@ -438,6 +400,37 @@ export function TaskView({
                     ) : null
                   }
                 />
+
+                {/* Where the work is happening, under the box that starts it.
+                    A person handing a folder to an agent should be able to see
+                    which folder without opening anything, so the path is here
+                    rather than a click away — machine-shaped, so it reads as a
+                    location rather than as a sentence. */}
+                <div className="flex h-11 shrink-0 items-center gap-2.5 text-caption text-muted-foreground">
+                  <FolderIcon className="size-3.5 shrink-0" />
+                  {/* The label is a fixed phrase and the path is the part that
+                      can give ground, so the label never wraps and the path
+                      truncates from the front-heavy end instead. */}
+                  <span className="shrink-0 whitespace-nowrap">
+                    Managed by Deskto
+                  </span>
+                  {active ? (
+                    <span className="flex items-center gap-2 pl-3">
+                      <span
+                        aria-hidden
+                        className="size-1.5 rounded-full bg-foreground/60 motion-safe:animate-pulse"
+                      />
+                      {thread.status === "waiting-approval"
+                        ? "Needs input"
+                        : "Working"}
+                    </span>
+                  ) : null}
+                  {projectPath ? (
+                    <span className="ml-auto min-w-0 truncate pl-4 font-mono text-micro">
+                      {projectPath}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

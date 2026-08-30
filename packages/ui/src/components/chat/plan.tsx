@@ -90,7 +90,7 @@ function StepGlyph({ status }: { status: PlanStepStatus }) {
     return (
       <span
         aria-hidden
-        className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600"
+        className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground text-knockout"
       >
         <svg
           viewBox="0 0 24 24"

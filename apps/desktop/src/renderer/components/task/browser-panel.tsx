@@ -224,7 +224,7 @@ export function BrowserPanel({
           <InlineError message={message} />
         </div>
       ) : null}
-      <div ref={slotRef} className="relative min-h-0 flex-1 bg-background">
+      <div ref={slotRef} className="relative min-h-0 flex-1 bg-knockout">
         {!state?.url ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
             <GlobeIcon className="size-7 opacity-50" />

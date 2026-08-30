@@ -54,7 +54,7 @@ function SheetContent({
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[calc(100%-3rem)] flex-col border-l border-border bg-background text-sm text-foreground shadow-xl ring-1 ring-foreground/10 duration-200 ease-out outline-none sm:max-w-3xl data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:duration-150 data-closed:slide-out-to-right",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[calc(100%-3rem)] flex-col glass-panel border-l border-border text-sm text-foreground shadow-floating duration-200 ease-out outline-none sm:max-w-3xl data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:duration-150 data-closed:slide-out-to-right",
           className
         )}
         {...props}

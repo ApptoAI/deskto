@@ -20,7 +20,6 @@ import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import GitBranchIcon from "lucide-react/dist/esm/icons/git-branch"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import MessagesSquareIcon from "lucide-react/dist/esm/icons/messages-square"
-import XIcon from "lucide-react/dist/esm/icons/x"
 import {
   isActivityBlocked,
   type Activity,
@@ -252,7 +251,7 @@ export function TaskPanel({
         minWidth: minimumTaskPanelWidth,
         maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
       }}
-      className="relative flex h-full shrink-0 flex-col border-l border-border bg-chrome"
+      className="glass-panel relative flex h-full shrink-0 flex-col border-l border-border"
     >
       <div
         ref={separatorRef}
@@ -297,14 +296,7 @@ export function TaskPanel({
           />
         </div>
         <div className="flex shrink-0 items-center">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => surface.panel.close(threadId)}
-            aria-label="Close the panel"
-          >
-            <XIcon />
-          </Button>
+          
         </div>
       </div>
 
@@ -483,7 +475,7 @@ function PanelTab({
       className={cn(
         "gap-1.5",
         active
-          ? "bg-accent text-foreground hover:bg-accent"
+          ? "bevel bg-fill-row-selected text-foreground hover:bg-fill-row-selected"
           : "text-muted-foreground"
       )}
     >
@@ -582,7 +574,7 @@ function FileTreeRowButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex w-full items-center gap-3 rounded-row px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Outlined rather than filled: the row fills on hover, and a filled
           tile would vanish into it. */}
@@ -825,7 +817,7 @@ export function FilePreview({
       ) : null}
 
       {stale ? (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-2">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-fill-card px-3 py-2">
           <p className="min-w-0 flex-1 text-xs text-muted-foreground">
             This file changed on disk while you were editing. Saving now will be
             refused.

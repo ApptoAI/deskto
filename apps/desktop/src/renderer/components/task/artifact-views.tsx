@@ -75,10 +75,13 @@ const artifactViews = {
       <ScrollArea className="flex-1">
         {/* A document, not a chat bubble: one step up in size, and wide
             enough to use a panel the user has dragged out, with a ceiling so
-            a full-screen panel does not turn lines into a scan. */}
+            a full-screen panel does not turn lines into a scan.
+
+            Paper, for the same reason the Word preview is: this is the file
+            the agent wrote, not the agent talking about it. See ADR 0027. */}
         <Markdown
           className={cn(
-            "mx-auto w-full px-8 py-8 text-reading",
+            "paper mx-auto my-8 w-full rounded-card px-10 py-10 text-reading",
             documentMeasureClassName
           )}
         >
@@ -92,7 +95,12 @@ const artifactViews = {
     editor: TextEditor,
     render: (preview) => (
       <ScrollArea className="flex-1">
-        <pre className="p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">
+        <pre
+          className={cn(
+            "paper mx-auto my-8 rounded-card p-8 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap",
+            documentMeasureClassName
+          )}
+        >
           {preview.content}
         </pre>
       </ScrollArea>

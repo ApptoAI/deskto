@@ -25,19 +25,33 @@ function defaultWindowSize() {
     constant. The chosen theme is a Runtime setting and out of reach here, so
     this follows the operating system: a user who picked the palette their
     system is not in still gets one wrong frame, which is as close as the main
-    process can get on its own. */
+    process can get on its own.
+
+    This is the wallpaper's base stop rather than a surface colour: the Surface
+    paints the wallpaper and floats glass on it, so the deepest thing behind
+    everything is what a torn frame should show. Keep in step with --wp-base. */
 function canvasColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"
+  return nativeTheme.shouldUseDarkColors ? "#232327" : "#e8e8ec"
 }
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...defaultWindowSize(),
-    minWidth: 900,
+    // Wide enough for the layout to keep its own promises: the task list at
+    // 288, the conversation's declared floor at 520, and the task panel's
+    // minimum at 280. Below this the conversation is squeezed under the width
+    // its composer needs, which is how its controls ended up on top of one
+    // another. Keep in step with task-panel-size.ts.
+    minWidth: 1088,
     minHeight: 620,
     center: true,
     show: false,
     titleBarStyle: "hiddenInset",
+    // The Surface draws its own titlebar. macOS already keeps its menu in the
+    // system bar, but Windows and Linux would otherwise stack a native menu
+    // strip on top of ours, which is two rows of chrome for one window. Alt
+    // still summons it.
+    autoHideMenuBar: true,
     backgroundColor: canvasColor(),
     webPreferences: {
       preload: path.join(bundleDirectory, "../preload/index.cjs"),

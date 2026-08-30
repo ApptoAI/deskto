@@ -51,7 +51,7 @@ export function WorkspaceHeaderLabel({
   return (
     <>
       {workspace ? <WorkspaceTile workspace={workspace} /> : null}
-      <span className="min-w-0 flex-1 truncate text-left text-reading font-semibold tracking-tight">
+      <span className="min-w-0 flex-1 truncate text-left text-ui font-semibold tracking-tight">
         {workspace?.name ?? "Workspace"}
       </span>
     </>

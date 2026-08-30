@@ -17,9 +17,9 @@ export function ScenePanel({ children }: { children: ReactNode }) {
   return (
     <div
       aria-hidden
-      className="flex h-56 flex-col overflow-hidden rounded-xl bg-background ring-1 ring-foreground/10"
+      className="bevel flex h-56 flex-col overflow-hidden rounded-window bg-fill-card ring-1 ring-edge-strong"
     >
-      <div className="flex h-6 shrink-0 items-center gap-1.5 border-b border-border bg-chrome px-2.5">
+      <div className="flex h-6 shrink-0 items-center gap-1.5 border-b border-border bg-fill-chip px-2.5">
         <span className="size-1.5 rounded-full bg-border" />
         <span className="size-1.5 rounded-full bg-border" />
         <span className="size-1.5 rounded-full bg-border" />
@@ -54,9 +54,9 @@ export function InboxScene() {
             title="w-28 bg-foreground/70"
             meta="Working"
           />
-          <SceneRow dot="bg-amber-500" title="w-36 bg-foreground/70" meta="Review" />
+          <SceneRow dot="bg-foreground" title="w-36 bg-foreground/70" meta="Review" />
           <SceneRow
-            dot="bg-emerald-500"
+            dot="bg-muted-foreground"
             title="w-24 bg-muted-foreground/50"
             meta="Done"
           />
@@ -89,7 +89,7 @@ function SceneRow({
   return (
     <span
       className={cn(
-        "relative flex h-8 items-center gap-2.5 rounded-lg border border-border bg-card px-3",
+        "relative flex h-8 items-center gap-2.5 rounded-row border border-edge bg-fill-card px-3",
         className
       )}
     >
@@ -115,7 +115,7 @@ export function ProjectsScene() {
   return (
     <ScenePanel>
       <div className="flex h-full">
-        <div className="flex w-2/5 shrink-0 flex-col gap-2 border-r border-border bg-chrome p-3">
+        <div className="flex w-2/5 shrink-0 flex-col gap-2 border-r border-border bg-fill-chip p-3">
           <p className="eyebrow text-muted-foreground">Projects</p>
           <div
             className="relative flex flex-col gap-1.5"
@@ -167,7 +167,7 @@ export function OrchestrationScene() {
             meta="Working"
           />
           <SceneRow
-            dot="bg-emerald-500"
+            dot="bg-muted-foreground"
             title="w-20 bg-muted-foreground/50"
             meta="Done"
           />
@@ -180,7 +180,7 @@ export function OrchestrationScene() {
 function ProjectRow({ name }: { name: string }) {
   return (
     <span className="relative flex h-8 items-center gap-2 rounded-lg px-2.5">
-      <span className="size-2.5 shrink-0 rounded border border-border bg-card" />
+      <span className="size-2.5 shrink-0 rounded-sm border border-edge bg-fill-card" />
       <span className={cn("h-1 rounded-full bg-foreground/60", name)} />
     </span>
   )
@@ -211,7 +211,7 @@ function ProjectPane({
           className={cn("h-1 rounded-full bg-muted-foreground/40", width)}
         />
       ))}
-      <span className="mt-auto h-7 rounded-lg border border-border bg-card" />
+      <span className="mt-auto h-7 rounded-row border border-edge bg-fill-card" />
     </span>
   )
 }

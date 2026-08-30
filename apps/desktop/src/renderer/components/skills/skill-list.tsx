@@ -130,7 +130,7 @@ function SkillRow({
         onClick={() => onSelect(item)}
         aria-current={selected ? "true" : undefined}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors duration-150 ease-out group-hover:text-foreground dark:bg-muted/70">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-fill-chip text-muted-foreground transition-colors duration-150 ease-out group-hover:text-foreground">
           <BoxIcon className="size-3.5" />
         </span>
         {/* Name and description share one line: at this width the description
