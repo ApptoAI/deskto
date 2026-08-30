@@ -14,9 +14,10 @@ import type { Activity } from "@deskto/protocol"
 
 import { cn } from "@workspace/ui/lib/utils"
 
+import { shortenActivityDetail } from "./activity-detail.js"
 import { ArtifactIcon } from "./artifact-views.js"
 import { elapsedBetween, formatElapsed, useElapsed } from "./elapsed.js"
-import { useFileAt } from "./files-context.js"
+import { useFileAt, useProjectPath } from "./files-context.js"
 
 /**
  * The rows a Turn's work is drawn with, shared by the conversation and the
@@ -81,6 +82,7 @@ export function ActivityLine({
   icon?: Icon | undefined
 }) {
   const [open, setOpen] = useState(false)
+  const projectPath = useProjectPath()
   const payload = activity.payload
   const files = payload?.kind === "file-change" ? payload.files : []
   const mono =
@@ -141,7 +143,9 @@ export function ActivityLine({
             mono && "font-mono tracking-normal"
           )}
         >
-          <span className="truncate">{activity.detail}</span>
+          <span className="truncate">
+            {shortenActivityDetail(activity.detail, projectPath)}
+          </span>
         </span>
       ) : null}
     </>

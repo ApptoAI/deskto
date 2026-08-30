@@ -42,6 +42,11 @@ export function FilesProvider({
   )
 }
 
+/** The open project's folder, for trimming paths a row reports against it. */
+export function useProjectPath(): string | undefined {
+  return useContext(FilesContext)?.projectPath
+}
+
 export function useFileActions(): Pick<FilesAccess, "open" | "openAll"> {
   const access = useContext(FilesContext)
   return access ?? { open: () => {}, openAll: () => {} }

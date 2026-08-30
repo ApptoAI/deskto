@@ -31,6 +31,29 @@ import { DesktoWordmark } from "./deskto-wordmark.js"
 /** How the project panel should show up before the user has chosen. */
 export type ProjectPanelPreference = "open" | "collapsed" | "auto"
 
+/**
+ * Openers for a project with nothing in it yet. Each one is a whole task a
+ * person can actually hand over on a fresh folder, phrased as the outcome
+ * rather than the tool, which is the phrasing the rest of the app teaches.
+ */
+const taskSuggestions = [
+  {
+    label: "Write a README",
+    prompt:
+      "Write a README.md for this project explaining what it is and how to use it.",
+  },
+  {
+    label: "Summarize this project",
+    prompt:
+      "Look through this project and summarize what is in it and how it fits together.",
+  },
+  {
+    label: "Find what needs attention",
+    prompt:
+      "Review this project and tell me what looks broken, unfinished, or worth fixing first.",
+  },
+]
+
 export function NewTaskView({
   project,
   harnesses,
@@ -52,6 +75,9 @@ export function NewTaskView({
     null
   )
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  // The Composer reapplies a draft only on a new token, so the same
+  // suggestion picked twice needs a fresh one rather than equal text.
+  const [draft, setDraft] = useState({ text: "", token: 0 })
 
   const loadPreferences = useCallback(
     () => client.getPreferences(project.workspaceId),
@@ -154,6 +180,7 @@ export function NewTaskView({
                 placeholder="Describe the task"
                 onSend={handleSend}
                 blockedReason={blockedReason}
+                draft={draft}
                 {...(models.length > 0
                   ? { onOpenModelPicker: () => setModelMenuOpen(true) }
                   : {})}
@@ -179,6 +206,28 @@ export function NewTaskView({
                 }
               />
             </div>
+
+            {/* An empty box asks a question the person may not have an answer
+                to yet. These give the shape of one — they fill the composer
+                rather than send, so the wording stays theirs. */}
+            <ul className="flex w-full flex-wrap justify-center gap-1.5">
+              {taskSuggestions.map((suggestion) => (
+                <li key={suggestion.label}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        text: suggestion.prompt,
+                        token: current.token + 1,
+                      }))
+                    }
+                    className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors duration-100 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {suggestion.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
 
             {/* Settings live under the composer, out of the way: a quiet
                 toggle on the right, cards beneath it when open. */}

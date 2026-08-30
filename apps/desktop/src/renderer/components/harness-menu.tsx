@@ -17,6 +17,16 @@ import {
 } from "../lib/harness.js"
 import { HarnessLogo } from "./brand-logos.js"
 
+/** One line on what each agent is, for the menu's resting rows. */
+const harnessSummaries = new Map<string, string>([
+  ["claude", "Anthropic's agent. Runs with your Claude subscription."],
+  ["codex", "OpenAI's agent. Runs with your ChatGPT subscription."],
+])
+
+function harnessSummary(harnessId: string): string | undefined {
+  return harnessSummaries.get(harnessId)
+}
+
 export function HarnessMenu({
   harnesses,
   selectedId,
@@ -45,7 +55,11 @@ export function HarnessMenu({
           onValueChange={(value) => onSelect(String(value))}
         >
           {harnesses.map((harness) => {
-            const reason = harnessUnavailableReason(harness)
+            // An unavailable agent explains itself; an available one still
+            // owes the person a sentence, or the only annotated row in the
+            // menu is the broken one.
+            const reason =
+              harnessUnavailableReason(harness) ?? harnessSummary(harness.id)
             return (
               <DropdownMenuRadioItem
                 key={harness.id}

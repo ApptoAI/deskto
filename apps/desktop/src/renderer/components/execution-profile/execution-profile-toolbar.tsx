@@ -9,7 +9,7 @@ import {
 } from "../../lib/execution-profile.js"
 import { HarnessLogo } from "../brand-logos.js"
 import { permissionOptions, toPermissionMode } from "./permission-modes.js"
-import { ProfileMenu } from "./profile-menu.js"
+import { ProfileMenu, type ProfileOption } from "./profile-menu.js"
 import {
   DefaultThinkingIcon,
   effortRank,
@@ -41,17 +41,28 @@ export function ExecutionProfileToolbar({
     <HarnessLogo harnessId={harnessId} className="size-4" />
   ) : undefined
 
-  const thinkingOptions = [
+  // Every option says what it changes, because the trigger cannot: a row of
+  // bare values is four words with nothing to say which question each answers.
+  const thinkingOptions: ProfileOption[] = [
     {
       value: DEFAULT_EFFORT,
       label: effortLabel(DEFAULT_EFFORT),
+      description: "However much this model thinks on its own.",
       icon: <DefaultThinkingIcon />,
     },
-    ...model.supportedEfforts.map((effort) => ({
-      value: effort,
-      label: effortLabel(effort),
-      icon: <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />,
-    })),
+    ...model.supportedEfforts.map((effort) => {
+      const option: ProfileOption = {
+        value: effort,
+        label: effortLabel(effort),
+        icon: (
+          <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />
+        ),
+      }
+      // Only the ends of the scale carry one; the middle rungs stay bare.
+      const description = thinkingDescription(effort, model.supportedEfforts)
+      if (description) option.description = description
+      return option
+    }),
   ]
 
   const permissionModeOptions = permissionOptions.filter((option) =>
@@ -131,4 +142,25 @@ const compactLabel = "hidden @[37rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+}
+
+/**
+ * What more thinking buys, in the terms the person paid in: time. Only the
+ * ends of the scale get a line — one sentence repeated down three middle
+ * rungs would claim they are the same choice, and the bars beside them
+ * already say which is deeper. Position is read off the harness's own order
+ * rather than the effort's name, since providers invent their own top rung.
+ */
+function thinkingDescription(
+  effort: string,
+  efforts: readonly string[]
+): string | undefined {
+  if (effort === "none") return "No extra reasoning. Fastest."
+  const ranked = efforts.filter((candidate) => candidate !== "none")
+  if (ranked.length < 2) return undefined
+  if (effort === ranked[0]) return "A quick pass. Best for small, clear tasks."
+  if (effort === ranked[ranked.length - 1]) {
+    return "The most reasoning this model offers. Slowest."
+  }
+  return undefined
 }
