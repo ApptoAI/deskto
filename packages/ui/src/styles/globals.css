@@ -24,14 +24,22 @@
     --text-tiny: calc(0.625rem * var(--app-font-scale));
     --text-micro: calc(0.6875rem * var(--app-font-scale));
     --text-xs: calc(0.75rem * var(--app-font-scale));
-    --text-ui: calc(0.8125rem * var(--app-font-scale));
+    /* The row's second line — a project name under a task title. */
+    --text-caption: calc(0.78125rem * var(--app-font-scale));
+    --text-ui: calc(0.875rem * var(--app-font-scale));
     --text-sm: calc(0.875rem * var(--app-font-scale));
-    /* One step above the app's 14px body, for the long-form surfaces: an
-       answer, a file preview, a prompt someone wrote. */
-    --text-reading: calc(0.9375rem * var(--app-font-scale));
+    /* Titlebar task title, card headings: the smallest step that still reads
+       as a heading rather than as another line of chrome. */
+    --text-title: calc(0.9375rem * var(--app-font-scale));
+    /* One step above the app's body, for the long-form surfaces: an answer, a
+       file preview, a prompt someone wrote. */
+    --text-reading: calc(1rem * var(--app-font-scale));
     --text-base: calc(1rem * var(--app-font-scale));
+    /* The conversation itself. A desktop agent client is read at arm's length
+       for minutes at a time, so the transcript runs a step above UI copy. */
+    --text-conversation: calc(1.0625rem * var(--app-font-scale));
     --text-lg: calc(1.125rem * var(--app-font-scale));
-    --text-display-sm: calc(1.75rem * var(--app-font-scale));
+    --text-display-sm: calc(1.8125rem * var(--app-font-scale));
 }
 
 @theme inline {
@@ -69,6 +77,24 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    /* The glass vocabulary, exposed so a component can name a surface rather
+       than restate its rgba. */
+    --color-edge: var(--edge);
+    --color-edge-strong: var(--edge-strong);
+    --color-edge-button: var(--edge-button);
+    --color-fill-bubble: var(--fill-bubble);
+    --color-fill-card: var(--fill-card);
+    --color-fill-chip: var(--fill-chip);
+    --color-fill-chip-hover: var(--fill-chip-hover);
+    --color-fill-row-selected: var(--fill-row-selected);
+    --color-paper: var(--paper-bg);
+    --color-paper-foreground: var(--paper-fg);
+    --color-paper-muted: var(--paper-fg-muted);
+    --color-knockout: var(--knockout);
+    --shadow-send: var(--elevation-send);
+    --shadow-floating: var(--elevation-floating);
+    /* The provider's own mark. Never an app accent — see the palette note. */
+    --color-brand-claude: #d97757;
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -76,136 +102,226 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    /* The named shapes. The generic scale above is proportional and drifts as
+       --radius moves; these are the four corners the design actually specifies,
+       so they are stated rather than derived. Bigger surface, bigger corner. */
+    --radius-row: 9px;
+    --radius-window: 12px;
+    --radius-card: 14px;
+    --radius-panel: 16px;
     --ease-out-quart: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
     --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
- * The same ladder read the other way up. Dark lifts the frame off a near-black
- * page; light recesses it under a white one. Either way a region is told from
- * its neighbour by surface before any border is drawn, the divider is a
- * hairline that is genuinely visible, and the filled pill is whatever the
- * canvas is not — near-black here, near-white there.
+ * The app is monochrome glass. Every surface, edge, and text colour is the
+ * canvas or its opposite at some opacity — there is no hue anywhere it is not
+ * carrying meaning, and the two places it is are named at the bottom of this
+ * block.
  *
- *   canvas   #ffffff  the page. Conversation, previews, everything read.
- *   chrome   #f4f4f7  the frame. Sidebar, toolbars, headers, tab strips.
- *   card     #ebecf0  raised blocks. Cards, code, wells.
- *   muted    #e5e6ea  the hover fill, one step above whatever it sits on.
- *   accent   #dcdee3  selection, and the highlighted row in a menu.
- *   border   #d7d9df  the only divider.
+ * Three rules generate the whole palette, and they are the same rules in both
+ * themes read from opposite ends:
+ *
+ *   1. Raised is closer to the light, recessed is further from it. A composer
+ *      lifts off the window; a side panel sinks under it. In dark that means
+ *      whiter and blacker respectively; in light it means whiter and greyer.
+ *   2. The bevel is always white. An inset top highlight is a real edge
+ *      catching light from above, and light comes from above in both themes.
+ *      This is the one value that does not invert.
+ *   3. The filled pill is whatever the canvas is not — near-white on dark,
+ *      near-black on light.
+ *
+ * Depth is grayscale only: white insets for "closer to the light", black drop
+ * shadows for "floating above the wallpaper". No coloured glow anywhere.
+ *
+ * The wallpaper is structural, not decoration. A glass panel over a flat
+ * single colour reads as flat grey; the blur needs something varied behind it
+ * to be a blur of anything. That is why --wp-* exists and why body paints it.
  */
 :root {
     --app-font-scale: 1;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --body: oklch(0.332 0.01 260.7);
-    --chrome: oklch(0.968 0.004 286.3);
-    --card: oklch(0.943 0.005 275);
-    --card-foreground: oklch(0.332 0.01 260.7);
-    /* White, not the card grey: a menu floats over every surface here, and
-       only the page colour reads as being in front of all of them. */
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.179 0.004 286);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9 0.008 271);
-    --secondary-foreground: oklch(0.145 0 0);
-    /* Distinct from --card on purpose: a row inside a card hovers to --muted,
-       and the two being equal is a hover that does nothing. */
-    --muted: oklch(0.925 0.006 274);
-    --muted-foreground: oklch(0.487 0.012 262);
-    --accent: oklch(0.9 0.008 271);
-    --accent-foreground: oklch(0.145 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.885 0.008 271);
+
+    /* Wallpaper — what the glass blurs. Never a UI fill. Light mirrors dark's
+       structure: a bright bloom top-left falling away to the deepest stop
+       bottom-left, so the same gradient geometry serves both themes. */
+    --wp-1: #ffffff;
+    --wp-2: #dcdce8;
+    --wp-3: #c0c0d0;
+    --wp-4: #a6a6bc;
+    --wp-base: #d6d6e0;
+
+    /* Glass, raised to recessed. */
+    --glass-window: oklch(0.995 0.0008 286 / 62%);
+    --glass-composer: oklch(1 0 0 / 55%);
+    --glass-panel-light: oklch(1 0 0 / 40%);
+    /* A flood, not a tint. Dark recesses its panels by pouring 60% near-black
+       over the window; the mirror of that is 60% of a mid grey, not a few per
+       cent of black — at 3.5% the sidebar sat level with the canvas and the
+       wallpaper's own left-to-right gradient was louder than the surface. */
+    --glass-panel-dark: oklch(0.9 0.003 286 / 66%);
+
+    /* Fills on glass. Tints of the canvas's opposite, so a row reads against
+       whatever it happens to sit on. */
+    --fill-bubble: oklch(0 0 0 / 5%);
+    --fill-card: oklch(0 0 0 / 3.5%);
+    --fill-chip: oklch(0 0 0 / 5%);
+    --fill-chip-hover: oklch(0 0 0 / 7.5%);
+    --fill-row-selected: oklch(0 0 0 / 6.5%);
+
+    /* Edges. A hairline on light glass needs more weight than on dark to stay
+       genuinely visible rather than dissolving into the surface behind it. */
+    --edge: oklch(0 0 0 / 9%);
+    --edge-strong: oklch(0 0 0 / 12%);
+    --edge-button: oklch(0 0 0 / 17%);
+
+    /* The bevel. White in both themes — see rule 2. */
+    --bevel: oklch(1 0 0 / 90%);
+
+    /* What a knocked-out mark inside a solid glyph is painted in. A status
+       glyph is a filled circle with a check or a cross cut out of it, and the
+       cut has to read as a hole through to the surface behind rather than as
+       ink of its own. Every glass fill here is translucent, so this is the
+       opaque colour those fills actually resolve to over the wallpaper. */
+    --knockout: oklch(0.955 0.001 286);
+
+    /* Elevation. Grayscale only — depth is never tinted. Light needs far less
+       of it: the same alpha that reads as lift over a near-black wallpaper
+       reads as dirt over a bright one. */
+    --elevation-send: 0 2px 10px oklch(0 0 0 / 16%);
+    --elevation-floating: 0 20px 50px oklch(0 0 0 / 14%);
+
+    /* Text, by hierarchy. Opacity is the ramp; there is no second hue. */
+    --text-1: oklch(0.16 0.003 286);
+    --text-2: oklch(0.24 0.003 286);
+    --text-3: oklch(0 0 0 / 64%);
+    --text-4: oklch(0 0 0 / 46%);
+    --text-5: oklch(0 0 0 / 34%);
+
+    /* Paper — the one surface that is not glass. When Deskto shows the file it
+       actually produced rather than chat about the file, that surface steps
+       away from the chrome it sits in. In dark it lightens; in light it is the
+       only true white, lifted on a real shadow. The shift is the signal. */
+    --paper-bg: oklch(1 0 0);
+    --paper-fg: oklch(0.145 0 0);
+    --paper-fg-muted: oklch(0 0 0 / 45%);
+
+    /* Semantic slots, mapped onto the glass vocabulary above so a component
+       that asks for `bg-card` gets the right glass without knowing it. */
+    --background: var(--glass-window);
+    --foreground: var(--text-1);
+    --body: var(--text-2);
+    --chrome: var(--glass-panel-light);
+    --card: var(--fill-card);
+    --card-foreground: var(--text-2);
+    /* Menus float over every surface here and have to stay legible, so a
+       popover is the one glass dense enough to read as opaque. */
+    --popover: oklch(0.985 0.001 286 / 92%);
+    --popover-foreground: var(--text-1);
+    --primary: oklch(0.19 0.003 286);
+    --primary-foreground: oklch(0.985 0.001 286);
+    --secondary: var(--fill-chip);
+    --secondary-foreground: var(--text-1);
+    --muted: var(--fill-chip);
+    --muted-foreground: var(--text-4);
+    --accent: var(--fill-row-selected);
+    --accent-foreground: var(--text-1);
+    /* Monochrome carries status, which is a different job from warning that an
+       action cannot be undone. Deleting a task is the one destructive thing
+       Deskto does, and the button for it keeps its colour. */
+    --destructive: oklch(0.55 0.21 27.3);
+    --border: var(--edge);
     /* Heavier than the hairline: a control's boundary is what identifies it,
-       so it clears 3:1 against the page rather than whispering like a rule. */
-    --input: oklch(0.6 0.012 262);
-    /* Translucent on purpose: the focus halo should read as a glow around
-       the control, not a second black border stacked on the first. */
-    --ring: oklch(0.6 0.012 262 / 45%);
+       so it clears 3:1 against the surface rather than whispering like a rule. */
+    --input: var(--edge-button);
+    /* Translucent on purpose: the focus halo should read as a glow around the
+       control, not a second border stacked on the first. */
+    --ring: oklch(0.4 0.006 286 / 40%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --radius: 0.5rem;
-    --sidebar: oklch(0.968 0.004 286.3);
-    --sidebar-foreground: oklch(0.332 0.01 260.7);
-    --sidebar-primary: oklch(0.179 0.004 286);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.9 0.008 271);
-    --sidebar-accent-foreground: oklch(0.145 0 0);
-    --sidebar-border: oklch(0.915 0.008 278.6);
-    --sidebar-ring: oklch(0.6 0.012 262 / 45%);
+    --radius: 0.5625rem;
+    --sidebar: var(--glass-panel-dark);
+    --sidebar-foreground: var(--text-2);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--fill-row-selected);
+    --sidebar-accent-foreground: var(--text-1);
+    --sidebar-border: var(--edge);
+    --sidebar-ring: var(--ring);
 }
 
 /*
- * A four-step ladder, cool-neutral, no colour anywhere it is not carrying
- * meaning. Content sits on the true canvas; every frame around it — sidebar,
- * tab strips, headers, composer — is one step up, so a region reads as a
- * region before a single border is drawn. Borders are hairlines that are
- * genuinely visible against the surface they divide, not translucent white
- * that disappears into whatever is behind it.
- *
- *   canvas   #0a0a0a  the page. Conversation, previews, everything read.
- *   chrome   #131316  the frame. Sidebar, toolbars, headers, tab strips.
- *   card     #1a1b1f  raised blocks. Cards, code, wells, menus.
- *   muted    #202126  the hover fill, one step above whatever it sits on.
- *   accent   #2b2e34  selection, and the highlighted row in a menu.
- *   hairline #26282d  the only divider.
+ * The same three rules read from the other end. Values here are the design's
+ * own: dark is the theme the system was drawn in, so it is transcribed rather
+ * than derived, and light above is the mirror.
  */
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(1 0 0);
-    --body: oklch(0.892 0.006 275);
-    --chrome: oklch(0.188 0.006 285.8);
-    --card: oklch(0.223 0.008 274.6);
-    --card-foreground: oklch(0.892 0.006 275);
-    /* Menus take the card surface so the accent below can highlight a row
-       against them; when the two matched, a hovered menu item was invisible. */
-    --popover: oklch(0.223 0.008 274.6);
-    --popover-foreground: oklch(1 0 0);
-    --primary: oklch(1 0 0);
-    --primary-foreground: oklch(0.145 0 0);
-    --secondary: oklch(0.3 0.011 268);
-    --secondary-foreground: oklch(1 0 0);
-    --muted: oklch(0.248 0.009 272);
-    --muted-foreground: oklch(0.675 0.011 258);
-    --accent: oklch(0.3 0.011 268);
-    --accent-foreground: oklch(1 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(0.277 0.01 268.3);
-    /* See the light block: a control's edge is not a hairline. */
-    --input: oklch(0.55 0.012 265);
-    /* Mirrors the light ladder: a halo, not a second border. */
-    --ring: oklch(0.55 0.012 265 / 55%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.188 0.006 285.8);
-    --sidebar-foreground: oklch(0.892 0.006 275);
-    --sidebar-primary: oklch(1 0 0);
-    --sidebar-primary-foreground: oklch(0.145 0 0);
-    --sidebar-accent: oklch(0.3 0.011 268);
-    --sidebar-accent-foreground: oklch(1 0 0);
-    --sidebar-border: oklch(0.243 0.008 264.4);
-    --sidebar-ring: oklch(0.55 0.012 265 / 55%);
+    --wp-1: #8e8e96;
+    --wp-2: #6f6f78;
+    --wp-3: #55555d;
+    --wp-4: #3a3a40;
+    --wp-base: #232327;
+
+    --glass-window: oklch(0.16 0.002 286 / 66%);
+    --glass-composer: oklch(1 0 0 / 5%);
+    --glass-panel-light: oklch(1 0 0 / 3.5%);
+    --glass-panel-dark: oklch(0.14 0.003 286 / 60%);
+
+    --fill-bubble: oklch(1 0 0 / 6.5%);
+    --fill-card: oklch(1 0 0 / 4.5%);
+    --fill-chip: oklch(1 0 0 / 7%);
+    --fill-chip-hover: oklch(1 0 0 / 9%);
+    --fill-row-selected: oklch(1 0 0 / 7%);
+
+    --edge: oklch(1 0 0 / 8%);
+    --edge-strong: oklch(1 0 0 / 10%);
+    --edge-button: oklch(1 0 0 / 14%);
+
+    --bevel: oklch(1 0 0 / 10%);
+
+    --knockout: oklch(0.185 0.002 286);
+
+    --elevation-send: 0 2px 12px oklch(0 0 0 / 40%);
+    --elevation-floating: 0 20px 50px oklch(0 0 0 / 40%);
+
+    --text-1: oklch(0.972 0.001 286);
+    --text-2: oklch(0.925 0.001 286);
+    --text-3: oklch(1 0 0 / 66%);
+    --text-4: oklch(1 0 0 / 46%);
+    --text-5: oklch(1 0 0 / 32%);
+
+    --paper-bg: oklch(0.936 0.002 106);
+    --paper-fg: oklch(0.205 0 0);
+    --paper-fg-muted: oklch(0 0 0 / 45%);
+
+    --popover: oklch(0.19 0.003 286 / 92%);
+    --primary: oklch(0.955 0.001 286);
+    --primary-foreground: oklch(0.13 0 0);
+    --destructive: oklch(0.7 0.19 22.2);
+    --ring: oklch(0.75 0.006 286 / 45%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
     }
-  /* Inter is drawn for tight setting: a touch of negative tracking is what
-     makes it read as one gathered voice instead of loose default sans. On a
-     near-black canvas, unsmoothed text also renders visibly heavier than it
-     was designed to, so it is antialiased here rather than per component. */
+  /* The wallpaper lives here rather than on the app root so it stays put
+     while everything above it scrolls, and so the root itself can be glass
+     with something real to blur. Fixed, not scrolled: it is the light in the
+     room, not part of the document. */
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+
+    background:
+      radial-gradient(58% 52% at 26% 6%, var(--wp-1), transparent 66%),
+      radial-gradient(50% 46% at 84% 82%, var(--wp-2), transparent 62%),
+      radial-gradient(46% 44% at 62% 40%, var(--wp-3), transparent 70%),
+      radial-gradient(70% 60% at 8% 96%, var(--wp-4), transparent 64%),
+      var(--wp-base);
+    background-attachment: fixed;
 
     font-size: var(--text-base);
     -webkit-font-smoothing: antialiased;
@@ -230,6 +346,93 @@
       outline-offset: 2px;
       }
     }
+  /* Glass is a backdrop-filter, and a backdrop-filter is a lie told about the
+     pixels behind it. Forced-colours mode has its own opinion about those
+     pixels, so the effect stands down and the surfaces go solid. */
+  @media (forced-colors: active) {
+    .glass-window,
+    .glass-panel,
+    .glass-composer,
+    .glass-popover {
+      backdrop-filter: none;
+      background: Canvas;
+      }
+    }
+}
+
+/* The outer chrome: one sheet of glass over the wallpaper, carrying the whole
+   window. The heavy blur and the saturate are what keep the wallpaper reading
+   as light rather than as a picture. */
+@utility glass-window {
+  background: var(--glass-window);
+  backdrop-filter: blur(72px) saturate(150%);
+  -webkit-backdrop-filter: blur(72px) saturate(150%);
+}
+
+/* A surface inside the window that should read as set back from it — the
+   sidebar, the file panel beside a conversation. The divider is left to the
+   caller: which edge of a panel faces the content depends on which side of the
+   window it is on, and a fixed inset would draw it on the wrong one half the
+   time. */
+@utility glass-panel {
+  background: var(--glass-panel-dark);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+/* A surface that should read as lifted off the window: the composer. Paired
+   with the bevel, because a raised edge is the whole tell. */
+@utility glass-composer {
+  background: var(--glass-composer);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  box-shadow:
+    0 0 0 1px var(--edge),
+    inset 0 1px 0 var(--bevel);
+}
+
+/* Menus and dialogs, which float above every other surface and so blur more
+   aggressively and sit on a real drop shadow. */
+@utility glass-popover {
+  background: var(--popover);
+  backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  box-shadow:
+    0 0 0 1px var(--edge-strong),
+    inset 0 1px 0 var(--bevel),
+    var(--elevation-floating);
+}
+
+/* The bevel on its own, for a surface that already has its own background. */
+@utility bevel {
+  box-shadow: inset 0 1px 0 var(--bevel);
+}
+
+/* Real document content, the one surface that steps out of the glass system.
+   See --paper-bg for why.
+ *
+ * Paper rebinds the semantic slots for everything inside it. A component that
+ * asks for `text-muted-foreground` or `border-border` is asking for "the quiet
+ * text on the surface I am on", and on this surface that is a tint of black in
+ * both palettes — paper is a light sheet whether the app is light or dark, so
+ * the dark theme's near-white foreground would otherwise vanish into it. These
+ * are fixed rather than themed for the same reason: the sheet does not invert.
+ */
+@utility paper {
+  background: var(--paper-bg);
+  color: var(--paper-fg);
+  box-shadow: var(--elevation-floating);
+
+  --foreground: var(--paper-fg);
+  --body: oklch(0 0 0 / 82%);
+  --muted-foreground: var(--paper-fg-muted);
+  --border: oklch(0 0 0 / 12%);
+  --card: oklch(0 0 0 / 5%);
+  --muted: oklch(0 0 0 / 5%);
+  --accent: oklch(0 0 0 / 6%);
+  --accent-foreground: var(--paper-fg);
+  --fill-card: oklch(0 0 0 / 4%);
+  --fill-chip: oklch(0 0 0 / 5%);
 }
 
 /* The one display step the app has: a page title, or the question on an empty
@@ -246,9 +449,9 @@
    column heads, counters — and never competes with the content under it. */
 @utility eyebrow {
   font-family: var(--font-mono);
-  font-size: var(--text-micro);
+  font-size: var(--text-tiny);
   line-height: 1.45;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 400;
 }

@@ -25,9 +25,13 @@ function defaultWindowSize() {
     constant. The chosen theme is a Runtime setting and out of reach here, so
     this follows the operating system: a user who picked the palette their
     system is not in still gets one wrong frame, which is as close as the main
-    process can get on its own. */
+    process can get on its own.
+
+    This is the wallpaper's base stop rather than a surface colour: the Surface
+    paints the wallpaper and floats glass on it, so the deepest thing behind
+    everything is what a torn frame should show. Keep in step with --wp-base. */
 function canvasColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"
+  return nativeTheme.shouldUseDarkColors ? "#232327" : "#e8e8ec"
 }
 
 export function createMainWindow(): BrowserWindow {
