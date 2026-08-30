@@ -124,6 +124,7 @@ export function Composer({
   onOpenModelPicker,
   onOpenSideChat,
   focusToken,
+  draft,
   running = false,
   blockedReason,
   toolbar,
@@ -143,6 +144,8 @@ export function Composer({
   onOpenSideChat?: () => void
   /** Bump to move the keyboard into this composer; see the effect below. */
   focusToken?: number
+  /** Text to drop into the box, with a token the caller bumps per request. */
+  draft?: { text: string; token: number }
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
@@ -196,6 +199,27 @@ export function Composer({
     lastFocusToken.current = focusToken
     textareaRef.current?.focus()
   }, [focusToken])
+
+  // A suggestion fills the box rather than sending: the person still owns the
+  // wording, and the caret lands at the end so they can keep typing. Tracked
+  // by the same token discipline as focus, so picking one suggestion twice
+  // refills the box both times.
+  const draftToken = draft?.token ?? 0
+  const draftText = draft?.text ?? ""
+  const lastDraftToken = useRef(0)
+  useEffect(() => {
+    if (!draftToken) {
+      lastDraftToken.current = 0
+      return
+    }
+    if (draftToken === lastDraftToken.current) return
+    lastDraftToken.current = draftToken
+    setPrompt(draftText)
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.focus()
+    textarea.setSelectionRange(draftText.length, draftText.length)
+  }, [draftToken, draftText])
 
   const blocked = blockedReason !== undefined
   // Commands close over this render's props: availability and action both

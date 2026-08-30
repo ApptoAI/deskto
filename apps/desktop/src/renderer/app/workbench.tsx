@@ -14,6 +14,7 @@ import {
 import { OnboardingView } from "../components/onboarding/onboarding-view.js"
 import { ProjectDialog } from "../components/project/project-dialog.js"
 import { ProjectsView } from "../components/project/projects-view.js"
+import { ProjectTasksView } from "../components/project/project-tasks-view.js"
 import {
   firstSettingsPage,
   type SettingsPageId,
@@ -380,6 +381,11 @@ export function Workbench() {
 
   const openThreadId = view.kind === "task" ? view.threadId : null
 
+  // Only the single-project scope has a list to table up: in all-projects the
+  // per-project query never runs, and the picker answers first anyway.
+  const projectThreads =
+    !allProjects && threads.state.status === "ready" ? threads.state.data : []
+
   // One branch per screen the main pane can show, from the most modal state
   // (Settings) down to the default new-task composer.
   function renderMain() {
@@ -461,6 +467,23 @@ export function Workbench() {
         <NewTaskProjectPicker
           projects={workspaceProjects}
           onSelect={(projectId) => setView({ kind: "new-task", projectId })}
+        />
+      )
+    }
+    // A project with work in it opens on that work. The centered composer is
+    // for the project that has none yet, where a table would be a header row
+    // over an empty space.
+    if (projectThreads.length > 0) {
+      return (
+        <ProjectTasksView
+          key={newTaskProject.id}
+          project={newTaskProject}
+          threads={projectThreads}
+          harnesses={harnesses.state}
+          openThreadId={openThreadId}
+          onOpenThread={surface.navigation.openTask}
+          onTaskCreated={revalidateThreads}
+          onTaskStarted={surface.navigation.openTask}
         />
       )
     }
