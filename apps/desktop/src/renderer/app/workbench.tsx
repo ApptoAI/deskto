@@ -59,6 +59,7 @@ import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
 
 import { DesktoMark } from "../components/deskto-logo.js"
+import { useAccentSync } from "../settings/accent-sync.js"
 import { openFolder } from "../lib/desktop.js"
 import { TitleBar, TitleBarTask } from "../components/title-bar.js"
 import {
@@ -171,6 +172,15 @@ export function Workbench() {
     retryLists,
     revalidateSelection,
   } = useWorkspaceSelection(client, setView, runAction)
+
+  // The accent follows the Workspace the person is standing in, and only when
+  // they asked for one.
+  useAccentSync(
+    settingsSnapshot
+      ? settingValue(settingsSnapshot, appSettings.accentSource)
+      : "monochrome",
+    activeWorkspace
+  )
 
   const {
     threads,

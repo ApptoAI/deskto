@@ -163,11 +163,11 @@
 
     /* Fills on glass. Tints of the canvas's opposite, so a row reads against
        whatever it happens to sit on. */
-    --fill-bubble: oklch(0 0 0 / 5%);
-    --fill-card: oklch(0 0 0 / 3.5%);
+    --fill-bubble: oklch(0 0 0 / 5.5%);
+    --fill-card: oklch(0 0 0 / 3%);
     --fill-chip: oklch(0 0 0 / 5%);
-    --fill-chip-hover: oklch(0 0 0 / 7.5%);
-    --fill-row-selected: oklch(0 0 0 / 6.5%);
+    --fill-chip-hover: oklch(0 0 0 / 9%);
+    --fill-row-selected: oklch(0 0 0 / 8%);
 
     /* Edges. A hairline on light glass needs more weight than on dark to stay
        genuinely visible rather than dissolving into the surface behind it. */
@@ -192,11 +192,11 @@
     --elevation-floating: 0 20px 50px oklch(0 0 0 / 14%);
 
     /* Text, by hierarchy. Opacity is the ramp; there is no second hue. */
-    --text-1: oklch(0.16 0.003 286);
-    --text-2: oklch(0.24 0.003 286);
-    --text-3: oklch(0 0 0 / 64%);
-    --text-4: oklch(0 0 0 / 46%);
-    --text-5: oklch(0 0 0 / 34%);
+    --text-1: oklch(0.13 0.003 286);
+    --text-2: oklch(0.26 0.003 286);
+    --text-3: oklch(0 0 0 / 62%);
+    --text-4: oklch(0 0 0 / 42%);
+    --text-5: oklch(0 0 0 / 26%);
 
     /* Paper — the one surface that is not glass. When Deskto shows the file it
        actually produced rather than chat about the file, that surface steps
@@ -218,8 +218,19 @@
        popover is the one glass dense enough to read as opaque. */
     --popover: oklch(0.985 0.001 286 / 92%);
     --popover-foreground: var(--text-1);
-    --primary: oklch(0.19 0.003 286);
-    --primary-foreground: oklch(0.985 0.001 286);
+
+/*
+ * The accent. Off by default: the palette's third rule is that the filled pill
+ * is whatever the canvas is not, and monochrome is the design's own answer.
+ * When a person turns it on, the accent is not a new brand colour — it is the
+ * colour they already gave the Workspace they are standing in, so the one
+ * filled thing on screen says where they are. --accent-base is set on the
+ * document by the Surface and is absent otherwise, which is why every slot
+ * below states its monochrome value as the fallback rather than in a
+ * competing rule.
+ */
+    --primary: var(--accent-base, oklch(0.19 0.003 286));
+    --primary-foreground: var(--accent-contrast, oklch(0.985 0.001 286));
     --secondary: var(--fill-chip);
     --secondary-foreground: var(--text-1);
     --muted: var(--fill-chip);
@@ -236,7 +247,7 @@
     --input: var(--edge-button);
     /* Translucent on purpose: the focus halo should read as a glow around the
        control, not a second border stacked on the first. */
-    --ring: oklch(0.4 0.006 286 / 40%);
+    --ring: var(--accent-ring, oklch(0.4 0.006 286 / 40%));
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -270,11 +281,11 @@
     --glass-panel-light: oklch(1 0 0 / 3.5%);
     --glass-panel-dark: oklch(0.14 0.003 286 / 60%);
 
-    --fill-bubble: oklch(1 0 0 / 6.5%);
-    --fill-card: oklch(1 0 0 / 4.5%);
+    --fill-bubble: oklch(1 0 0 / 7%);
+    --fill-card: oklch(1 0 0 / 4%);
     --fill-chip: oklch(1 0 0 / 7%);
-    --fill-chip-hover: oklch(1 0 0 / 9%);
-    --fill-row-selected: oklch(1 0 0 / 7%);
+    --fill-chip-hover: oklch(1 0 0 / 11%);
+    --fill-row-selected: oklch(1 0 0 / 10%);
 
     --edge: oklch(1 0 0 / 8%);
     --edge-strong: oklch(1 0 0 / 10%);
@@ -287,21 +298,21 @@
     --elevation-send: 0 2px 12px oklch(0 0 0 / 40%);
     --elevation-floating: 0 20px 50px oklch(0 0 0 / 40%);
 
-    --text-1: oklch(0.972 0.001 286);
-    --text-2: oklch(0.925 0.001 286);
-    --text-3: oklch(1 0 0 / 66%);
-    --text-4: oklch(1 0 0 / 46%);
-    --text-5: oklch(1 0 0 / 32%);
+    --text-1: oklch(0.995 0.001 286);
+    --text-2: oklch(0.9 0.001 286);
+    --text-3: oklch(1 0 0 / 62%);
+    --text-4: oklch(1 0 0 / 40%);
+    --text-5: oklch(1 0 0 / 25%);
 
     --paper-bg: oklch(0.936 0.002 106);
     --paper-fg: oklch(0.205 0 0);
     --paper-fg-muted: oklch(0 0 0 / 45%);
 
     --popover: oklch(0.19 0.003 286 / 92%);
-    --primary: oklch(0.955 0.001 286);
-    --primary-foreground: oklch(0.13 0 0);
+    --primary: var(--accent-base, oklch(0.955 0.001 286));
+    --primary-foreground: var(--accent-contrast, oklch(0.13 0 0));
     --destructive: oklch(0.7 0.19 22.2);
-    --ring: oklch(0.75 0.006 286 / 45%);
+    --ring: var(--accent-ring, oklch(0.75 0.006 286 / 45%));
 }
 
 @layer base {

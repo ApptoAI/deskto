@@ -31,6 +31,32 @@ const colorSwatches = new Map<string, string>([
 
 export const workspaceColors = [...colorSwatches.keys()]
 
+/**
+ * The same eight colours as literal values, for the one place a class name
+ * cannot reach: the accent, which is a CSS variable the whole window reads.
+ *
+ * These are tuned rather than copied from the swatch. A swatch is a 20px tile
+ * and can be as saturated as it likes; an accent fills buttons and carries
+ * text on top of them, so each one is pulled toward the lightness where a
+ * near-black label stays legible on it in both palettes.
+ */
+const accentValues = new Map<string, string>([
+  ["slate", "oklch(0.72 0.04 256)"],
+  ["blue", "oklch(0.7 0.15 254)"],
+  ["violet", "oklch(0.7 0.17 293)"],
+  ["rose", "oklch(0.72 0.17 15)"],
+  ["amber", "oklch(0.79 0.15 78)"],
+  ["emerald", "oklch(0.75 0.15 163)"],
+  ["cyan", "oklch(0.78 0.12 213)"],
+  ["pink", "oklch(0.73 0.17 348)"],
+])
+
+/** The accent a Workspace lends the window, or null if it names no colour. */
+export function workspaceAccent(color: string | undefined): string | null {
+  if (color === undefined) return null
+  return accentValues.get(color) ?? null
+}
+
 export function workspaceSwatch(color: string): string {
   return colorSwatches.get(color) ?? "bg-slate-500"
 }

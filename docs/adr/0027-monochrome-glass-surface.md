@@ -74,6 +74,33 @@ The wallpaper is painted by `body` and is structural, not decoration. A glass
 panel over a flat single colour reads as flat grey; the blur needs something
 varied behind it to be a blur of anything.
 
+## Amendment: an optional Workspace accent
+
+- Date: 2026-08-30
+
+Monochrome asks opacity, weight and shape to carry the whole hierarchy, and on
+a dense screen that ramp was too tight to read: everything sat in a narrow band
+of grey on near-black. Two changes answer it.
+
+The ramps widen. Text and fills both span further at each end, so a step is a
+step rather than a suggestion.
+
+And the accent becomes a choice. `appearance.accent-source` defaults to
+`monochrome`, which is this ADR unchanged. Set to `workspace`, the filled pill,
+the focus ring and the selected row take the colour the person already gave the
+Workspace they are standing in.
+
+This does not reopen colour generally. It is the same principle the two
+existing exceptions rest on — hue identifies rather than styles — extended to
+the one filled thing on screen, so that thing says where you are working. The
+palette states its monochrome values as fallbacks inside `var()`, so the accent
+is applied by the presence of `--accent-base` and removed by its absence; there
+is no competing rule, and a token that moves stays correct in both modes.
+
+Anything that carries meaning without the accent still carries it with the
+accent off, because the accent is never the only signal: status stays shape,
+and the destructive action stays destructive.
+
 ## Consequences
 
 - Adding a hue to the Surface is now a decision that has to argue with this

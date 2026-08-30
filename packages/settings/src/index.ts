@@ -1,5 +1,8 @@
 export {
+  accentSourceOptions,
+  accentSourceSchema,
   appSettings,
+  defaultAccentSource,
   defaultInterfaceFontSize,
   defaultWorkspaceLayout,
   harnessModelSettings,
@@ -14,6 +17,7 @@ export {
   themePreferenceSchema,
   workspaceLayoutOptions,
   workspaceLayoutSchema,
+  type AccentSource,
   type HarnessModelSelection,
   type InterfaceFontSize,
   type ThemePreference,
