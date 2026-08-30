@@ -88,6 +88,32 @@ describe("NewTaskView", () => {
     await waitFor(() => expect(edit.hasAttribute("disabled")).toBe(false))
   })
 
+  it("keeps the project cards mounted after closing the About dialog", async () => {
+    renderNewTaskView({ instructions: "", panelPreference: "open" })
+
+    await screen.findByRole("button", { name: "Edit name and description" })
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit name and description" })
+    )
+    expect(
+      await screen.findByRole("dialog", { name: "About this project" })
+    ).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
+
+    // jsdom has no CSS animation lifecycle, so Base UI calls
+    // onOpenChangeComplete immediately. Waiting for removal still verifies
+    // that callback, rather than onOpenChange, unmounts the dialog root.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "About this project" })
+      ).toBeNull()
+    )
+    expect(screen.getByText("About")).toBeTruthy()
+    expect(screen.getByText("Instructions")).toBeTruthy()
+    expect(screen.getByText("Files")).toBeTruthy()
+  })
+
   it("sends the saved profile after switching back to a Harness", async () => {
     const request = vi.fn((body: { method: string }) => {
       if (body.method === "preferences.get") {

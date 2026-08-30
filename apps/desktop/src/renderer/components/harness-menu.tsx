@@ -42,7 +42,7 @@ export function HarnessMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="sm" className="text-muted-foreground" />
+          <Button variant="ghost" size="sm" className="text-[var(--text-3)]" />
         }
       >
         {selected ? <HarnessLogo harnessId={selected.id} /> : null}

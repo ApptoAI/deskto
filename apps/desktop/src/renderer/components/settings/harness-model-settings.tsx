@@ -102,6 +102,7 @@ function HarnessModelRow({
             label={definition.label}
             value={selectionKey(selection)}
             options={options}
+            contentClassName="max-h-80"
             onSelect={(value) => {
               const selected = options.find((option) => option.value === value)
               if (!selected) return

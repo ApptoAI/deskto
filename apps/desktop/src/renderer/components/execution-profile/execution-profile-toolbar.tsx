@@ -70,7 +70,7 @@ export function ExecutionProfileToolbar({
   )
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex min-w-0 items-center gap-2">
       {/* The model carries the longest label, so it gives it up first: three
           times the shrink factor of its neighbours, which means "High" and
           "Auto" are still readable at widths where the model name is not. */}

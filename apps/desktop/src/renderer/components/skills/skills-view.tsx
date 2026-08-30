@@ -219,6 +219,7 @@ export function SkillsView({
               <Button
                 type="button"
                 variant="outline"
+                size="lg"
                 onClick={() => setManagingPacks(true)}
               >
                 Manage Packs
@@ -367,14 +368,16 @@ function CatalogContent({
     )
   }
   return (
-    <SkillList
-      inventory={inventory.state.data}
-      items={items}
-      selectedKey={selectedKey}
-      filter={filter}
-      query={query}
-      onSelect={onSelect}
-    />
+    <div className="loaded-list-enter">
+      <SkillList
+        inventory={inventory.state.data}
+        items={items}
+        selectedKey={selectedKey}
+        filter={filter}
+        query={query}
+        onSelect={onSelect}
+      />
+    </div>
   )
 }
 
@@ -447,7 +450,7 @@ function AddSkillMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button type="button" disabled={disabled} />}
+        render={<Button type="button" size="lg" disabled={disabled} />}
       >
         <PlusIcon data-icon="inline-start" />
         Add

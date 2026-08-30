@@ -129,6 +129,8 @@ export function Composer({
   blockedReason,
   toolbar,
   trailing,
+  textareaClassName,
+  textareaRows = 2,
   autoFocus = false,
   browserContexts = noBrowserContexts,
   onRemoveBrowserContext,
@@ -150,6 +152,8 @@ export function Composer({
   blockedReason?: string
   toolbar?: ReactNode
   trailing?: ReactNode
+  textareaClassName?: string
+  textareaRows?: number
   autoFocus?: boolean
   browserContexts?: readonly BrowserElementContext[]
   onRemoveBrowserContext?: (id: string) => void
@@ -638,6 +642,7 @@ export function Composer({
           />
           <PromptInputTextarea
             ref={textareaRef}
+            className={textareaClassName}
             value={prompt}
             onChange={(event) =>
               updatePrompt(event.target.value, event.target.selectionStart)
@@ -668,7 +673,7 @@ export function Composer({
             aria-autocomplete="list"
             disabled={blocked}
             autoFocus={autoFocus}
-            rows={2}
+            rows={textareaRows}
           />
           <PromptInputToolbar>
             <input
@@ -688,6 +693,7 @@ export function Composer({
               type="button"
               variant="ghost"
               size="icon"
+              className="text-[var(--text-3)]"
               disabled={blocked || sending}
               onClick={() => fileInputRef.current?.click()}
               aria-label="Attach images"
@@ -696,7 +702,7 @@ export function Composer({
               <PaperclipIcon />
             </Button>
             {toolbar}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-3">
               {trailing}
               {running && onCancel ? (
                 <Button
@@ -717,7 +723,7 @@ export function Composer({
                   // The one filled pill on the composer, and the only control
                   // here that sits on a drop shadow: send is what the whole
                   // surface is for, so it is the thing floating closest.
-                  className="shadow-send"
+                  className="text-primary-foreground shadow-send"
                 >
                   <ArrowUpIcon />
                 </Button>

@@ -58,7 +58,7 @@ export function ProfileMenu({
             // The label goes before the icon does, and the title says what the
             // icon alone cannot.
             className={cn(
-              "min-w-0 shrink text-muted-foreground",
+              "min-w-0 shrink text-[var(--text-3)]",
               triggerClassName
             )}
             disabled={disabled}
@@ -76,7 +76,7 @@ export function ProfileMenu({
       <DropdownMenuContent
         align="start"
         side="top"
-        className={cn("w-64", contentClassName)}
+        className={cn("w-64 overscroll-contain", contentClassName)}
       >
         <DropdownMenuRadioGroup
           value={value}
@@ -88,13 +88,13 @@ export function ProfileMenu({
               value={option.value}
               closeOnClick
             >
-              <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
+              <span className="flex min-w-0 flex-col gap-1 py-0.5">
                 <span className="flex items-center gap-1.5">
                   {option.icon}
                   {option.label}
                 </span>
                 {option.description ? (
-                  <span className="text-xs leading-snug text-muted-foreground">
+                  <span className="text-xs leading-relaxed text-muted-foreground">
                     {option.description}
                   </span>
                 ) : null}

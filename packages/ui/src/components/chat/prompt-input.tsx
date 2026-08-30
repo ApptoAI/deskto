@@ -11,7 +11,7 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
         // The composer is the one surface that reads as lifted off the window
         // rather than set into it: its own glass, a hairline, and the bevel
         // along the top edge that says the light is above it.
-        "glass-composer flex w-full flex-col rounded-panel pb-2 transition-shadow duration-200 ease-out focus-within:ring-3 focus-within:ring-ring",
+        "flex w-full flex-col rounded-panel pb-2 glass-composer transition-shadow duration-200 ease-out focus-within:ring-3 focus-within:ring-ring",
         // The toolbar inside answers to this box, not to the window: the
         // conversation column narrows when the panel opens while the window
         // stays as wide as it was.
@@ -39,7 +39,7 @@ function PromptInputTextarea({
         // being in charge.
         // Set at the conversation step, not the UI step: what a person types
         // here is read back to them in the transcript at the same size.
-        "max-h-[min(16rem,30svh)] min-h-14 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-5 py-4 text-conversation focus-visible:ring-0",
+        "max-h-[min(16rem,30svh)] min-h-14 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-2 py-4 text-conversation focus-visible:ring-0",
         className
       )}
       onKeyDown={(event) => {
@@ -68,9 +68,9 @@ function PromptInputToolbar({
     <div
       data-slot="prompt-input-toolbar"
       className={cn(
-        // Wrap rather than overlap: when the column is narrow the controls
-        // must find a second line, not sit on top of one another.
-        "flex flex-wrap items-center gap-2 px-2",
+        // The send action stays on the controls row. Selectors own truncation
+        // at narrow widths rather than pushing the primary action below them.
+        "flex flex-nowrap items-center gap-3 px-2",
         className
       )}
       {...props}
