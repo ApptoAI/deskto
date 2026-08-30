@@ -41,15 +41,19 @@ export function ExecutionProfileToolbar({
     <HarnessLogo harnessId={harnessId} className="size-4" />
   ) : undefined
 
+  // Every option says what it changes, because the trigger cannot: a row of
+  // bare values is four words with nothing to say which question each answers.
   const thinkingOptions = [
     {
       value: DEFAULT_EFFORT,
       label: effortLabel(DEFAULT_EFFORT),
+      description: "However much this model thinks on its own.",
       icon: <DefaultThinkingIcon />,
     },
     ...model.supportedEfforts.map((effort) => ({
       value: effort,
       label: effortLabel(effort),
+      description: thinkingDescription(effort, model.supportedEfforts),
       icon: <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />,
     })),
   ]
@@ -131,4 +135,20 @@ const compactLabel = "hidden @[37rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+}
+
+/**
+ * What more thinking buys, in the terms the person paid in: time. The rung
+ * is read off the harness's own order rather than the effort's name, for the
+ * same reason the icon is — providers invent their own top rung.
+ */
+function thinkingDescription(
+  effort: string,
+  efforts: readonly string[]
+): string {
+  if (effort === "none") return "No extra reasoning. Fastest."
+  const rank = effortRank(effort, efforts)
+  if (rank <= 1) return "A quick pass. Best for small, clear tasks."
+  if (rank <= 3) return "More reasoning before acting. Slower."
+  return "The most reasoning this model offers. Slowest."
 }

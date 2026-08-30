@@ -156,7 +156,9 @@ describe("NewTaskView", () => {
 
     await screen.findByRole("button", { name: "Model: Claude Opus" })
     fireEvent.click(screen.getByRole("button", { name: "Claude Code" }))
-    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Codex" }))
+    // Matched loosely: each row now carries a line on what the agent is, so
+    // the accessible name is the agent's name plus that sentence.
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Codex/ }))
 
     expect(
       await screen.findByRole("button", { name: "Model: Codex Sol" })
