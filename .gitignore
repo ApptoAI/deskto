@@ -48,3 +48,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Design exports pulled from Claude Design for reference, not source.
+.design/
