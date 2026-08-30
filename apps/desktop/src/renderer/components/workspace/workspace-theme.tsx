@@ -11,6 +11,12 @@ import StarIcon from "lucide-react/dist/esm/icons/star"
 /**
  * Workspaces store neutral color and icon tokens; only this file knows what
  * they look like. Class names stay literal so Tailwind generates them.
+ *
+ * These are the one set of hues the monochrome palette keeps, and they survive
+ * for the same reason the provider mark does: they identify a thing rather than
+ * style the app. A person picked this colour to tell their workspaces apart at
+ * a glance, so it is their data, not our chrome. Nothing else in the app may
+ * reach for a hue — status is carried by shape, hierarchy by opacity.
  */
 const colorSwatches = new Map<string, string>([
   ["slate", "bg-slate-500"],

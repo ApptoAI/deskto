@@ -497,7 +497,7 @@ export function Workbench() {
   // strips, and every screen until the user finishes or skips.
   if (showOnboarding) {
     return (
-      <div className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
+      <div className="glass-window flex h-dvh w-full flex-col overflow-hidden text-foreground">
         <OnboardingView
           harnesses={harnesses}
           workspaceReady={activeWorkspaceId !== null}
@@ -512,7 +512,7 @@ export function Workbench() {
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+    <div className="glass-window flex h-dvh w-full overflow-hidden text-foreground">
       {view.kind === "settings" ? (
         <SettingsSidebar
           page={view.page}

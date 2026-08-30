@@ -711,9 +711,13 @@ export function Composer({
               ) : (
                 <Button
                   type="submit"
-                  size="icon"
+                  size="icon-lg"
                   disabled={!canSend}
                   aria-label="Send"
+                  // The one filled pill on the composer, and the only control
+                  // here that sits on a drop shadow: send is what the whole
+                  // surface is for, so it is the thing floating closest.
+                  className="shadow-send"
                 >
                   <ArrowUpIcon />
                 </Button>

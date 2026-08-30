@@ -212,7 +212,7 @@ export function SkillDetailsPanel({
                       report?.status === "failed"
                         ? "bg-destructive"
                         : report?.status === "configured"
-                          ? "bg-emerald-500"
+                          ? "bg-foreground"
                           : "bg-muted-foreground/40"
                     )}
                   />
@@ -405,7 +405,7 @@ function StatusChip({ status }: { status: SourceStatus }) {
           status.tone === "destructive"
             ? "bg-destructive"
             : status.tone === "positive"
-              ? "bg-emerald-500"
+              ? "bg-foreground"
               : "bg-muted-foreground/40"
         )}
       />

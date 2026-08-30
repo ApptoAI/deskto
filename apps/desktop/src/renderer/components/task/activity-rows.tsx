@@ -226,9 +226,9 @@ export function SubagentBadge({ status }: { status: Activity["status"] }) {
         // The fade survives reduced motion the way `enter-rise` keeps its
         // own, but the scale-in does not: only the distance travelled is
         // what a motion-sensitive reader needs dropped.
-        "flex size-5 shrink-0 items-center justify-center rounded-full text-white transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:opacity-0 motion-safe:starting:scale-50",
+        "flex size-5 shrink-0 items-center justify-center rounded-full text-primary-foreground transition-[opacity,scale] duration-300 ease-(--ease-out-quart) starting:opacity-0 motion-safe:starting:scale-50",
         status === "completed"
-          ? "bg-emerald-500 dark:bg-emerald-600"
+          ? "bg-foreground text-knockout"
           : "bg-destructive"
       )}
     >
@@ -346,12 +346,12 @@ function FileChip({
         {fileName(file.path)}
       </span>
       {file.additions ? (
-        <span className="shrink-0 text-emerald-600 tabular-nums dark:text-emerald-400">
+        <span className="shrink-0 text-foreground tabular-nums">
           +{file.additions}
         </span>
       ) : null}
       {file.deletions ? (
-        <span className="shrink-0 text-red-500 tabular-nums dark:text-red-400">
+        <span className="shrink-0 text-muted-foreground tabular-nums">
           −{file.deletions}
         </span>
       ) : null}

@@ -24,20 +24,27 @@ export function ThemePreview({ value }: { value: string }) {
   )
 }
 
+/*
+ * Sampled from the running app rather than derived, because every surface in
+ * the real thing is translucent glass over a wallpaper and there is no single
+ * declared colour to quote. These are what that composite actually resolves
+ * to: canvas is the window sheet, chrome is the sidebar recessed under it.
+ * Re-sample if the glass or wallpaper tokens move.
+ */
 const palettes = {
   light: {
-    canvas: "#ffffff",
-    chrome: "#f4f4f7",
-    border: "#d9dbe1",
-    ink: "#33363b",
-    mute: "#c0c3ca",
+    canvas: "#eeeef4",
+    chrome: "#e7e7ea",
+    border: "#d7d7dd",
+    ink: "#29292d",
+    mute: "#b6b6bf",
   },
   dark: {
-    canvas: "#0a0a0a",
-    chrome: "#131316",
-    border: "#26282d",
-    ink: "#dadbdf",
-    mute: "#3a3d43",
+    canvas: "#161618",
+    chrome: "#0b0b0d",
+    border: "#2a2a2e",
+    ink: "#e8e8ea",
+    mute: "#45454b",
   },
 } as const
 

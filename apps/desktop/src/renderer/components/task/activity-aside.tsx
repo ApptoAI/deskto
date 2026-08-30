@@ -41,11 +41,11 @@ export const ActivityAside = memo(function ActivityAside({
 
   return (
     <aside className="hidden w-76 shrink-0 flex-col pt-4 pr-4 pb-6 lg:flex">
-      <div className="flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-lg ring-1 ring-border/60">
+      <div className="glass-popover flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-card">
         <button
           type="button"
           onClick={onOpen}
-          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 px-3 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 px-3 text-left transition-colors outline-none hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Open activity panel"
         >
           <span className="text-ui font-medium">Activity</span>
@@ -119,7 +119,7 @@ function AgentLine({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors outline-none hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={`Open activity for ${activity.name}`}
     >
       <SubagentBadge status={activity.status} />

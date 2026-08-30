@@ -284,7 +284,6 @@ export function TaskList({
           rows={partition.later}
           renderRow={renderRow}
           openRow={ghostRow(partition.later, laterExpanded)}
-          accentClassName="text-violet-500/90 hover:text-violet-500 dark:text-violet-400/90 dark:hover:text-violet-300"
         />
       ) : null}
 
@@ -345,7 +344,6 @@ function Shelf({
   renderRow,
   openRow,
   footer,
-  accentClassName,
 }: {
   label: string
   count: number
@@ -356,7 +354,6 @@ function Shelf({
   renderRow: (thread: Thread, section: InboxSection) => ReactNode
   openRow?: Thread | undefined
   footer?: ReactNode
-  accentClassName?: string
 }) {
   return (
     <section>
@@ -364,10 +361,7 @@ function Shelf({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className={cn(
-          "flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-5 pb-2 text-left eyebrow transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          accentClassName ?? "text-muted-foreground hover:text-foreground"
-        )}
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-5 pb-2 text-left eyebrow text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span>{label}</span>
         <ChevronDownIcon
@@ -539,7 +533,7 @@ function TaskRow({
               className={cn(
                 "text-xs tabular-nums",
                 isWakeLabel
-                  ? "text-violet-500/90 dark:text-violet-400/90"
+                  ? "text-foreground"
                   : "text-muted-foreground/70"
               )}
               title={timeTitle}
@@ -603,7 +597,6 @@ function TaskRow({
                 <RowActionButton
                   action="Mark done"
                   subject={thread.title}
-                  tone="done"
                   popupOpen={popupOpen}
                   onClick={() => actions.onSetDone(thread.id, true)}
                 >
@@ -749,14 +742,12 @@ function DeleteTaskDialog({
 function RowActionButton({
   action,
   subject,
-  tone,
   popupOpen,
   className,
   ...props
 }: ComponentProps<"button"> & {
   action: string
   subject: string
-  tone?: "done"
   popupOpen?: boolean
 }) {
   return (
@@ -775,9 +766,7 @@ function RowActionButton({
         "group-has-focus-visible:pointer-events-auto group-has-focus-visible:scale-100 group-has-focus-visible:opacity-100",
         "focus-visible:ring-2 focus-visible:ring-ring",
         popupOpen && "pointer-events-auto scale-100 opacity-100",
-        tone === "done"
-          ? "hover:border-emerald-500/50 hover:bg-emerald-500/15 hover:text-emerald-600 dark:hover:text-emerald-400"
-          : "hover:border-border hover:bg-muted hover:text-foreground",
+        "hover:border-input hover:bg-fill-chip-hover hover:text-foreground",
         className
       )}
       {...props}
@@ -786,15 +775,20 @@ function RowActionButton({
 }
 
 /**
- * The row's right-hand signal, one at a time, drawn as the classic circle
- * status glyphs in the inbox palette: a muted half-pie while the agent
- * works, an amber pie when it waits on the user, a red X on failure, a
- * violet dashed ring while snoozed, a green pie for an unseen completion
- * and a check on closed tasks. Keyed so a change pops in with a scale.
+ * The row's right-hand signal, one at a time. Status is carried by shape and
+ * weight, never by hue: the palette is monochrome, so a glyph that only a
+ * colour told apart would tell a reader nothing here, and would already have
+ * told a reader with a colour vision deficiency nothing anywhere.
  *
- * Only the amber "needs you" state animates. A whole sidebar of spinners
- * pulls the eye to work that is simply proceeding, and it competes with
- * the one state that genuinely wants an answer.
+ * Six states, six silhouettes. A ring with a half wedge is work in progress,
+ * dim while it simply proceeds and full-strength while it waits on an answer.
+ * A dashed ring is parked. A solid disc is a finished task nobody has looked
+ * at yet, and cutting a mark out of that disc closes it — a check for done, a
+ * cross for failed. Keyed so a change pops in with a scale.
+ *
+ * Only "needs you" animates. A whole sidebar of spinners pulls the eye to work
+ * that is simply proceeding, and it competes with the one state that genuinely
+ * wants an answer.
  */
 function RowIndicator({
   thread,
@@ -823,17 +817,17 @@ function RowIndicator({
       className="flex size-3.5 items-center justify-center transition-[opacity,scale] duration-200 ease-(--ease-out-quart) motion-reduce:transition-none starting:scale-50 starting:opacity-0"
     >
       {kind === "running" ? (
-        <PieGlyph className="text-blue-500 dark:text-blue-400" />
+        <PieGlyph className="text-muted-foreground" />
       ) : kind === "waiting-approval" ? (
-        <PieGlyph className="text-amber-500 motion-safe:animate-pulse dark:text-amber-400" />
+        <PieGlyph className="text-foreground motion-safe:animate-pulse" />
       ) : kind === "failed" ? (
-        <MarkGlyph variant="x" className="text-destructive" />
+        <MarkGlyph variant="x" className="text-foreground" />
       ) : kind === "snoozed" ? (
-        <DashedGlyph className="text-violet-500 dark:text-violet-400" />
+        <DashedGlyph className="text-muted-foreground" />
       ) : kind === "unread" ? (
-        <PieGlyph className="text-emerald-500 dark:text-emerald-400" />
+        <DotGlyph className="text-foreground" />
       ) : (
-        <MarkGlyph variant="check" className="text-muted-foreground/70" />
+        <MarkGlyph variant="check" className="text-muted-foreground" />
       )}
     </span>
   )
@@ -874,7 +868,21 @@ function DashedGlyph({ className }: { className?: string }) {
   )
 }
 
-/** Filled circle with a check or an X knocked out in the sidebar color. */
+/** Solid disc — a finished task nobody has opened yet. Deliberately the one
+    glyph with no interior detail: it is the only state that is asking to be
+    looked at rather than reporting what happened. */
+function DotGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className={cn("size-3.5", className)}>
+      <circle cx="8" cy="8" r="5" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** Filled circle with a check or an X cut out of it. The cut is painted in
+    --knockout rather than the sidebar fill: every surface here is translucent
+    glass, so the mark has to be the opaque colour that glass resolves to, or
+    it tints whatever happens to be scrolling underneath. */
 function MarkGlyph({
   variant,
   className,
@@ -889,7 +897,7 @@ function MarkGlyph({
         <path
           d="M5 8.3 7.1 10.4 11 6.4"
           fill="none"
-          className="stroke-sidebar"
+          className="stroke-knockout"
           strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -898,7 +906,7 @@ function MarkGlyph({
         <path
           d="M5.8 5.8 10.2 10.2 M10.2 5.8 5.8 10.2"
           fill="none"
-          className="stroke-sidebar"
+          className="stroke-knockout"
           strokeWidth="1.7"
           strokeLinecap="round"
         />

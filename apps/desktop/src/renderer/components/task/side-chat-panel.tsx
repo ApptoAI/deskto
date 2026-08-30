@@ -222,7 +222,7 @@ function EmptySideChat() {
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 pb-6 text-center">
       {/* Outlined tile rather than a bare glyph: it echoes the file rows and
           agent cards so an empty surface still feels like part of the panel. */}
-      <span className="flex size-10 items-center justify-center rounded-xl bg-card ring-1 ring-border/60">
+      <span className="flex size-10 items-center justify-center rounded-card bg-fill-card ring-1 ring-edge">
         <GitBranchIcon
           aria-hidden
           className="size-5 text-muted-foreground/60"

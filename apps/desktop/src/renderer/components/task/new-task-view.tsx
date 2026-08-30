@@ -221,7 +221,7 @@ export function NewTaskView({
                         token: current.token + 1,
                       }))
                     }
-                    className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors duration-100 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-full border border-edge-button bg-transparent px-3 py-1.5 text-xs text-muted-foreground transition-colors duration-100 outline-none hover:bg-fill-chip hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {suggestion.label}
                   </button>
