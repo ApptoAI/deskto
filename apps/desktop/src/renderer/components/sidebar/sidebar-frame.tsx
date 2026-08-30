@@ -24,7 +24,7 @@ export function SidebarFrame({
   return (
     <aside
       className={cn(
-        "glass-panel flex shrink-0 flex-col border-r border-border",
+        "flex shrink-0 flex-col border-r border-border",
         sidebarWidthClass[width]
       )}
     >

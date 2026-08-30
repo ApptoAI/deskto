@@ -463,7 +463,7 @@ function TaskRow({
           // Shift+F10 or the Menu key, so say out loud that one exists.
           aria-haspopup="menu"
           className={cn(
-            "flex w-full items-start gap-2.5 rounded-lg py-2 pr-7 pl-2 text-left text-sm",
+            "flex w-full items-start gap-2.5 rounded-row px-2 py-1.5 pr-7 text-left text-caption",
             "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
             "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",
@@ -509,7 +509,7 @@ function TaskRow({
               {thread.title}
             </span>
             {projectName ? (
-              <span className="mt-0.5 flex items-center gap-1 pr-7 text-xs leading-4 text-muted-foreground/70">
+              <span className="mt-0.5 flex items-center gap-1 pr-7 text-micro leading-4 text-muted-foreground/70">
                 <FolderIcon
                   aria-hidden
                   className="size-3 shrink-0 text-muted-foreground/50"
@@ -531,7 +531,7 @@ function TaskRow({
             />
             <span
               className={cn(
-                "text-xs tabular-nums",
+                "text-micro tabular-nums",
                 isWakeLabel
                   ? "text-foreground"
                   : "text-muted-foreground/70"
