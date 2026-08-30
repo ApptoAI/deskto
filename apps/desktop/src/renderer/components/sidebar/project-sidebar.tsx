@@ -216,7 +216,9 @@ export function ProjectSidebar({
         </div>
       </ScrollArea>
 
-      <div className="no-drag space-y-0.5 px-2 pb-3">
+      {/* A rule above the foot, as in the design: the nav is a different kind
+          of thing from the task list and needs saying so. */}
+      <div className="no-drag space-y-0.5 border-t border-border px-2 pt-1.5 pb-3">
         {updateState?.status === "ready" ? (
           <Button
             variant="secondary"
@@ -250,15 +252,20 @@ export function ProjectSidebar({
           <PuzzleIcon data-icon="inline-start" />
           Skills
         </Button>
-        <Button
+        <button
           ref={settingsButton}
-          variant="ghost"
-          className="w-full justify-start text-muted-foreground"
+          type="button"
           onClick={onOpenSettings}
+          className="mt-1.5 flex w-full items-center gap-2.5 rounded-[10px] bg-fill-chip px-2 py-1.5 text-left outline-none transition-colors duration-150 hover:bg-fill-chip-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <SettingsIcon data-icon="inline-start" />
-          Settings
-        </Button>
+          <span className="flex size-5.5 shrink-0 items-center justify-center rounded-full bg-fill-chip-hover text-muted-foreground">
+            <SettingsIcon className="size-3" />
+          </span>
+          <span className="text-caption text-foreground">Settings</span>
+          {/* Where the work runs. The design puts an account here; Deskto has
+              no accounts, and this is the fact that row would be carrying. */}
+          <span className="ml-auto eyebrow text-muted-foreground">Local</span>
+        </button>
       </div>
     </SidebarFrame>
   )
