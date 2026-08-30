@@ -155,15 +155,23 @@ export function NewTaskView({
           clipping at the top. The negative top margin offsets the drag strip
           above, so the closed screen lands on the optical centre of the
           window rather than 40px below. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
+        {/* The lockup sits near the top of the pane rather than on top of the
+            column: the question and the composer are what the eye should land
+            on, and stacking the brand into that group pushes them off centre.
+            Hidden once the project cards open, where the column needs the
+            height more than the screen needs the signature. */}
+        {!panelVisible ? (
+          <div className="pointer-events-none flex justify-center pb-2">
+            <DesktoWordmark />
+          </div>
+        ) : null}
         <div className="flex min-h-full items-center justify-center">
           <div
-            className={`enter-rise flex w-full max-w-3xl flex-col items-center gap-4 ${
-              panelVisible ? "" : "-mt-10"
+            className={`enter-rise flex w-full max-w-[940px] flex-col items-center gap-5 ${
+              panelVisible ? "" : "-mt-16"
             }`}
           >
-            <DesktoWordmark />
-
             {/* The one display moment in the app. Size and tight tracking
                 carry it; there is nothing to bold against on an empty
                 screen. */}
@@ -172,7 +180,7 @@ export function NewTaskView({
               <span className="text-foreground">{project.name}</span>?
             </p>
 
-            <div className="w-full">
+            <div className="w-full max-w-[700px]">
               <Composer
                 projectId={project.id}
                 harnessId={harnessId}
@@ -210,7 +218,7 @@ export function NewTaskView({
             {/* An empty box asks a question the person may not have an answer
                 to yet. These give the shape of one — they fill the composer
                 rather than send, so the wording stays theirs. */}
-            <ul className="flex w-full flex-wrap justify-center gap-1.5">
+            <ul className="flex w-full max-w-[700px] flex-wrap justify-center gap-1.5">
               {taskSuggestions.map((suggestion) => (
                 <li key={suggestion.label}>
                   <button
@@ -231,7 +239,7 @@ export function NewTaskView({
 
             {/* Settings live under the composer, out of the way: a quiet
                 toggle on the right, cards beneath it when open. */}
-            <div className="flex w-full justify-end">
+            <div className="flex w-full max-w-[700px] justify-end">
               <Button
                 type="button"
                 variant="ghost"

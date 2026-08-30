@@ -1,11 +1,11 @@
-/** The ghost wordmark behind the task start screens. */
+import { DesktoLockup } from "../deskto-logo.js"
+
+/**
+ * The brand lockup over the task start screen. It is the real mark rather than
+ * a ghosted word: this screen is the one place in the app with nothing in it
+ * yet, so it is the one place the product is allowed to say its own name at
+ * full strength instead of whispering it behind the content.
+ */
 export function DesktoWordmark() {
-  return (
-    <div
-      aria-hidden
-      className="font-heading text-6xl leading-none font-normal tracking-[-0.04em] text-foreground/8 select-none sm:text-7xl"
-    >
-      deskto
-    </div>
-  )
+  return <DesktoLockup className="h-[52px] w-auto shrink-0 text-body" />
 }

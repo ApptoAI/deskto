@@ -42,6 +42,11 @@ export function createMainWindow(): BrowserWindow {
     center: true,
     show: false,
     titleBarStyle: "hiddenInset",
+    // The Surface draws its own titlebar. macOS already keeps its menu in the
+    // system bar, but Windows and Linux would otherwise stack a native menu
+    // strip on top of ours, which is two rows of chrome for one window. Alt
+    // still summons it.
+    autoHideMenuBar: true,
     backgroundColor: canvasColor(),
     webPreferences: {
       preload: path.join(bundleDirectory, "../preload/index.cjs"),
