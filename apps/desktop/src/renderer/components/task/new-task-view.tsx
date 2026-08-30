@@ -75,7 +75,8 @@ export function NewTaskView({
     null
   )
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  // Bumped per pick so choosing the same suggestion twice refills the box.
+  // The Composer reapplies a draft only on a new token, so the same
+  // suggestion picked twice needs a fresh one rather than equal text.
   const [draft, setDraft] = useState({ text: "", token: 0 })
 
   const loadPreferences = useCallback(

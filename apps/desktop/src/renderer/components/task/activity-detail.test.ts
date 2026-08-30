@@ -33,6 +33,12 @@ describe("shortenPath", () => {
   it("survives a missing project root", () => {
     expect(shortenPath("/one/two/three/four.txt")).toBe("three/four.txt")
   })
+
+  it("reads a Windows path, separators and all", () => {
+    expect(shortenPath("C:\\work\\notes\\src\\index.ts")).toBe(
+      "src/index.ts"
+    )
+  })
 })
 
 describe("shortenCommand", () => {
@@ -60,6 +66,20 @@ describe("shortenActivityDetail", () => {
       "README.md"
     )
     expect(shortenActivityDetail("rg --files -g '*.ts'", project)).toBe("rg --files…")
+  })
+
+  it("takes a Windows path as a path, even with a space in a folder name", () => {
+    // Whitespace normally marks a command, so the drive letter has to win:
+    // shortened as a command this reads "C:\\work…", which names nothing.
+    expect(
+      shortenActivityDetail("C:\\work\\My Project\\src\\index.ts")
+    ).toBe("src/index.ts")
+  })
+
+  it("still reads a command that contains a path as a command", () => {
+    expect(shortenActivityDetail("ls -la /home/someone/notes", project)).toBe(
+      "ls -la…"
+    )
   })
 
   it("leaves a bare word — a search term, a tool name — untouched", () => {

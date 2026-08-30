@@ -215,6 +215,11 @@ export function Composer({
     if (draftToken === lastDraftToken.current) return
     lastDraftToken.current = draftToken
     setPrompt(draftText)
+    // The draft replaces the text a suggestion menu was opened against, so
+    // the menu has nothing left to complete; typing clears these together
+    // for the same reason.
+    setTrigger(null)
+    setHighlightedId(null)
     const textarea = textareaRef.current
     if (!textarea) return
     textarea.focus()

@@ -10,9 +10,16 @@
  * with less to wade through, and the fuller answer is one click away.
  */
 
-/** A path, roughly: separators and no argument-shaped whitespace. */
+/**
+ * A path, roughly. Separators of either slash, and no argument-shaped
+ * whitespace — except behind a drive letter, which no command starts with
+ * and which a Windows path with a space in a folder name needs to pass.
+ */
+const windowsDrive = /^[a-zA-Z]:[\\/]/
+
 function looksLikePath(detail: string): boolean {
-  return detail.includes("/") && !/\s/.test(detail)
+  if (windowsDrive.test(detail)) return true
+  return /[/\\]/.test(detail) && !/\s/.test(detail)
 }
 
 /**
