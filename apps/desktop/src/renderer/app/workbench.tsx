@@ -14,7 +14,6 @@ import {
 import { OnboardingView } from "../components/onboarding/onboarding-view.js"
 import { ProjectDialog } from "../components/project/project-dialog.js"
 import { ProjectsView } from "../components/project/projects-view.js"
-import { ProjectTasksView } from "../components/project/project-tasks-view.js"
 import {
   firstSettingsPage,
   type SettingsPageId,
@@ -55,7 +54,7 @@ import { usePackActions } from "./use-pack-actions.js"
 import { useProjectActions } from "./use-project-actions.js"
 import { useThreadQueries } from "./use-thread-queries.js"
 import { useWorkspaceSelection } from "./use-workspace-selection.js"
-import { toNewTask, toProject, type MainView } from "./work-view.js"
+import { toNewTask, type MainView } from "./work-view.js"
 
 type WorkspaceDialogState = null | { mode: "create" } | { mode: "edit" }
 
@@ -98,7 +97,7 @@ export function Workbench() {
     useCallback(() => revalidateHarnesses(), [revalidateHarnesses])
   )
 
-  const [view, setView] = useState<MainView>({ kind: "project" })
+  const [view, setView] = useState<MainView>({ kind: "new-task" })
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
@@ -182,7 +181,7 @@ export function Workbench() {
   const openProjectFromGrid = useCallback(
     (projectId: string) => {
       selectProject(projectId)
-      setView(toProject)
+      setView(toNewTask)
     },
     [selectProject]
   )
@@ -195,7 +194,7 @@ export function Workbench() {
       (threadId: string) => {
         setView((current) => {
           if (current.kind === "task" && current.threadId === threadId) {
-            return toProject(current)
+            return toNewTask(current)
           }
           // Settings stays open, but Go back cannot land on a task that is gone.
           if (
@@ -203,7 +202,7 @@ export function Workbench() {
             current.returnTo.kind === "task" &&
             current.returnTo.threadId === threadId
           ) {
-            return toProject(current)
+            return toNewTask(current)
           }
           return current
         })
@@ -374,17 +373,12 @@ export function Workbench() {
     return tryAction(async () => {
       if (!activeWorkspace) return
       await client.deleteWorkspace(activeWorkspace.id)
-      setView(toProject)
+      setView(toNewTask)
       revalidateSelection()
     })
   }
 
   const openThreadId = view.kind === "task" ? view.threadId : null
-
-  // Only the single-project scope has a list to table up: in all-projects the
-  // per-project query never runs, and the picker answers first anyway.
-  const projectThreads =
-    !allProjects && threads.state.status === "ready" ? threads.state.data : []
 
   // One branch per screen the main pane can show, from the most modal state
   // (Settings) down to the default new-task composer.
@@ -467,24 +461,6 @@ export function Workbench() {
         <NewTaskProjectPicker
           projects={workspaceProjects}
           onSelect={(projectId) => setView({ kind: "new-task", projectId })}
-        />
-      )
-    }
-    // A project with work in it rests on that work. New task asked for a
-    // blank composer, so it gets one; the centered screen is also what a
-    // project with no tasks yet shows, where a table would be a header row
-    // over an empty space.
-    if (view.kind !== "new-task" && projectThreads.length > 0) {
-      return (
-        <ProjectTasksView
-          key={newTaskProject.id}
-          project={newTaskProject}
-          threads={projectThreads}
-          harnesses={harnesses.state}
-          openThreadId={openThreadId}
-          onOpenThread={surface.navigation.openTask}
-          onTaskCreated={revalidateThreads}
-          onTaskStarted={surface.navigation.openTask}
         />
       )
     }

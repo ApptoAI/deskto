@@ -2,20 +2,31 @@ import { useCallback, useState } from "react"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import ChevronUpIcon from "lucide-react/dist/esm/icons/chevron-up"
 import SettingsIcon from "lucide-react/dist/esm/icons/settings"
-import type { Harness, Project } from "@deskto/protocol"
+import type {
+  ExecutionProfile,
+  Harness,
+  Project,
+  TurnInput,
+} from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 
+import { executionProfileForHarness } from "../../lib/execution-profile.js"
+import {
+  describeHarnessBlock,
+  findHarness,
+  isHarnessAvailable,
+} from "../../lib/harness.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import {
   useRuntimeQuery,
   type QueryState,
 } from "../../runtime/use-runtime-query.js"
 import { Composer } from "../composer.js"
+import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
+import { HarnessMenu } from "../harness-menu.js"
 import { ProjectPanel } from "../project/project-panel.js"
 import { DesktoWordmark } from "./deskto-wordmark.js"
-import { TaskComposerToolbar } from "./task-composer-toolbar.js"
-import { useTaskComposer } from "./use-task-composer.js"
 
 /** How the project panel should show up before the user has chosen. */
 export type ProjectPanelPreference = "open" | "collapsed" | "auto"
@@ -59,14 +70,19 @@ export function NewTaskView({
   onPanelCollapsedChange: (collapsed: boolean) => void
 }) {
   const client = useRuntimeClient()
-  const composer = useTaskComposer({
-    project,
-    harnesses,
-    onTaskCreated,
-    onTaskStarted,
-  })
+  const [chosenHarnessId, setChosenHarnessId] = useState<string | null>(null)
+  const [chosenProfile, setChosenProfile] = useState<ExecutionProfile | null>(
+    null
+  )
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   // Bumped per pick so choosing the same suggestion twice refills the box.
   const [draft, setDraft] = useState({ text: "", token: 0 })
+
+  const loadPreferences = useCallback(
+    () => client.getPreferences(project.workspaceId),
+    [client, project.workspaceId]
+  )
+  const preferences = useRuntimeQuery(loadPreferences)
 
   const loadDetails = useCallback(
     () => client.getProject(project.id),
@@ -85,6 +101,46 @@ export function NewTaskView({
   const panelVisible =
     panelPreference === "open" ||
     (panelPreference === "auto" && autoOpen === true)
+  const lastProfile =
+    preferences.state.status === "ready"
+      ? preferences.state.data.lastProfile
+      : null
+  const profilesByHarness =
+    preferences.state.status === "ready"
+      ? preferences.state.data.profilesByHarness
+      : {}
+
+  const options = harnesses.status === "ready" ? harnesses.data : []
+  const lastHarness = lastProfile
+    ? findHarness(options, lastProfile.harnessId)
+    : null
+  const fallbackHarnessId =
+    (lastHarness && isHarnessAvailable(lastHarness) ? lastHarness.id : null) ??
+    options.find(isHarnessAvailable)?.id ??
+    null
+  const harnessId = chosenHarnessId ?? fallbackHarnessId
+  const blockedReason = describeHarnessBlock(harnesses, harnessId)
+
+  const models = harnessId
+    ? (findHarness(options, harnessId)?.models ?? [])
+    : []
+  const profile =
+    chosenProfile ??
+    executionProfileForHarness(models, harnessId, profilesByHarness)
+
+  function selectHarness(id: string) {
+    setChosenHarnessId(id)
+    setChosenProfile(null)
+  }
+
+  async function handleSend(input: TurnInput) {
+    if (!harnessId) return
+
+    const thread = await client.createThread(project.id, harnessId, profile)
+    onTaskCreated(thread.id)
+    await client.startTurn(thread.id, input)
+    onTaskStarted(thread.id)
+  }
 
   return (
     <>
@@ -118,17 +174,35 @@ export function NewTaskView({
             <div className="w-full">
               <Composer
                 projectId={project.id}
-                harnessId={composer.harnessId}
+                harnessId={harnessId}
                 label="What should the agent do?"
                 placeholder="Describe the task"
-                onSend={composer.send}
-                blockedReason={composer.blockedReason}
+                onSend={handleSend}
+                blockedReason={blockedReason}
                 draft={draft}
-                {...(composer.models.length > 0
-                  ? { onOpenModelPicker: () => composer.setModelMenuOpen(true) }
+                {...(models.length > 0
+                  ? { onOpenModelPicker: () => setModelMenuOpen(true) }
                   : {})}
                 autoFocus
-                toolbar={<TaskComposerToolbar composer={composer} />}
+                toolbar={
+                  options.length > 0 ? (
+                    <>
+                      <HarnessMenu
+                        harnesses={options}
+                        selectedId={harnessId}
+                        onSelect={selectHarness}
+                      />
+                      <ExecutionProfileToolbar
+                        models={models}
+                        profile={profile}
+                        onChange={setChosenProfile}
+                        harnessId={harnessId}
+                        modelMenuOpen={modelMenuOpen}
+                        onModelMenuOpenChange={setModelMenuOpen}
+                      />
+                    </>
+                  ) : null
+                }
               />
             </div>
 
