@@ -113,7 +113,10 @@ async function openApplication(): Promise<void> {
   // The sandboxed preload reads the environment it inherits from here, so
   // clearing the dev-only flag is what keeps devFlags false in packaged
   // builds even when the variable is exported in the launching shell.
-  if (app.isPackaged) delete process.env.DESKTO_FORCE_ONBOARDING
+  if (app.isPackaged) {
+    delete process.env.DESKTO_FORCE_ONBOARDING
+    delete process.env.DESKTO_DEV_ELEMENT_PICKER
+  }
 
   // Discovery processes must not inherit a launch directory such as the
   // person's home folder. A CLI inspecting it would make macOS ask Deskto

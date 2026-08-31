@@ -68,6 +68,11 @@ export interface DesktopApi {
   devFlags: {
     /** Show the first-run wizard on every launch, ignoring the saved answer. */
     forceOnboarding: boolean
+    /**
+     * Only `pnpm desktop:dev:picker` sets this; packaged builds strip the
+     * variable in main, so the overlay cannot ship.
+     */
+    elementPicker: boolean
   }
   runtime: {
     request<M extends RuntimeMethod>(
