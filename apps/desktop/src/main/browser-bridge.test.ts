@@ -44,6 +44,22 @@ describe("browser Runtime bridge", () => {
     expect(response.status).toBe(403)
   })
 
+  it("opens the event stream for a same-origin request carrying no origin", async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/events`)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toBe("text/event-stream")
+    await response.body?.cancel()
+  })
+
+  it("rejects an event stream opened from another site", async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/events`, {
+      headers: { origin: "https://somewhere.example" },
+    })
+
+    expect(response.status).toBe(403)
+  })
+
   it("decodes UTF-8 only after every request chunk arrives", async () => {
     const body = Buffer.from(
       JSON.stringify({

@@ -39,20 +39,24 @@ function requestHostname(
   }
 }
 
+function isAllowedBridgeHostname(hostname: string | undefined): boolean {
+  if (!hostname) return false
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname.endsWith(".exe.xyz")
+  )
+}
+
 function isAllowedBridgeOrigin(
   origin: string,
   hostname: string | undefined
 ): boolean {
-  if (!hostname) return false
+  if (!isAllowedBridgeHostname(hostname)) return false
   try {
     const url = new URL(origin)
-    const allowedHostname =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "[::1]" ||
-      hostname.endsWith(".exe.xyz")
     return (
-      allowedHostname &&
       url.hostname === hostname &&
       (url.protocol === "http:" || url.protocol === "https:")
     )
@@ -61,14 +65,21 @@ function isAllowedBridgeOrigin(
   }
 }
 
-function setBridgeCorsHeaders(
+// A cross-origin request always carries an Origin header, so a request without
+// one cannot come from another site. Same-origin GETs send no Origin, which is
+// how the Surface opens the event stream; state-changing methods always send
+// one, so /request still demands it.
+function allowBridgeRequest(
   req: import("node:http").IncomingMessage,
-  res: import("node:http").ServerResponse
+  res: import("node:http").ServerResponse,
+  allowMissingOrigin: boolean
 ): boolean {
+  const hostname = requestHostname(req)
   const origin = req.headers.origin
-  if (!origin || !isAllowedBridgeOrigin(origin, requestHostname(req))) {
-    return false
+  if (origin === undefined) {
+    return allowMissingOrigin && isAllowedBridgeHostname(hostname)
   }
+  if (!isAllowedBridgeOrigin(origin, hostname)) return false
   res.setHeader("access-control-allow-origin", origin)
   res.setHeader("access-control-allow-headers", "content-type")
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS")
@@ -78,7 +89,7 @@ function setBridgeCorsHeaders(
 export function startBrowserBridge(runtime: Runtime, port: number): () => void {
   const server: Server = createServer((req, res) => {
     if (req.method === "OPTIONS") {
-      if (!setBridgeCorsHeaders(req, res)) {
+      if (!allowBridgeRequest(req, res, false)) {
         res.writeHead(403, { "content-type": "application/json" }).end(
           JSON.stringify({
             ok: false,
@@ -92,7 +103,7 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
     }
 
     if (req.method === "GET" && req.url === "/events") {
-      if (!setBridgeCorsHeaders(req, res)) {
+      if (!allowBridgeRequest(req, res, true)) {
         res.writeHead(403, { "content-type": "application/json" }).end(
           JSON.stringify({
             ok: false,
@@ -106,6 +117,10 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
         "cache-control": "no-cache",
         connection: "keep-alive",
       })
+      // A proxy in front of the bridge holds the response until its first
+      // byte, and the first event may be minutes away, so open the stream with
+      // a comment rather than leaving the Surface waiting on the heartbeat.
+      res.write(": open\n\n")
       const unsubscribe = runtime.subscribe((event: RuntimeEvent) => {
         const parsed = runtimeEventSchema.safeParse(event)
         if (!parsed.success) {
@@ -126,7 +141,7 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
     }
 
     if (req.method === "POST" && req.url === "/request") {
-      if (!setBridgeCorsHeaders(req, res)) {
+      if (!allowBridgeRequest(req, res, false)) {
         res.writeHead(403, { "content-type": "application/json" }).end(
           JSON.stringify({
             ok: false,
