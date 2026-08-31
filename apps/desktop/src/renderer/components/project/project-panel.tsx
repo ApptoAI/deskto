@@ -13,13 +13,6 @@ import {
 
 import { Button } from "@workspace/ui/components/button"
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -129,7 +122,7 @@ export function ProjectPanel({
     <section
       id="project-settings-panel"
       aria-label="Project settings"
-      className="enter-rise w-full space-y-3"
+      className="enter-rise w-full space-y-2"
     >
       {panelError ? <InlineError message={panelError} /> : null}
       {loadError ? (
@@ -146,50 +139,63 @@ export function ProjectPanel({
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <PanelCard
-          title="About"
-          editLabel="Edit name and description"
-          hasContent={project.description !== ""}
-          onEdit={() => openDialog("about")}
+      <div className="-mx-2 space-y-0.5">
+        <MetaRow
+          label="About"
+          trailing={
+            <MetaEditButton
+              label="Edit name and description"
+              hasContent={project.description !== ""}
+              onClick={() => openDialog("about")}
+            />
+          }
         >
           {project.description ? (
-            <p className="line-clamp-4 text-sm">{project.description}</p>
+            project.description
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <span className="text-muted-foreground">
               Describe what this project is for.
-            </p>
+            </span>
           )}
-        </PanelCard>
+        </MetaRow>
 
-        <PanelCard
-          title="Instructions"
-          editLabel="Edit project instructions"
-          hasContent={
-            loadedDetails !== null && loadedDetails.instructions !== ""
+        <MetaRow
+          label="Instructions"
+          trailing={
+            <MetaEditButton
+              label="Edit project instructions"
+              hasContent={loadedDetails !== null && loadedDetails.instructions !== ""}
+              disabled={loadedDetails === null}
+              onClick={() => openDialog("instructions")}
+            />
           }
-          editDisabled={loadedDetails === null}
-          onEdit={() => openDialog("instructions")}
         >
           {loadedDetails === null ? (
-            <p className="text-sm text-muted-foreground">
+            <span className="text-muted-foreground">
               {loadError ? "Instructions are unavailable." : "Loading…"}
-            </p>
+            </span>
           ) : loadedDetails.instructions ? (
-            <p className="line-clamp-4 text-sm whitespace-pre-wrap">
-              {loadedDetails.instructions}
-            </p>
+            loadedDetails.instructions
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <span className="text-muted-foreground">
               Tell every agent how work should be done here.
-            </p>
+            </span>
           )}
-        </PanelCard>
+        </MetaRow>
 
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Files</CardTitle>
-            <CardAction>
+        <MetaRow
+          label="Files"
+          trailing={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground"
+                onClick={() => void showFolder()}
+              >
+                Show folder
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
@@ -197,7 +203,7 @@ export function ProjectPanel({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      className="-mt-0.5 -mr-1 text-muted-foreground"
+                      className="text-muted-foreground"
                       aria-label="Project actions"
                     />
                   }
@@ -205,56 +211,34 @@ export function ProjectPanel({
                   <EllipsisVerticalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {project.locationKind === "managed" ? (
+                    <DropdownMenuItem
+                      disabled={moving}
+                      onClick={() => void moveFolder()}
+                    >
+                      {moving ? "Moving…" : "Move to folder…"}
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem onClick={() => openDialog("template")}>
                     Save as template…
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex min-w-0 items-center gap-2 text-sm">
-              <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1">
-                {project.locationKind === "managed"
-                  ? "Managed by Deskto"
-                  : "Linked folder"}
-              </span>
-            </div>
-            <p
-              className="truncate font-mono text-micro text-muted-foreground"
-              title={project.path}
-            >
-              {project.path}
-            </p>
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => void showFolder()}
-              >
-                Show folder
-              </Button>
-              {project.locationKind === "managed" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  disabled={moving}
-                  onClick={() => void moveFolder()}
-                >
-                  {moving ? "Moving…" : "Move to folder…"}
-                </Button>
-              ) : null}
-            </div>
-            {project.locationKind === "managed" ? (
-              <p className="text-xs text-muted-foreground">
-                Tasks and instructions stay with the project.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+            </>
+          }
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <FolderIcon
+              aria-hidden="true"
+              className="size-4 shrink-0 text-muted-foreground"
+            />
+            <span className="min-w-0 truncate" title={project.path}>
+              {project.locationKind === "managed"
+                ? "Managed by Deskto"
+                : "Linked folder"}
+            </span>
+          </span>
+        </MetaRow>
       </div>
 
       {loadedDetails?.sourceTemplate ? (
@@ -327,41 +311,49 @@ export function ProjectPanel({
   )
 }
 
-function PanelCard({
-  title,
-  editLabel,
-  hasContent,
-  editDisabled = false,
-  onEdit,
+function MetaRow({
+  label,
+  trailing,
   children,
 }: {
-  title: string
-  editLabel: string
-  hasContent: boolean
-  editDisabled?: boolean
-  onEdit: () => void
+  label: string
+  trailing: ReactNode
   children: ReactNode
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardAction>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="-mt-0.5 -mr-1 text-muted-foreground"
-            aria-label={editLabel}
-            disabled={editDisabled}
-            onClick={onEdit}
-          >
-            {hasContent ? <PencilIcon /> : <PlusIcon />}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <div className="group flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-fill-chip/50">
+      <h3 className="eyebrow w-28 shrink-0 text-muted-foreground">{label}</h3>
+      <div className="min-w-0 flex-1 truncate text-sm">{children}</div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-50 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        {trailing}
+      </div>
+    </div>
+  )
+}
+
+function MetaEditButton({
+  label,
+  hasContent,
+  disabled = false,
+  onClick,
+}: {
+  label: string
+  hasContent: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      className="text-muted-foreground"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {hasContent ? <PencilIcon /> : <PlusIcon />}
+    </Button>
   )
 }
 

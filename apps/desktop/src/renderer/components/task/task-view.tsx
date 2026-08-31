@@ -426,7 +426,7 @@ export function TaskView({
                     </span>
                   ) : null}
                   {projectPath ? (
-                    <span className="ml-auto min-w-0 truncate pl-4 font-mono text-micro">
+                    <span className="ml-auto min-w-0 truncate pl-4 text-micro">
                       {projectPath}
                     </span>
                   ) : null}

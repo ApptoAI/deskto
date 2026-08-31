@@ -1,6 +1,12 @@
 import path from "node:path"
 
-import { BrowserWindow, nativeTheme, screen } from "electron"
+import { BrowserWindow, ipcMain, nativeTheme, screen } from "electron"
+
+import {
+  windowCloseChannel,
+  windowMaximizeToggleChannel,
+  windowMinimizeChannel,
+} from "../shared/channels.js"
 
 /**
  * The main bundle is ESM, where `__dirname` exists only if the bundler injects
@@ -10,8 +16,6 @@ import { BrowserWindow, nativeTheme, screen } from "electron"
  */
 const bundleDirectory = import.meta.dirname
 
-/** Opens large on a roomy display without overflowing a small one: most of
-    the work area, capped so it never becomes an unwieldy full-screen sheet. */
 function defaultWindowSize() {
   const workArea = screen.getPrimaryDisplay().workAreaSize
   return {
@@ -46,7 +50,8 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 620,
     center: true,
     show: false,
-    titleBarStyle: "hiddenInset",
+    // macOS keeps native traffic lights; other platforms use renderer controls.
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     trafficLightPosition: { x: 16, y: 20 },
     // The Surface draws its own titlebar. macOS already keeps its menu in the
     // system bar, but Windows and Linux would otherwise stack a native menu
@@ -66,8 +71,7 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
-  // The colour is only read at construction, and a window outlives any one
-  // system palette.
+  // nativeTheme is global, so remove the listener with its window.
   const followSystemCanvas = () => window.setBackgroundColor(canvasColor())
   nativeTheme.on("updated", followSystemCanvas)
   window.once("closed", () => nativeTheme.off("updated", followSystemCanvas))
@@ -77,6 +81,22 @@ export function createMainWindow(): BrowserWindow {
   window.webContents.on("will-navigate", (event) => event.preventDefault())
 
   return window
+}
+
+/** Serves the titlebar's window controls on platforms that hide the native
+    ones. One listener per window; the last-registered window wins, which is
+    the window a person can see (there is only ever one). */
+export function registerWindowControlsIpc(window: BrowserWindow): () => void {
+  ipcMain.on(windowMinimizeChannel, () => window.minimize())
+  ipcMain.on(windowMaximizeToggleChannel, () =>
+    window.isMaximized() ? window.unmaximize() : window.maximize()
+  )
+  ipcMain.on(windowCloseChannel, () => window.close())
+  return () => {
+    ipcMain.removeAllListeners(windowMinimizeChannel)
+    ipcMain.removeAllListeners(windowMaximizeToggleChannel)
+    ipcMain.removeAllListeners(windowCloseChannel)
+  }
 }
 
 export interface LoadableMainWindow {

@@ -270,7 +270,7 @@ export function SkillDetailsPanel({
                         {entry.source.label}
                       </span>
                       {active ? (
-                        <span className="shrink-0 font-mono text-tiny tracking-wide text-muted-foreground uppercase">
+                        <span className="shrink-0 text-tiny font-medium tracking-wide text-muted-foreground uppercase">
                           Shown
                         </span>
                       ) : null}

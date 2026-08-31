@@ -24,3 +24,6 @@ export function canMarkDone(thread: WithStatus): boolean {
 export function canSnooze(thread: WithStatus): boolean {
   return thread.status !== "waiting-approval"
 }
+
+/** Quiet days before a task closes itself. One constant both sides agree on. */
+export const autoDoneAfterDays = 3

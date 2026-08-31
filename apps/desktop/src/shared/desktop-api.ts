@@ -104,4 +104,10 @@ export interface DesktopApi {
     cancelElementSelection(threadId: string): Promise<void>
     subscribe(listener: (event: BrowserEvent) => void): () => void
   }
+  platform: NodeJS.Platform
+  windowControls?: {
+    minimize(): void
+    toggleMaximize(): void
+    close(): void
+  }
 }

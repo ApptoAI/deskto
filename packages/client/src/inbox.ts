@@ -1,4 +1,8 @@
-import { isActivityBlocked, type Thread } from "@deskto/protocol"
+import {
+  autoDoneAfterDays,
+  isActivityBlocked,
+  type Thread,
+} from "@deskto/protocol"
 
 /**
  * The task inbox (ADR 0007): pure classification over thread records, shared
@@ -10,8 +14,7 @@ import { isActivityBlocked, type Thread } from "@deskto/protocol"
 const DAY_MS = 24 * 60 * 60 * 1_000
 const HOUR_MS = 60 * 60 * 1_000
 
-/** Quiet days before a task closes itself. Becomes a setting later. */
-export const autoDoneAfterDays = 3
+export { autoDoneAfterDays }
 
 /** NaN-safe Date.parse: a malformed timestamp must not poison a comparison
     or a sort, so it sinks to the epoch instead. */

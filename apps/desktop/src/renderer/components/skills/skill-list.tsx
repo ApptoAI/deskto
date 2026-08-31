@@ -62,19 +62,14 @@ export function SkillList({
 
       {[...groups.entries()].map(([group, groupItems]) => (
         <section key={group} aria-labelledby={`skill-group-${group}`}>
-          {/* Sticky so a long folder never scrolls away from the name of the
-              folder it belongs to. It already sits on the window's glass, so
-              painting the glass tint here would composite it twice and read as
-              a black band — it blurs what scrolls beneath instead, and tints
-              only at fill strength. */}
-          <div className="sticky top-0 z-10 flex items-center gap-3 bg-fill-card px-2 pt-6 pb-2 backdrop-blur-2xl">
+          <div className="sticky top-0 z-10 flex items-center gap-3 px-2 pt-6 pb-2 backdrop-blur-2xl">
             <h2
               id={`skill-group-${group}`}
               className="eyebrow text-muted-foreground"
             >
               {skillCatalogGroupLabels[group]}
             </h2>
-            <span className="font-mono text-micro text-muted-foreground/70 tabular-nums">
+            <span className="text-tiny text-muted-foreground/70 tabular-nums">
               {groupItems.length}
             </span>
             <span aria-hidden="true" className="h-px flex-1 bg-border" />
@@ -152,7 +147,7 @@ function SkillRow({
             <span className="sr-only">Needs attention</span>
           </span>
         ) : null}
-        <span className="shrink-0 font-mono text-tiny tracking-wide text-muted-foreground/70 uppercase">
+        <span className="shrink-0 text-tiny font-medium tracking-wide text-muted-foreground/70 uppercase">
           {tag}
         </span>
         <ChevronRightIcon
@@ -190,7 +185,7 @@ function SourceIssues({ sources }: { sources: SkillInventory["sources"] }) {
               </span>{" "}
               {diagnostic.message}
               <span
-                className="mt-0.5 block truncate font-mono text-micro"
+                className="mt-0.5 block truncate text-micro"
                 title={diagnostic.path}
               >
                 {diagnostic.path}

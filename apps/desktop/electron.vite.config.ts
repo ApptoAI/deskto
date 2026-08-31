@@ -7,6 +7,8 @@ import type { Plugin } from "vite"
 
 import { packagedMetaContentSecurityPolicy } from "./src/main/csp.js"
 
+const browserBridgePort = process.env.DESKTO_BROWSER_BRIDGE_PORT ?? "5174"
+
 // The packaged renderer loads over file://, where responses carry no HTTP
 // headers, so its Content-Security-Policy has to live in the document itself.
 // The directives are shared with the header policies in src/main/csp.ts.
@@ -62,5 +64,19 @@ export default defineConfig({
       },
     },
     plugins: [react(), tailwindcss(), injectContentSecurityPolicy()],
+    server: {
+      host: true,
+      allowedHosts: [".exe.xyz"],
+      // Forwards the dev-only Runtime HTTP bridge so a browser-hosted Surface
+      // talks same-origin; an https page cannot fetch the plain-http bridge.
+      proxy: {
+        "/bridge": {
+          target: `http://localhost:${browserBridgePort}`,
+          changeOrigin: true,
+          xfwd: true,
+          rewrite: (pathname) => pathname.replace(/^\/bridge/, ""),
+        },
+      },
+    },
   },
 })

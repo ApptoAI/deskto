@@ -1,6 +1,6 @@
 import { ipcMain, type WebContents } from "electron"
 
-import { runtimeRequestSchema } from "@deskto/protocol"
+import { runtimeEventSchema, runtimeRequestSchema } from "@deskto/protocol"
 import type { Runtime } from "@deskto/runtime"
 
 import {
@@ -13,7 +13,15 @@ export function registerRuntimeIpc(
   webContents: WebContents
 ): () => void {
   const unsubscribe = runtime.subscribe((event) => {
-    if (!webContents.isDestroyed()) webContents.send(runtimeEventChannel, event)
+    const parsed = runtimeEventSchema.safeParse(event)
+    if (!parsed.success) {
+      console.error(
+        "Runtime IPC received an invalid Runtime event",
+        parsed.error
+      )
+      return
+    }
+    if (!webContents.isDestroyed()) webContents.send(runtimeEventChannel, parsed.data)
   })
 
   ipcMain.handle(runtimeRequestChannel, (_event, value) => {

@@ -440,7 +440,7 @@ const MessageEntry = memo(function MessageEntry({
         {message.state === "streaming" && message.content ? (
           <span
             aria-hidden
-            className="mt-1 inline-block h-4 w-1.5 animate-pulse rounded-xs bg-foreground/60 align-middle"
+            className="mt-1 inline-block h-4 w-1.5 motion-safe:animate-pulse rounded-xs bg-foreground/60 align-middle"
           />
         ) : null}
       </MessageBody>

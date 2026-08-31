@@ -24,6 +24,9 @@ import {
   updateEventChannel,
   updateInstallChannel,
   updateStateChannel,
+  windowCloseChannel,
+  windowMaximizeToggleChannel,
+  windowMinimizeChannel,
 } from "../shared/channels.js"
 import type { DesktopApi } from "../shared/desktop-api.js"
 
@@ -91,6 +94,12 @@ const api: DesktopApi = {
       ipcRenderer.on(browserEventChannel, handler)
       return () => ipcRenderer.removeListener(browserEventChannel, handler)
     },
+  },
+  platform: process.platform,
+  windowControls: {
+    minimize: () => ipcRenderer.send(windowMinimizeChannel),
+    toggleMaximize: () => ipcRenderer.send(windowMaximizeToggleChannel),
+    close: () => ipcRenderer.send(windowCloseChannel),
   },
 }
 
