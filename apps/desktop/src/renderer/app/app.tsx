@@ -30,7 +30,7 @@ const client = bridge
 export function App() {
   if (!client) {
     return (
-      <div className="glass-window flex h-dvh w-full flex-col text-foreground">
+      <div className="flex h-full w-full flex-col text-foreground glass-window">
         <div className="drag-region h-10 shrink-0" />
         <StatusPanel
           title="Deskto could not start"

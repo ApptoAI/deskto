@@ -693,7 +693,7 @@ export function Workbench() {
   // strips, and every screen until the user finishes or skips.
   if (showOnboarding) {
     return (
-      <div className="flex h-dvh w-full flex-col overflow-hidden text-foreground glass-window">
+      <div className="flex h-full w-full flex-col overflow-hidden text-foreground glass-window">
         <OnboardingView
           harnesses={harnesses}
           workspaceReady={activeWorkspaceId !== null}
@@ -708,7 +708,7 @@ export function Workbench() {
   }
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden text-foreground glass-window">
+    <div className="flex h-full w-full flex-col overflow-hidden text-foreground glass-window">
       <TitleBar
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
