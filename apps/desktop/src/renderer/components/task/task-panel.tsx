@@ -333,7 +333,9 @@ export function TaskPanel({
           <InlineError message={files.message} />
         </div>
       ) : active ? (
-        <ResultPreviewBoundary key={active.artifact.id}>
+        <ResultPreviewBoundary
+          key={`${active.artifact.id}:${active.artifact.updatedAt}`}
+        >
           <FilePreview
             key={active.artifact.id}
             threadId={threadId}

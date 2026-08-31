@@ -61,12 +61,16 @@ HTML and PDF conversation links open in the same Task Browser by default.
 The renderer names only the Thread and Artifact. Main asks the Runtime for a
 fresh bounded preview, rejects other formats, and publishes the bytes through
 the private `deskto-artifact` protocol registered only on the Browser session.
-HTML responses carry a CSP sandbox with scripts, network access, forms,
-objects, and child frames disabled. PDF responses support byte ranges for
-Chromium's viewer. Opening either format from the Files overview continues to
-use its Files preview and actions. Artifact documents cannot navigate across
-the private protocol boundary themselves, while Browser toolbar and Harness
-navigation remain available. Cached Artifact bytes stay available while a
+HTML responses carry a CSP sandbox that permits the artifact's inline scripts
+while keeping network access, forms, objects, and child frames disabled. This
+lets a generated local app run without granting it access to the machine or
+the web. PDF responses support byte ranges for Chromium's viewer. Opening
+either format from the Files overview continues to use its Files preview and
+actions. Artifact documents cannot navigate across the private protocol
+boundary themselves, while Browser toolbar and Harness navigation remain
+available. Browser tools identify the private protocol as a distinct built-in
+preview environment and warn Harnesses that an HTTP workaround does not verify
+a failure reported there. Cached Artifact bytes stay available while a
 Task displays them. Older Artifact entries leave that Task's back/forward
 history, which keeps the bounded byte cache from growing with every preview.
 When a hidden Task becomes visible after its bytes were evicted, Main asks the

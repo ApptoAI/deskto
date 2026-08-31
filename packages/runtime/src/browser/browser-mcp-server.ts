@@ -246,7 +246,8 @@ function createBrowserMcp(
   server.registerTool(
     "browser_status",
     {
-      description: "Inspect the current Deskto browser tab without opening it.",
+      description:
+        "Inspect the current Deskto browser tab without opening it. A deskto-artifact:// URL is Deskto's built-in artifact preview, a distinct execution environment from an HTTP server.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -256,7 +257,7 @@ function createBrowserMcp(
     "browser_open",
     {
       description:
-        "Open the collaborative Deskto browser. Prefer this browser over Computer Use for websites and local web apps.",
+        "Open the collaborative Deskto browser. Prefer this browser over Computer Use for websites and local web apps. If it already shows a deskto-artifact:// preview, opening an HTTP URL changes execution environments and does not verify that preview.",
       inputSchema: { url: z.string().max(8_192).optional() },
     },
     ({ url }) => toolCall(() => host.open(threadId, url))
@@ -264,7 +265,8 @@ function createBrowserMcp(
   server.registerTool(
     "browser_navigate",
     {
-      description: "Navigate the Deskto browser to an HTTP or HTTPS URL.",
+      description:
+        "Navigate the Deskto browser to an HTTP or HTTPS URL. This leaves any deskto-artifact:// built-in preview; behavior on the HTTP page is not evidence that a reported built-in preview failure is fixed. Return to and test the original preview before reporting success.",
       inputSchema: { url: z.string().min(1).max(8_192) },
     },
     ({ url }) => toolCall(() => host.navigate(threadId, url))
@@ -273,7 +275,7 @@ function createBrowserMcp(
     "browser_snapshot",
     {
       description:
-        "Read visible page text and interactive elements. Use returned refs for click and type.",
+        "Read visible page text and interactive elements. Use returned refs for click and type. Treat deskto-artifact:// as Deskto's built-in preview and verify fixes there when that is where the failure was reported.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },

@@ -109,7 +109,7 @@ describe("Browser artifact protocol", () => {
     ])
   })
 
-  it("sandboxes HTML and refuses a mismatched artifact", async () => {
+  it("runs local HTML app scripts inside the isolated sandbox", async () => {
     const html: BrowserArtifactResource = {
       threadId: "thread-1",
       artifactId: "artifact-html",
@@ -123,7 +123,12 @@ describe("Browser artifact protocol", () => {
     )
 
     expect(response.status).toBe(200)
-    expect(response.headers.get("content-security-policy")).toContain("sandbox")
+    expect(response.headers.get("content-security-policy")).toContain(
+      "sandbox allow-scripts"
+    )
+    expect(response.headers.get("content-security-policy")).toContain(
+      "script-src 'unsafe-inline' blob:"
+    )
     expect(response.headers.get("content-security-policy")).toContain(
       "default-src 'none'"
     )

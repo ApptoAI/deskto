@@ -50,6 +50,14 @@ describe("BrowserMcpServer", () => {
       ).toBe(401)
       const tools = await client.listTools()
       expect(tools.tools.map((tool) => tool.name)).toContain("browser_snapshot")
+      expect(
+        tools.tools.find((tool) => tool.name === "browser_navigate")
+          ?.description
+      ).toContain("not evidence")
+      expect(
+        tools.tools.find((tool) => tool.name === "browser_snapshot")
+          ?.description
+      ).toContain("built-in preview")
       await client.callTool({
         name: "browser_open",
         arguments: { url: "https://example.com" },

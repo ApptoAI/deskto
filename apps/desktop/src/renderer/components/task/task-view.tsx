@@ -37,6 +37,8 @@ import { TaskPanel } from "./task-panel.js"
 import { conversationMeasureClassName } from "./task-panel-size.js"
 
 const noOutputs: TurnOutput[] = []
+const sideChatBlockedMessage =
+  "The agent is responding. A side chat can start once it settles."
 
 export function TaskView({
   threadId,
@@ -65,6 +67,10 @@ export function TaskView({
   const [browserContexts, setBrowserContexts] = useState<
     BrowserElementContext[]
   >([])
+  const active =
+    state.status === "ready" &&
+    (state.data.thread.status === "running" ||
+      state.data.thread.status === "waiting-approval")
 
   useEffect(() => {
     let active = true
@@ -220,8 +226,10 @@ export function TaskView({
   }
   const projectPath = project.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
-  const active =
-    thread.status === "running" || thread.status === "waiting-approval"
+  const visibleTaskActionError =
+    !active && taskActionError === sideChatBlockedMessage
+      ? null
+      : taskActionError
 
   const blockedReason = pendingApproval
     ? "Answer the request above before sending anything else."
@@ -248,9 +256,7 @@ export function TaskView({
     // An existing side chat opens any time; creating one while the parent is
     // mid-response cannot fork cleanly, so say so instead of a failed request.
     if (!sideThread && active) {
-      setTaskActionError(
-        "The agent is responding. A side chat can start once it settles."
-      )
+      setTaskActionError(sideChatBlockedMessage)
       return
     }
     try {
@@ -308,8 +314,8 @@ export function TaskView({
                   conversationMeasureClassName
                 )}
               >
-                {taskActionError ? (
-                  <InlineError message={taskActionError} />
+                {visibleTaskActionError ? (
+                  <InlineError message={visibleTaskActionError} />
                 ) : null}
                 {profileError ? <InlineError message={profileError} /> : null}
                 {turnOutputs.state.status === "error" ? (
@@ -365,6 +371,7 @@ export function TaskView({
                   }}
                   blockedReason={blockedReason}
                   onSend={async (input) => {
+                    setTaskActionError(null)
                     replace(await client.startTurn(thread.id, input))
                   }}
                   {...(models.length > 0 && !active
