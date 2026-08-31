@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
+import XIcon from "lucide-react/dist/esm/icons/x"
 import type { WorkspaceLayout } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
@@ -50,11 +50,8 @@ export function SettingsSidebar({
           className="w-full justify-start"
           onClick={onGoBack}
         >
-          <ArrowLeftIcon
-            data-icon="inline-start"
-            className="text-muted-foreground"
-          />
-          Go back
+          <XIcon data-icon="inline-start" className="text-muted-foreground" />
+          Close settings
         </Button>
       </div>
 

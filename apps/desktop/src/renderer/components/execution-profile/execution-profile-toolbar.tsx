@@ -47,22 +47,18 @@ export function ExecutionProfileToolbar({
     {
       value: DEFAULT_EFFORT,
       label: effortLabel(DEFAULT_EFFORT),
-      description: "However much this model thinks on its own.",
+      description: "Model decides.",
       icon: <DefaultThinkingIcon />,
     },
-    ...model.supportedEfforts.map((effort) => {
-      const option: ProfileOption = {
+    ...model.supportedEfforts.map(
+      (effort): ProfileOption => ({
         value: effort,
         label: effortLabel(effort),
         icon: (
           <ThinkingIcon level={effortRank(effort, model.supportedEfforts)} />
         ),
-      }
-      // Only the ends of the scale carry one; the middle rungs stay bare.
-      const description = thinkingDescription(effort, model.supportedEfforts)
-      if (description) option.description = description
-      return option
-    }),
+      })
+    ),
   ]
 
   const permissionModeOptions = permissionOptions.filter((option) =>
@@ -93,12 +89,16 @@ export function ExecutionProfileToolbar({
           if (next) onChange(withModel(profile, next))
         }}
       />
-      {model.supportedEfforts.length > 0 ? (
-        <>
-          <Divider />
+      <Divider />
+      <span
+        data-slot="thinking-profile"
+        className="flex w-8 shrink-0 items-center @[48rem]:w-28"
+      >
+        {model.supportedEfforts.length > 0 ? (
           <ProfileMenu
             label="Thinking"
             value={profile.effort ?? DEFAULT_EFFORT}
+            triggerClassName="w-full justify-start"
             labelClassName={thinkingLabel}
             disabled={disabled}
             options={thinkingOptions}
@@ -109,8 +109,10 @@ export function ExecutionProfileToolbar({
               })
             }
           />
-        </>
-      ) : null}
+        ) : (
+          <span aria-hidden className="h-8 w-full" />
+        )}
+      </span>
       <Divider />
       <ProfileMenu
         label="Permissions"
@@ -128,7 +130,7 @@ export function ExecutionProfileToolbar({
 
 /**
  * Thinking and permissions are one or two words — "Auto", "Full access",
- * "Extra high" — and truncated they read as "A" and "Full acce…", which says
+ * "Extra High" — and truncated they read as "A" and "Full acce…", which says
  * less than the icon beside them already does. So they are shown whole or not
  * at all, on the composer's own width rather than the window's.
  *
@@ -140,25 +142,4 @@ const permissionLabel = "hidden @[56rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
-}
-
-/**
- * What more thinking buys, in the terms the person paid in: time. Only the
- * ends of the scale get a line — one sentence repeated down three middle
- * rungs would claim they are the same choice, and the bars beside them
- * already say which is deeper. Position is read off the harness's own order
- * rather than the effort's name, since providers invent their own top rung.
- */
-function thinkingDescription(
-  effort: string,
-  efforts: readonly string[]
-): string | undefined {
-  if (effort === "none") return "No extra reasoning. Fastest."
-  const ranked = efforts.filter((candidate) => candidate !== "none")
-  if (ranked.length < 2) return undefined
-  if (effort === ranked[0]) return "A quick pass. Best for small, clear tasks."
-  if (effort === ranked[ranked.length - 1]) {
-    return "The most reasoning this model offers. Slowest."
-  }
-  return undefined
 }

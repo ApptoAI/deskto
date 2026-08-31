@@ -89,7 +89,7 @@ export const DEFAULT_EFFORT = "__default__"
 
 const effortLabels = new Map<string, string>([
   [DEFAULT_EFFORT, "Default"],
-  ["xhigh", "Extra high"],
+  ["xhigh", "Extra High"],
   ["none", "No thinking"],
 ])
 

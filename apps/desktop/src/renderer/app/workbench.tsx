@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { appSettings, settingValue } from "@deskto/settings"
 
 import { personalWorkspaceId, type Thread } from "@deskto/protocol"
@@ -46,6 +46,7 @@ import { useProjectPanel } from "./use-project-panel.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
 import { useHarnessChanged } from "../runtime/use-harness-changed.js"
 import { useRuntimeQuery } from "../runtime/use-runtime-query.js"
+import { primeThreadView } from "../runtime/use-thread-view.js"
 import { useThreadDeleted } from "../runtime/use-thread-deleted.js"
 import { useKeybinding } from "../settings/use-keybinding.js"
 import { useSettings } from "../settings/settings-context.js"
@@ -116,8 +117,13 @@ export function Workbench() {
     stack: MainView[]
     index: number
   }>(() => ({ stack: [{ kind: "new-task" }], index: 0 }))
+  const [openingThreadId, setOpeningThreadId] = useState<string | null>(null)
+  const navigationRequest = useRef(0)
   const view = history.stack[history.index]!
+  const openThreadId = view.kind === "task" ? view.threadId : null
   const setView = useCallback((update: (current: MainView) => MainView) => {
+    navigationRequest.current += 1
+    setOpeningThreadId(null)
     setHistory((current) => {
       const here = current.stack[current.index]!
       const next = update(here)
@@ -131,9 +137,13 @@ export function Workbench() {
   const canGoBack = history.index > 0
   const canGoForward = history.index < history.stack.length - 1
   const goBack = useCallback(() => {
+    navigationRequest.current += 1
+    setOpeningThreadId(null)
     setHistory((c) => (c.index > 0 ? { ...c, index: c.index - 1 } : c))
   }, [])
   const goForward = useCallback(() => {
+    navigationRequest.current += 1
+    setOpeningThreadId(null)
     setHistory((c) =>
       c.index < c.stack.length - 1 ? { ...c, index: c.index + 1 } : c
     )
@@ -392,9 +402,23 @@ export function Workbench() {
 
   const openThread = useCallback(
     (threadId: string) => {
-      setView(() => ({ kind: "task", threadId }))
+      if (threadId === openThreadId) return
+      const request = ++navigationRequest.current
+      setOpeningThreadId(threadId)
+      void client.getThread(threadId).then(
+        (threadView) => {
+          if (request !== navigationRequest.current) return
+          primeThreadView(threadView)
+          setView(() => ({ kind: "task", threadId }))
+        },
+        () => {
+          if (request !== navigationRequest.current) return
+          // TaskView owns the actionable error and retry state.
+          setView(() => ({ kind: "task", threadId }))
+        }
+      )
     },
-    [setView]
+    [client, openThreadId, setView]
   )
 
   const openSkills = useCallback(() => {
@@ -472,8 +496,6 @@ export function Workbench() {
       revalidateSelection()
     })
   }
-
-  const openThreadId = view.kind === "task" ? view.threadId : null
 
   // The titlebar says what the window is showing. A task names itself and the
   // project it belongs to; every other screen just names itself, because the
@@ -768,7 +790,15 @@ export function Workbench() {
         {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
           whole — by focus, not by the wheel — which drags the window chrome
           off the top of the app. Every screen scrolls inside itself. */}
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {openingThreadId ? (
+            <div
+              role="status"
+              className="pointer-events-none absolute top-2 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-popover px-3 py-1 text-xs text-muted-foreground shadow-floating"
+            >
+              Opening task…
+            </div>
+          ) : null}
           {actionError ? (
             <div className="px-6 pt-3">
               <InlineError message={actionError} />

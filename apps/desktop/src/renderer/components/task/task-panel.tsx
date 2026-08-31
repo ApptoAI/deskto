@@ -333,7 +333,9 @@ export function TaskPanel({
           <InlineError message={files.message} />
         </div>
       ) : active ? (
-        <ResultPreviewBoundary key={active.artifact.id}>
+        <ResultPreviewBoundary
+          key={`${active.artifact.id}:${active.artifact.updatedAt}`}
+        >
           <FilePreview
             key={active.artifact.id}
             threadId={threadId}
@@ -372,7 +374,7 @@ function SideTab({
       title="Ask a side question with the current context"
     >
       <MessagesSquareIcon aria-hidden className="size-3.5 shrink-0" />
-      <span>Side</span>
+      <span>Side chat</span>
       {running ? (
         <span
           role="img"

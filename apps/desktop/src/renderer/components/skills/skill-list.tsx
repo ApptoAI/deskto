@@ -7,7 +7,8 @@ import type { SkillInventory } from "@deskto/protocol"
 
 import { cn } from "@workspace/ui/lib/utils"
 
-import { shortHarnessLabel } from "../../lib/harness.js"
+import { knownHarnessLabel } from "../../lib/harness.js"
+import { HarnessLogo, harnessAccentByHarnessId } from "../brand-logos.js"
 import {
   skillCatalogGroupLabels,
   sourceMatchesSkillsFilter,
@@ -62,17 +63,23 @@ export function SkillList({
 
       {[...groups.entries()].map(([group, groupItems]) => (
         <section key={group} aria-labelledby={`skill-group-${group}`}>
-          <div className="sticky top-0 z-10 flex items-center gap-3 px-2 pt-6 pb-2 backdrop-blur-2xl">
+          <div className="flex items-baseline gap-2 px-2 pt-7 pb-2">
             <h2
               id={`skill-group-${group}`}
-              className="eyebrow text-muted-foreground"
+              className="text-xs font-medium text-muted-foreground"
             >
               {skillCatalogGroupLabels[group]}
             </h2>
-            <span className="text-tiny text-muted-foreground/70 tabular-nums">
+            <span
+              className="text-tiny text-muted-foreground tabular-nums"
+              aria-label={`${groupItems.length} skills`}
+            >
               {groupItems.length}
             </span>
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+            <span
+              aria-hidden="true"
+              className="h-px flex-1 self-center bg-border"
+            />
           </div>
           <ul>
             {groupItems.map((item) => (
@@ -99,24 +106,12 @@ function SkillRow({
   selected: boolean
   onSelect: (item: SkillCatalogItem) => void
 }) {
-  const harnesses = [
-    ...new Set(
-      item.occurrences.flatMap(({ source }) =>
-        source.harnessIds.map(shortHarnessLabel)
-      )
-    ),
+  const harnessIds = [
+    ...new Set(item.occurrences.flatMap(({ source }) => source.harnessIds)),
   ]
   const hasError = item.occurrences.some(({ occurrence }) =>
     occurrence.diagnostics.some((diagnostic) => diagnostic.severity === "error")
   )
-  // One quiet tag at the end of the row, because two rows can carry the same
-  // name and differ only by the agent that found them — or by being the same
-  // skill sitting in two folders.
-  const tag =
-    item.occurrences.length > 1
-      ? `${item.occurrences.length} copies`
-      : (harnesses[0] ?? "No agent")
-
   return (
     <li className="border-b border-border/60 last:border-b-0">
       <button
@@ -131,12 +126,16 @@ function SkillRow({
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-fill-chip text-muted-foreground transition-colors duration-150 ease-out group-hover:text-foreground">
           <BoxIcon className="size-3.5" />
         </span>
-        {/* Name and description share one line: at this width the description
-            still has room to say something, and the row stays scannable. */}
-        <span className="w-52 shrink-0 truncate text-sm font-medium">
+        <span
+          className="w-36 shrink-0 truncate text-sm font-medium xl:w-52"
+          title={item.name}
+        >
           {item.name}
         </span>
-        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-muted-foreground">
+        <span
+          className="line-clamp-2 min-w-0 flex-1 text-ui leading-5 text-muted-foreground"
+          title={item.description ?? "Description could not be read."}
+        >
           {item.description ?? "Description could not be read."}
         </span>
         {/* Trouble sits on the right rail with the other row metadata, so the
@@ -147,12 +146,51 @@ function SkillRow({
             <span className="sr-only">Needs attention</span>
           </span>
         ) : null}
-        <span className="shrink-0 text-tiny font-medium tracking-wide text-muted-foreground/70 uppercase">
-          {tag}
-        </span>
+        {item.occurrences.length > 1 ? (
+          <span className="shrink-0 text-tiny text-muted-foreground">
+            {item.occurrences.length} copies
+          </span>
+        ) : null}
+        {harnessIds.length > 0 ? (
+          <span className="flex shrink-0 items-center gap-1.5">
+            {harnessIds.map((harnessId) => {
+              const label = knownHarnessLabel(harnessId)
+              return (
+                <span
+                  key={harnessId}
+                  role="img"
+                  aria-label={label}
+                  title={label}
+                  className={cn(
+                    "flex size-5 items-center justify-center",
+                    harnessAccentByHarnessId.get(harnessId) ??
+                      "text-muted-foreground"
+                  )}
+                >
+                  <HarnessLogo
+                    harnessId={harnessId}
+                    className="size-3.5"
+                    fallback={
+                      <span
+                        aria-hidden
+                        className="flex size-4 items-center justify-center rounded-full border border-current text-[9px] font-semibold uppercase"
+                      >
+                        {label.slice(0, 1)}
+                      </span>
+                    }
+                  />
+                </span>
+              )
+            })}
+          </span>
+        ) : (
+          <span className="shrink-0 text-tiny text-muted-foreground">
+            No agent
+          </span>
+        )}
         <ChevronRightIcon
           aria-hidden="true"
-          className="size-3.5 shrink-0 self-center text-muted-foreground/40 transition-colors duration-150 ease-out group-hover:text-muted-foreground"
+          className="size-3.5 shrink-0 self-center text-muted-foreground transition-colors duration-150 ease-out group-hover:text-foreground"
         />
       </button>
     </li>

@@ -17,8 +17,9 @@ export type BrowserArtifactInput = Omit<BrowserArtifactIdentity, "threadId"> &
   BrowserArtifactPayload
 
 const htmlContentSecurityPolicy = [
-  "sandbox",
+  "sandbox allow-scripts",
   "default-src 'none'",
+  "script-src 'unsafe-inline' blob:",
   "style-src 'unsafe-inline'",
   "img-src data: blob:",
   "font-src data:",

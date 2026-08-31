@@ -84,60 +84,66 @@ export function PacksPanel({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 rounded-xl border border-border p-4 sm:flex-row sm:items-end">
-        <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="space-y-4 border-b border-border pb-5">
+        <div className="space-y-1.5">
           <label htmlFor="new-pack-name" className="text-sm font-medium">
             Create a Pack
           </label>
-          <Input
-            id="new-pack-name"
-            value={newPackName}
-            onChange={(event) => setNewPackName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter") return
-              event.preventDefault()
-              createPack()
-            }}
-            placeholder="Pack name"
-            disabled={busy !== null}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="new-pack-name"
+              value={newPackName}
+              onChange={(event) => setNewPackName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return
+                event.preventDefault()
+                createPack()
+              }}
+              placeholder="Pack name"
+              disabled={busy !== null}
+            />
+            <Button
+              type="button"
+              disabled={busy !== null || !newPackName.trim()}
+              onClick={createPack}
+            >
+              <PlusIcon data-icon="inline-start" />
+              Create
+            </Button>
+          </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy !== null || !newPackName.trim()}
-          onClick={createPack}
-        >
-          <PlusIcon data-icon="inline-start" />
-          Create
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => void run("install", actions.onInstallFolder)}
-        >
-          <FolderInputIcon data-icon="inline-start" />
-          Install pack...
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => void run("install-zip", actions.onInstallZip)}
-        >
-          <FileArchiveIcon data-icon="inline-start" />
-          Install ZIP...
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => void run("link", actions.onLink)}
-        >
-          <FolderInputIcon data-icon="inline-start" />
-          Link folder...
-        </Button>
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium">Add an existing Pack</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => void run("install", actions.onInstallFolder)}
+            >
+              <FolderInputIcon data-icon="inline-start" />
+              Install Pack from folder…
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => void run("install-zip", actions.onInstallZip)}
+            >
+              <FileArchiveIcon data-icon="inline-start" />
+              Install Pack ZIP…
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => void run("link", actions.onLink)}
+            >
+              <FolderInputIcon data-icon="inline-start" />
+              Link Pack folder…
+            </Button>
+          </div>
+        </div>
       </div>
 
       {!workspace ? (

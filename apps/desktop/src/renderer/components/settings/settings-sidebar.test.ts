@@ -19,5 +19,7 @@ describe("SettingsSidebar", () => {
     )
 
     expect(html).toContain(widthClass)
+    expect(html).toContain("Close settings")
+    expect(html).not.toContain(">Go back<")
   })
 })

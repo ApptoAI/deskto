@@ -1,8 +1,9 @@
 import type { HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonObject, JsonValue } from "@deskto/protocol"
 import type { ZodType } from "zod"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { threadTitlePrompt } from "../../thread-title-generator.js"
 import {
   CodexAdapter,
   codexActivity,
@@ -146,6 +147,47 @@ const clientFactory: CodexClientFactory = () => new FakeCodexClient()
 
 beforeEach(() => {
   delete clientState.notification
+})
+
+describe("Codex text generation", () => {
+  it("generates a title from the complete title prompt", async () => {
+    const client = new RecordingCodexClient()
+    const prompt = threadTitlePrompt("Review the renewal pipeline")
+    const generated = new CodexAdapter(() => client).generateText(
+      {
+        projectPath: "/tmp/project",
+        prompt,
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+      },
+      new AbortController().signal
+    )
+
+    await vi.waitFor(() => expect(clientState.notification).toBeTypeOf("function"))
+    clientState.notification!({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        delta: "Renewal pipeline review",
+      },
+    })
+    clientState.notification!({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    })
+
+    await expect(generated).resolves.toBe("Renewal pipeline review")
+    expect(
+      client.requests.find(({ method }) => method === "turn/start")?.params.input
+    ).toEqual([{ type: "text", text: prompt, text_elements: [] }])
+  })
 })
 
 describe("Codex account discovery", () => {

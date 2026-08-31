@@ -89,9 +89,19 @@ describe("NewTaskView", () => {
   })
 
   it("keeps the project cards mounted after closing the About dialog", async () => {
-    renderNewTaskView({ instructions: "", panelPreference: "open" })
+    const { container } = renderNewTaskView({
+      instructions: "",
+      panelPreference: "open",
+    })
 
     await screen.findByRole("button", { name: "Edit name and description" })
+    const content = container.querySelector('[data-slot="new-task-content"]')
+    const panel = screen.getByRole("region", { name: "Project settings" })
+    expect(content?.className).toContain("max-w-[700px]")
+    expect(content?.className).not.toContain("-translate-y-6")
+    expect(panel.className).toContain("max-w-[42rem]")
+    expect(panel.className).not.toContain("enter-rise")
+
     fireEvent.click(
       screen.getByRole("button", { name: "Edit name and description" })
     )

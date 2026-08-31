@@ -121,20 +121,20 @@ function WorkspaceForm({
             id="workspace-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Press, Personal, Clients…"
+            placeholder="Sales, Clients, Publishing…"
             autoFocus
           />
         </div>
 
         <div className="space-y-2">
-          <Label>Color</Label>
+          <Label>Colour</Label>
           <div className="flex flex-wrap gap-2">
             {workspaceColors.map((candidate) => (
               <button
                 key={candidate}
                 type="button"
                 title={candidate}
-                aria-label={`Color ${candidate}`}
+                aria-label={`Colour ${candidate}`}
                 aria-pressed={candidate === color}
                 onClick={() => setColor(candidate)}
                 className={cn(

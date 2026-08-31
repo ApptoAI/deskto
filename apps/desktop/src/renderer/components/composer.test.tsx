@@ -25,6 +25,44 @@ afterEach(() => {
 })
 
 describe("Composer", () => {
+  it("splits configuration from composer actions below the writing surface", () => {
+    const { container } = render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Describe the task"
+          onSend={vi.fn().mockResolvedValue(undefined)}
+          toolbar={<button type="button">Profile</button>}
+        />
+      </RuntimeClientProvider>
+    )
+
+    const form = container.querySelector('[data-slot="prompt-input"]')
+    const textarea = container.querySelector(
+      '[data-slot="prompt-input-textarea"]'
+    )
+    const toolbar = container.querySelector(
+      '[data-slot="prompt-input-toolbar"]'
+    )
+    const settings = container.querySelector(
+      '[data-slot="prompt-input-settings"]'
+    )
+    const actions = container.querySelector(
+      '[data-slot="prompt-input-actions"]'
+    )
+
+    expect(form?.children[1]).toBe(textarea)
+    expect(form?.children[2]).toBe(toolbar)
+    expect(settings?.textContent).toContain("Profile")
+    expect(
+      actions?.contains(screen.getByRole("button", { name: "Attach images" }))
+    ).toBe(true)
+    expect(
+      actions?.contains(screen.getByRole("button", { name: "Send" }))
+    ).toBe(true)
+  })
+
   it("opens a side chat from the slash command", () => {
     vi.stubGlobal("CSS", { escape: (value: string) => value })
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {

@@ -84,6 +84,8 @@
   --color-fill-chip: var(--fill-chip);
   --color-fill-chip-hover: var(--fill-chip-hover);
   --color-fill-row-selected: var(--fill-row-selected);
+  --color-fill-menu-selected: var(--fill-menu-selected);
+  --color-fill-menu-active: var(--fill-menu-active);
   --color-paper: var(--paper-bg);
   --color-paper-foreground: var(--paper-fg);
   --color-paper-muted: var(--paper-fg-muted);
@@ -135,6 +137,8 @@
   --fill-chip: oklch(0 0 0 / 3.5%);
   --fill-chip-hover: oklch(0 0 0 / 6%);
   --fill-row-selected: oklch(0 0 0 / 5%);
+  --fill-menu-selected: oklch(0 0 0 / 8%);
+  --fill-menu-active: oklch(0 0 0 / 12%);
   --secondary-hover: color-mix(
     in oklch,
     var(--secondary),
@@ -168,7 +172,7 @@
        only true white, lifted on a real shadow. The shift is the signal. */
   --paper-bg: oklch(1 0 0);
   --paper-fg: oklch(0.145 0 0);
-  --paper-fg-muted: oklch(0 0 0 / 45%);
+  --paper-fg-muted: oklch(0 0 0 / 60%);
 
   /* Semantic slots, mapped onto the glass vocabulary above so a component
        that asks for `bg-card` gets the right glass without knowing it. */
@@ -198,7 +202,7 @@
   --secondary: oklch(0 0 0 / 12%);
   --secondary-foreground: var(--text-1);
   --muted: var(--fill-chip);
-  --muted-foreground: var(--text-4);
+  --muted-foreground: var(--text-3);
   --accent: var(--fill-row-selected);
   --accent-foreground: var(--text-1);
   /* Monochrome carries status, which is a different job from warning that an
@@ -242,6 +246,8 @@
   --fill-chip: oklch(1 0 0 / 3.5%);
   --fill-chip-hover: oklch(1 0 0 / 6%);
   --fill-row-selected: oklch(1 0 0 / 6%);
+  --fill-menu-selected: oklch(1 0 0 / 10%);
+  --fill-menu-active: oklch(1 0 0 / 15%);
 
   --edge: oklch(1 0 0 / 7%);
   --edge-strong: oklch(1 0 0 / 11%);
@@ -258,9 +264,9 @@
   --text-4: #83838a;
   --text-5: #67676c;
 
-  --paper-bg: oklch(0.936 0.002 106);
+  --paper-bg: oklch(0.86 0.003 106);
   --paper-fg: oklch(0.205 0 0);
-  --paper-fg-muted: oklch(0 0 0 / 45%);
+  --paper-fg-muted: oklch(0 0 0 / 60%);
 
   --popover: oklch(0.19 0.003 286);
   --primary: var(--accent-base, oklch(0.955 0.001 286));

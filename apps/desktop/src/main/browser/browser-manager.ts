@@ -302,13 +302,13 @@ export class BrowserManager implements BrowserAutomationHost {
     return this.#status(this.#ensureTab(threadId))
   }
 
-  async open(threadId: string, url?: string): Promise<BrowserStatus> {
+  async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
     if (url) return this.navigate(threadId, url)
-    return this.status(threadId)
+    return this.snapshot(threadId)
   }
 
-  async navigate(threadId: string, value: string): Promise<BrowserStatus> {
+  async navigate(threadId: string, value: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
@@ -322,7 +322,7 @@ export class BrowserManager implements BrowserAutomationHost {
         tab.view.webContents.loadURL(url)
       )
     )
-    return this.#status(tab)
+    return this.snapshot(threadId)
   }
 
   async snapshot(threadId: string): Promise<BrowserSnapshot> {
@@ -353,7 +353,7 @@ export class BrowserManager implements BrowserAutomationHost {
     }
   }
 
-  async click(threadId: string, ref: string): Promise<BrowserStatus> {
+  async click(threadId: string, ref: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
@@ -374,7 +374,7 @@ export class BrowserManager implements BrowserAutomationHost {
         clickCount: 1,
       })
       await settleInput()
-      return this.#status(tab)
+      return this.snapshot(threadId)
     })
   }
 
@@ -383,7 +383,7 @@ export class BrowserManager implements BrowserAutomationHost {
     ref: string,
     text: string,
     submit: boolean
-  ): Promise<BrowserStatus> {
+  ): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
@@ -402,11 +402,11 @@ export class BrowserManager implements BrowserAutomationHost {
         throw new Error(`Element ${ref} cannot receive text`)
       if (submit) await this.#sendKey(tab, "Enter")
       await settleInput()
-      return this.#status(tab)
+      return this.snapshot(threadId)
     })
   }
 
-  async keypress(threadId: string, key: string): Promise<BrowserStatus> {
+  async keypress(threadId: string, key: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     if (!/^[A-Za-z0-9+_-]{1,40}$/.test(key)) {
@@ -416,11 +416,11 @@ export class BrowserManager implements BrowserAutomationHost {
     return this.#withAgentInput(tab, async () => {
       await this.#sendKey(tab, key)
       await settleInput()
-      return this.#status(tab)
+      return this.snapshot(threadId)
     })
   }
 
-  async back(threadId: string): Promise<BrowserStatus> {
+  async back(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
@@ -434,10 +434,10 @@ export class BrowserManager implements BrowserAutomationHost {
         waitForNavigation(tab.view.webContents, () => history.goBack())
       )
     }
-    return this.#status(tab)
+    return this.snapshot(threadId)
   }
 
-  async forward(threadId: string): Promise<BrowserStatus> {
+  async forward(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
@@ -451,23 +451,23 @@ export class BrowserManager implements BrowserAutomationHost {
         waitForNavigation(tab.view.webContents, () => history.goForward())
       )
     }
-    return this.#status(tab)
+    return this.snapshot(threadId)
   }
 
-  async reload(threadId: string): Promise<BrowserStatus> {
+  async reload(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
     const tab = this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const currentUrl = this.#status(tab).url
-    if (!currentUrl) return this.#status(tab)
+    if (!currentUrl) return this.snapshot(threadId)
     tab.refs.clear()
     await this.#runMainNavigation(tab, currentUrl, () =>
       waitForNavigation(tab.view.webContents, () =>
         tab.view.webContents.reload()
       )
     )
-    return this.#status(tab)
+    return this.snapshot(threadId)
   }
 
   async screenshot(threadId: string) {

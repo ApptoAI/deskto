@@ -79,7 +79,8 @@ export class ThreadTitleGenerator {
           executionProfile,
         },
         signal
-      )
+      ),
+      input.prompt
     )
     if (!title) return
     if (
@@ -135,30 +136,50 @@ Focus on the durable subject and desired outcome, not on instructions about tool
 
 Rules:
 - Use the same language as the user.
-- Use 3-8 words and fewer than 40 characters.
+- Use 1-8 words and fewer than 40 characters.
 - Use a compact noun phrase or clear action phrase.
 - Do not claim the work is complete.
 - Do not copy and truncate the message.
+- For a short greeting, acknowledgement, or celebration, use its own words as the title.
+- Never explain, refuse, or judge whether the message is a task.
 - Avoid filler and trailing punctuation.
 
 User message:
 ${message.slice(0, 8_000)}`
 }
 
-export function sanitizeThreadTitle(output: string): string | undefined {
+export function sanitizeThreadTitle(
+  output: string,
+  userMessage?: string
+): string | undefined {
+  const fallback = shortThreadTitle(userMessage)
   const firstLine = output
     .replace(/^```(?:text)?\s*/i, "")
     .replace(/\s*```$/, "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean)
-  if (!firstLine) return undefined
+  if (!firstLine) return fallback
 
   const title = firstLine
     .replace(/^(?:title|tytuł)\s*:\s*/i, "")
     .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
     .replace(/\s+/g, " ")
     .trim()
-  if (!title || title === newThreadTitle) return undefined
-  return title.length > 64 ? title.slice(0, 64).trimEnd() : title
+  if (
+    title &&
+    title !== newThreadTitle &&
+    title.length < 40 &&
+    title.split(/\s+/).length <= 8
+  ) {
+    return title
+  }
+  return fallback
+}
+
+function shortThreadTitle(message?: string): string | undefined {
+  const title = message?.replace(/\s+/g, " ").trim()
+  return title && title.length < 40 && title.split(" ").length <= 8
+    ? title
+    : undefined
 }

@@ -256,9 +256,16 @@ export function SkillsView({
               workspaceAvailable={workspace !== null}
               onChange={onSelectFilter}
             />
-            <span className="ml-auto text-micro text-muted-foreground tabular-nums">
-              {items.length === 1 ? "1 skill" : `${items.length} skills`}
-            </span>
+            {inventoryData ? (
+              <span className="ml-auto text-micro text-muted-foreground tabular-nums">
+                {items.length === 1 ? "1 skill" : `${items.length} skills`}
+              </span>
+            ) : inventory.state.status === "loading" ||
+              inventory.state.status === "idle" ? (
+              <span className="ml-auto text-micro text-muted-foreground">
+                Checking folders…
+              </span>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -464,15 +471,15 @@ function AddSkillMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onInstallFolder}>
           <FolderInputIcon />
-          Install Pack from folder
+          Install Pack from folder…
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onInstallZip}>
           <FileArchiveIcon />
-          Install Pack ZIP
+          Install Pack ZIP…
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onLink}>
           <FolderInputIcon />
-          Link Pack folder
+          Link Pack folder…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

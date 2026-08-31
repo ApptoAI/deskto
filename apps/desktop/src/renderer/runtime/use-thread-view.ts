@@ -7,6 +7,19 @@ import { useRuntimeEvent } from "./use-runtime-event.js"
 import { useRuntimeQuery, type RuntimeQuery } from "./use-runtime-query.js"
 import { useThreadChanged } from "./use-thread-changed.js"
 
+const cachedViews = new Map<string, ThreadView>()
+const MAX_CACHED_VIEWS = 20
+
+/** Makes a locally selected task available before its screen replaces the old one. */
+export function primeThreadView(view: ThreadView): void {
+  cachedViews.delete(view.thread.id)
+  cachedViews.set(view.thread.id, view)
+  if (cachedViews.size > MAX_CACHED_VIEWS) {
+    const oldest = cachedViews.keys().next()
+    if (!oldest.done) cachedViews.delete(oldest.value)
+  }
+}
+
 /**
  * Holds one Thread view and keeps it current. High-frequency changes arrive
  * as `thread.delta` events and fold into the held view in place; lifecycle
@@ -33,11 +46,12 @@ export function useThreadView(threadId: string): RuntimeQuery<ThreadView> {
       ? held
       : fetched
   }, [client, threadId])
-  const query = useRuntimeQuery(load)
+  const query = useRuntimeQuery(load, cachedViews.get(threadId))
 
   const view = query.state.status === "ready" ? query.state.data : undefined
   useEffect(() => {
     viewRef.current = view
+    if (view) primeThreadView(view)
   }, [view])
 
   const { patch, revalidate } = query

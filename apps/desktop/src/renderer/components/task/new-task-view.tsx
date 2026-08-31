@@ -125,9 +125,8 @@ export function NewTaskView({
       <div className="relative flex min-h-0 flex-1 overflow-y-auto px-6 py-8">
         <div className="m-auto flex w-full justify-center">
           <div
-            className={`enter-rise flex w-full max-w-[940px] flex-col items-center gap-5 ${
-              panelVisible ? "" : "-translate-y-6"
-            }`}
+            data-slot="new-task-content"
+            className="enter-rise flex w-full max-w-[700px] flex-col items-center gap-5"
           >
             {/* The one display moment in the app. Size and tight tracking
                 carry it; there is nothing to bold against on an empty

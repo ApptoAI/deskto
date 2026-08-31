@@ -5,6 +5,53 @@ import { openDatabase } from "./database.js"
 import { Store } from "./store.js"
 
 describe("Threads storage", () => {
+  it("keeps independent root task transcripts isolated", () => {
+    const sequences = new ThreadSequences()
+    const store = new Store(openDatabase(":memory:"), sequences)
+    try {
+      const project = store.projects.add("/tmp/example", "Example", "personal")
+      const profile = {
+        modelId: "gpt-5",
+        effort: "high",
+        permissionMode: "auto" as const,
+      }
+      const first = store.threads.create(project.id, "codex", profile)
+      const second = store.threads.create(project.id, "codex", profile)
+      const firstTurn = store.turns.begin(first.id, {
+        text: "first task only",
+        references: [],
+        attachments: [],
+      })
+      const secondTurn = store.turns.begin(second.id, {
+        text: "second task only",
+        references: [],
+        attachments: [],
+      })
+      store.turns.appendDelta(firstTurn.assistantMessageId, "first answer")
+      store.turns.appendDelta(secondTurn.assistantMessageId, "second answer")
+
+      const firstView = store.threads.view(first.id)
+      const secondView = store.threads.view(second.id)
+
+      expect(firstView.messages.map((message) => message.content)).toEqual([
+        "first task only",
+        "first answer",
+      ])
+      expect(secondView.messages.map((message) => message.content)).toEqual([
+        "second task only",
+        "second answer",
+      ])
+      expect(
+        firstView.messages.every((message) => message.threadId === first.id)
+      ).toBe(true)
+      expect(
+        secondView.messages.every((message) => message.threadId === second.id)
+      ).toBe(true)
+    } finally {
+      store.close()
+    }
+  })
+
   it("forgets sequence cursors for every task removed by a cascade", () => {
     const sequences = new ThreadSequences()
     const store = new Store(openDatabase(":memory:"), sequences)

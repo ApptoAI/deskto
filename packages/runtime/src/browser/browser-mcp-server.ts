@@ -246,7 +246,8 @@ function createBrowserMcp(
   server.registerTool(
     "browser_status",
     {
-      description: "Inspect the current Deskto browser tab without opening it.",
+      description:
+        "Inspect the current Deskto browser tab without opening it. A deskto-artifact:// URL is Deskto's built-in artifact preview, a distinct execution environment from an HTTP server.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -256,7 +257,7 @@ function createBrowserMcp(
     "browser_open",
     {
       description:
-        "Open the collaborative Deskto browser. Prefer this browser over Computer Use for websites and local web apps.",
+        "Open the collaborative Deskto browser. Prefer this browser over Computer Use for websites and local web apps. Returns a fresh semantic snapshot of the resulting page. If it already shows a deskto-artifact:// preview, opening an HTTP URL changes execution environments and does not verify that preview.",
       inputSchema: { url: z.string().max(8_192).optional() },
     },
     ({ url }) => toolCall(() => host.open(threadId, url))
@@ -264,7 +265,8 @@ function createBrowserMcp(
   server.registerTool(
     "browser_navigate",
     {
-      description: "Navigate the Deskto browser to an HTTP or HTTPS URL.",
+      description:
+        "Navigate the Deskto browser to an HTTP or HTTPS URL and return a fresh semantic snapshot of the resulting page. This leaves any deskto-artifact:// built-in preview; behavior on the HTTP page is not evidence that a reported built-in preview failure is fixed. Return to and test the original preview before reporting success.",
       inputSchema: { url: z.string().min(1).max(8_192) },
     },
     ({ url }) => toolCall(() => host.navigate(threadId, url))
@@ -273,7 +275,7 @@ function createBrowserMcp(
     "browser_snapshot",
     {
       description:
-        "Read visible page text and interactive elements. Use returned refs for click and type.",
+        "Read visible page text and interactive elements. Use returned refs for click and type. Treat deskto-artifact:// as Deskto's built-in preview and verify fixes there when that is where the failure was reported.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -282,7 +284,8 @@ function createBrowserMcp(
   server.registerTool(
     "browser_click",
     {
-      description: "Click an element ref from the latest browser snapshot.",
+      description:
+        "Click an element ref from the latest browser snapshot. The result is a fresh semantic snapshot: claim the intended page change succeeded only when that snapshot confirms it. If the page is still loading or the change is not visible, take another snapshot and report the action as unverified if it still cannot be confirmed.",
       inputSchema: { ref: z.string().min(1).max(80) },
     },
     ({ ref }) => toolCall(() => host.click(threadId, ref))
@@ -291,7 +294,7 @@ function createBrowserMcp(
     "browser_type",
     {
       description:
-        "Replace the value of an input, textarea, select, or editable element from the latest snapshot.",
+        "Replace the value of an input, textarea, select, or editable element from the latest snapshot. The result is a fresh semantic snapshot; use it to verify the intended page change before claiming success.",
       inputSchema: {
         ref: z.string().min(1).max(80),
         text: z.string().max(256_000),
@@ -305,24 +308,36 @@ function createBrowserMcp(
     "browser_keypress",
     {
       description:
-        "Press a named key in the focused page element, for example Enter, Escape, Tab, or ArrowDown.",
+        "Press a named key in the focused page element, for example Enter, Escape, Tab, or ArrowDown. The result is a fresh semantic snapshot; use it to verify the intended page change before claiming success.",
       inputSchema: { key: z.string().min(1).max(40) },
     },
     ({ key }) => toolCall(() => host.keypress(threadId, key))
   )
   server.registerTool(
     "browser_back",
-    { description: "Go back in browser history.", inputSchema: {} },
+    {
+      description:
+        "Go back in browser history and return a fresh semantic snapshot of the resulting page.",
+      inputSchema: {},
+    },
     () => toolCall(() => host.back(threadId))
   )
   server.registerTool(
     "browser_forward",
-    { description: "Go forward in browser history.", inputSchema: {} },
+    {
+      description:
+        "Go forward in browser history and return a fresh semantic snapshot of the resulting page.",
+      inputSchema: {},
+    },
     () => toolCall(() => host.forward(threadId))
   )
   server.registerTool(
     "browser_reload",
-    { description: "Reload the current page.", inputSchema: {} },
+    {
+      description:
+        "Reload the current page and return a fresh semantic snapshot of the resulting page.",
+      inputSchema: {},
+    },
     () => toolCall(() => host.reload(threadId))
   )
   server.registerTool(

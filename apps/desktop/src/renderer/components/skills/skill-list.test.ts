@@ -90,6 +90,40 @@ describe("SkillList", () => {
     expect(
       screen.getByRole("button", { name: /review.*Needs attention/i })
     ).toBeDefined()
+    expect(screen.getByTitle("Review a change set")).toBeDefined()
+  })
+
+  it("uses accessible provider logos with an initial fallback", () => {
+    const skillSource = source({ harnessIds: ["codex", "future-agent"] })
+    const skillOccurrence = occurrence({ sourceId: skillSource.id })
+    const item: SkillCatalogItem = {
+      key: "name:review",
+      name: "review",
+      description: "Review a change set",
+      occurrences: [{ occurrence: skillOccurrence, source: skillSource }],
+      primary: { occurrence: skillOccurrence, source: skillSource },
+      group: "detected",
+    }
+
+    render(
+      createElement(SkillList, {
+        inventory: inventory([skillSource], [skillOccurrence]),
+        items: [item],
+        selectedKey: null,
+        filter: "all",
+        query: "",
+        onSelect: vi.fn(),
+      })
+    )
+
+    expect(screen.getByRole("img", { name: "Codex" })).toBeDefined()
+    expect(screen.getByRole("img", { name: "future-agent" })).toBeDefined()
+    expect(screen.queryByText("Codex")).toBeNull()
+    expect(screen.getByText("f")).toBeDefined()
+    expect(
+      screen.getByRole("heading", { name: "Detected on this computer" })
+        .parentElement?.className
+    ).not.toContain("sticky")
   })
 })
 
