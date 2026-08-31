@@ -30,8 +30,13 @@ release
 *.pem
 
 # agent tooling
-.agents/
+.agents/*
+!.agents/setup
+!.agents/resume
 .claude/
+
+# Amp orb runtime state
+.amp/portals/*
 
 # debug
 npm-debug.log*

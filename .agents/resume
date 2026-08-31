@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Deskto orb resume complete; no services or authentication need restoring."

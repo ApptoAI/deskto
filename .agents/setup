@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+node_version="22.18.0"
+pnpm_version="10.33.4"
+node_archive="node-v${node_version}-linux-x64.tar.xz"
+toolchain_root="$HOME/.local/share/deskto"
+node_root="$toolchain_root/node-v${node_version}-linux-x64"
+node_current="$toolchain_root/node-current"
+
+install_node() (
+  if [[ -x "$node_root/bin/node" ]] && [[ "$($node_root/bin/node --version)" == "v${node_version}" ]]; then
+    echo "Node.js v${node_version} is already installed."
+    return
+  fi
+
+  local temporary_directory expected_checksum
+  temporary_directory="$(mktemp -d)"
+  trap 'rm -rf -- "$temporary_directory"' EXIT
+
+  echo "Installing Node.js v${node_version}..."
+  curl --fail --silent --show-error --location \
+    "https://nodejs.org/dist/v${node_version}/${node_archive}" \
+    --output "$temporary_directory/$node_archive"
+  expected_checksum="$(
+    curl --fail --silent --show-error --location \
+      "https://nodejs.org/dist/v${node_version}/SHASUMS256.txt" |
+      awk -v archive="$node_archive" '$2 == archive { print $1 }'
+  )"
+  printf '%s  %s\n' "$expected_checksum" "$temporary_directory/$node_archive" | sha256sum --check --status
+
+  mkdir -p -- "$temporary_directory/node" "$toolchain_root"
+  tar --extract --xz --file "$temporary_directory/$node_archive" \
+    --directory "$temporary_directory/node" --strip-components=1
+  rm -rf -- "$node_root"
+  mv -- "$temporary_directory/node" "$node_root"
+)
+
+echo "==> Preparing the pinned Node.js toolchain"
+time install_node
+ln -sfn -- "$node_root" "$node_current"
+
+profile_marker="# Deskto orb Node.js toolchain"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+  cat >> "$HOME/.bash_profile" <<'EOF'
+
+# Deskto orb Node.js toolchain
+export PATH="$HOME/.local/share/deskto/node-current/bin:$PATH"
+EOF
+fi
+
+export PATH="$node_current/bin:$PATH"
+
+echo "==> Activating pnpm ${pnpm_version}"
+time corepack enable
+time corepack prepare "pnpm@${pnpm_version}" --activate
+
+echo "==> Installing repository dependencies"
+cd -- "$repo_root"
+time pnpm install --frozen-lockfile
+
+echo "Deskto orb setup complete: $(node --version), pnpm $(pnpm --version)."
