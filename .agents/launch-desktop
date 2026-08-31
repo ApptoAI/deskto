@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="$HOME/.local/share/deskto/node-current/bin:$PATH"
+cd -- "$repo_root"
+exec pnpm --filter @deskto/desktop exec electron-vite dev --watch -- \
+  --ozone-platform=x11 \
+  --disable-gpu

@@ -33,6 +33,7 @@ release
 .agents/*
 !.agents/setup
 !.agents/resume
+!.agents/launch-desktop
 .claude/
 
 # Amp orb runtime state

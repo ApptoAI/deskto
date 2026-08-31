@@ -75,3 +75,4 @@ cd -- "$repo_root"
 time pnpm install --frozen-lockfile
 
 echo "Deskto orb setup complete: $(node --version), pnpm $(pnpm --version)."
+echo "Launch the visible app with .agents/launch-desktop through Amp Desktop."
