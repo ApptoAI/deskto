@@ -18,6 +18,7 @@ import {
 
 import { discoverArtifactRuntime } from "./artifact-runtime.js"
 import { withForcedUnavailability } from "./dev-harness-stubs.js"
+import { browserBridgeEnabled, startBrowserBridge } from "./browser-bridge.js"
 import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
 import { configureCliPath } from "./cli-path.js"
@@ -27,7 +28,11 @@ import { installContentSecurityPolicy } from "./security.js"
 import { createElectronUpdateDriver } from "./update-driver.js"
 import { registerUpdateIpc } from "./update-ipc.js"
 import { UpdateManager } from "./update-manager.js"
-import { createMainWindow, loadMainWindow } from "./window.js"
+import {
+  createMainWindow,
+  loadMainWindow,
+  registerWindowControlsIpc,
+} from "./window.js"
 import { browserEventChannel } from "../shared/channels.js"
 
 const runtimeCloseTimeoutMs = 5_000
@@ -126,6 +131,7 @@ async function openApplication(): Promise<void> {
   installContentSecurityPolicy()
 
   const window = createMainWindow()
+  const unregisterWindowControls = registerWindowControlsIpc(window)
   const browser = new BrowserManager(window, (event) => {
     if (!window.webContents.isDestroyed()) {
       window.webContents.send(browserEventChannel, event)
@@ -219,6 +225,15 @@ async function openApplication(): Promise<void> {
   // File actions resolve results through the runtime, so they register once
   // it exists rather than at startup.
   registerDesktopIpc(runtime, browser)
+  // Serves the same Runtime protocol over HTTP for a browser-hosted Surface.
+  // Dev-only and opt-in; the port is reachable only from this machine's
+  // networks, so the flag is what keeps a casual dev run from opening it.
+  const closeBrowserBridge = browserBridgeEnabled()
+    ? startBrowserBridge(
+        runtime,
+        Number(process.env.DESKTO_BROWSER_BRIDGE_PORT ?? 5174)
+      )
+    : undefined
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
   })
@@ -235,8 +250,9 @@ async function openApplication(): Promise<void> {
   closeRuntime = async () => {
     updateManager.dispose()
     unregisterUpdateIpc()
-    unsubscribeBrowserRuntime()
     unregisterRuntimeIpc()
+    unregisterWindowControls()
+    closeBrowserBridge?.()
     await closeApplicationRuntime()
   }
   loadMainWindow(window)

@@ -1,6 +1,12 @@
 import path from "node:path"
 
-import { BrowserWindow, nativeTheme, screen } from "electron"
+import { BrowserWindow, ipcMain, nativeTheme, screen } from "electron"
+
+import {
+  windowCloseChannel,
+  windowMaximizeToggleChannel,
+  windowMinimizeChannel,
+} from "../shared/channels.js"
 
 /**
  * The main bundle is ESM, where `__dirname` exists only if the bundler injects
@@ -46,7 +52,11 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 620,
     center: true,
     show: false,
-    titleBarStyle: "hiddenInset",
+    // macOS keeps the traffic lights and the Surface leaves room for them.
+    // Linux and Windows have no equivalent, so the native titlebar is hidden
+    // entirely — with it visible the window carried two rows of chrome — and
+    // the Surface draws its own controls.
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     trafficLightPosition: { x: 16, y: 20 },
     // The Surface draws its own titlebar. macOS already keeps its menu in the
     // system bar, but Windows and Linux would otherwise stack a native menu
@@ -77,6 +87,22 @@ export function createMainWindow(): BrowserWindow {
   window.webContents.on("will-navigate", (event) => event.preventDefault())
 
   return window
+}
+
+/** Serves the titlebar's window controls on platforms that hide the native
+    ones. One listener per window; the last-registered window wins, which is
+    the window a person can see (there is only ever one). */
+export function registerWindowControlsIpc(window: BrowserWindow): () => void {
+  ipcMain.on(windowMinimizeChannel, () => window.minimize())
+  ipcMain.on(windowMaximizeToggleChannel, () =>
+    window.isMaximized() ? window.unmaximize() : window.maximize()
+  )
+  ipcMain.on(windowCloseChannel, () => window.close())
+  return () => {
+    ipcMain.removeAllListeners(windowMinimizeChannel)
+    ipcMain.removeAllListeners(windowMaximizeToggleChannel)
+    ipcMain.removeAllListeners(windowCloseChannel)
+  }
 }
 
 export interface LoadableMainWindow {

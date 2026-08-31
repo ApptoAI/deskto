@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE · chat-first Deskto</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.8/index.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist-mono@5.2.7/index.min.css" />
+  <style>
+    :root {
+      --bg: #141318;
+      --fog: oklch(0.42 0.06 304 / 18%);
+      --fog-2: oklch(0.28 0.04 250 / 14%);
+      --ink: oklch(0.96 0.006 286);
+      --mute: oklch(0.96 0.006 286 / 42%);
+      --dim: oklch(0.96 0.006 286 / 28%);
+      --glass: oklch(1 0 0 / 6%);
+      --glass-2: oklch(1 0 0 / 9%);
+      --edge: oklch(1 0 0 / 10%);
+      --bevel: oklch(1 0 0 / 14%);
+      --pill: oklch(1 0 0 / 11%);
+      --chip: oklch(1 0 0 / 8%);
+      --sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+      --mono: "Geist Mono Variable", ui-monospace, monospace;
+      --r: 22px;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(58% 48% at 18% -8%, var(--fog), transparent 62%),
+        radial-gradient(42% 36% at 88% 108%, var(--fog-2), transparent 64%),
+        var(--bg);
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    .mono { font-family: var(--mono); letter-spacing: 0; }
+
+    .app { height: 100dvh; display: grid; }
+
+    /* A — Séance: docked composer, ghost title */
+    [data-v="a"] { grid-template-rows: auto 1fr auto; }
+    [data-v="a"] .ident {
+      padding: 28px 24px 8px;
+      text-align: center;
+    }
+    [data-v="a"] .ident h1 {
+      font-size: 15px; font-weight: 560; letter-spacing: -0.02em;
+    }
+    [data-v="a"] .ident p {
+      margin-top: 4px; font-size: 12px; color: var(--mute);
+    }
+    [data-v="a"] .stream { overflow: auto; padding: 28px 24px 12px; }
+    [data-v="a"] .col { max-width: 640px; margin: 0 auto; }
+    [data-v="a"] .dock {
+      padding: 8px 24px 22px;
+    }
+    [data-v="a"] .dock-inner { max-width: 640px; margin: 0 auto; }
+
+    /* B — Letter: composer lives in the scroll, document feel */
+    [data-v="b"] { grid-template-rows: 1fr; }
+    [data-v="b"] .stream { overflow: auto; padding: 56px 24px 80px; }
+    [data-v="b"] .col { max-width: 520px; margin: 0 auto; }
+    [data-v="b"] .ident {
+      margin-bottom: 48px;
+    }
+    [data-v="b"] .ident h1 {
+      font-size: 28px; font-weight: 480; letter-spacing: -0.04em; line-height: 1.15;
+    }
+    [data-v="b"] .ident p { margin-top: 10px; font-size: 13px; color: var(--mute); }
+    [data-v="b"] .dock { padding-top: 36px; }
+
+    /* C — Command: empty field, spotlight composer, time-first */
+    [data-v="c"] { grid-template-rows: auto 1fr auto; }
+    [data-v="c"] .ident {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 20px 28px 0;
+    }
+    [data-v="c"] .ident h1 { font-size: 13px; font-weight: 500; color: var(--mute); }
+    [data-v="c"] .ident p { font-size: 12px; color: var(--dim); }
+    [data-v="c"] .stream { overflow: auto; padding: 40px 28px 8px; }
+    [data-v="c"] .col { max-width: 580px; margin: 0 auto; display: grid; gap: 28px; }
+    [data-v="c"] .turn {
+      display: grid; grid-template-columns: 52px 1fr; gap: 16px; align-items: start;
+    }
+    [data-v="c"] .when {
+      font-size: 11px; color: var(--dim); padding-top: 3px;
+    }
+    [data-v="c"] .dock {
+      padding: 12px 28px 36px;
+      display: flex; justify-content: center;
+    }
+    [data-v="c"] .dock-inner { width: min(580px, 100%); }
+
+    .user {
+      display: flex; justify-content: flex-end;
+      margin: 28px 0;
+    }
+    [data-v="c"] .user { margin: 0; }
+    .user .bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 20px 20px 6px 20px;
+      background: var(--pill);
+      box-shadow: inset 0 1px 0 var(--bevel);
+      font-size: 15px; line-height: 1.45;
+    }
+    [data-v="b"] .user .bubble {
+      border-radius: 18px;
+      max-width: 92%;
+    }
+    .attach {
+      display: flex; justify-content: flex-end; margin: 0 0 -16px;
+    }
+    .attach span {
+      font-size: 12px; color: var(--mute);
+      padding: 8px 12px;
+      border-radius: 14px;
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+    }
+    .agent {
+      font-size: 16px; line-height: 1.62; color: var(--ink);
+    }
+    .agent p + p { margin-top: 1.1em; }
+    .chip {
+      display: inline; padding: 0.08em 0.42em; border-radius: 6px;
+      background: var(--chip); font-family: var(--mono); font-size: 0.86em;
+    }
+    .work {
+      margin: 18px 0 22px;
+    }
+    .work summary {
+      list-style: none; cursor: pointer;
+      font-size: 12px; color: var(--mute);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .work summary::-webkit-details-marker { display: none; }
+    .work summary::before {
+      content: ""; width: 5px; height: 5px; border-radius: 99px;
+      background: var(--mute); opacity: 0.7;
+    }
+    .work p { margin-top: 8px; font-size: 12px; color: var(--dim); padding-left: 13px; }
+
+    .composer {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 56px; padding: 8px 8px 8px 18px;
+      border-radius: 999px;
+      background: var(--glass-2);
+      backdrop-filter: blur(28px) saturate(140%);
+      box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 1px var(--edge);
+    }
+    [data-v="c"] .composer {
+      min-height: 64px; padding: 10px 10px 10px 22px;
+      box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 1px var(--edge), 0 24px 60px oklch(0 0 0 / 28%);
+    }
+    .composer input {
+      flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+      color: var(--ink); font: inherit; font-size: 15px;
+    }
+    .composer input::placeholder { color: var(--dim); }
+    .ghost {
+      font-size: 12px; color: var(--mute); padding: 6px 4px; white-space: nowrap;
+    }
+    .ico {
+      width: 36px; height: 36px; border-radius: 99px;
+      display: grid; place-items: center; color: var(--mute);
+    }
+    .ico.send {
+      background: var(--ink); color: var(--bg);
+    }
+    .meta {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 10px 8px 0; font-size: 11px; color: var(--dim);
+    }
+
+    .switcher {
+      position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+      z-index: 40;
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 8px; border-radius: 999px;
+      background: #0c0b10; color: #f4f2f8;
+      box-shadow: 0 10px 40px oklch(0 0 0 / 45%);
+      font-size: 12px; font-weight: 500;
+    }
+    .switcher b { font-weight: 560; min-width: 168px; text-align: center; display: inline-block; }
+    .switcher button {
+      width: 28px; height: 28px; border-radius: 99px; background: #1c1b22;
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .composer, .attach span { backdrop-filter: none; background: #1c1b22; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" data-v="a" id="app">
+    <header class="ident">
+      <h1>Partner brief draft</h1>
+      <p>Q3 Planning · local</p>
+    </header>
+    <main class="stream">
+      <div class="col" id="col"></div>
+    </main>
+    <footer class="dock">
+      <div class="dock-inner">
+        <div class="composer">
+          <input placeholder="Do anything…" aria-label="Message" />
+          <button class="ghost" type="button">Claude Code</button>
+          <button class="ghost" type="button">High</button>
+          <button class="ico" type="button" aria-label="Attach">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7L9.2 18.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+          </button>
+          <button class="ico send" type="button" aria-label="Send">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+        <div class="meta">
+          <span>Working · 18s</span>
+          <span class="mono">~/Documents/Q3 Planning</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div class="switcher" id="switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <b id="label">A · Séance</b>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+  <script>
+    const names = { a: "A · Séance", b: "B · Letter", c: "C · Command" };
+    const transcript = `
+      <div class="attach"><span>Pricing memo.pdf</span></div>
+      <div class="user"><div class="bubble">Draft the Q3 partner brief from the notes in this project. Two pages, house template, and don't pull anything from outside.</div></div>
+      <details class="work" open>
+        <summary>Ran 4 steps · read 3 files · wrote 1 file</summary>
+        <p>Read sync notes, pricing memo, last quarter's brief. Wrote Partner brief.docx.</p>
+      </details>
+      <div class="agent">
+        <p>There are three files in the project: the September sync notes, the pricing memo, and last quarter's brief. I'm keeping last quarter's structure and taking the new figures from the pricing memo.</p>
+        <p>The sync notes and the memo disagree on renewal timing, so I've flagged it in the margin rather than picking one — page 2, beside the pricing table.</p>
+        <p>Draft's in the project as <span class="chip">Partner brief.docx</span> — summary, the three partner asks, and the pricing table. Nothing cited from outside the project.</p>
+      </div>
+      <div class="user"><div class="bubble">settle it with the memo and send it as a pdf</div></div>
+    `;
+
+    function apply(v) {
+      const app = document.getElementById("app");
+      app.dataset.v = v;
+      document.getElementById("label").textContent = names[v];
+      const col = document.getElementById("col");
+      if (v === "c") {
+        col.innerHTML = `
+          <div class="turn"><div class="when">09:14</div><div>
+            <div class="attach"><span>Pricing memo.pdf</span></div>
+            <div class="user"><div class="bubble">Draft the Q3 partner brief from the notes in this project. Two pages, house template, and don't pull anything from outside.</div></div>
+          </div></div>
+          <div class="turn"><div class="when">09:14</div><div>
+            <details class="work" open>
+              <summary>Ran 4 steps · read 3 files · wrote 1 file</summary>
+              <p>Read sync notes, pricing memo, last quarter's brief. Wrote Partner brief.docx.</p>
+            </details>
+            <div class="agent">
+              <p>There are three files in the project: the September sync notes, the pricing memo, and last quarter's brief. I'm keeping last quarter's structure and taking the new figures from the pricing memo.</p>
+              <p>The sync notes and the memo disagree on renewal timing, so I've flagged it in the margin rather than picking one — page 2, beside the pricing table.</p>
+              <p>Draft's in the project as <span class="chip">Partner brief.docx</span> — summary, the three partner asks, and the pricing table. Nothing cited from outside the project.</p>
+            </div>
+          </div></div>
+          <div class="turn"><div class="when">09:16</div><div>
+            <div class="user"><div class="bubble">settle it with the memo and send it as a pdf</div></div>
+          </div></div>`;
+      } else {
+        col.innerHTML = transcript;
+      }
+      const params = new URLSearchParams(location.search);
+      params.set("variant", v);
+      history.replaceState(null, "", "?" + params.toString());
+    }
+
+    const keys = ["a", "b", "c"];
+    function cycle(d) {
+      const i = keys.indexOf(document.getElementById("app").dataset.v);
+      apply(keys[(i + d + 3) % 3]);
+    }
+    document.getElementById("prev").onclick = () => cycle(-1);
+    document.getElementById("next").onclick = () => cycle(1);
+    window.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowLeft") cycle(-1);
+      if (e.key === "ArrowRight") cycle(1);
+    });
+    const start = new URLSearchParams(location.search).get("variant") || "a";
+    apply(keys.includes(start) ? start : "a");
+  </script>
+</body>
+</html>

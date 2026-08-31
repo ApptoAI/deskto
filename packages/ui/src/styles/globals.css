@@ -11,11 +11,13 @@
 @source "../../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
-/* Two faces carry the whole system. Inter sets everything a person reads;
-   Geist Mono is reserved for text that is machine-shaped — labels, counts,
-   paths, code — so a glance at the shape already says what kind of thing it
-   is. Both ship with the app: an offline desktop client cannot wait on a CDN,
-   and a fallback stack that differs per platform would undo the tuning below. */
+/* Two faces carry the whole system. Inter sets everything a person reads —
+   including section labels and counts, which name regions in human words.
+   Geist Mono is reserved for text that is machine-shaped — paths, code,
+   identifiers, timestamps — so a glance at the shape already says what kind
+   of thing it is. Both ship with the app: an offline desktop client cannot
+   wait on a CDN, and a fallback stack that differs per platform would undo
+   the tuning below. */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono:
@@ -172,6 +174,7 @@
   --fill-chip: oklch(0 0 0 / 5%);
   --fill-chip-hover: oklch(0 0 0 / 9%);
   --fill-row-selected: oklch(0 0 0 / 8%);
+  --secondary-hover: color-mix(in oklch, var(--secondary), var(--foreground) 5%);
 
   /* Edges. A hairline on light glass needs more weight than on dark to stay
        genuinely visible rather than dissolving into the surface behind it. */
@@ -474,14 +477,16 @@
   letter-spacing: -0.02em;
 }
 
-/* The label voice: uppercase mono, tracked open, always muted. It marks the
+/* The label voice: uppercase Inter, tracked open, always muted. It marks the
    text that names a region rather than saying anything — section headers,
-   column heads, counters — and never competes with the content under it. */
+   column heads, counters — and never competes with the content under it.
+   Inter rather than mono: these are words a person reads, and mixing mono
+   here made every header look like it came from a different app. */
 @utility eyebrow {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-tiny);
   line-height: 1.45;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-weight: 400;
+  font-weight: 500;
 }

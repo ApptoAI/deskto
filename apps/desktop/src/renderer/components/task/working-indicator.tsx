@@ -64,7 +64,7 @@ export function WorkingIndicator({
       </span>
       <span
         aria-hidden
-        className="font-mono text-xs text-muted-foreground/70 tabular-nums"
+        className="text-xs text-muted-foreground/70 tabular-nums"
       >
         {elapsed}
       </span>

@@ -135,7 +135,7 @@ export function ProjectsView({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="ml-auto font-mono text-micro text-muted-foreground tabular-nums">
+            <span className="ml-auto text-micro text-muted-foreground tabular-nums">
               {shown.length === 1 ? "1 project" : `${shown.length} projects`}
             </span>
           </div>
@@ -238,9 +238,7 @@ function ProjectCard({
           {age === "now" ? "Just now" : `${age} ago`}
         </span>
         {project.locationKind === "linked" ? (
-          <span className="min-w-0 truncate font-mono text-micro">
-            {project.path}
-          </span>
+          <span className="min-w-0 truncate text-micro">{project.path}</span>
         ) : null}
       </div>
     </Card>

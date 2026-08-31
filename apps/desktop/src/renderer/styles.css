@@ -5,13 +5,13 @@
      pinned here: it has to follow the chosen palette, not a build-time guess. */
   :root {
     --app-scrollbar-width: 6px;
-    --app-scrollbar-thumb: rgb(0 0 0 / 14%);
-    --app-scrollbar-thumb-hover: rgb(0 0 0 / 22%);
+    --app-scrollbar-thumb: oklch(0 0 0 / 14%);
+    --app-scrollbar-thumb-hover: oklch(0 0 0 / 22%);
   }
 
   .dark {
-    --app-scrollbar-thumb: rgb(255 255 255 / 8%);
-    --app-scrollbar-thumb-hover: rgb(255 255 255 / 12%);
+    --app-scrollbar-thumb: oklch(1 0 0 / 8%);
+    --app-scrollbar-thumb-hover: oklch(1 0 0 / 12%);
   }
 
   body {

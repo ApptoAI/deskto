@@ -62,5 +62,18 @@ export default defineConfig({
       },
     },
     plugins: [react(), tailwindcss(), injectContentSecurityPolicy()],
+    server: {
+      host: true,
+      allowedHosts: true,
+      // Forwards the dev-only Runtime HTTP bridge so a browser-hosted Surface
+      // talks same-origin; an https page cannot fetch the plain-http bridge.
+      proxy: {
+        "/bridge": {
+          target: "http://localhost:5174",
+          changeOrigin: true,
+          rewrite: (pathname) => pathname.replace(/^\/bridge/, ""),
+        },
+      },
+    },
   },
 })

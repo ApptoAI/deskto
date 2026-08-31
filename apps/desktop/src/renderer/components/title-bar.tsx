@@ -1,8 +1,11 @@
 import type { ReactNode } from "react"
 import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import ArrowRightIcon from "lucide-react/dist/esm/icons/arrow-right"
+import MinusIcon from "lucide-react/dist/esm/icons/minus"
 import PanelLeftIcon from "lucide-react/dist/esm/icons/panel-left"
 import PlusIcon from "lucide-react/dist/esm/icons/plus"
+import SquareIcon from "lucide-react/dist/esm/icons/square"
+import XIcon from "lucide-react/dist/esm/icons/x"
 
 import { cn } from "@workspace/ui/lib/utils"
 
@@ -37,14 +40,18 @@ export function TitleBar({
   children?: ReactNode
   trailing?: ReactNode
 }) {
+  const drawWindowControls = window.deskto.platform !== "darwin"
   return (
     <header className="drag-region flex h-13 shrink-0 items-center px-4">
       {/* macOS draws its traffic lights over the top-left of the content with
-          `titleBarStyle: hiddenInset`, so the row starts clear of them. Other
-          platforms keep their own frame and simply see a little more air. */}
-      {/* Lights start at x=16 and span ~52px; the spacer must clear their
-          right edge (~68px) plus a visible gap before the first control. */}
-      <span aria-hidden className="w-[80px] shrink-0" />
+          `titleBarStyle: hiddenInset`, so the row starts clear of them.
+          Elsewhere the native titlebar is hidden and the controls sit on the
+          right, where those platforms expect them. */}
+      {drawWindowControls ? null : (
+        /* Lights start at x=16 and span ~52px; the spacer must clear their
+            right edge (~68px) plus a visible gap before the first control. */
+        <span aria-hidden className="w-[80px] shrink-0" />
+      )}
 
       <nav aria-label="Window" className="no-drag flex items-center gap-3">
         <span className="flex items-center">
@@ -79,12 +86,41 @@ export function TitleBar({
         <div className="ml-3 flex min-w-0 items-center gap-1.5">{children}</div>
       ) : null}
 
-      {trailing ? (
-        <div className="no-drag ml-auto flex shrink-0 items-center gap-1">
-          {trailing}
-        </div>
-      ) : null}
+      <div
+        className={`no-drag ml-auto flex shrink-0 items-center gap-1${trailing ? " pl-1" : ""}`}
+      >
+        {trailing}
+        {drawWindowControls ? <WindowControls /> : null}
+      </div>
     </header>
+  )
+}
+
+/**
+ * Minimize, maximize, and close for the platforms whose native chrome the
+ * window hides. They keep the titlebar's quiet icon voice; close alone may
+ * take the destructive hue on hover, the one place hue is allowed.
+ * Maximize reads no state back, so its glyph is the action rather than the
+ * current geometry.
+ */
+function WindowControls() {
+  const controls = window.deskto.windowControls
+  return (
+    <span className="ml-1 flex items-center">
+      <TitleBarButton label="Minimize" onClick={controls.minimize}>
+        <MinusIcon />
+      </TitleBarButton>
+      <TitleBarButton label="Maximize" onClick={controls.toggleMaximize}>
+        <SquareIcon />
+      </TitleBarButton>
+      <TitleBarButton
+        label="Close"
+        onClick={controls.close}
+        className="hover:bg-destructive/90 hover:text-white"
+      >
+        <XIcon />
+      </TitleBarButton>
+    </span>
   )
 }
 
@@ -98,12 +134,14 @@ function TitleBarButton({
   pressed,
   disabled,
   onClick,
+  className,
   children,
 }: {
   label: string
   pressed?: boolean
   disabled?: boolean
   onClick: () => void
+  className?: string
   children: ReactNode
 }) {
   return (
@@ -119,7 +157,8 @@ function TitleBarButton({
         "hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-40",
         "[&_svg]:size-[17px] [&_svg]:stroke-[1.8]",
-        pressed ? "text-foreground" : "text-muted-foreground"
+        pressed ? "text-foreground" : "text-muted-foreground",
+        className
       )}
     >
       {children}

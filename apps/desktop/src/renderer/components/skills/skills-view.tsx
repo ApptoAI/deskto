@@ -256,7 +256,7 @@ export function SkillsView({
               workspaceAvailable={workspace !== null}
               onChange={onSelectFilter}
             />
-            <span className="ml-auto font-mono text-micro text-muted-foreground tabular-nums">
+            <span className="ml-auto text-micro text-muted-foreground tabular-nums">
               {items.length === 1 ? "1 skill" : `${items.length} skills`}
             </span>
             <Button

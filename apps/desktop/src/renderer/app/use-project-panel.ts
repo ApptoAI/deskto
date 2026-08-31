@@ -26,7 +26,7 @@ export function useProjectPanel(activeProjectId: string | null) {
     activeProjectId && overrideProjectId === activeProjectId
       ? "open"
       : stored === undefined
-        ? "auto"
+        ? "collapsed"
         : stored
           ? "collapsed"
           : "open"

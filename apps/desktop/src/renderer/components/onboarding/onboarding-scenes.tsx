@@ -98,7 +98,7 @@ function SceneRow({
         style={dotDelay ? { animationDelay: dotDelay } : undefined}
       />
       <span className={cn("h-1 rounded-full", title)} />
-      <span className="ml-auto font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
+      <span className="ml-auto text-[9px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
         {meta}
       </span>
     </span>

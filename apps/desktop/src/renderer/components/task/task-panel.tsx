@@ -312,7 +312,7 @@ export function TaskPanel({
           />
         ) : (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <GitBranchIcon aria-hidden className="size-4 animate-pulse" />
+            <GitBranchIcon aria-hidden className="size-4 motion-safe:animate-pulse" />
             Starting side chat…
           </div>
         )
@@ -510,7 +510,7 @@ function FilesOverview({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-3">
       {/* The tab above already says Files, so this is a section label rather
-          than a second title: mono eyebrow, and the sentence under it carries
+          than a second title: an eyebrow, and the sentence under it carries
           what the list actually holds. */}
       <div className="mb-3 px-1">
         <FolderCrumbs folder={folder} onOpenFolder={onOpenFolder} />

@@ -270,13 +270,13 @@ export function SkillDetailsPanel({
                         {entry.source.label}
                       </span>
                       {active ? (
-                        <span className="shrink-0 font-mono text-tiny tracking-wide text-muted-foreground uppercase">
+                        <span className="shrink-0 text-tiny font-medium tracking-wide text-muted-foreground uppercase">
                           Shown
                         </span>
                       ) : null}
                     </span>
                     <span
-                      className="mt-0.5 block truncate font-mono text-micro text-muted-foreground"
+                      className="mt-0.5 block truncate text-micro text-muted-foreground"
                       title={entry.occurrence.directoryPath}
                     >
                       {entry.occurrence.directoryPath}
