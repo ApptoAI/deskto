@@ -23,20 +23,20 @@ export type BrowserSnapshot = BrowserStatus & {
 /** Electron implements this interface; Runtime and Harness Adapters do not. */
 export interface BrowserAutomationHost {
   status(threadId: string): Promise<BrowserStatus>
-  open(threadId: string, url?: string): Promise<BrowserStatus>
-  navigate(threadId: string, url: string): Promise<BrowserStatus>
+  open(threadId: string, url?: string): Promise<BrowserSnapshot>
+  navigate(threadId: string, url: string): Promise<BrowserSnapshot>
   snapshot(threadId: string): Promise<BrowserSnapshot>
-  click(threadId: string, ref: string): Promise<BrowserStatus>
+  click(threadId: string, ref: string): Promise<BrowserSnapshot>
   type(
     threadId: string,
     ref: string,
     text: string,
     submit: boolean
-  ): Promise<BrowserStatus>
-  keypress(threadId: string, key: string): Promise<BrowserStatus>
-  back(threadId: string): Promise<BrowserStatus>
-  forward(threadId: string): Promise<BrowserStatus>
-  reload(threadId: string): Promise<BrowserStatus>
+  ): Promise<BrowserSnapshot>
+  keypress(threadId: string, key: string): Promise<BrowserSnapshot>
+  back(threadId: string): Promise<BrowserSnapshot>
+  forward(threadId: string): Promise<BrowserSnapshot>
+  reload(threadId: string): Promise<BrowserSnapshot>
   screenshot(threadId: string): Promise<{
     status: BrowserStatus
     data: string

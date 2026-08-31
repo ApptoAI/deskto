@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import type {
   BrowserAutomationHost,
+  BrowserSnapshot,
   BrowserStatus,
 } from "./browser-automation-host.js"
 import { BrowserMcpServer } from "./browser-mcp-server.js"
@@ -16,6 +17,13 @@ const status: BrowserStatus = {
   loading: false,
   canGoBack: false,
   canGoForward: false,
+}
+
+const snapshot: BrowserSnapshot = {
+  ...status,
+  snapshotId: "after-action",
+  text: "Saved changes",
+  elements: [{ ref: "e1", tag: "button", name: "Undo" }],
 }
 
 describe("BrowserMcpServer", () => {
@@ -58,11 +66,23 @@ describe("BrowserMcpServer", () => {
         tools.tools.find((tool) => tool.name === "browser_snapshot")
           ?.description
       ).toContain("built-in preview")
+      expect(
+        tools.tools.find((tool) => tool.name === "browser_click")?.description
+      ).toContain("claim the intended page change succeeded only when")
       await client.callTool({
         name: "browser_open",
         arguments: { url: "https://example.com" },
       })
       expect(host.open).toHaveBeenCalledWith("thread-7", "https://example.com")
+
+      const clickResult = await client.callTool({
+        name: "browser_click",
+        arguments: { ref: "e1" },
+      })
+      expect(clickResult.content).toEqual([
+        { type: "text", text: JSON.stringify(snapshot) },
+      ])
+      expect(host.click).toHaveBeenCalledWith("thread-7", "e1")
 
       await lease.close()
       await expect(client.listTools()).rejects.toThrow()
@@ -249,17 +269,17 @@ function fakeHost(): BrowserAutomationHost & {
 } {
   return {
     status: vi.fn(() => Promise.resolve(status)),
-    open: vi.fn(() => Promise.resolve(status)),
-    navigate: vi.fn(() => Promise.resolve(status)),
+    open: vi.fn(() => Promise.resolve(snapshot)),
+    navigate: vi.fn(() => Promise.resolve(snapshot)),
     snapshot: vi.fn(() =>
       Promise.resolve({ ...status, snapshotId: "one", text: "", elements: [] })
     ),
-    click: vi.fn(() => Promise.resolve(status)),
-    type: vi.fn(() => Promise.resolve(status)),
-    keypress: vi.fn(() => Promise.resolve(status)),
-    back: vi.fn(() => Promise.resolve(status)),
-    forward: vi.fn(() => Promise.resolve(status)),
-    reload: vi.fn(() => Promise.resolve(status)),
+    click: vi.fn(() => Promise.resolve(snapshot)),
+    type: vi.fn(() => Promise.resolve(snapshot)),
+    keypress: vi.fn(() => Promise.resolve(snapshot)),
+    back: vi.fn(() => Promise.resolve(snapshot)),
+    forward: vi.fn(() => Promise.resolve(snapshot)),
+    reload: vi.fn(() => Promise.resolve(snapshot)),
     screenshot: vi.fn(() =>
       Promise.resolve({
         status,
