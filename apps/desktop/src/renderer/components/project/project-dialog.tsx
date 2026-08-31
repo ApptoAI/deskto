@@ -248,61 +248,63 @@ function ProjectForm({
 
           <CollapsibleContent>
             <div className="space-y-5 pt-px">
-              <div className="space-y-2">
-                <Label id="project-template-label">Template</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-between font-normal"
-                        aria-labelledby="project-template-label"
-                        disabled={busy || templatesLoading}
-                      />
-                    }
-                  >
-                    <span className="min-w-0 truncate">
-                      {templatesLoading
-                        ? "Loading templates…"
-                        : (selectedTemplate?.name ?? "Blank project")}
-                    </span>
-                    <ChevronDownIcon
-                      data-icon="inline-end"
-                      className="text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuRadioGroup
-                      value={templateId}
-                      onValueChange={(value) => setTemplateId(String(value))}
+              {templatesLoading || templates.length > 0 ? (
+                <div className="space-y-2">
+                  <Label id="project-template-label">Template</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between font-normal"
+                          aria-labelledby="project-template-label"
+                          disabled={busy || templatesLoading}
+                        />
+                      }
                     >
-                      <DropdownMenuRadioItem value="" closeOnClick>
-                        Blank project
-                      </DropdownMenuRadioItem>
-                      {templates.map((template) => (
-                        <DropdownMenuRadioItem
-                          key={template.id}
-                          value={template.id}
-                          closeOnClick
-                        >
-                          <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
-                            <span className="truncate">{template.name}</span>
-                            <span className="truncate text-xs text-muted-foreground">
-                              {template.packName}
-                            </span>
-                          </span>
+                      <span className="min-w-0 truncate">
+                        {templatesLoading
+                          ? "Loading templates…"
+                          : (selectedTemplate?.name ?? "Blank project")}
+                      </span>
+                      <ChevronDownIcon
+                        data-icon="inline-end"
+                        className="text-muted-foreground"
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuRadioGroup
+                        value={templateId}
+                        onValueChange={(value) => setTemplateId(String(value))}
+                      >
+                        <DropdownMenuRadioItem value="" closeOnClick>
+                          Blank project
                         </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {selectedTemplate?.description ? (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedTemplate.description}
-                  </p>
-                ) : null}
-              </div>
+                        {templates.map((template) => (
+                          <DropdownMenuRadioItem
+                            key={template.id}
+                            value={template.id}
+                            closeOnClick
+                          >
+                            <span className="flex min-w-0 flex-col gap-0.5 py-0.5">
+                              <span className="truncate">{template.name}</span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                {template.packName}
+                              </span>
+                            </span>
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {selectedTemplate?.description ? (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedTemplate.description}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium">Location</legend>

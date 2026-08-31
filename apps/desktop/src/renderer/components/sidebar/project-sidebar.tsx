@@ -179,16 +179,8 @@ export function ProjectSidebar({
       >
         <div className="pb-3">
           {projects.length === 0 ? (
-            <div className="space-y-2 px-4 py-2">
+            <div className="px-4 py-2">
               <p className="text-sm text-muted-foreground">No projects yet.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onAddProject}
-                disabled={addingProject}
-              >
-                Create project
-              </Button>
             </div>
           ) : allProjects ? (
             <WorkspaceThreadList

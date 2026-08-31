@@ -501,6 +501,7 @@ function TaskRow({
               exactly the same measure when they appear. */}
           <span className="min-w-0 flex-1">
             <span
+              title={thread.title}
               className={cn(
                 "block truncate leading-5",
                 needsALook && !isOpen && "font-medium text-foreground"

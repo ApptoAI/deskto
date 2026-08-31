@@ -90,6 +90,7 @@ describe("SkillList", () => {
     expect(
       screen.getByRole("button", { name: /review.*Needs attention/i })
     ).toBeDefined()
+    expect(screen.getByTitle("Review a change set")).toBeDefined()
   })
 
   it("uses an accessible provider logo instead of a text badge", () => {

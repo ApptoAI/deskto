@@ -84,6 +84,8 @@
   --color-fill-chip: var(--fill-chip);
   --color-fill-chip-hover: var(--fill-chip-hover);
   --color-fill-row-selected: var(--fill-row-selected);
+  --color-fill-menu-selected: var(--fill-menu-selected);
+  --color-fill-menu-active: var(--fill-menu-active);
   --color-paper: var(--paper-bg);
   --color-paper-foreground: var(--paper-fg);
   --color-paper-muted: var(--paper-fg-muted);
@@ -135,6 +137,8 @@
   --fill-chip: oklch(0 0 0 / 3.5%);
   --fill-chip-hover: oklch(0 0 0 / 6%);
   --fill-row-selected: oklch(0 0 0 / 5%);
+  --fill-menu-selected: oklch(0 0 0 / 8%);
+  --fill-menu-active: oklch(0 0 0 / 12%);
   --secondary-hover: color-mix(
     in oklch,
     var(--secondary),
@@ -242,6 +246,8 @@
   --fill-chip: oklch(1 0 0 / 3.5%);
   --fill-chip-hover: oklch(1 0 0 / 6%);
   --fill-row-selected: oklch(1 0 0 / 6%);
+  --fill-menu-selected: oklch(1 0 0 / 10%);
+  --fill-menu-active: oklch(1 0 0 / 15%);
 
   --edge: oklch(1 0 0 / 7%);
   --edge-strong: oklch(1 0 0 / 11%);

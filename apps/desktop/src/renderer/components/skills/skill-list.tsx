@@ -126,12 +126,16 @@ function SkillRow({
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-fill-chip text-muted-foreground transition-colors duration-150 ease-out group-hover:text-foreground">
           <BoxIcon className="size-3.5" />
         </span>
-        {/* Name and description share one line: at this width the description
-            still has room to say something, and the row stays scannable. */}
-        <span className="w-52 shrink-0 truncate text-sm font-medium">
+        <span
+          className="w-36 shrink-0 truncate text-sm font-medium xl:w-52"
+          title={item.name}
+        >
           {item.name}
         </span>
-        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-muted-foreground">
+        <span
+          className="line-clamp-2 min-w-0 flex-1 text-ui leading-5 text-muted-foreground"
+          title={item.description ?? "Description could not be read."}
+        >
           {item.description ?? "Description could not be read."}
         </span>
         {/* Trouble sits on the right rail with the other row metadata, so the

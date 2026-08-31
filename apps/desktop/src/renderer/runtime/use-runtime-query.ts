@@ -23,24 +23,32 @@ export type RuntimeQuery<T> = {
 
 type Load<T> = (() => Promise<T>) | null
 
-function startingState<T>(load: Load<T>): QueryState<T> {
+function startingState<T>(
+  load: Load<T>,
+  initialData?: T | undefined
+): QueryState<T> {
+  if (initialData !== undefined) return { status: "ready", data: initialData }
   return load ? { status: "loading" } : { status: "idle" }
 }
 
 /**
  * Reads Runtime state through a `load` function. Pass `null` to stand down, for
  * example while no project is selected. `load` must be stable; a new identity
- * starts a fresh read and drops any answer still in flight.
+ * starts a fresh read and drops any answer still in flight. Initial data stays
+ * visible while the first read refreshes it.
  */
-export function useRuntimeQuery<T>(load: Load<T>): RuntimeQuery<T> {
+export function useRuntimeQuery<T>(
+  load: Load<T>,
+  initialData?: T | undefined
+): RuntimeQuery<T> {
   const [snapshot, setSnapshot] = useState(() => ({
     load,
-    state: startingState<T>(load),
+    state: startingState(load, initialData),
   }))
   const latestRequest = useRef(0)
 
   if (snapshot.load !== load) {
-    setSnapshot({ load, state: startingState(load) })
+    setSnapshot({ load, state: startingState(load, initialData) })
   }
 
   const read = useCallback((nextLoad: Load<T>) => {
@@ -104,7 +112,10 @@ export function useRuntimeQuery<T>(load: Load<T>): RuntimeQuery<T> {
   )
 
   return {
-    state: snapshot.load === load ? snapshot.state : startingState(load),
+    state:
+      snapshot.load === load
+        ? snapshot.state
+        : startingState(load, initialData),
     revalidate,
     replace,
     patch,

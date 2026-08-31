@@ -93,12 +93,16 @@ export function ExecutionProfileToolbar({
           if (next) onChange(withModel(profile, next))
         }}
       />
-      {model.supportedEfforts.length > 0 ? (
-        <>
-          <Divider />
+      <Divider />
+      <span
+        data-slot="thinking-profile"
+        className="flex w-8 shrink-0 items-center @[48rem]:w-28"
+      >
+        {model.supportedEfforts.length > 0 ? (
           <ProfileMenu
             label="Thinking"
             value={profile.effort ?? DEFAULT_EFFORT}
+            triggerClassName="w-full justify-start"
             labelClassName={thinkingLabel}
             disabled={disabled}
             options={thinkingOptions}
@@ -109,8 +113,10 @@ export function ExecutionProfileToolbar({
               })
             }
           />
-        </>
-      ) : null}
+        ) : (
+          <span aria-hidden className="h-8 w-full" />
+        )}
+      </span>
       <Divider />
       <ProfileMenu
         label="Permissions"
