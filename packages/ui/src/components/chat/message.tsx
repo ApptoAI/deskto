@@ -16,15 +16,15 @@ const messageVariants = cva("flex w-full", {
 
 /*
  * The conversation is the app's primary reading surface, so it is set a step
- * above UI copy. What the person said is a bubble — a fill on the glass with
- * the bevel that says it sits on top; what the agent said is unenclosed, at
- * full measure, because it is the page rather than a remark on it.
+ * above UI copy. What the person said is a compact flat bubble; what the agent
+ * said is unenclosed, at full measure, because it is the page rather than a
+ * remark on it.
  */
 const messageBodyVariants = cva("min-w-0 text-sm", {
   variants: {
     role: {
-      user: "bevel max-w-[80%] rounded-panel bg-fill-bubble px-5 py-4 text-conversation leading-relaxed whitespace-pre-wrap",
-      assistant: "w-full text-conversation leading-relaxed",
+      user: "max-w-[84%] rounded-panel bg-fill-bubble px-4.5 py-3 text-conversation leading-[1.5] text-pretty whitespace-pre-wrap",
+      assistant: "w-full text-conversation leading-[1.62] text-body",
       system: "max-w-[80%] text-center text-xs text-muted-foreground",
     },
   },

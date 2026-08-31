@@ -45,13 +45,13 @@ export function TitleBar({
   const drawWindowControls =
     window.deskto.platform !== "darwin" && windowControls !== undefined
   return (
-    <header className="drag-region flex h-13 shrink-0 items-center px-4">
+    <header className="drag-region flex h-12 shrink-0 items-center px-4">
       {reserveTrafficLights ? (
         /* hiddenInset traffic lights occupy x=16–68. */
         <span aria-hidden className="w-[80px] shrink-0" />
       ) : null}
 
-      <nav aria-label="Window" className="no-drag flex items-center gap-3">
+      <nav aria-label="Window" className="no-drag flex items-center gap-2.5">
         <span className="flex items-center">
           <TitleBarButton
             label={sidebarOpen ? "Hide the task list" : "Show the task list"}
@@ -62,7 +62,11 @@ export function TitleBar({
           </TitleBarButton>
         </span>
         <span className="flex items-center gap-1">
-          <TitleBarButton label="Go back" disabled={!canGoBack} onClick={onBack}>
+          <TitleBarButton
+            label="Go back"
+            disabled={!canGoBack}
+            onClick={onBack}
+          >
             <ArrowLeftIcon />
           </TitleBarButton>
           <TitleBarButton
@@ -152,9 +156,10 @@ function TitleBarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex size-7 items-center justify-center rounded-md outline-none transition-colors duration-150",
+        "flex size-8 items-center justify-center rounded-md transition-[background-color,color,transform,opacity] duration-120 outline-none",
         "hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-40",
+        "motion-safe:active:scale-[0.96]",
         "[&_svg]:size-[17px] [&_svg]:stroke-[1.8]",
         pressed ? "text-foreground" : "text-muted-foreground",
         className

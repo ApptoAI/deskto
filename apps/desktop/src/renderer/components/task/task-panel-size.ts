@@ -1,7 +1,6 @@
-// Wide enough on first open that a document preview reaches its own reading
-// measure. A panel that opens under it makes every file look narrow, and the
-// user has to drag before reading anything.
-export const defaultTaskPanelWidth = 480
+// The compact overview width from the task-page design. A person can still
+// widen it when a document needs more reading room.
+export const defaultTaskPanelWidth = 340
 export const minimumTaskPanelWidth = 280
 export const maximumTaskPanelWidth = 1_024
 // The composer's controls set this floor, not the text. Below roughly this
@@ -16,7 +15,8 @@ export const minimumConversationWidth = 520
  * holds the native window to it, so the three constraints never have to be
  * resolved by squeezing the conversation.
  */
-export const minimumWindowWidth = 288 + minimumConversationWidth + minimumTaskPanelWidth
+export const minimumWindowWidth =
+  236 + minimumConversationWidth + minimumTaskPanelWidth
 
 /**
  * The two measures long-form text is held to. They live beside the panel
@@ -26,7 +26,7 @@ export const minimumWindowWidth = 288 + minimumConversationWidth + minimumTaskPa
  * The conversation is the narrower of the two — it is read in turns, with a
  * composer under it — while a file is read as a page.
  */
-export const conversationMeasureClassName = "max-w-[46rem]"
+export const conversationMeasureClassName = "max-w-[50rem]"
 export const documentMeasureClassName = "max-w-[52rem]"
 
 export function maximumTaskPanelWidthForContainer(

@@ -130,7 +130,7 @@ export function Composer({
   toolbar,
   trailing,
   textareaClassName,
-  textareaRows = 2,
+  textareaRows = 1,
   autoFocus = false,
   browserContexts = noBrowserContexts,
   onRemoveBrowserContext,
@@ -631,15 +631,17 @@ export function Composer({
             void addFiles(Array.from(event.dataTransfer.files))
           }}
         >
-          <BrowserContextAttachments
-            contexts={browserContexts}
-            onRemove={(id) => onRemoveBrowserContext?.(id)}
-          />
-          <ComposerAttachments
-            attachments={attachments}
-            preparingCount={preparingCount}
-            onRemove={removeImage}
-          />
+          <div className="col-span-2">
+            <BrowserContextAttachments
+              contexts={browserContexts}
+              onRemove={(id) => onRemoveBrowserContext?.(id)}
+            />
+            <ComposerAttachments
+              attachments={attachments}
+              preparingCount={preparingCount}
+              onRemove={removeImage}
+            />
+          </div>
           <PromptInputTextarea
             ref={textareaRef}
             className={textareaClassName}
@@ -676,6 +678,7 @@ export function Composer({
             rows={textareaRows}
           />
           <PromptInputToolbar>
+            {toolbar}
             <input
               ref={fileInputRef}
               className="sr-only"
@@ -701,8 +704,7 @@ export function Composer({
             >
               <PaperclipIcon />
             </Button>
-            {toolbar}
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-1 flex items-center gap-1">
               {trailing}
               {running && onCancel ? (
                 <Button

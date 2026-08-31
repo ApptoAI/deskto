@@ -122,10 +122,9 @@ export function Workbench() {
       const here = current.stack[current.index]!
       const next = update(here)
       if (JSON.stringify(next) === JSON.stringify(here)) return current
-      const stack = [
-        ...current.stack.slice(0, current.index + 1),
-        next,
-      ].slice(-50)
+      const stack = [...current.stack.slice(0, current.index + 1), next].slice(
+        -50
+      )
       return { stack, index: stack.length - 1 }
     })
   }, [])
@@ -391,9 +390,12 @@ export function Workbench() {
     )
   }
 
-  const openThread = useCallback((threadId: string) => {
-    setView(() => ({ kind: "task", threadId }))
-  }, [setView])
+  const openThread = useCallback(
+    (threadId: string) => {
+      setView(() => ({ kind: "task", threadId }))
+    },
+    [setView]
+  )
 
   const openSkills = useCallback(() => {
     setView(() => ({ kind: "skills", filter: firstSkillsFilter }))
@@ -413,7 +415,14 @@ export function Workbench() {
       nextWorkspace: () => cycleWorkspace(1),
       previousWorkspace: () => cycleWorkspace(-1),
     }),
-    [cycleWorkspace, openProjects, openSettings, openSkills, openThread, setView]
+    [
+      cycleWorkspace,
+      openProjects,
+      openSettings,
+      openSkills,
+      openThread,
+      setView,
+    ]
   )
   useSurfaceNavigation(navigationHost)
 
@@ -481,7 +490,8 @@ export function Workbench() {
     ? (readyThreads.find((thread) => thread.id === openThreadId) ?? null)
     : null
   const activeThreadProject = activeThread
-    ? (projects.find((project) => project.id === activeThread.projectId) ?? null)
+    ? (projects.find((project) => project.id === activeThread.projectId) ??
+      null)
     : null
 
   // The open screen's own actions ride in the titlebar rather than in a second
@@ -495,9 +505,7 @@ export function Workbench() {
           className="text-muted-foreground"
           title={`Open folder — ${activeThreadProject.path}`}
           aria-label="Open folder"
-          onClick={() =>
-            runAction(() => openFolder(activeThreadProject.path))
-          }
+          onClick={() => runAction(() => openFolder(activeThreadProject.path))}
         >
           <FolderOpenIcon />
         </Button>
@@ -624,7 +632,9 @@ export function Workbench() {
       return (
         <NewTaskProjectPicker
           projects={workspaceProjects}
-          onSelect={(projectId) => setView(() => ({ kind: "new-task", projectId }))}
+          onSelect={(projectId) =>
+            setView(() => ({ kind: "new-task", projectId }))
+          }
         />
       )
     }
@@ -661,7 +671,7 @@ export function Workbench() {
   // strips, and every screen until the user finishes or skips.
   if (showOnboarding) {
     return (
-      <div className="glass-window flex h-dvh w-full flex-col overflow-hidden text-foreground">
+      <div className="flex h-dvh w-full flex-col overflow-hidden text-foreground glass-window">
         <OnboardingView
           harnesses={harnesses}
           workspaceReady={activeWorkspaceId !== null}
@@ -676,7 +686,7 @@ export function Workbench() {
   }
 
   return (
-    <div className="glass-window flex h-dvh w-full flex-col overflow-hidden text-foreground">
+    <div className="flex h-dvh w-full flex-col overflow-hidden text-foreground glass-window">
       <TitleBar
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
@@ -693,83 +703,96 @@ export function Workbench() {
       </TitleBar>
 
       <div className="flex min-h-0 flex-1">
-      {view.kind === "settings" ? (
-        <SettingsSidebar
-          page={view.page}
-          workspaceLayout={workspaceLayout}
-          onSelectPage={selectSettingsPage}
-          onGoBack={leaveSettings}
-        />
-      ) : sidebarOpen ? (
-        <>
-          {workspaceLayout === "slack" ? (
-            <WorkspaceRail
-              workspaces={workspaces}
-              activeWorkspaceId={activeWorkspaceId}
-              onSelect={selectWorkspace}
-              onCreate={() => setWorkspaceDialog({ mode: "create" })}
-            />
-          ) : null}
-          <ProjectSidebar
-            workspace={activeWorkspace}
-            workspaces={workspaces}
-            projects={workspaceProjects}
-            activeProject={activeProject}
-            allProjects={allProjects}
-            onSelectProject={selectProject}
-            onSelectAllProjects={selectAllProjects}
-            onAddProject={addProject}
-            onMoveProject={moveProject}
-            onEditProject={openProjectPanel}
-            onSetProjectPinned={setProjectPinned}
-            addingProject={projectDialog.open}
-            onSelectWorkspace={selectWorkspace}
-            onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
-            onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
-            threads={threads.state}
-            workspaceThreads={workspaceThreads.state}
-            openThreadId={openThreadId}
-            onOpenThread={surface.navigation.openTask}
-            onNewTask={() => {
-              void surface.commands.execute(surfaceCommandIds.newTask)
-            }}
-            onRetryThreads={revalidateThreads}
-            onOpenProjects={surface.navigation.openProjects}
-            projectsActive={view.kind === "projects"}
-            onOpenSkills={surface.navigation.openSkills}
-            skillsActive={view.kind === "skills"}
-            onOpenSettings={surface.navigation.openSettings}
-            focusSettings={focusSettingsButton}
-            inboxActions={inboxActions}
+        {view.kind === "settings" ? (
+          <SettingsSidebar
+            page={view.page}
             workspaceLayout={workspaceLayout}
+            onSelectPage={selectSettingsPage}
+            onGoBack={leaveSettings}
           />
-        </>
-      ) : null}
+        ) : (
+          <div
+            className={`flex shrink-0 overflow-hidden transition-[width,opacity] duration-260 ease-(--ease-drawer) motion-reduce:transition-none ${
+              sidebarOpen
+                ? workspaceLayout === "slack"
+                  ? "w-[308px] opacity-100"
+                  : "w-[236px] opacity-100"
+                : "pointer-events-none w-0 opacity-0"
+            }`}
+            inert={!sidebarOpen}
+          >
+            {workspaceLayout === "slack" ? (
+              <WorkspaceRail
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelect={selectWorkspace}
+                onCreate={() => setWorkspaceDialog({ mode: "create" })}
+              />
+            ) : null}
+            <ProjectSidebar
+              workspace={activeWorkspace}
+              workspaces={workspaces}
+              projects={workspaceProjects}
+              activeProject={activeProject}
+              allProjects={allProjects}
+              onSelectProject={selectProject}
+              onSelectAllProjects={selectAllProjects}
+              onAddProject={addProject}
+              onMoveProject={moveProject}
+              onEditProject={openProjectPanel}
+              onSetProjectPinned={setProjectPinned}
+              addingProject={projectDialog.open}
+              onSelectWorkspace={selectWorkspace}
+              onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
+              onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
+              threads={threads.state}
+              workspaceThreads={workspaceThreads.state}
+              openThreadId={openThreadId}
+              onOpenThread={surface.navigation.openTask}
+              onNewTask={() => {
+                void surface.commands.execute(surfaceCommandIds.newTask)
+              }}
+              onRetryThreads={revalidateThreads}
+              onOpenProjects={surface.navigation.openProjects}
+              projectsActive={view.kind === "projects"}
+              onOpenSkills={surface.navigation.openSkills}
+              skillsActive={view.kind === "skills"}
+              onOpenSettings={surface.navigation.openSettings}
+              focusSettings={focusSettingsButton}
+              inboxActions={inboxActions}
+              workspaceLayout={workspaceLayout}
+            />
+          </div>
+        )}
 
-      {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
+        {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
           whole — by focus, not by the wheel — which drags the window chrome
           off the top of the app. Every screen scrolls inside itself. */}
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {actionError ? (
-          <div className="px-6 pt-3">
-            <InlineError message={actionError} />
-          </div>
-        ) : null}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {actionError ? (
+            <div className="px-6 pt-3">
+              <InlineError message={actionError} />
+            </div>
+          ) : null}
 
-        {harnesses.state.status === "error" && view.kind !== "settings" ? (
-          <div className="flex items-center gap-3 px-6 pt-3">
-            <InlineError
-              className="min-w-0 flex-1"
-              message={`Deskto cannot read the list of agents. ${harnesses.state.message}`}
-            />
-            <Button variant="outline" size="sm" onClick={harnesses.revalidate}>
-              Try again
-            </Button>
-          </div>
-        ) : null}
+          {harnesses.state.status === "error" && view.kind !== "settings" ? (
+            <div className="flex items-center gap-3 px-6 pt-3">
+              <InlineError
+                className="min-w-0 flex-1"
+                message={`Deskto cannot read the list of agents. ${harnesses.state.message}`}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={harnesses.revalidate}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : null}
 
-        {renderMain()}
-      </main>
+          {renderMain()}
+        </main>
       </div>
 
       <WorkspaceDialog

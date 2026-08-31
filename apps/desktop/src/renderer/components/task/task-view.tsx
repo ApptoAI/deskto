@@ -236,7 +236,6 @@ export function TaskView({
     }
   }
 
-
   async function handleOpenSide(options: { focusComposer?: boolean } = {}) {
     setTaskActionError(null)
     if (sideThread) {
@@ -277,7 +276,6 @@ export function TaskView({
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             {messages.length === 0 ? (
@@ -301,7 +299,7 @@ export function TaskView({
                 />
               </FilesProvider>
             )}
-            <div className="shrink-0 px-6 pb-6">
+            <div className="shrink-0 px-6 pb-4">
               {/* The composer takes the conversation's measure so it lines up
                   with the answers rather than out-reaching them. */}
               <div
@@ -406,7 +404,7 @@ export function TaskView({
                     which folder without opening anything, so the path is here
                     rather than a click away — machine-shaped, so it reads as a
                     location rather than as a sentence. */}
-                <div className="flex h-11 shrink-0 items-center gap-2.5 text-caption text-muted-foreground">
+                <div className="flex h-9 shrink-0 items-center gap-2 text-caption text-muted-foreground tabular-nums">
                   <FolderIcon className="size-3.5 shrink-0" />
                   {/* The label is a fixed phrase and the path is the part that
                       can give ground, so the label never wraps and the path

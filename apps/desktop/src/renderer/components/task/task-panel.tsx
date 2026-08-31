@@ -240,9 +240,7 @@ export function TaskPanel({
     [panelWidth, resizeTo, setPanelWidth]
   )
 
-  // The panel sits a step above the canvas the conversation is on. A hairline
-  // alone could not tell two full-height columns apart when both were the
-  // same near-black.
+  // The panel shares the canvas and needs only the relationship hairline.
   return (
     <aside
       ref={asideRef}
@@ -251,7 +249,7 @@ export function TaskPanel({
         minWidth: minimumTaskPanelWidth,
         maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
       }}
-      className="glass-panel relative flex h-full shrink-0 flex-col border-l border-border"
+      className="panel-enter relative flex h-full shrink-0 flex-col border-l border-border glass-panel"
     >
       <div
         ref={separatorRef}
@@ -273,7 +271,7 @@ export function TaskPanel({
       >
         <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring group-focus-visible/resize:bg-ring" />
       </div>
-      <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-border pr-2 pl-1">
+      <div className="flex h-11 shrink-0 items-stretch gap-1 px-2 pt-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <FilesTab
             active={panel.surface === "files"}
@@ -295,9 +293,7 @@ export function TaskPanel({
             onSelect={onOpenSide}
           />
         </div>
-        <div className="flex shrink-0 items-center">
-          
-        </div>
+        <div className="flex shrink-0 items-center"></div>
       </div>
 
       {panel.surface === "side" ? (
@@ -312,7 +308,10 @@ export function TaskPanel({
           />
         ) : (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <GitBranchIcon aria-hidden className="size-4 motion-safe:animate-pulse" />
+            <GitBranchIcon
+              aria-hidden
+              className="size-4 motion-safe:animate-pulse"
+            />
             Starting side chat…
           </div>
         )
@@ -475,7 +474,7 @@ function PanelTab({
       className={cn(
         "gap-1.5",
         active
-          ? "bevel bg-fill-row-selected text-foreground hover:bg-fill-row-selected"
+          ? "bg-fill-row-selected text-foreground hover:bg-fill-row-selected"
           : "text-muted-foreground"
       )}
     >
@@ -508,14 +507,14 @@ function FilesOverview({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-3">
-      <div className="mb-3 px-1">
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      <div className="mb-3 px-2">
         <FolderCrumbs folder={folder} onOpenFolder={onOpenFolder} />
         <p className="mt-1 text-xs text-muted-foreground">
           Created or changed during this task
         </p>
       </div>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-0.5">
         {listFolder(outputs, folder).map((row) =>
           row.kind === "folder" ? (
             <li key={`folder:${row.path}`}>
@@ -571,11 +570,10 @@ function FileTreeRowButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="flex w-full items-center gap-3 rounded-row px-3 py-2.5 text-left transition-colors duration-150 ease-out outline-none hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex w-full items-center gap-2.5 rounded-card px-2.5 py-2 text-left transition-[background-color,transform] duration-120 outline-none hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring motion-safe:active:scale-[0.98]"
     >
-      {/* Outlined rather than filled: the row fills on hover, and a filled
-          tile would vanish into it. */}
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/70">
+      {/* A quiet tile distinguishes the file kind from the row's hover fill. */}
+      <span className="flex size-7.5 shrink-0 items-center justify-center rounded-row bg-fill-row-selected ring-1 ring-border/70">
         {icon}
       </span>
       <span className="min-w-0 flex-1">

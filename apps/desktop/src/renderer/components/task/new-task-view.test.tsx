@@ -181,7 +181,7 @@ describe("NewTaskView", () => {
     )
 
     await screen.findByRole("button", { name: "Model: Claude Opus" })
-    fireEvent.click(screen.getByRole("button", { name: "Claude Code" }))
+    fireEvent.click(screen.getByRole("button", { name: "Agent: Claude Code" }))
     // Matched loosely: each row now carries a line on what the agent is, so
     // the accessible name is the agent's name plus that sentence.
     fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Codex/ }))

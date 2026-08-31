@@ -31,22 +31,21 @@ function defaultWindowSize() {
     system is not in still gets one wrong frame, which is as close as the main
     process can get on its own.
 
-    This is the wallpaper's base stop rather than a surface colour: the Surface
-    paints the wallpaper and floats glass on it, so the deepest thing behind
-    everything is what a torn frame should show. Keep in step with --wp-base. */
+    This is the body fallback behind the opaque Surface. Keep it in step with
+    --wp-base. */
 function canvasColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#202024" : "#d6d6e0"
+  return nativeTheme.shouldUseDarkColors ? "#09090a" : "#f8f7f5"
 }
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...defaultWindowSize(),
     // Wide enough for the layout to keep its own promises: the task list at
-    // 288, the conversation's declared floor at 520, and the task panel's
+    // 236, the conversation's declared floor at 520, and the task panel's
     // minimum at 280. Below this the conversation is squeezed under the width
     // its composer needs, which is how its controls ended up on top of one
     // another. Keep in step with task-panel-size.ts.
-    minWidth: 1088,
+    minWidth: 1036,
     minHeight: 620,
     center: true,
     show: false,

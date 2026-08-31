@@ -1,6 +1,6 @@
 # ADR 0027: The Surface is monochrome glass over a wallpaper
 
-- Status: accepted
+- Status: superseded by ADR 0028
 - Date: 2026-08-30
 
 ## Context

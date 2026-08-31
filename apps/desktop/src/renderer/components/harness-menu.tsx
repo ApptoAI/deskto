@@ -31,10 +31,12 @@ export function HarnessMenu({
   harnesses,
   selectedId,
   onSelect,
+  compact = false,
 }: {
   harnesses: Harness[]
   selectedId: string | null
   onSelect: (harnessId: string) => void
+  compact?: boolean
 }) {
   const selected = selectedId ? findHarness(harnesses, selectedId) : null
 
@@ -42,11 +44,19 @@ export function HarnessMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="sm" className="text-[var(--text-3)]" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-[var(--text-3)]"
+            aria-label={`Agent: ${selected?.name ?? "Choose an agent"}`}
+            title={`Agent: ${selected?.name ?? "Choose an agent"}`}
+          />
         }
       >
         {selected ? <HarnessLogo harnessId={selected.id} /> : null}
-        {selected?.name ?? "Choose an agent"}
+        <span className={compact ? "sr-only" : undefined}>
+          {selected?.name ?? "Choose an agent"}
+        </span>
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-72">

@@ -35,11 +35,9 @@ export function DocumentPreview({ dataBase64 }: { dataBase64: string }) {
   }
 
   return (
-    // The paper metaphor, deliberately. Every other surface in the app is
-    // translucent glass over the wallpaper; this one is opaque and lifted, and
-    // that break is the whole point of it. It is the difference between the
-    // agent talking about a file and Deskto showing you the file, and a reader
-    // should be able to tell those apart before reading a word. See ADR 0027.
+    // The paper metaphor, deliberately. The app chrome stays flat while this
+    // file is opaque and lifted; the break distinguishes an artifact from an
+    // agent talking about one. See ADR 0028.
     <ScrollArea className="flex-1">
       <article
         className={cn(
