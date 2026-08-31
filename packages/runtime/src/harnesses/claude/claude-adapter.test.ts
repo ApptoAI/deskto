@@ -11,6 +11,7 @@ import type { HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { threadTitlePrompt } from "../../thread-title-generator.js"
 import {
   ClaudeAdapter,
   claudeAccountSignedIn,
@@ -538,6 +539,44 @@ describe("claudeAssistantFailure", () => {
 })
 
 describe("ClaudeAdapter", () => {
+  it("generates a title from the complete title prompt", async () => {
+    const prompt = threadTitlePrompt("Review the renewal pipeline")
+    queryMock.mockReturnValue(
+      fakeQuery([
+        sdkMessage({
+          type: "stream_event",
+          parent_tool_use_id: null,
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "Renewal pipeline review" },
+          },
+        }),
+        sdkMessage({
+          type: "result",
+          subtype: "success",
+          modelUsage: {},
+        }),
+      ])
+    )
+
+    await expect(
+      new ClaudeAdapter({ queryFactory: queryMock }).generateText(
+        {
+          projectPath: "/tmp/project",
+          prompt,
+          executionProfile: {
+            modelId: null,
+            effort: null,
+            permissionMode: "approval-required",
+          },
+        },
+        new AbortController().signal
+      )
+    ).resolves.toBe("Renewal pipeline review")
+    expect(queryMock.mock.calls[0]?.[0].prompt).toBe(prompt)
+  })
+
   it("sends text and images as Claude user content", async () => {
     queryMock.mockReturnValue(fakeQuery([]))
     const session = await new ClaudeAdapter({ queryFactory: queryMock }).start(

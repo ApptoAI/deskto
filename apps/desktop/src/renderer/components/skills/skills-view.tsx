@@ -260,11 +260,12 @@ export function SkillsView({
               <span className="ml-auto text-micro text-muted-foreground tabular-nums">
                 {items.length === 1 ? "1 skill" : `${items.length} skills`}
               </span>
-            ) : (
+            ) : inventory.state.status === "loading" ||
+              inventory.state.status === "idle" ? (
               <span className="ml-auto text-micro text-muted-foreground">
                 Checking folders…
               </span>
-            )}
+            ) : null}
             <Button
               type="button"
               variant="ghost"

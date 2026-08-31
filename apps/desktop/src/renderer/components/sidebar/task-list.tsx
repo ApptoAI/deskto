@@ -499,7 +499,7 @@ function TaskRow({
           </span>
           {/* Actions replace the right-hand status rail, so the title keeps
               exactly the same measure when they appear. */}
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 pr-20">
             <span
               title={thread.title}
               className={cn(
@@ -510,7 +510,7 @@ function TaskRow({
               {thread.title}
             </span>
             {projectName ? (
-              <span className="mt-0.5 flex items-center gap-1 pr-7 text-micro leading-4 text-muted-foreground">
+              <span className="mt-0.5 flex items-center gap-1 text-micro leading-4 text-muted-foreground">
                 <FolderIcon
                   aria-hidden
                   className="size-3 shrink-0 text-muted-foreground"
@@ -521,7 +521,7 @@ function TaskRow({
           </span>
           <span
             className={cn(
-              "flex h-5 shrink-0 items-center justify-end gap-1.5 transition-opacity duration-150 group-hover:opacity-0 group-has-focus-visible:opacity-0",
+              "absolute top-1/2 right-2 flex h-5 w-20 -translate-y-1/2 items-center justify-end gap-1.5 transition-opacity duration-150 group-hover:opacity-0 group-has-focus-visible:opacity-0",
               popupOpen && "opacity-0"
             )}
           >

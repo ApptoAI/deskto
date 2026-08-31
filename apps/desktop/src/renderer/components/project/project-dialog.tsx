@@ -129,6 +129,24 @@ function ProjectForm({
   const [description, setDescription] = useState("")
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [templateId, setTemplateId] = useState("")
+  const templateInventoryKey = templatesLoading
+    ? null
+    : templates.map((template) => template.id).join("\0")
+  const [knownTemplateInventoryKey, setKnownTemplateInventoryKey] = useState(
+    templateInventoryKey
+  )
+  if (
+    templateInventoryKey !== null &&
+    templateInventoryKey !== knownTemplateInventoryKey
+  ) {
+    setKnownTemplateInventoryKey(templateInventoryKey)
+    if (
+      templateId &&
+      !templates.some((template) => template.id === templateId)
+    ) {
+      setTemplateId("")
+    }
+  }
   const [locationKind, setLocationKind] = useState<"managed" | "linked">(
     "managed"
   )
@@ -165,7 +183,7 @@ function ProjectForm({
         name: normalizedName,
         description: description.trim(),
         location,
-        ...(templateId ? { templateId } : undefined),
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : undefined),
       })
     } catch {
       // The workbench shows the Runtime error and keeps this draft open.
@@ -275,7 +293,7 @@ function ProjectForm({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
                       <DropdownMenuRadioGroup
-                        value={templateId}
+                        value={selectedTemplate?.id ?? ""}
                         onValueChange={(value) => setTemplateId(String(value))}
                       >
                         <DropdownMenuRadioItem value="" closeOnClick>
