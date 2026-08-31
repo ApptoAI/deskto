@@ -52,7 +52,7 @@ function EffortBars({ level }: { level: number }) {
           width="2.5"
           height={17 - bar.y}
           rx="1"
-          className={cn("fill-current", index >= level && "opacity-25")}
+          className={cn("fill-current", index >= level && "opacity-10")}
         />
       ))}
     </svg>
