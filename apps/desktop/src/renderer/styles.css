@@ -350,6 +350,13 @@
   }
 }
 
+@keyframes dev-picker-note-rise {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dev-picker-blob,
   .dev-picker-dock,
@@ -523,6 +530,7 @@
   width: 224px;
   padding: 8px 9px 6px;
   border-radius: 12px;
+  animation-name: dev-picker-note-rise;
 }
 
 .dev-picker-note textarea {
@@ -538,36 +546,6 @@
 
 .dev-picker-note textarea::placeholder {
   color: var(--dp-muted);
-}
-
-.dev-picker-note > span {
-  display: block;
-  margin-top: 4px;
-  color: var(--dp-muted);
-  font-size: 9px;
-  text-align: right;
-}
-
-.dev-picker-icon-button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dp-muted);
-  cursor: pointer;
-}
-
-.dev-picker-icon-button:hover {
-  background: var(--dp-hover);
-  color: var(--dp-fg);
-}
-
-.dev-picker-icon-button[data-active] {
-  background: var(--dp-accent);
-  color: var(--dp-accent-fg);
 }
 
 .dev-picker-blob > button[data-tip]::after,

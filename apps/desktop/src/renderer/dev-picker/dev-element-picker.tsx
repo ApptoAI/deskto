@@ -79,23 +79,13 @@ const pickerModes = [
   "interact",
 ] as const satisfies readonly PickerMode[]
 
+function insidePickerUi(target: EventTarget | null) {
+  return target instanceof Element && target.closest(pickerUiSelector) !== null
+}
+
 function keyboardModeForKey(key: string) {
-  switch (key.toLowerCase()) {
-    case "n":
-      return "notation"
-    case "s":
-      return "select"
-    case "r":
-      return "region"
-    case "d":
-      return "draw"
-    case "e":
-      return "erase"
-    case "v":
-      return "interact"
-    default:
-      return undefined
-  }
+  const normalized = key.toUpperCase()
+  return pickerModes.find((mode) => modeShortcuts[mode] === normalized)
 }
 
 function normalizeRegion(region: DraftRegion): DevPickerRegion {
@@ -252,7 +242,7 @@ export function DevElementPicker() {
       regions,
       strokes,
     })
-    await navigator.clipboard.writeText(brief)
+    await navigator.clipboard.writeText(brief).catch(() => undefined)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1_600)
   }, [drafts, marks, regions, strokes])
@@ -296,22 +286,25 @@ export function DevElementPicker() {
     }
   })
 
-  // Mode shortcuts and the global exits. Text fields keep their own keys.
+  // Mode shortcuts and the global exits. The app keeps ⌘Enter unless the
+  // picker owns the moment — armed, or focus sits in the picker's fields —
+  // and this capture listener runs before any app handler can see the key.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target
+      const inField =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        if ((!active && !expanded) || (inField && !insidePickerUi(target))) {
+          return
+        }
         event.preventDefault()
         event.stopPropagation()
         void copyBrief()
         return
       }
-      const target = event.target
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement
-      ) {
-        return
-      }
+      if (inField) return
       if (event.key === "Escape") {
         if (drafts.length > 0) setDrafts([])
         else if (active) {
@@ -372,9 +365,6 @@ export function DevElementPicker() {
   }, [hovered, pick, selecting])
 
   useEffect(() => {
-    const insidePickerUi = (target: EventTarget | null) =>
-      target instanceof Element && target.closest(pickerUiSelector)
-
     const eraseAt = (point: Point) => {
       const draft = [...drafts]
         .reverse()
@@ -520,14 +510,25 @@ export function DevElementPicker() {
       }
     }
 
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (!pointerDown.current) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      pointerDown.current = false
+      setDraftRegion(undefined)
+      setDraftStroke(undefined)
+    }
+
     window.addEventListener("pointermove", handlePointerMove, true)
     window.addEventListener("pointerdown", handlePointerDown, true)
     window.addEventListener("pointerup", handlePointerUp, true)
+    window.addEventListener("pointercancel", handlePointerCancel, true)
     window.addEventListener("click", handleClick, true)
     return () => {
       window.removeEventListener("pointermove", handlePointerMove, true)
       window.removeEventListener("pointerdown", handlePointerDown, true)
       window.removeEventListener("pointerup", handlePointerUp, true)
+      window.removeEventListener("pointercancel", handlePointerCancel, true)
       window.removeEventListener("click", handleClick, true)
     }
   }, [active, drafts, marks, mode, pick, regions, selecting, strokes])
@@ -545,7 +546,7 @@ export function DevElementPicker() {
     .filter(({ element }) => element.isConnected)
     .map((draft, index) => ({
       draft,
-      number: marks.length + index + 1,
+      number: markRects.length + index + 1,
       rect: draft.element.getBoundingClientRect(),
     }))
   const hoverRect =
@@ -700,7 +701,6 @@ export function DevElementPicker() {
                 key={key}
                 type="button"
                 data-dev-picker-action={`mode:${key}`}
-                className="dev-picker-icon-button"
                 data-active={mode === key || undefined}
                 aria-label={`${modeLabels[key]} (${modeShortcuts[key]})`}
                 data-tip={`${modeLabels[key]} · ${modeShortcuts[key]}`}
@@ -713,7 +713,6 @@ export function DevElementPicker() {
           <button
             type="button"
             data-dev-picker-action="clear"
-            className="dev-picker-icon-button"
             aria-label="Clear annotations"
             data-tip="Clear all"
             disabled={annotationCount === 0}
@@ -723,7 +722,6 @@ export function DevElementPicker() {
           <button
             type="button"
             data-dev-picker-action="copy"
-            className="dev-picker-icon-button dev-picker-copy"
             aria-label="Copy annotation brief"
             data-tip="Copy brief · ⌘Enter"
             disabled={annotationCount === 0}
