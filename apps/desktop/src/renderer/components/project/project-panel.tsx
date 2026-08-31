@@ -311,11 +311,6 @@ export function ProjectPanel({
   )
 }
 
-/**
- * One fact about the project, as a definition row: label, value, action. The
- * whole strip reads as metadata on the glass rather than as objects sitting
- * on it — three rows, one line each, nothing boxed.
- */
 function MetaRow({
   label,
   trailing,
@@ -336,8 +331,6 @@ function MetaRow({
   )
 }
 
-/** The row's edit affordance: a pencil when there is something to change, a
-    plus when the fact is still unset. */
 function MetaEditButton({
   label,
   hasContent,

@@ -40,6 +40,7 @@
     .mono { font-family: var(--mono); letter-spacing: 0; }
 
     .app { height: 100dvh; display: grid; }
+    .scroll-content { display: contents; }
 
     /* A — Séance: docked composer, ghost title */
     [data-v="a"] { grid-template-rows: auto 1fr auto; }
@@ -61,8 +62,9 @@
     [data-v="a"] .dock-inner { max-width: 640px; margin: 0 auto; }
 
     /* B — Letter: composer lives in the scroll, document feel */
-    [data-v="b"] { grid-template-rows: 1fr; }
-    [data-v="b"] .stream { overflow: auto; padding: 56px 24px 80px; }
+    [data-v="b"] { grid-template-rows: auto 1fr; }
+    [data-v="b"] .scroll-content { display: block; min-height: 0; overflow: auto; }
+    [data-v="b"] .stream { overflow: visible; padding: 56px 24px 80px; }
     [data-v="b"] .col { max-width: 520px; margin: 0 auto; }
     [data-v="b"] .ident {
       margin-bottom: 48px;
@@ -204,28 +206,30 @@
       <h1>Partner brief draft</h1>
       <p>Q3 Planning · local</p>
     </header>
-    <main class="stream">
-      <div class="col" id="col"></div>
-    </main>
-    <footer class="dock">
-      <div class="dock-inner">
-        <div class="composer">
-          <input placeholder="Do anything…" aria-label="Message" />
-          <button class="ghost" type="button">Claude Code</button>
-          <button class="ghost" type="button">High</button>
-          <button class="ico" type="button" aria-label="Attach">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7L9.2 18.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
-          </button>
-          <button class="ico send" type="button" aria-label="Send">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          </button>
+    <div class="scroll-content">
+      <main class="stream">
+        <div class="col" id="col"></div>
+      </main>
+      <footer class="dock">
+        <div class="dock-inner">
+          <div class="composer">
+            <input placeholder="Do anything…" aria-label="Message" />
+            <button class="ghost" type="button">Claude Code</button>
+            <button class="ghost" type="button">High</button>
+            <button class="ico" type="button" aria-label="Attach">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7L9.2 18.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+            </button>
+            <button class="ico send" type="button" aria-label="Send">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </button>
+          </div>
+          <div class="meta">
+            <span>Working · 18s</span>
+            <span class="mono">~/Documents/Q3 Planning</span>
+          </div>
         </div>
-        <div class="meta">
-          <span>Working · 18s</span>
-          <span class="mono">~/Documents/Q3 Planning</span>
-        </div>
-      </div>
-    </footer>
+      </footer>
+    </div>
   </div>
 
   <div class="switcher" id="switcher">

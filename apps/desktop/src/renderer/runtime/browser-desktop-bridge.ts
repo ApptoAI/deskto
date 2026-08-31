@@ -33,26 +33,20 @@ export function createBrowserDesktopBridge(): DesktopApi {
         return
       }
       const parsed = runtimeEventSchema.safeParse(data)
-      if (!parsed.success) return
+      if (!parsed.success) {
+        console.error(
+          "Browser Surface received an invalid Runtime event",
+          parsed.error
+        )
+        return
+      }
       for (const listener of eventListeners) listener(parsed.data)
-    }
-    eventSource.onerror = () => {
-      // EventSource reconnects on its own; drop the handle so it is recreated
-      // if the server restarted with a new subscription set.
-      eventSource = undefined
     }
   }
 
   return {
     devFlags: { forceOnboarding: false },
-    // The dev machine runs Linux, so the Surface lays out for it; the
-    // controls below are honest no-ops because a browser tab has no window.
     platform: "linux",
-    windowControls: {
-      minimize: () => {},
-      toggleMaximize: () => {},
-      close: () => {},
-    },
     runtime: {
       request<M extends RuntimeMethod>(
         request: RequestFor<M>

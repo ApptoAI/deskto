@@ -1,6 +1,5 @@
 import { createServer, type Server } from "node:http"
 
-import { app } from "electron"
 import { z } from "zod"
 
 import {
@@ -24,16 +23,39 @@ const failureDetailSchema = z
  */
 const maxBridgeRequestBytes = 1_048_576
 
-function isAllowedBridgeOrigin(origin: string | undefined): boolean {
-  if (!origin) return true
+function requestHostname(
+  req: import("node:http").IncomingMessage
+): string | undefined {
+  const forwardedHost = req.headers["x-forwarded-host"]
+  const host = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : (forwardedHost ?? req.headers.host)
+  const firstHost = host?.split(",", 1)[0]?.trim()
+  if (!firstHost) return undefined
+  try {
+    return new URL(`http://${firstHost}`).hostname
+  } catch {
+    return undefined
+  }
+}
+
+function isAllowedBridgeOrigin(
+  origin: string,
+  hostname: string | undefined
+): boolean {
+  if (!hostname) return false
   try {
     const url = new URL(origin)
-    const host = url.hostname
-    const allowedHost =
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".exe.xyz")
-    return allowedHost && (url.protocol === "http:" || url.protocol === "https:")
+    const allowedHostname =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "[::1]" ||
+      hostname.endsWith(".exe.xyz")
+    return (
+      allowedHostname &&
+      url.hostname === hostname &&
+      (url.protocol === "http:" || url.protocol === "https:")
+    )
   } catch {
     return false
   }
@@ -43,12 +65,11 @@ function setBridgeCorsHeaders(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse
 ): boolean {
-  // SAFETY: Node's IncomingMessage headers are string | string[] | undefined
-  // per the http types, and the Origin header is always a single string when
-  // present, so narrowing to string | undefined is safe.
-  const origin = req.headers.origin as string | undefined
-  if (origin && !isAllowedBridgeOrigin(origin)) return false
-  if (origin) res.setHeader("access-control-allow-origin", origin)
+  const origin = req.headers.origin
+  if (!origin || !isAllowedBridgeOrigin(origin, requestHostname(req))) {
+    return false
+  }
+  res.setHeader("access-control-allow-origin", origin)
   res.setHeader("access-control-allow-headers", "content-type")
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS")
   return true
@@ -87,7 +108,13 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
       })
       const unsubscribe = runtime.subscribe((event: RuntimeEvent) => {
         const parsed = runtimeEventSchema.safeParse(event)
-        if (!parsed.success) return
+        if (!parsed.success) {
+          console.error(
+            "Browser bridge received an invalid Runtime event",
+            parsed.error
+          )
+          return
+        }
         res.write(`data: ${JSON.stringify(parsed.data)}\n\n`)
       })
       const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15_000)
@@ -108,7 +135,7 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
         )
         return
       }
-      let body = ""
+      const chunks: Buffer[] = []
       let receivedBytes = 0
       let overflowed = false
       req.on("data", (chunk: Buffer) => {
@@ -117,7 +144,7 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
           overflowed = true
           return
         }
-        body += chunk
+        chunks.push(chunk)
       })
       req.on("end", () => {
         if (overflowed) {
@@ -131,7 +158,7 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
         }
         let value: unknown
         try {
-          value = JSON.parse(body)
+          value = JSON.parse(Buffer.concat(chunks).toString("utf8"))
         } catch {
           res.writeHead(400).end(
             JSON.stringify({
@@ -177,13 +204,17 @@ export function startBrowserBridge(runtime: Runtime, port: number): () => void {
     res.writeHead(404).end()
   })
 
+  server.on("error", (error) => {
+    console.error("Browser bridge failed", error)
+  })
   server.listen(port, "127.0.0.1")
   return () => {
     server.close()
+    server.closeAllConnections()
   }
 }
 
 /** Opt-in so a dev launch never opens a network port by accident. */
-export function browserBridgeEnabled(): boolean {
-  return !app.isPackaged && process.env.DESKTO_BROWSER_BRIDGE === "1"
+export function browserBridgeEnabled(isPackaged: boolean): boolean {
+  return !isPackaged && process.env.DESKTO_BROWSER_BRIDGE === "1"
 }

@@ -2,6 +2,5 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  server: { host: true },
-  vite: { server: { host: true, allowedHosts: true } },
+  server: { host: true, allowedHosts: ['.exe.xyz'] },
 });

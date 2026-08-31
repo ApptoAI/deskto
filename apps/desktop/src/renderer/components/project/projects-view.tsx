@@ -238,7 +238,7 @@ function ProjectCard({
           {age === "now" ? "Just now" : `${age} ago`}
         </span>
         {project.locationKind === "linked" ? (
-          <span className="min-w-0 truncate text-micro">{project.path}</span>
+          <span className="min-w-0 truncate font-mono text-micro">{project.path}</span>
         ) : null}
       </div>
     </Card>

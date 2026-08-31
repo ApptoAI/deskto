@@ -16,8 +16,6 @@ import {
  */
 const bundleDirectory = import.meta.dirname
 
-/** Opens large on a roomy display without overflowing a small one: most of
-    the work area, capped so it never becomes an unwieldy full-screen sheet. */
 function defaultWindowSize() {
   const workArea = screen.getPrimaryDisplay().workAreaSize
   return {
@@ -52,10 +50,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 620,
     center: true,
     show: false,
-    // macOS keeps the traffic lights and the Surface leaves room for them.
-    // Linux and Windows have no equivalent, so the native titlebar is hidden
-    // entirely — with it visible the window carried two rows of chrome — and
-    // the Surface draws its own controls.
+    // macOS keeps native traffic lights; other platforms use renderer controls.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     trafficLightPosition: { x: 16, y: 20 },
     // The Surface draws its own titlebar. macOS already keeps its menu in the
@@ -76,8 +71,7 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
-  // The colour is only read at construction, and a window outlives any one
-  // system palette.
+  // nativeTheme is global, so remove the listener with its window.
   const followSystemCanvas = () => window.setBackgroundColor(canvasColor())
   nativeTheme.on("updated", followSystemCanvas)
   window.once("closed", () => nativeTheme.off("updated", followSystemCanvas))

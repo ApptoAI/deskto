@@ -14,7 +14,13 @@ export function registerRuntimeIpc(
 ): () => void {
   const unsubscribe = runtime.subscribe((event) => {
     const parsed = runtimeEventSchema.safeParse(event)
-    if (!parsed.success) return
+    if (!parsed.success) {
+      console.error(
+        "Runtime IPC received an invalid Runtime event",
+        parsed.error
+      )
+      return
+    }
     if (!webContents.isDestroyed()) webContents.send(runtimeEventChannel, parsed.data)
   })
 

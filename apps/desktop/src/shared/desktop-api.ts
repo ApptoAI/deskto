@@ -104,10 +104,8 @@ export interface DesktopApi {
     cancelElementSelection(threadId: string): Promise<void>
     subscribe(listener: (event: BrowserEvent) => void): () => void
   }
-  /** Where the window chrome lives; the titlebar draws controls from it. */
   platform: NodeJS.Platform
-  /** Only wired on platforms without native window controls (Linux, Windows). */
-  windowControls: {
+  windowControls?: {
     minimize(): void
     toggleMaximize(): void
     close(): void

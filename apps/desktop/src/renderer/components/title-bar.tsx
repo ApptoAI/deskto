@@ -40,18 +40,16 @@ export function TitleBar({
   children?: ReactNode
   trailing?: ReactNode
 }) {
-  const drawWindowControls = window.deskto.platform !== "darwin"
+  const windowControls = window.deskto.windowControls
+  const reserveTrafficLights = window.deskto.platform === "darwin"
+  const drawWindowControls =
+    window.deskto.platform !== "darwin" && windowControls !== undefined
   return (
     <header className="drag-region flex h-13 shrink-0 items-center px-4">
-      {/* macOS draws its traffic lights over the top-left of the content with
-          `titleBarStyle: hiddenInset`, so the row starts clear of them.
-          Elsewhere the native titlebar is hidden and the controls sit on the
-          right, where those platforms expect them. */}
-      {drawWindowControls ? null : (
-        /* Lights start at x=16 and span ~52px; the spacer must clear their
-            right edge (~68px) plus a visible gap before the first control. */
+      {reserveTrafficLights ? (
+        /* hiddenInset traffic lights occupy x=16–68. */
         <span aria-hidden className="w-[80px] shrink-0" />
-      )}
+      ) : null}
 
       <nav aria-label="Window" className="no-drag flex items-center gap-3">
         <span className="flex items-center">
@@ -87,30 +85,31 @@ export function TitleBar({
       ) : null}
 
       <div
-        className={`no-drag ml-auto flex shrink-0 items-center gap-1${trailing ? " pl-1" : ""}`}
+        className={cn(
+          "no-drag ml-auto flex shrink-0 items-center gap-1",
+          trailing && "pl-1"
+        )}
       >
         {trailing}
-        {drawWindowControls ? <WindowControls /> : null}
+        {drawWindowControls && windowControls ? (
+          <WindowControls controls={windowControls} />
+        ) : null}
       </div>
     </header>
   )
 }
 
-/**
- * Minimize, maximize, and close for the platforms whose native chrome the
- * window hides. They keep the titlebar's quiet icon voice; close alone may
- * take the destructive hue on hover, the one place hue is allowed.
- * Maximize reads no state back, so its glyph is the action rather than the
- * current geometry.
- */
-function WindowControls() {
-  const controls = window.deskto.windowControls
+function WindowControls({
+  controls,
+}: {
+  controls: NonNullable<typeof window.deskto.windowControls>
+}) {
   return (
     <span className="ml-1 flex items-center">
       <TitleBarButton label="Minimize" onClick={controls.minimize}>
         <MinusIcon />
       </TitleBarButton>
-      <TitleBarButton label="Maximize" onClick={controls.toggleMaximize}>
+      <TitleBarButton label="Toggle maximize" onClick={controls.toggleMaximize}>
         <SquareIcon />
       </TitleBarButton>
       <TitleBarButton

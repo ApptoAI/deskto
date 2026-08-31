@@ -96,7 +96,6 @@ const api: DesktopApi = {
     },
   },
   platform: process.platform,
-  // Fire-and-forget: a window control has no answer a renderer waits on.
   windowControls: {
     minimize: () => ipcRenderer.send(windowMinimizeChannel),
     toggleMaximize: () => ipcRenderer.send(windowMaximizeToggleChannel),

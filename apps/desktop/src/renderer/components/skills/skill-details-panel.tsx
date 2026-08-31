@@ -276,7 +276,7 @@ export function SkillDetailsPanel({
                       ) : null}
                     </span>
                     <span
-                      className="mt-0.5 block truncate text-micro text-muted-foreground"
+                      className="mt-0.5 block truncate font-mono text-micro text-muted-foreground"
                       title={entry.occurrence.directoryPath}
                     >
                       {entry.occurrence.directoryPath}

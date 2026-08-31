@@ -228,7 +228,7 @@ async function openApplication(): Promise<void> {
   // Serves the same Runtime protocol over HTTP for a browser-hosted Surface.
   // Dev-only and opt-in; the port is reachable only from this machine's
   // networks, so the flag is what keeps a casual dev run from opening it.
-  const closeBrowserBridge = browserBridgeEnabled()
+  const closeBrowserBridge = browserBridgeEnabled(app.isPackaged)
     ? startBrowserBridge(
         runtime,
         Number(process.env.DESKTO_BROWSER_BRIDGE_PORT ?? 5174)
@@ -251,6 +251,7 @@ async function openApplication(): Promise<void> {
     updateManager.dispose()
     unregisterUpdateIpc()
     unregisterRuntimeIpc()
+    unsubscribeBrowserRuntime()
     unregisterWindowControls()
     closeBrowserBridge?.()
     await closeApplicationRuntime()

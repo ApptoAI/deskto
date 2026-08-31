@@ -62,10 +62,6 @@ export function SkillList({
 
       {[...groups.entries()].map(([group, groupItems]) => (
         <section key={group} aria-labelledby={`skill-group-${group}`}>
-          {/* Sticky so a long folder never scrolls away from the name of the
-              folder it belongs to. Blur alone separates it from what scrolls
-              beneath: a tint painted here composites with the window's own
-              glass and reads as a pale band. */}
           <div className="sticky top-0 z-10 flex items-center gap-3 px-2 pt-6 pb-2 backdrop-blur-2xl">
             <h2
               id={`skill-group-${group}`}

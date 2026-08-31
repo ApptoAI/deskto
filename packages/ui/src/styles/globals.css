@@ -11,13 +11,8 @@
 @source "../../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
-/* Two faces carry the whole system. Inter sets everything a person reads —
-   including section labels and counts, which name regions in human words.
-   Geist Mono is reserved for text that is machine-shaped — paths, code,
-   identifiers, timestamps — so a glance at the shape already says what kind
-   of thing it is. Both ship with the app: an offline desktop client cannot
-   wait on a CDN, and a fallback stack that differs per platform would undo
-   the tuning below. */
+/* Bundled fonts keep the app usable offline. Inter maps to human-readable text;
+   Geist Mono maps to machine-shaped text. */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono:
@@ -468,8 +463,6 @@
   --fill-chip: oklch(0 0 0 / 5%);
 }
 
-/* The one display step the app has: a page title, or the question on an empty
-   task screen. Weight 400 and tight tracking do the work that bolding would. */
 @utility display-sm {
   font-size: var(--text-display-sm);
   line-height: 1.2;
@@ -477,11 +470,6 @@
   letter-spacing: -0.02em;
 }
 
-/* The label voice: uppercase Inter, tracked open, always muted. It marks the
-   text that names a region rather than saying anything — section headers,
-   column heads, counters — and never competes with the content under it.
-   Inter rather than mono: these are words a person reads, and mixing mono
-   here made every header look like it came from a different app. */
 @utility eyebrow {
   font-family: var(--font-sans);
   font-size: var(--text-tiny);
