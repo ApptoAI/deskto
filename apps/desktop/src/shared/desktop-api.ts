@@ -68,6 +68,8 @@ export interface DesktopApi {
   devFlags: {
     /** Show the first-run wizard on every launch, ignoring the saved answer. */
     forceOnboarding: boolean
+    /** Overlay the development-only DOM selection and annotation tools. */
+    elementPicker: boolean
   }
   runtime: {
     request<M extends RuntimeMethod>(

@@ -35,6 +35,7 @@ const api: DesktopApi = {
   // dev-only force flag crosses into the renderer without an IPC round trip.
   devFlags: {
     forceOnboarding: process.env.DESKTO_FORCE_ONBOARDING === "1",
+    elementPicker: process.env.DESKTO_DEV_ELEMENT_PICKER === "1",
   },
   runtime: {
     request: (request) => ipcRenderer.invoke(runtimeRequestChannel, request),

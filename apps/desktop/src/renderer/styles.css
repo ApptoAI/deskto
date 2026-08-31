@@ -306,3 +306,299 @@
     opacity: 1;
   }
 }
+
+/* Development-only element picker. Its selectors stay self-contained because
+   this layer annotates the Surface without becoming part of the product UI.
+   The blob and dock invert the app palette — dark app, light chrome — driven
+   by the data-app-dark attribute a MutationObserver keeps current. */
+.dev-picker-layer {
+  --dp-accent: #7c3aed;
+  --dp-accent-fg: #ffffff;
+  --dp-bg: #18181b;
+  --dp-fg: #fafafa;
+  --dp-muted: rgb(250 250 250 / 52%);
+  --dp-border: rgb(250 250 250 / 16%);
+  --dp-hover: rgb(255 255 255 / 9%);
+  --dp-tip-bg: #fafafa;
+  --dp-tip-fg: #18181b;
+  --dp-shadow: 0 14px 40px rgb(0 0 0 / 30%), 0 2px 10px rgb(0 0 0 / 18%);
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--dp-fg);
+}
+
+.dev-picker-layer[data-app-dark="true"] {
+  --dp-bg: #fafafa;
+  --dp-fg: #18181b;
+  --dp-muted: rgb(24 24 27 / 52%);
+  --dp-border: rgb(24 24 27 / 12%);
+  --dp-hover: rgb(24 24 27 / 7%);
+  --dp-tip-bg: #18181b;
+  --dp-tip-fg: #fafafa;
+  --dp-shadow: 0 14px 40px rgb(0 0 0 / 22%), 0 2px 10px rgb(0 0 0 / 12%);
+}
+
+@keyframes dev-picker-rise {
+  from {
+    opacity: 0;
+    translate: -50% 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-picker-blob,
+  .dev-picker-dock,
+  .dev-picker-note {
+    animation: none;
+  }
+}
+
+.dev-picker-hover-box,
+.dev-picker-selection-box,
+.dev-picker-draft-box,
+.dev-picker-region-box {
+  position: fixed;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.dev-picker-hover-box {
+  border: 1px dashed rgb(139 92 246 / 85%);
+  background: rgb(139 92 246 / 8%);
+}
+
+.dev-picker-hover-chip {
+  position: fixed;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dp-bg);
+  color: var(--dp-fg);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+  pointer-events: none;
+}
+
+.dev-picker-selection-box,
+.dev-picker-draft-box {
+  border: 2px solid var(--dp-accent);
+  background: rgb(139 92 246 / 9%);
+}
+
+.dev-picker-draft-box {
+  border-style: dashed;
+}
+
+.dev-picker-selection-box > span,
+.dev-picker-draft-box > span {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 999px;
+  background: var(--dp-accent);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+}
+
+.dev-picker-draft-box > span {
+  border-style: solid;
+  background: white;
+  color: var(--dp-accent);
+}
+
+.dev-picker-region-box {
+  border: 2px dashed var(--dp-accent);
+  background: rgb(139 92 246 / 10%);
+}
+
+.dev-picker-drawing {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 0 white) drop-shadow(0 -1px 0 white);
+}
+
+.dev-picker-blob,
+.dev-picker-dock,
+.dev-picker-note {
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--dp-border);
+  background: var(--dp-bg);
+  color: var(--dp-fg);
+  box-shadow: var(--dp-shadow);
+  animation: dev-picker-rise 220ms var(--ease-out-quart) both;
+}
+
+.dev-picker-blob,
+.dev-picker-dock {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 999px;
+}
+
+.dev-picker-blob > button,
+.dev-picker-dock > button {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dev-picker-blob > button:hover,
+.dev-picker-dock > button:hover {
+  background: var(--dp-hover);
+}
+
+.dev-picker-blob > button[data-active],
+.dev-picker-dock > button[data-active] {
+  background: var(--dp-accent);
+  color: var(--dp-accent-fg);
+}
+
+.dev-picker-dock > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dev-picker-dock > button:disabled:hover {
+  background: transparent;
+}
+
+.dev-picker-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--dp-border);
+}
+
+.dev-picker-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  place-items: center;
+  border: 2px solid var(--dp-bg);
+  border-radius: 999px;
+  background: var(--dp-accent);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dev-picker-note {
+  position: fixed;
+  width: 224px;
+  padding: 8px 9px 6px;
+  border-radius: 12px;
+}
+
+.dev-picker-note textarea {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--dp-fg);
+  font: inherit;
+  line-height: 1.4;
+  resize: none;
+}
+
+.dev-picker-note textarea::placeholder {
+  color: var(--dp-muted);
+}
+
+.dev-picker-note > span {
+  display: block;
+  margin-top: 4px;
+  color: var(--dp-muted);
+  font-size: 9px;
+  text-align: right;
+}
+
+.dev-picker-icon-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dp-muted);
+  cursor: pointer;
+}
+
+.dev-picker-icon-button:hover {
+  background: var(--dp-hover);
+  color: var(--dp-fg);
+}
+
+.dev-picker-icon-button[data-active] {
+  background: var(--dp-accent);
+  color: var(--dp-accent-fg);
+}
+
+.dev-picker-blob > button[data-tip]::after,
+.dev-picker-dock > button[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--dp-tip-bg);
+  color: var(--dp-tip-fg);
+  font-size: 10px;
+  font-weight: 550;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
+  transition: opacity 110ms var(--ease-out-quart) 340ms;
+}
+
+.dev-picker-blob > button[data-tip]:hover::after,
+.dev-picker-dock > button[data-tip]:hover::after {
+  opacity: 1;
+  transition-delay: 340ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-picker-blob > button[data-tip]::after,
+  .dev-picker-dock > button[data-tip]::after {
+    transition: none;
+  }
+}
