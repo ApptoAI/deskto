@@ -88,7 +88,7 @@ export function MessageStream({
             once here rather than per element. */}
         <div
           className={cn(
-            "mx-auto flex w-full flex-col gap-5 py-8",
+            "mx-auto flex w-full flex-col gap-5 py-5 pb-8",
             conversationMeasureClassName
           )}
         >
@@ -254,15 +254,14 @@ function WorkedDisclosure({
   // still says how long it took, as a label rather than a toggle onto blank.
   if (items.length === 0) {
     return (
-      <div className="enter-rise w-full">
+      <div className="enter-rise w-fit">
         <p className={turnHeaderClassName}>{label}</p>
-        <span aria-hidden className="block h-px w-full bg-border" />
       </div>
     )
   }
 
   return (
-    <div className="enter-rise w-full">
+    <div className="enter-rise w-fit max-w-full">
       <button
         type="button"
         aria-expanded={open}
@@ -301,7 +300,6 @@ function WorkedDisclosure({
           )}
         </div>
       </Collapse>
-      <span aria-hidden className="block h-px w-full bg-border" />
     </div>
   )
 }
@@ -440,7 +438,7 @@ const MessageEntry = memo(function MessageEntry({
         {message.state === "streaming" && message.content ? (
           <span
             aria-hidden
-            className="mt-1 inline-block h-4 w-1.5 motion-safe:animate-pulse rounded-xs bg-foreground/60 align-middle"
+            className="mt-1 inline-block h-4 w-1.5 rounded-xs bg-foreground/60 align-middle motion-safe:animate-pulse"
           />
         ) : null}
       </MessageBody>

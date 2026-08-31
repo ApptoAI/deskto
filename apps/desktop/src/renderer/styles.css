@@ -64,6 +64,26 @@
   animation: loaded-list-fade 150ms var(--ease-out-quart) both;
 }
 
+@utility panel-enter {
+  transition:
+    opacity 180ms var(--ease-out-quart),
+    translate 260ms var(--ease-drawer);
+
+  @starting-style {
+    opacity: 0;
+    translate: 18px 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    @starting-style {
+      opacity: 1;
+      translate: none;
+    }
+  }
+}
+
 @keyframes loaded-list-fade {
   from {
     opacity: 0;

@@ -36,7 +36,7 @@ export function WorkspaceRail({
               className={cn(
                 "group/rail relative flex size-10 shrink-0 items-center justify-center rounded-xl outline-hidden transition-[background-color,box-shadow,transform] duration-150",
                 "focus-visible:ring-2 focus-visible:ring-ring active:scale-95",
-                selected ? "bevel bg-fill-row-selected" : "hover:bg-fill-chip"
+                selected ? "bg-fill-row-selected" : "hover:bg-fill-chip"
               )}
             >
               {selected ? (

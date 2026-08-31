@@ -26,7 +26,6 @@ import { Composer } from "../composer.js"
 import { ExecutionProfileToolbar } from "../execution-profile/execution-profile-toolbar.js"
 import { HarnessMenu } from "../harness-menu.js"
 import { ProjectPanel } from "../project/project-panel.js"
-import { DesktoWordmark } from "./deskto-wordmark.js"
 
 /** How the project panel should show up before the user has chosen. */
 export type ProjectPanelPreference = "open" | "collapsed" | "auto"
@@ -118,31 +117,16 @@ export function NewTaskView({
 
   return (
     <>
-      <header className="drag-region h-10 shrink-0" />
-
-      {/* The whole start screen sits as one centered column: wordmark, the
-          question, and the composer right under them. Pinning the input to
-          the bottom made the empty view read as a half-loaded task. The
-          min-h-full wrapper keeps centring honest once the project cards
-          expand past the viewport: the column grows and scrolls instead of
-          clipping at the top. The negative top margin offsets the drag strip
-          above, so the closed screen lands on the optical centre of the
-          window rather than 40px below. */}
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pt-6 pb-8">
-        {/* The lockup sits near the top of the pane rather than on top of the
-            column: the question and the composer are what the eye should land
-            on, and stacking the brand into that group pushes them off centre.
-            Hidden once the project cards open, where the column needs the
-            height more than the screen needs the signature. */}
-        {!panelVisible ? (
-          <div className="pointer-events-none flex justify-center pb-2">
-            <DesktoWordmark />
-          </div>
-        ) : null}
-        <div className="flex min-h-full items-center justify-center">
+      {/* The whole start screen sits as one centered column: the question and
+          the composer right under it. Pinning the input to
+          the bottom made the empty view read as a half-loaded task. Auto
+          margins center short content without forcing an empty scrollbar;
+          expanded project settings can still grow and scroll. */}
+      <div className="relative flex min-h-0 flex-1 overflow-y-auto px-6 py-8">
+        <div className="m-auto flex w-full justify-center">
           <div
             className={`enter-rise flex w-full max-w-[940px] flex-col items-center gap-5 ${
-              panelVisible ? "" : "-mt-16"
+              panelVisible ? "" : "-translate-y-6"
             }`}
           >
             {/* The one display moment in the app. Size and tight tracking
@@ -172,12 +156,12 @@ export function NewTaskView({
                         harnesses={options}
                         selectedId={harnessId}
                         onSelect={selectHarness}
+                        compact
                       />
                       <ExecutionProfileToolbar
                         models={models}
                         profile={profile}
                         onChange={setChosenProfile}
-                        harnessId={harnessId}
                         modelMenuOpen={modelMenuOpen}
                         onModelMenuOpenChange={setModelMenuOpen}
                       />

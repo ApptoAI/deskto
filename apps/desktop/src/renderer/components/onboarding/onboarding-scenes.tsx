@@ -17,7 +17,7 @@ export function ScenePanel({ children }: { children: ReactNode }) {
   return (
     <div
       aria-hidden
-      className="bevel flex h-56 flex-col overflow-hidden rounded-window bg-fill-card ring-1 ring-edge-strong"
+      className="flex h-56 flex-col overflow-hidden rounded-window bg-fill-card ring-1 ring-edge-strong"
     >
       <div className="flex h-6 shrink-0 items-center gap-1.5 border-b border-border bg-fill-chip px-2.5">
         <span className="size-1.5 rounded-full bg-border" />

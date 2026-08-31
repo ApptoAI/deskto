@@ -2,11 +2,10 @@ import type { ReactNode } from "react"
 
 import { cn } from "@workspace/ui/lib/utils"
 
-
 const sidebarWidthClass = {
-  default: "w-72 xl:w-80",
-  compact: "w-64",
-  "rail-stack": "w-82",
+  default: "w-[236px]",
+  compact: "w-[236px]",
+  "rail-stack": "w-[308px]",
 } as const
 
 /**
@@ -36,11 +35,9 @@ export function SidebarFrame({
 /**
  * Selected row in either sidebar: tasks in one, settings pages in the other.
  *
- * One rule in both themes now. The fill is a tint of whatever the canvas is
- * not, so it lifts the row on dark glass and settles it on light without
- * either palette needing its own case, and the bevel on top is what keeps it
- * reading as a raised surface rather than as a patch of different colour.
+ * One quiet fill in both themes, with no bevel or border competing with the
+ * row's label.
  */
-export const sidebarRowSelected = "bevel bg-fill-row-selected text-foreground"
+export const sidebarRowSelected = "bg-fill-row-selected text-foreground"
 
 export const sidebarRowIdle = "hover:bg-fill-chip"

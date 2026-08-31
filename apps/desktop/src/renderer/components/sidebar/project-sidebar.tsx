@@ -212,9 +212,8 @@ export function ProjectSidebar({
         </div>
       </ScrollArea>
 
-      {/* A rule above the foot, as in the design: the nav is a different kind
-          of thing from the task list and needs saying so. */}
-      <div className="no-drag space-y-0.5 border-t border-edge px-2 pt-1.5 pb-3">
+      {/* Position, not another rule, separates global navigation from tasks. */}
+      <div className="no-drag space-y-0.5 px-2 pt-1.5 pb-3">
         {updateState?.status === "ready" ? (
           <Button
             variant="secondary"

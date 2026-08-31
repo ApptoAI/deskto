@@ -27,6 +27,7 @@ export function ProfileMenu({
   contentClassName,
   triggerClassName,
   labelClassName,
+  triggerLabel,
   open,
   onOpenChange,
 }: {
@@ -40,6 +41,8 @@ export function ProfileMenu({
   triggerClassName?: string
   /** For a label short enough that half of it is worse than none of it. */
   labelClassName?: string
+  /** A shorter resting label; the menu and accessible name keep the full one. */
+  triggerLabel?: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
@@ -69,7 +72,7 @@ export function ProfileMenu({
       >
         {selected?.icon}
         <span className={cn("truncate", labelClassName)}>
-          {selected?.label ?? label}
+          {triggerLabel ?? selected?.label ?? label}
         </span>
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>

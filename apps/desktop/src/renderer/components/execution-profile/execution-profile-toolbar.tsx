@@ -77,7 +77,8 @@ export function ExecutionProfileToolbar({
       <ProfileMenu
         label="Model"
         value={model.id}
-        triggerClassName="shrink-[3]"
+        triggerClassName="max-w-[10.5rem] shrink-[3]"
+        triggerLabel={model.isDefault ? "Default" : undefined}
         disabled={disabled}
         open={modelMenuOpen}
         onOpenChange={onModelMenuOpenChange}
@@ -98,7 +99,7 @@ export function ExecutionProfileToolbar({
           <ProfileMenu
             label="Thinking"
             value={profile.effort ?? DEFAULT_EFFORT}
-            labelClassName={compactLabel}
+            labelClassName={thinkingLabel}
             disabled={disabled}
             options={thinkingOptions}
             onSelect={(effort) =>
@@ -114,7 +115,7 @@ export function ExecutionProfileToolbar({
       <ProfileMenu
         label="Permissions"
         value={profile.permissionMode}
-        labelClassName={compactLabel}
+        labelClassName={permissionLabel}
         disabled={disabled}
         options={permissionModeOptions}
         onSelect={(value) =>
@@ -131,14 +132,11 @@ export function ExecutionProfileToolbar({
  * less than the icon beside them already does. So they are shown whole or not
  * at all, on the composer's own width rather than the window's.
  *
- * The threshold is where the longest of them fit *without squeezing the model
- * name*: measured at 572px for "Extra high" with "Full access", 581px for the
- * longest thinking label a model may offer. Below it the model has the row to
- * itself and truncates only when its own name is long; above it, nothing
- * truncates. Anything lower and widening the panel would make the model name
- * shorter, which is the wrong way round.
+ * Labels return only on a wide composer. Below that, the icons and accessible
+ * names preserve each control while leaving enough room to write.
  */
-const compactLabel = "hidden @[37rem]:inline"
+const thinkingLabel = "hidden @[48rem]:inline"
+const permissionLabel = "hidden @[56rem]:inline"
 
 function Divider() {
   return <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
