@@ -372,7 +372,7 @@ function SideTab({
       title="Ask a side question with the current context"
     >
       <MessagesSquareIcon aria-hidden className="size-3.5 shrink-0" />
-      <span>Side</span>
+      <span>Side chat</span>
       {running ? (
         <span
           role="img"

@@ -212,7 +212,7 @@ function ProjectForm({
             className="min-h-20 resize-y"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="Describe your project, goals, subject, etc..."
+            placeholder="Describe the project, its goals, and relevant context…"
             maxLength={projectDescriptionMaxLength}
             disabled={busy}
           />

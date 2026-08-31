@@ -128,7 +128,7 @@ export function ExecutionProfileToolbar({
 
 /**
  * Thinking and permissions are one or two words — "Auto", "Full access",
- * "Extra high" — and truncated they read as "A" and "Full acce…", which says
+ * "Extra High" — and truncated they read as "A" and "Full acce…", which says
  * less than the icon beside them already does. So they are shown whole or not
  * at all, on the composer's own width rather than the window's.
  *

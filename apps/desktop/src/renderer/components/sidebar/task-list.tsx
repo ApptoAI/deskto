@@ -263,12 +263,15 @@ export function TaskList({
 
       {partition.active.length > 0 ? (
         <section>
-          <div className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-2 pt-5 pb-2 eyebrow text-muted-foreground">
-            <span aria-hidden />
-            <span>Inbox</span>
-            <span className="ml-auto tabular-nums opacity-60">
+          <div className="flex items-baseline gap-2 px-2 pt-5 pb-2 text-muted-foreground">
+            <h2 className="eyebrow">Inbox</h2>
+            <span
+              className="text-tiny tabular-nums"
+              aria-label={`${partition.active.length} tasks`}
+            >
               {partition.active.length}
             </span>
+            <span aria-hidden className="h-px flex-1 self-center bg-border" />
           </div>
           <ul className="space-y-0.5">
             {partition.active.map((thread) => renderRow(thread, "active"))}
@@ -494,14 +497,9 @@ function TaskRow({
               }
             />
           </span>
-          {/* The buttons sit over this column, so the text truncates earlier
-              while they are up rather than running underneath them. */}
-          <span
-            className={cn(
-              "min-w-0 flex-1 transition-[padding] duration-150 ease-(--ease-out-quart) group-hover:pr-8 group-has-focus-visible:pr-8",
-              popupOpen && "pr-8"
-            )}
-          >
+          {/* Actions replace the right-hand status rail, so the title keeps
+              exactly the same measure when they appear. */}
+          <span className="min-w-0 flex-1">
             <span
               className={cn(
                 "block truncate leading-5",
@@ -511,10 +509,10 @@ function TaskRow({
               {thread.title}
             </span>
             {projectName ? (
-              <span className="mt-0.5 flex items-center gap-1 pr-7 text-micro leading-4 text-muted-foreground/70">
+              <span className="mt-0.5 flex items-center gap-1 pr-7 text-micro leading-4 text-muted-foreground">
                 <FolderIcon
                   aria-hidden
-                  className="size-3 shrink-0 text-muted-foreground/50"
+                  className="size-3 shrink-0 text-muted-foreground"
                 />
                 <span className="truncate">{projectName}</span>
               </span>
@@ -534,7 +532,7 @@ function TaskRow({
             <span
               className={cn(
                 "w-8 shrink-0 text-right text-micro tabular-nums",
-                isWakeLabel ? "text-foreground" : "text-muted-foreground/70"
+                isWakeLabel ? "text-foreground" : "text-muted-foreground"
               )}
               title={timeTitle}
             >

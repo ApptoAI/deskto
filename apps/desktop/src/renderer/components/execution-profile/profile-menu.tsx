@@ -78,7 +78,7 @@ export function ProfileMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        side="top"
+        side="bottom"
         className={cn("w-64 overscroll-contain", contentClassName)}
       >
         <DropdownMenuRadioGroup

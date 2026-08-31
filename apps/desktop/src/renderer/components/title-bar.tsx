@@ -183,7 +183,10 @@ export function TitleBarTask({
   return (
     <>
       {mark}
-      <span className="truncate text-title font-semibold text-foreground">
+      <span
+        className="max-w-[min(32rem,45vw)] min-w-0 truncate text-title font-semibold text-foreground"
+        title={title}
+      >
         {title}
       </span>
       {subtitle ? (

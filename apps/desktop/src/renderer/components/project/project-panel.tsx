@@ -164,7 +164,9 @@ export function ProjectPanel({
           trailing={
             <MetaEditButton
               label="Edit project instructions"
-              hasContent={loadedDetails !== null && loadedDetails.instructions !== ""}
+              hasContent={
+                loadedDetails !== null && loadedDetails.instructions !== ""
+              }
               disabled={loadedDetails === null}
               onClick={() => openDialog("instructions")}
             />
@@ -322,11 +324,9 @@ function MetaRow({
 }) {
   return (
     <div className="group flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-150 hover:bg-fill-chip/50">
-      <h3 className="eyebrow w-28 shrink-0 text-muted-foreground">{label}</h3>
+      <h3 className="w-28 shrink-0 eyebrow text-muted-foreground">{label}</h3>
       <div className="min-w-0 flex-1 truncate text-sm">{children}</div>
-      <div className="flex shrink-0 items-center gap-0.5 opacity-50 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-        {trailing}
-      </div>
+      <div className="flex shrink-0 items-center gap-0.5">{trailing}</div>
     </div>
   )
 }
@@ -451,7 +451,7 @@ function AboutForm({
             onChange={(event) => setDescription(event.target.value)}
             maxLength={projectDescriptionMaxLength}
             disabled={busy}
-            placeholder="Describe your project, goals, subject, etc..."
+            placeholder="Describe the project, its goals, and relevant context…"
           />
         </div>
         {error ? <InlineError message={error} /> : null}

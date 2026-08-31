@@ -66,6 +66,12 @@ export function activityIcon(activity: Activity): Icon | undefined {
   return toolIcons.get(payload.tool)
 }
 
+/** Provider MCP ids are transport syntax, not names a person can scan. */
+export function activityDisplayName(name: string): string {
+  const mcpName = name.match(/^(?:select:)?mcp__.+?__(.+)$/)?.[1]
+  return mcpName ? mcpName.replaceAll("_", " ") : name
+}
+
 /**
  * One tool call as a compact row: kind icon, name, and the detail in an
  * inline chip. Rows with a truncatable detail expand — the icon crossfades
@@ -129,7 +135,7 @@ export function ActivityLine({
           failed ? "text-destructive" : "text-foreground"
         )}
       >
-        {activity.name}
+        {activityDisplayName(activity.name)}
       </span>
       {files.length > 0 ? (
         <FileChips files={files} />

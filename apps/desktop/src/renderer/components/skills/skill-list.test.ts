@@ -91,6 +91,37 @@ describe("SkillList", () => {
       screen.getByRole("button", { name: /review.*Needs attention/i })
     ).toBeDefined()
   })
+
+  it("uses an accessible provider logo instead of a text badge", () => {
+    const skillSource = source({ harnessIds: ["codex"] })
+    const skillOccurrence = occurrence({ sourceId: skillSource.id })
+    const item: SkillCatalogItem = {
+      key: "name:review",
+      name: "review",
+      description: "Review a change set",
+      occurrences: [{ occurrence: skillOccurrence, source: skillSource }],
+      primary: { occurrence: skillOccurrence, source: skillSource },
+      group: "detected",
+    }
+
+    render(
+      createElement(SkillList, {
+        inventory: inventory([skillSource], [skillOccurrence]),
+        items: [item],
+        selectedKey: null,
+        filter: "all",
+        query: "",
+        onSelect: vi.fn(),
+      })
+    )
+
+    expect(screen.getByRole("img", { name: "Codex" })).toBeDefined()
+    expect(screen.queryByText("Codex")).toBeNull()
+    expect(
+      screen.getByRole("heading", { name: "Detected on this computer" })
+        .parentElement?.className
+    ).not.toContain("sticky")
+  })
 })
 
 function source(overrides: Partial<SkillSource> = {}): SkillSource {

@@ -59,7 +59,7 @@ export function HarnessMenu({
         </span>
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-72">
+      <DropdownMenuContent align="start" side="bottom" className="w-72">
         <DropdownMenuRadioGroup
           value={selectedId ?? ""}
           onValueChange={(value) => onSelect(String(value))}
