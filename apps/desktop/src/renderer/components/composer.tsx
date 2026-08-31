@@ -678,7 +678,12 @@ export function Composer({
             rows={textareaRows}
           />
           <PromptInputToolbar>
-            {toolbar}
+            <div
+              data-slot="prompt-input-settings"
+              className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
+            >
+              {toolbar}
+            </div>
             <input
               ref={fileInputRef}
               className="sr-only"
@@ -692,19 +697,22 @@ export function Composer({
                 event.currentTarget.value = ""
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="text-[var(--text-3)]"
-              disabled={blocked || sending}
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach images"
-              title="Attach images, or paste with Ctrl/Cmd+V"
+            <div
+              data-slot="prompt-input-actions"
+              className="flex shrink-0 items-center gap-1"
             >
-              <PaperclipIcon />
-            </Button>
-            <div className="ml-1 flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-[var(--text-3)]"
+                disabled={blocked || sending}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Attach images"
+                title="Attach images, or paste with Ctrl/Cmd+V"
+              >
+                <PaperclipIcon />
+              </Button>
               {trailing}
               {running && onCancel ? (
                 <Button

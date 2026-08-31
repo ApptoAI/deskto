@@ -1,5 +1,3 @@
-import SparklesIcon from "lucide-react/dist/esm/icons/sparkles"
-
 import { cn } from "@workspace/ui/lib/utils"
 
 /**
@@ -13,9 +11,30 @@ export function ThinkingIcon({ level }: { level: number }) {
   return <EffortBars level={level} />
 }
 
-/** "Default" defers to the model, so there is no level to draw. */
+/** Hollow bars show the available range without claiming an explicit level. */
 export function DefaultThinkingIcon() {
-  return <SparklesIcon />
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden
+      data-automatic-thinking
+      className="size-4"
+    >
+      {bars.map((bar) => (
+        <rect
+          key={bar.x}
+          x={bar.x}
+          y={bar.y}
+          width="2.5"
+          height={17 - bar.y}
+          rx="1"
+          strokeWidth="0.75"
+          vectorEffect="non-scaling-stroke"
+          className="fill-none stroke-current opacity-70"
+        />
+      ))}
+    </svg>
+  )
 }
 
 /**

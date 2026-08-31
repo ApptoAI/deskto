@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { Harness } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -9,6 +9,20 @@ import { ExecutionProfileToolbar } from "./execution-profile-toolbar.js"
 afterEach(cleanup)
 
 describe("ExecutionProfileToolbar", () => {
+  it("uses a compact automatic-effort treatment without endpoint descriptions", () => {
+    const { container } = renderToolbar(
+      model("opus", ["low", "medium", "high", "max"])
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Thinking: Default" }))
+
+    expect(screen.getByText("Model decides.")).toBeTruthy()
+    expect(screen.queryByText(/quick pass/i)).toBeNull()
+    expect(screen.queryByText(/most reasoning/i)).toBeNull()
+    expect(container.querySelector("[data-automatic-thinking]")).toBeTruthy()
+    expect(container.querySelector(".lucide-sparkles")).toBeNull()
+  })
+
   it("reserves the Thinking slot when the selected model does not support it", () => {
     const { container, rerender } = renderToolbar(model("opus", ["low"]))
     const supportedSlot = container.querySelector(

@@ -10,7 +10,7 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
       className={cn(
         // The composer uses one nearby opaque fill. Its inset hairline keeps
         // the long control from dissolving into the canvas without lifting it.
-        "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-[13px] p-1.5 pl-3 shadow-[inset_0_0_0_1px_var(--edge)] transition-[box-shadow] duration-180 ease-out glass-composer focus-within:ring-1 focus-within:ring-ring",
+        "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-[13px] p-1.5 shadow-[inset_0_0_0_1px_var(--edge)] transition-[box-shadow] duration-180 ease-out glass-composer focus-within:ring-1 focus-within:ring-ring",
         // The toolbar inside answers to this box, not to the window: the
         // conversation column narrows when the panel opens while the window
         // stays as wide as it was.
@@ -38,7 +38,7 @@ function PromptInputTextarea({
         // being in charge.
         // Set at the conversation step, not the UI step: what a person types
         // here is read back to them in the transcript at the same size.
-        "field-sizing-fixed max-h-[min(16rem,30svh)] min-h-10 min-w-0 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-1.5 py-2.5 text-conversation leading-5 focus-visible:ring-0",
+        "col-span-2 field-sizing-fixed max-h-[min(16rem,30svh)] min-h-10 min-w-0 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-2.5 py-2.5 text-conversation leading-5 focus-visible:ring-0",
         className
       )}
       onKeyDown={(event) => {
@@ -67,9 +67,10 @@ function PromptInputToolbar({
     <div
       data-slot="prompt-input-toolbar"
       className={cn(
-        // The send action stays on the controls row. Selectors own truncation
-        // at narrow widths rather than pushing the primary action below them.
-        "flex max-w-[28rem] flex-nowrap items-center gap-1",
+        // Configuration and actions share a quiet rail below the writing
+        // surface. Splitting the two groups keeps Send anchored and lets the
+        // selectors yield space together instead of crowding the draft.
+        "col-span-2 flex min-w-0 items-center justify-between gap-2 pt-0.5",
         className
       )}
       {...props}

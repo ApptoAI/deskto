@@ -93,8 +93,8 @@ describe("SkillList", () => {
     expect(screen.getByTitle("Review a change set")).toBeDefined()
   })
 
-  it("uses an accessible provider logo instead of a text badge", () => {
-    const skillSource = source({ harnessIds: ["codex"] })
+  it("uses accessible provider logos with an initial fallback", () => {
+    const skillSource = source({ harnessIds: ["codex", "future-agent"] })
     const skillOccurrence = occurrence({ sourceId: skillSource.id })
     const item: SkillCatalogItem = {
       key: "name:review",
@@ -117,7 +117,9 @@ describe("SkillList", () => {
     )
 
     expect(screen.getByRole("img", { name: "Codex" })).toBeDefined()
+    expect(screen.getByRole("img", { name: "future-agent" })).toBeDefined()
     expect(screen.queryByText("Codex")).toBeNull()
+    expect(screen.getByText("f")).toBeDefined()
     expect(
       screen.getByRole("heading", { name: "Detected on this computer" })
         .parentElement?.className
