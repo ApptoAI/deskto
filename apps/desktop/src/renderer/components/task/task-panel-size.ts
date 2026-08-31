@@ -1,22 +1,21 @@
+import {
+  minimumConversationWidth,
+  minimumTaskPanelWidth,
+} from "../../../shared/window-layout.js"
+
 // The compact overview width from the task-page design. A person can still
 // widen it when a document needs more reading room.
 export const defaultTaskPanelWidth = 340
-export const minimumTaskPanelWidth = 280
 export const maximumTaskPanelWidth = 1_024
 // The composer's controls set this floor, not the text. Below roughly this
 // width the toolbar has nowhere to put a harness, a model, a thinking level, a
 // permission mode and Send, and they start overlapping each other rather than
 // wrapping — which reads as an app whose buttons do not work.
-export const minimumConversationWidth = 520
-
-/**
- * The narrowest window in which every minimum above can be honoured at once:
- * the task list, this floor, and the panel's own minimum. `createMainWindow`
- * holds the native window to it, so the three constraints never have to be
- * resolved by squeezing the conversation.
- */
-export const minimumWindowWidth =
-  236 + minimumConversationWidth + minimumTaskPanelWidth
+export {
+  minimumConversationWidth,
+  minimumTaskPanelWidth,
+  minimumWindowWidth,
+} from "../../../shared/window-layout.js"
 
 /**
  * The two measures long-form text is held to. They live beside the panel

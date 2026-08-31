@@ -78,7 +78,7 @@ export function ExecutionProfileToolbar({
         label="Model"
         value={model.id}
         triggerClassName="max-w-[10.5rem] shrink-[3]"
-        triggerLabel={model.id === models[0]?.id ? "Default" : undefined}
+        triggerLabel={model.isDefault ? "Default" : undefined}
         disabled={disabled}
         open={modelMenuOpen}
         onOpenChange={onModelMenuOpenChange}

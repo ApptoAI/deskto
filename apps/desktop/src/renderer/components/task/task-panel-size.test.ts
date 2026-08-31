@@ -6,9 +6,16 @@ import {
   maximumTaskPanelWidthForContainer,
   minimumConversationWidth,
   minimumTaskPanelWidth,
+  minimumWindowWidth,
 } from "./task-panel-size.js"
 
 describe("clampTaskPanelWidth", () => {
+  it("reserves the widest sidebar at the native window minimum", () => {
+    expect(minimumWindowWidth).toBe(
+      308 + minimumConversationWidth + minimumTaskPanelWidth
+    )
+  })
+
   it("keeps the panel and conversation usable", () => {
     expect(clampTaskPanelWidth(100, 1_200)).toBe(minimumTaskPanelWidth)
     expect(clampTaskPanelWidth(620, 1_200)).toBe(620)

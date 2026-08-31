@@ -128,7 +128,6 @@
   --glass-composer: #e9e8e4;
   --glass-panel-light: #f3f2ef;
   --glass-panel-dark: #eeede9;
-  --blur-floating: blur(40px) saturate(140%);
 
   /* Quiet local fills for bubbles, rows, and chips. */
   --fill-bubble: #e4e3df;
@@ -145,7 +144,7 @@
   /* Hairlines identify boundaries; they do not add elevation. */
   --edge: oklch(0 0 0 / 7%);
   --edge-strong: oklch(0 0 0 / 10%);
-  --edge-button: oklch(0 0 0 / 13%);
+  --edge-button: oklch(0 0 0 / 43%);
 
   /* What a knocked-out mark inside a solid status glyph is painted in. */
   --knockout: oklch(0.955 0.001 286);
@@ -179,9 +178,9 @@
   --chrome: var(--glass-panel-light);
   --card: var(--fill-card);
   --card-foreground: var(--text-2);
-  /* Menus float over every surface here and have to stay legible, so a
-       popover is the one glass dense enough to read as opaque. */
-  --popover: oklch(0.985 0.001 286 / 92%);
+  /* Menus float over every surface here and stay independent of the content
+       behind them, so the popover is fully opaque. */
+  --popover: oklch(0.985 0.001 286);
   --popover-foreground: var(--text-1);
 
   /*
@@ -237,7 +236,6 @@
   --glass-composer: #1a1a1b;
   --glass-panel-light: #131314;
   --glass-panel-dark: #131314;
-  --blur-floating: blur(40px) saturate(140%);
 
   --fill-bubble: #1d1d1f;
   --fill-card: oklch(1 0 0 / 2.5%);
@@ -247,7 +245,7 @@
 
   --edge: oklch(1 0 0 / 7%);
   --edge-strong: oklch(1 0 0 / 11%);
-  --edge-button: oklch(1 0 0 / 12%);
+  --edge-button: oklch(1 0 0 / 34%);
 
   --knockout: oklch(0.185 0.002 286);
 
@@ -264,7 +262,7 @@
   --paper-fg: oklch(0.205 0 0);
   --paper-fg-muted: oklch(0 0 0 / 45%);
 
-  --popover: oklch(0.19 0.003 286 / 92%);
+  --popover: oklch(0.19 0.003 286);
   --primary: var(--accent-base, oklch(0.955 0.001 286));
   --primary-foreground: var(--accent-contrast, oklch(0.13 0 0));
   --secondary: oklch(1 0 0 / 14%);
@@ -334,13 +332,11 @@
   background: var(--glass-composer);
 }
 
-/* Menus and dialogs, which float above every other surface and so blur more
-   aggressively and sit on a real drop shadow. */
+/* Menus and dialogs float above every other surface on an opaque fill and a
+   real drop shadow. */
 @utility glass-popover {
   background: var(--popover);
   border: 1px solid var(--edge-strong);
-  -webkit-backdrop-filter: var(--blur-floating);
-  backdrop-filter: var(--blur-floating);
   box-shadow: var(--elevation-floating);
 }
 

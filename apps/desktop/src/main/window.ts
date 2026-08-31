@@ -7,6 +7,7 @@ import {
   windowMaximizeToggleChannel,
   windowMinimizeChannel,
 } from "../shared/channels.js"
+import { minimumWindowWidth } from "../shared/window-layout.js"
 
 /**
  * The main bundle is ESM, where `__dirname` exists only if the bundler injects
@@ -40,12 +41,8 @@ function canvasColor(): string {
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...defaultWindowSize(),
-    // Wide enough for the layout to keep its own promises: the task list at
-    // 236, the conversation's declared floor at 520, and the task panel's
-    // minimum at 280. Below this the conversation is squeezed under the width
-    // its composer needs, which is how its controls ended up on top of one
-    // another. Keep in step with task-panel-size.ts.
-    minWidth: 1036,
+    // Wide enough for the widest sidebar, conversation floor, and task panel.
+    minWidth: minimumWindowWidth,
     minHeight: 620,
     center: true,
     show: false,
