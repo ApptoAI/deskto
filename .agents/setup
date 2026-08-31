@@ -9,6 +9,17 @@ toolchain_root="$HOME/.local/share/deskto"
 node_root="$toolchain_root/node-v${node_version}-linux-x64"
 node_current="$toolchain_root/node-current"
 
+install_system_packages() {
+  if dpkg-query --show --showformat='${Status}' xvfb 2>/dev/null | grep -Fqx "install ok installed"; then
+    echo "The virtual display is already installed."
+    return
+  fi
+
+  echo "Installing the virtual display required to launch Electron in an orb..."
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends xvfb
+}
+
 install_node() (
   if [[ -x "$node_root/bin/node" ]] && [[ "$($node_root/bin/node --version)" == "v${node_version}" ]]; then
     echo "Node.js v${node_version} is already installed."
@@ -36,6 +47,9 @@ install_node() (
   rm -rf -- "$node_root"
   mv -- "$temporary_directory/node" "$node_root"
 )
+
+echo "==> Preparing the Electron runtime"
+time install_system_packages
 
 echo "==> Preparing the pinned Node.js toolchain"
 time install_node
