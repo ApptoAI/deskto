@@ -17,4 +17,11 @@ describe("interfaceViewportScale", () => {
     expect(interfaceViewportScale(3440, 1440)).toBe(1.25)
     expect(interfaceViewportScale(7680, 4320)).toBe(2)
   })
+
+  it("never rounds a scale above the limiting viewport ratio", () => {
+    const fittedScale = 2160 / 1920
+
+    expect(interfaceViewportScale(2160, 1215)).toBe(1)
+    expect(interfaceViewportScale(2160, 1215)).toBeLessThanOrEqual(fittedScale)
+  })
 })
