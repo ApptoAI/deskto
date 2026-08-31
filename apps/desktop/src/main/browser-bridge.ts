@@ -65,10 +65,11 @@ function isAllowedBridgeOrigin(
   }
 }
 
-// A cross-origin request always carries an Origin header, so a request without
-// one cannot come from another site. Same-origin GETs send no Origin, which is
-// how the Surface opens the event stream; state-changing methods always send
-// one, so /request still demands it.
+// A same-origin GET carries no Origin header, which is how the Surface opens
+// the event stream. A cross-origin no-cors GET omits it too, so an absent
+// Origin alone would let any page a person visits hold a Runtime subscription;
+// Sec-Fetch-Site tells the two apart and a page cannot forge it. Requests that
+// change state always carry an Origin, so /request still demands one.
 function allowBridgeRequest(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
@@ -77,7 +78,11 @@ function allowBridgeRequest(
   const hostname = requestHostname(req)
   const origin = req.headers.origin
   if (origin === undefined) {
-    return allowMissingOrigin && isAllowedBridgeHostname(hostname)
+    return (
+      allowMissingOrigin &&
+      isAllowedBridgeHostname(hostname) &&
+      req.headers["sec-fetch-site"] === "same-origin"
+    )
   }
   if (!isAllowedBridgeOrigin(origin, hostname)) return false
   res.setHeader("access-control-allow-origin", origin)
