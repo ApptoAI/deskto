@@ -589,7 +589,7 @@ export function Composer({
               emptyText={suggestionEmptyText(trigger, suggestionsError)}
               footerText={
                 hiddenCandidates > 0
-                  ? `${hiddenCandidates} more — keep typing to narrow`
+                  ? `${hiddenCandidates} more. Keep typing to narrow.`
                   : undefined
               }
               onActiveChange={setHighlightedId}
@@ -733,7 +733,7 @@ export function Composer({
                   // The one filled pill on the composer, and the only control
                   // here that sits on a drop shadow: send is what the whole
                   // surface is for, so it is the thing floating closest.
-                  className="text-primary-foreground shadow-send"
+                  className="rounded-full text-primary-foreground shadow-send"
                 >
                   <ArrowUpIcon />
                 </Button>

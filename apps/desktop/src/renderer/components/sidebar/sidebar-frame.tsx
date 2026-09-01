@@ -3,15 +3,18 @@ import type { ReactNode } from "react"
 import { cn } from "@workspace/ui/lib/utils"
 
 const sidebarWidthClass = {
-  default: "w-[236px]",
-  compact: "w-[236px]",
-  "rail-stack": "w-[308px]",
+  default: "w-[256px]",
+  compact: "w-[256px]",
+  "rail-stack": "w-[328px]",
 } as const
 
 /**
  * The chrome both sidebars share: width, the window drag strip, and the lockup.
  * Settings replaces the workspace chrome, so rail-stack reserves the combined
  * width of the rail and compact project sidebar.
+ *
+ * No border: the sidebar sits on the window shell and the pane beside it
+ * carries the only edge in the window.
  */
 export function SidebarFrame({
   children,
@@ -21,12 +24,7 @@ export function SidebarFrame({
   width?: keyof typeof sidebarWidthClass
 }) {
   return (
-    <aside
-      className={cn(
-        "flex shrink-0 flex-col border-r border-border",
-        sidebarWidthClass[width]
-      )}
-    >
+    <aside className={cn("flex shrink-0 flex-col", sidebarWidthClass[width])}>
       {children}
     </aside>
   )

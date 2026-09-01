@@ -1,13 +1,19 @@
+import os from "node:os"
 import path from "node:path"
 
 import { BrowserWindow, ipcMain, nativeTheme, screen } from "electron"
+import { z } from "zod"
 
 import {
   windowCloseChannel,
   windowMaximizeToggleChannel,
   windowMinimizeChannel,
+  windowThemeChannel,
 } from "../shared/channels.js"
-import { minimumWindowWidth } from "../shared/window-layout.js"
+import {
+  frostedShellArgument,
+  minimumWindowWidth,
+} from "../shared/window-layout.js"
 
 /**
  * The main bundle is ESM, where `__dirname` exists only if the bundler injects
@@ -26,21 +32,55 @@ function defaultWindowSize() {
 }
 
 /** What `ready-to-show` paints and what fills the gap when a resize outruns
-    the web contents, so it has to be the renderer's canvas rather than a
-    constant. The chosen theme is a Runtime setting and out of reach here, so
-    this follows the operating system: a user who picked the palette their
-    system is not in still gets one wrong frame, which is as close as the main
-    process can get on its own.
+    the web contents, so it has to be the renderer's shell rather than a
+    constant. The chosen theme is a Runtime setting and out of reach here
+    until the Surface reports it over `windowThemeChannel`; before that this
+    follows the operating system, so a user who picked the palette their
+    system is not in gets one wrong frame on launch and none after.
 
-    This is the body fallback behind the opaque Surface. Keep it in step with
+    This is the body fallback behind the opaque shell. Keep it in step with
     --wp-base. */
 function canvasColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#09090a" : "#f8f7f5"
+  return nativeTheme.shouldUseDarkColors ? "#151516" : "#f2f1ee"
+}
+
+export type ShellFrost = "vibrancy" | "acrylic" | null
+
+/**
+ * Which native blur the window can sit on. macOS has had vibrancy for every
+ * version Electron runs on. Windows only has acrylic from 11 22H2 (build
+ * 22621); asking an older build paints a transparent window with nothing
+ * behind it, so it stays opaque there. Linux compositors vary too much to ask.
+ */
+export function shellFrost(
+  platform: NodeJS.Platform,
+  release: string
+): ShellFrost {
+  if (platform === "darwin") return "vibrancy"
+  if (platform === "win32") {
+    const build = Number(release.split(".")[2])
+    return build >= 22621 ? "acrylic" : null
+  }
+  return null
+}
+
+/** The window options that only exist when a native blur is on. */
+function frostOptions(
+  frost: ShellFrost
+): Pick<
+  Electron.BrowserWindowConstructorOptions,
+  "vibrancy" | "backgroundMaterial"
+> {
+  if (frost === "vibrancy") return { vibrancy: "under-window" }
+  if (frost === "acrylic") return { backgroundMaterial: "acrylic" }
+  return {}
 }
 
 export function createMainWindow(): BrowserWindow {
+  const frost = shellFrost(process.platform, os.release())
   const window = new BrowserWindow({
     ...defaultWindowSize(),
+    ...frostOptions(frost),
     // Wide enough for the widest sidebar, conversation floor, and task panel.
     minWidth: minimumWindowWidth,
     minHeight: 620,
@@ -48,15 +88,18 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     // macOS keeps native traffic lights; other platforms use renderer controls.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
-    trafficLightPosition: { x: 16, y: 20 },
+    trafficLightPosition: { x: 14, y: 22 },
     // The Surface draws its own titlebar. macOS already keeps its menu in the
     // system bar, but Windows and Linux would otherwise stack a native menu
     // strip on top of ours, which is two rows of chrome for one window. Alt
     // still summons it.
     autoHideMenuBar: true,
-    backgroundColor: canvasColor(),
+    // A frosted window paints nothing of its own: the shell colour the
+    // Surface lays over the blur is the only paint.
+    backgroundColor: frost ? "#00000000" : canvasColor(),
     webPreferences: {
       preload: path.join(bundleDirectory, "../preload/index.cjs"),
+      additionalArguments: frost ? [frostedShellArgument] : [],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -67,8 +110,11 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
-  // nativeTheme is global, so remove the listener with its window.
-  const followSystemCanvas = () => window.setBackgroundColor(canvasColor())
+  // nativeTheme is global, so remove the listener with its window. A
+  // frosted window keeps its clear background; the blur follows the theme.
+  const followSystemCanvas = () => {
+    if (!frost) window.setBackgroundColor(canvasColor())
+  }
   nativeTheme.on("updated", followSystemCanvas)
   window.once("closed", () => nativeTheme.off("updated", followSystemCanvas))
 
@@ -88,10 +134,18 @@ export function registerWindowControlsIpc(window: BrowserWindow): () => void {
     window.isMaximized() ? window.unmaximize() : window.maximize()
   )
   ipcMain.on(windowCloseChannel, () => window.close())
+  // The Surface's palette drives the native side too: the blur under a
+  // frosted shell and the colour of any frame painted before web contents.
+  ipcMain.on(windowThemeChannel, (_event, payload) => {
+    const dark = z.boolean().safeParse(payload)
+    if (!dark.success) return
+    nativeTheme.themeSource = dark.data ? "dark" : "light"
+  })
   return () => {
     ipcMain.removeAllListeners(windowMinimizeChannel)
     ipcMain.removeAllListeners(windowMaximizeToggleChannel)
     ipcMain.removeAllListeners(windowCloseChannel)
+    ipcMain.removeAllListeners(windowThemeChannel)
   }
 }
 

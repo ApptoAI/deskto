@@ -54,4 +54,7 @@ export function applyTheme(theme: ThemePreference): void {
 
   root.classList.toggle("dark", dark)
   root.style.colorScheme = dark ? "dark" : "light"
+  // The window paints behind the Surface in the palette it is told about:
+  // the native blur under a frosted shell, and the frame before first paint.
+  window.deskto?.setNativeTheme(dark)
 }

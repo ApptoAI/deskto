@@ -27,8 +27,10 @@ import {
   windowCloseChannel,
   windowMaximizeToggleChannel,
   windowMinimizeChannel,
+  windowThemeChannel,
 } from "../shared/channels.js"
 import type { DesktopApi } from "../shared/desktop-api.js"
+import { frostedShellArgument } from "../shared/window-layout.js"
 
 const api: DesktopApi = {
   // Sandboxed preloads still see the process environment, which is how the
@@ -97,6 +99,10 @@ const api: DesktopApi = {
     },
   },
   platform: process.platform,
+  // Main decides per platform and version; the answer rides in on argv
+  // because a sandboxed preload has no other synchronous channel to it.
+  frostedShell: process.argv.includes(frostedShellArgument),
+  setNativeTheme: (dark) => ipcRenderer.send(windowThemeChannel, dark),
   windowControls: {
     minimize: () => ipcRenderer.send(windowMinimizeChannel),
     toggleMaximize: () => ipcRenderer.send(windowMaximizeToggleChannel),

@@ -271,7 +271,6 @@ export function TaskList({
             >
               {partition.active.length}
             </span>
-            <span aria-hidden className="h-px flex-1 self-center bg-border" />
           </div>
           <ul className="space-y-0.5">
             {partition.active.map((thread) => renderRow(thread, "active"))}
@@ -468,7 +467,7 @@ function TaskRow({
           // Shift+F10 or the Menu key, so say out loud that one exists.
           aria-haspopup="menu"
           className={cn(
-            "flex w-full items-center gap-2 rounded-row px-2 py-1.5 text-left text-caption",
+            "flex w-full items-center gap-2 rounded-row px-2 py-1.5 text-left text-control",
             "transition-[background-color,box-shadow,scale] duration-120 ease-(--ease-out-quart) outline-none",
             "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
             dimmed ? "text-muted-foreground/80" : "text-foreground/90",

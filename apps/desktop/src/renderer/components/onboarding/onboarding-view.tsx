@@ -348,9 +348,9 @@ function StepHeading({
       <>
         <h2 className="display-sm">A task instead of a message</h2>
         <p className="text-body">
-          You do not chat with Deskto. You hand it a task — a bug to fix, a
-          folder to reorganize, a question about your own past work — and a
-          coding agent like Claude Code or Codex goes off and does it.
+          You do not chat with Deskto. You hand it a task: a bug to fix, a
+          folder to reorganize, a question about your own past work. A coding
+          agent like Claude Code or Codex goes off and does it.
         </p>
       </>
     )
@@ -372,7 +372,7 @@ function StepHeading({
         <h2 className="display-sm">Projects scope the work</h2>
         <p className="text-body">
           A project is one folder on this computer. Every task runs inside
-          exactly one of them — agents never wander outside it.
+          exactly one of them, and agents never wander outside it.
         </p>
       </>
     )
@@ -383,8 +383,8 @@ function StepHeading({
         <h2 className="display-sm">Tasks that delegate tasks</h2>
         <p className="text-body">
           Deskto hands every running agent a private orchestration line to the
-          app — configured per task, torn down after, nothing written to your
-          agent configs.
+          app. It is configured per task, torn down after, and writes nothing to
+          your agent configs.
         </p>
       </>
     )
@@ -394,8 +394,8 @@ function StepHeading({
       <>
         <h2 className="display-sm">Make it yours</h2>
         <p className="text-body">
-          Deskto follows your system, or picks a side. The whole window
-          changes as you choose.
+          Deskto follows your system, or picks a side. The whole window changes
+          as you choose.
         </p>
       </>
     )
@@ -405,9 +405,9 @@ function StepHeading({
       <>
         <h2 className="display-sm">Connect a coding agent</h2>
         <p className="text-body">
-          Deskto drives agents installed on this computer, and every task
-          picks its agent, model, thinking level, and permission mode.
-          Install one, sign in, and this screen notices on its own.
+          Deskto drives agents installed on this computer, and every task picks
+          its agent, model, thinking level, and permission mode. Install one,
+          sign in, and this screen notices on its own.
         </p>
       </>
     )
@@ -427,8 +427,8 @@ function StepHeading({
     <>
       <h2 className="display-sm">Create your first project</h2>
       <p className="text-body">
-        Start from a template or empty. Deskto can manage the folder for you
-        — you can move it somewhere else later.
+        Start from a template or empty. Deskto can manage the folder for you,
+        and you can move it somewhere else later.
       </p>
     </>
   )
@@ -439,15 +439,15 @@ function WelcomeContent() {
   return (
     <ul className="flex flex-col gap-4 pt-1">
       <FeatureRow icon={<ClipboardListIcon />} name="Describe the outcome.">
-        One task description in — finished work out: code, files, answers.
-        Deskto even titles the task for you.
+        One task description in, finished work out: code, files, answers. Deskto
+        even titles the task for you.
       </FeatureRow>
       <FeatureRow icon={<InboxIcon />} name="Walk away.">
-        Tasks run in the background, in parallel, and land in an inbox when
-        they need you.
+        Tasks run in the background, in parallel, and land in an inbox when they
+        need you.
       </FeatureRow>
       <FeatureRow icon={<ShieldCheckIcon />} name="Stay in control.">
-        Agents ask before touching anything important — approvals are the
+        Agents ask before touching anything important. Approvals are the
         default, not an option you enable.
       </FeatureRow>
     </ul>
@@ -460,7 +460,7 @@ function InboxContent() {
       <InboxScene />
       <ul className="flex flex-col gap-4">
         <FeatureRow icon={<PinIcon />} name="Triage like mail.">
-          Pinned, active, later, done — snoozed tasks wake themselves up when
+          Pinned, active, later, done. Snoozed tasks wake themselves up when
           their time comes.
         </FeatureRow>
         <FeatureRow icon={<ActivityIcon />} name="Live status on every row.">
@@ -486,11 +486,11 @@ function ProjectsContent() {
           already have.
         </FeatureRow>
         <FeatureRow icon={<FileTextIcon />} name="Instructions and skills.">
-          Each project carries shared instructions and skills that every
-          agent picks up automatically.
+          Each project carries shared instructions and skills that every agent
+          picks up automatically.
         </FeatureRow>
         <FeatureRow icon={<LayoutTemplateIcon />} name="Templates.">
-          Start from a template — starter files and instructions copied in
+          Start from a template. Starter files and instructions are copied in
           once, then the project is yours.
         </FeatureRow>
         <FeatureRow icon={<BoxesIcon />} name="Workspaces.">
@@ -508,8 +508,8 @@ function OrchestrateContent() {
       <OrchestrationScene />
       <ul className="flex flex-col gap-4">
         <FeatureRow icon={<GitBranchIcon />} name="Fan out.">
-          An agent can spawn child tasks — up to eight in parallel — then
-          wait for the results and pull them together.
+          An agent can spawn up to eight child tasks in parallel, then wait for
+          the results and pull them together.
         </FeatureRow>
         <FeatureRow icon={<LayersIcon />} name="Children are real tasks.">
           They nest under their parent in the sidebar and open like any other
@@ -536,7 +536,7 @@ function FeatureRow({
 }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="[&>svg]:size-4.5 mt-0.5 flex shrink-0 items-center text-muted-foreground [&>svg]:stroke-[1.5]">
+      <span className="mt-0.5 flex shrink-0 items-center text-muted-foreground [&>svg]:size-4.5 [&>svg]:stroke-[1.5]">
         {icon}
       </span>
       <span className="text-sm leading-relaxed text-muted-foreground">

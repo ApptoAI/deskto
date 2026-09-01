@@ -23,19 +23,18 @@ describe("ExecutionProfileToolbar", () => {
     expect(container.querySelector(".lucide-sparkles")).toBeNull()
   })
 
-  it("reserves the Thinking slot when the selected model does not support it", () => {
+  it("drops the Thinking control and its divider when the model has no levels", () => {
     const { container, rerender } = renderToolbar(model("opus", ["low"]))
-    const supportedSlot = container.querySelector(
-      '[data-slot="thinking-profile"]'
-    )
+    expect(
+      container.querySelectorAll('[data-slot="toolbar-divider"]')
+    ).toHaveLength(2)
 
     rerender(toolbar(model("haiku", [])))
 
-    const unsupportedSlot = container.querySelector(
-      '[data-slot="thinking-profile"]'
-    )
-    expect(unsupportedSlot?.className).toBe(supportedSlot?.className)
-    expect(unsupportedSlot?.querySelector("button")).toBeNull()
+    expect(screen.queryByRole("button", { name: /^Thinking:/ })).toBeNull()
+    expect(
+      container.querySelectorAll('[data-slot="toolbar-divider"]')
+    ).toHaveLength(1)
   })
 })
 

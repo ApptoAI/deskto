@@ -74,7 +74,7 @@ export function SettingsSidebar({
                   onClick={() => onSelectPage(id)}
                   aria-current={selected ? "page" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm",
+                    "flex w-full items-center gap-2.5 rounded-row px-2 py-1.5 text-left text-control",
                     "transition-[background-color,box-shadow,scale] duration-150 ease-out outline-none",
                     "focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]",
                     selected

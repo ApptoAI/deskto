@@ -36,7 +36,7 @@ function ContextMenuContent({
           data-slot="context-menu-content"
           className={(state) =>
             cn(
-              "z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-card p-1 text-popover-foreground glass-popover duration-150 ease-(--ease-out-quart) outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:overflow-hidden data-closed:fade-out-0 data-closed:zoom-out-95",
+              "z-50 max-h-(--available-height) w-(--anchor-width) min-w-32 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-menu p-1 text-popover-foreground glass-popover duration-140 ease-(--ease-out-quart) outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-1 data-open:zoom-in-98 data-closed:animate-out data-closed:overflow-hidden data-closed:duration-100 data-closed:fade-out-0 data-closed:zoom-out-98",
               className instanceof Function ? className(state) : className
             )
           }

@@ -110,6 +110,17 @@ export interface DesktopApi {
     subscribe(listener: (event: BrowserEvent) => void): () => void
   }
   platform: NodeJS.Platform
+  /**
+   * True when the window sits on the operating system's own blur (macOS
+   * vibrancy, Windows acrylic) and the Surface should thin its shell to let
+   * it through. False wherever the window is opaque.
+   */
+  frostedShell: boolean
+  /**
+   * Tells the window which palette the Surface chose, so the native blur
+   * behind it and the frame it paints before the Surface loads match.
+   */
+  setNativeTheme(dark: boolean): void
   windowControls?: {
     minimize(): void
     toggleMaximize(): void

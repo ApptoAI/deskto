@@ -10,6 +10,8 @@ export const surfaceCommandIds = {
   newTask: "app.new-task",
   nextWorkspace: "workspace.next",
   previousWorkspace: "workspace.previous",
+  toggleSidebar: "app.toggle-sidebar",
+  toggleTaskPanel: "task.toggle-panel",
 } as const
 
 /** Renderer-local user intents shared by buttons, menus, and keybindings. */
