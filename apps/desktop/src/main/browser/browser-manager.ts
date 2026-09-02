@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync } from "node:fs"
 import path from "node:path"
 
 import {
@@ -57,9 +57,9 @@ import {
 } from "./browser-page-script.js"
 import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
 import {
-  browserDownloadDirectory,
   browserDownloadFileName,
   defaultBrowserSettings,
+  prepareBrowserDownloadDirectory,
   type BrowserSettings,
 } from "./browser-settings.js"
 import {
@@ -380,11 +380,7 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.registryKey = undefined
     tab.error = undefined
     const url = normalizeBrowserUrl(value)
-    if (!isBrowserHostPermitted(url, this.#settings.hostRules)) {
-      throw new Error(
-        `${new URL(url).hostname} is blocked by the browser settings in Deskto`
-      )
-    }
+    this.#assertHostPermitted(url)
     await this.#runMainNavigation(tab, url, () =>
       withNavigationTimeout(tab.view.webContents, () =>
         tab.view.webContents.loadURL(url)
@@ -498,6 +494,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const targetUrl = history.getEntryAtIndex(
         history.getActiveIndex() - 1
       ).url
+      this.#assertHostPermitted(targetUrl)
       await this.#runMainNavigation(tab, targetUrl, () =>
         waitForNavigation(tab.view.webContents, () => history.goBack())
       )
@@ -515,6 +512,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const targetUrl = history.getEntryAtIndex(
         history.getActiveIndex() + 1
       ).url
+      this.#assertHostPermitted(targetUrl)
       await this.#runMainNavigation(tab, targetUrl, () =>
         waitForNavigation(tab.view.webContents, () => history.goForward())
       )
@@ -529,6 +527,7 @@ export class BrowserManager implements BrowserAutomationHost {
     await this.#cancelElementPicker(tab)
     const currentUrl = this.#status(tab).url
     if (!currentUrl) return this.snapshot(threadId)
+    this.#assertHostPermitted(currentUrl)
     tab.refs.clear()
     await this.#runMainNavigation(tab, currentUrl, () =>
       waitForNavigation(tab.view.webContents, () =>
@@ -643,19 +642,11 @@ export class BrowserManager implements BrowserAutomationHost {
       const tab = [...this.#tabs.values()].find(
         (candidate) => candidate.view.webContents === webContents
       )
-      const directory = browserDownloadDirectory(
+      const directory = prepareBrowserDownloadDirectory(
         tab?.projectPath,
         this.#settings.downloadFolder
       )
       if (!directory) {
-        event.preventDefault()
-        return
-      }
-      // Chromium asks for the path synchronously and starts writing at once,
-      // so the folder has to exist before the path is handed back.
-      try {
-        mkdirSync(directory, { recursive: true })
-      } catch {
         event.preventDefault()
         return
       }
@@ -953,6 +944,13 @@ export class BrowserManager implements BrowserAutomationHost {
       tab.view.webContents.getURL(),
       url,
       !!tab.artifactBoundaryNavigation?.started
+    )
+  }
+
+  #assertHostPermitted(url: string): void {
+    if (isBrowserHostPermitted(url, this.#settings.hostRules)) return
+    throw new Error(
+      `${new URL(url).hostname} is blocked by the browser settings in Deskto`
     )
   }
 
