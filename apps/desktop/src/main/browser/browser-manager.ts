@@ -11,6 +11,8 @@ import type {
   BrowserAutomationHost,
   BrowserSnapshot,
   BrowserStatus,
+  ComputerUseHost,
+  ComputerUsePage,
 } from "@deskto/runtime"
 import {
   browserElementContextSchema,
@@ -98,7 +100,9 @@ type BrowserTab = {
   }
 }
 
-export class BrowserManager implements BrowserAutomationHost {
+export class BrowserManager
+  implements BrowserAutomationHost, ComputerUseHost
+{
   readonly #tabs = new Map<string, BrowserTab>()
   readonly #artifactResources = new Map<string, BrowserArtifactResource>()
   readonly #artifactLoads = new Map<string, number>()
@@ -483,6 +487,26 @@ export class BrowserManager implements BrowserAutomationHost {
       data: png.toString("base64"),
       mimeType: "image/png" as const,
     }
+  }
+
+  async operate<T>(
+    threadId: string,
+    run: (page: ComputerUsePage) => Promise<T>
+  ): Promise<T> {
+    this.#artifactOpens.invalidate(threadId)
+    this.#requestPanel(threadId)
+    const tab = this.#ensureTab(threadId)
+    return this.#withAgentInput(tab, () => {
+      const contents = tab.view.webContents
+      return run({
+        size: () => {
+          const bounds = tab.view.getBounds()
+          return { width: bounds.width, height: bounds.height }
+        },
+        capturePage: () => contents.capturePage(),
+        sendInputEvent: (event) => contents.sendInputEvent(event),
+      })
+    })
   }
 
   closeThread(threadId: string): void {

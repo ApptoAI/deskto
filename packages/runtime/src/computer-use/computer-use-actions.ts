@@ -35,7 +35,7 @@ export const keyChordSchema = z
   .string()
   .min(1)
   .max(80)
-  .regex(/^[A-Za-z0-9_+\-]+$/, "Use a key name like Return or ctrl+s")
+  .regex(/^[A-Za-z0-9_+-]+$/, "Use a key name like Return or ctrl+s")
 
 export const clickInputSchema = z.object({
   coordinate: coordinateSchema,
