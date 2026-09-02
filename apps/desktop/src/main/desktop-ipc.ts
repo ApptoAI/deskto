@@ -15,6 +15,10 @@ import {
 
 import type { BrowserManager } from "./browser/browser-manager.js"
 import { maximumBrowserUrlLength } from "./browser/browser-url.js"
+import {
+  importCookies,
+  listImportableProfiles,
+} from "./cookie-import/cookie-import.js"
 
 import {
   browserActionChannel,
@@ -28,6 +32,8 @@ import {
   browserSelectElementChannel,
   browserShowChannel,
   browserStateChannel,
+  cookieImportDiscoverChannel,
+  cookieImportRunChannel,
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
@@ -40,6 +46,7 @@ import {
 import type {
   BrowserAction,
   BrowserBounds,
+  CookieImportRequest,
   PickedProject,
   ResultRef,
 } from "../shared/desktop-api.js"
@@ -64,6 +71,11 @@ const browserActionSchema: z.ZodType<BrowserAction> = z.enum([
   "forward",
   "reload",
 ])
+const cookieImportRequestSchema: z.ZodType<CookieImportRequest> = z.object({
+  profileId: z.string().min(1),
+  workspaceId: workspaceIdSchema,
+  hosts: z.array(z.string().min(1)).max(200),
+})
 
 function handleFolderPick(channel: string, title: string): void {
   ipcMain.handle(channel, async (): Promise<PickedProject | undefined> => {
@@ -388,4 +400,11 @@ export function registerDesktopIpc(
       if (error) throw new Error(error)
     }
   )
+
+  ipcMain.handle(cookieImportDiscoverChannel, () => listImportableProfiles())
+  ipcMain.handle(cookieImportRunChannel, async (_event, value) => {
+    const request = cookieImportRequestSchema.parse(value)
+    const workspace = await existingWorkspace(request.workspaceId)
+    return importCookies(request, browser.cookieSink(workspace.id))
+  })
 }

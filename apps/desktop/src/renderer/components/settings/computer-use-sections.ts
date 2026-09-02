@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 
 import { BrowserSettingsSection } from "./computer-use-browser-section.js"
+import { CookieImportSection } from "./computer-use-cookie-section.js"
 import { BrowserProfilesSection } from "./computer-use-profiles-section.js"
 import { ScreenControlSettingsSection } from "./computer-use-screen-control-section.js"
 
@@ -40,5 +41,12 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     description:
       "Lets agents work the built-in browser the way a person does: look at it, then click, type, and scroll by position. Everything stays inside the task's browser; agents never reach other apps or your desktop.",
     Component: ScreenControlSettingsSection,
+  },
+  {
+    id: "cookie-import",
+    label: "Import sign-ins",
+    description:
+      "Copy cookies from a browser on this computer so agents open sites already signed in.",
+    Component: CookieImportSection,
   },
 ]

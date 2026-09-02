@@ -55,6 +55,7 @@ describe("Browser profiles section", () => {
       "browser",
       "profiles",
       "screen-control",
+      "cookie-import",
     ])
   })
 

@@ -57,6 +57,7 @@ import {
   browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
+import type { CookieSink } from "../cookie-import/cookie-import.js"
 import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
 import {
   browserDownloadFileName,
@@ -766,6 +767,25 @@ export class BrowserManager
       // message reaches the panel from here.
       tab.error = navigationErrorSchema.parse(error)
       this.#publishState(threadId, tab)
+    }
+  }
+
+  /**
+   * Writes imported cookies into one Workspace's browser profile, the same
+   * partition its task tabs open, so a signed-in session carries into that
+   * Workspace's tasks. Only Main holds the session, so a renderer cannot set
+   * a cookie directly.
+   */
+  cookieSink(workspaceId: string): CookieSink {
+    if (this.#settings.clearSessionBetweenTasks) {
+      return {
+        unavailableReason:
+          "Cookie import is unavailable while Clear session between tasks is on. Turn it off in Browser settings to use imported cookies.",
+      }
+    }
+    const browserSession = this.#workspaceSession(workspaceId)
+    return {
+      set: (cookie) => browserSession.cookies.set(cookie),
     }
   }
 
