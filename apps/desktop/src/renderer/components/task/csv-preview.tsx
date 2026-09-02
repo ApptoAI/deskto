@@ -32,7 +32,7 @@ export function CsvPreview({ content }: { content: string }) {
                 return (
                   <Cell
                     key={columnIndex}
-                    className="max-w-72 border-r border-b border-border px-2 py-1.5 text-left font-normal break-words"
+                    className="max-w-72 border-r border-b border-border px-2 py-1.5 text-left font-normal break-words tabular-nums"
                   >
                     {cell}
                   </Cell>

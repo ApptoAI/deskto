@@ -56,6 +56,7 @@ import { HarnessLogo, harnessAccentByHarnessId } from "../brand-logos.js"
 import { formatAge, formatExactTime } from "../../lib/format-time.js"
 import { describeThreadStatus } from "../../lib/thread-status.js"
 import { useLocalStorage } from "../../lib/use-local-storage.js"
+import { useNowMinute } from "../../lib/use-now-minute.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { sidebarRowIdle, sidebarRowSelected } from "./sidebar-frame.js"
 
@@ -73,20 +74,6 @@ export type InboxActions = {
 const DONE_INITIAL_COUNT = 10
 const DONE_PAGE_COUNT = 25
 const taskListFocusTargetId = "task-list-focus-target"
-
-/** Re-renders once a minute so auto-close and snooze wake-ups land while the
-    app just sits open. */
-function useNowMinute(): string {
-  const [now, setNow] = useState(() => new Date().toISOString())
-  useEffect(() => {
-    const id = window.setInterval(
-      () => setNow(new Date().toISOString()),
-      60_000
-    )
-    return () => window.clearInterval(id)
-  }, [])
-  return now
-}
 
 export function TaskList({
   state,
