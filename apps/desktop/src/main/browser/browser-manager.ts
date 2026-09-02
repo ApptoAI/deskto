@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { existsSync } from "node:fs"
-import { mkdir } from "node:fs/promises"
+import { existsSync, mkdirSync } from "node:fs"
 import path from "node:path"
 
 import {
@@ -180,7 +179,7 @@ export class BrowserManager implements BrowserAutomationHost {
     await this.#restoreArtifact(threadId, tab)
     // Not awaited: the panel opens at once and the page lands through the
     // navigation events, so a slow start page cannot hold the Surface.
-    void this.#openHome(tab)
+    void this.#openHome(threadId, tab)
     if (
       this.#visibleThreadId !== threadId ||
       this.#tabs.get(threadId) !== tab
@@ -351,7 +350,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
     if (url) return this.navigate(threadId, url)
-    await this.#openHome(this.#ensureTab(threadId))
+    await this.#openHome(threadId, this.#ensureTab(threadId))
     return this.snapshot(threadId)
   }
 
@@ -594,6 +593,14 @@ export class BrowserManager implements BrowserAutomationHost {
         event.preventDefault()
         return
       }
+      // Chromium asks for the path synchronously and starts writing at once,
+      // so the folder has to exist before the path is handed back.
+      try {
+        mkdirSync(directory, { recursive: true })
+      } catch {
+        event.preventDefault()
+        return
+      }
       const fileName = browserDownloadFileName(item.getFilename())
       const extension = path.extname(fileName)
       const stem = fileName.slice(0, fileName.length - extension.length)
@@ -601,10 +608,7 @@ export class BrowserManager implements BrowserAutomationHost {
       for (let attempt = 2; existsSync(target); attempt += 1) {
         target = path.join(directory, `${stem} (${attempt})${extension}`)
       }
-      // Chromium asks for the path synchronously; the folder is created
-      // beside it and a failure surfaces as an interrupted download.
       item.setSavePath(target)
-      void mkdir(directory, { recursive: true }).catch(() => item.cancel())
     })
   }
 
@@ -625,7 +629,7 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   /** Loads the start page into a tab that has not shown anything yet. */
-  async #openHome(tab: BrowserTab): Promise<void> {
+  async #openHome(threadId: string, tab: BrowserTab): Promise<void> {
     const homeUrl = this.#settings.homeUrl
     if (
       tab.homeOpened ||
@@ -639,6 +643,7 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.homeOpened = true
     if (!isBrowserHostPermitted(homeUrl, this.#settings.hostRules)) {
       tab.error = "The start page is blocked by the browser settings in Deskto"
+      this.#publishState(threadId, tab)
       return
     }
     try {
@@ -648,7 +653,10 @@ export class BrowserManager implements BrowserAutomationHost {
         )
       )
     } catch (error) {
+      // A timeout aborts the load, which did-fail-load ignores, so the
+      // message reaches the panel from here.
       tab.error = navigationErrorSchema.parse(error)
+      this.#publishState(threadId, tab)
     }
   }
 
