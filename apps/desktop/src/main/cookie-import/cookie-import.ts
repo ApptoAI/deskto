@@ -1,3 +1,8 @@
+import {
+  isCookieImportHost,
+  normalizeCookieImportHost,
+} from "@deskto/protocol"
+
 import type {
   CookieImportRequest,
   CookieImportResult,
@@ -62,16 +67,17 @@ export function listImportableProfiles(
   return discoverBrowserProfiles(env).map(toDetected)
 }
 
-function normalizeHost(host: string): string {
-  return host.trim().replace(/^\./u, "").toLowerCase()
-}
-
-// A cookie belongs to a chosen host when it is set on that host or on one of
-// its subdomains, so choosing "example.com" also brings "app.example.com".
-function hostMatches(cookieHost: string, chosen: ReadonlySet<string>): boolean {
-  const host = normalizeHost(cookieHost)
+// Chromium stores a domain cookie with a leading dot and a host-only cookie
+// without one. A cookie is imported when it would be sent to a chosen host:
+// a host-only cookie only to that exact host, a domain cookie to the domain
+// and everything below it. Choosing "example.com" therefore never brings
+// host-only cookies from its subdomains, and choosing "app.example.com"
+// brings the ".example.com" cookies that apply to it.
+function hostMatches(cookieHostKey: string, chosen: ReadonlySet<string>): boolean {
+  const host = normalizeCookieImportHost(cookieHostKey)
+  if (!cookieHostKey.startsWith(".")) return chosen.has(host)
   for (const target of chosen) {
-    if (host === target || host.endsWith(`.${target}`)) return true
+    if (target === host || target.endsWith(`.${host}`)) return true
   }
   return false
 }
@@ -84,7 +90,7 @@ function cookieVersion(encrypted: Buffer): StoredCookieVersion | undefined {
 }
 
 function importableCookie(cookie: RawCookie, value: string): ImportableCookie {
-  const host = normalizeHost(cookie.hostKey)
+  const host = normalizeCookieImportHost(cookie.hostKey)
   const isDomainCookie = cookie.hostKey.startsWith(".")
   const scheme = cookie.isSecure ? "https" : "http"
   return {
@@ -116,7 +122,11 @@ export async function importCookies(
   if ("unavailableReason" in sink) {
     return { imported: 0, skipped: 0, error: sink.unavailableReason }
   }
-  const chosen = new Set(request.hosts.map(normalizeHost).filter(Boolean))
+  // The IPC schema already enforces this; it stays here so no other caller
+  // can widen the import to a public suffix.
+  const chosen = new Set(
+    request.hosts.filter(isCookieImportHost).map(normalizeCookieImportHost)
+  )
   if (chosen.size === 0) {
     return { imported: 0, skipped: 0, error: "Choose at least one website." }
   }

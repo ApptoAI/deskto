@@ -111,9 +111,10 @@ function collectingSink() {
 }
 
 describe("importCookies", () => {
-  it("decrypts and writes cookies for the chosen host and its subdomains", async () => {
+  it("imports the cookies that apply to the chosen host", async () => {
     const env = seedProfile([
       { hostKey: ".example.com", name: "sid", encrypted: sealV10("secret") },
+      { hostKey: "example.com", name: "own", encrypted: sealV10("mine") },
       { hostKey: "sub.example.com", name: "sub", encrypted: sealV10("nested") },
       { hostKey: "other.test", name: "skip", encrypted: sealV10("no") },
     ])
@@ -125,12 +126,72 @@ describe("importCookies", () => {
       env
     )
 
+    // A host-only cookie on a subdomain is never sent to example.com, so it
+    // stays behind even though the domain cookie comes along.
     expect(result).toEqual({ imported: 2, skipped: 0 })
-    expect(written.map((cookie) => cookie.value).sort()).toEqual([
-      "nested",
-      "secret",
+    expect(written.map((cookie) => cookie.name).sort()).toEqual(["own", "sid"])
+    expect(written.find((cookie) => cookie.name === "sid")?.domain).toBe(
+      ".example.com"
+    )
+  })
+
+  it("brings a parent domain cookie when a subdomain is chosen", async () => {
+    const env = seedProfile([
+      { hostKey: ".example.com", name: "sid", encrypted: sealV10("secret") },
+      { hostKey: "example.com", name: "own", encrypted: sealV10("mine") },
+      { hostKey: "app.example.com", name: "app", encrypted: sealV10("here") },
+      { hostKey: "www.example.com", name: "www", encrypted: sealV10("no") },
     ])
-    expect(written.some((cookie) => cookie.name === "skip")).toBe(false)
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      {
+        workspaceId: "ws-1",
+        profileId: "chrome:Default",
+        hosts: ["app.example.com"],
+      },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 2, skipped: 0 })
+    expect(written.map((cookie) => cookie.name).sort()).toEqual(["app", "sid"])
+  })
+
+  it("does not let a lookalike domain match", async () => {
+    const env = seedProfile([
+      { hostKey: ".notexample.com", name: "look", plaintext: "alike" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      {
+        workspaceId: "ws-1",
+        profileId: "chrome:Default",
+        hosts: ["app.example.com"],
+      },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 0, skipped: 0 })
+    expect(written).toEqual([])
+  })
+
+  it("ignores a public suffix even when a caller bypasses the schema", async () => {
+    const env = seedProfile([
+      { hostKey: ".example.com", name: "sid", plaintext: "secret" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["com"] },
+      sink,
+      env
+    )
+
+    expect(result.error).toContain("website")
+    expect(written).toEqual([])
   })
 
   it("leaves an expired cookie out of both counts", async () => {

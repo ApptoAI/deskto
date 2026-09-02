@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from "react"
 import CheckIcon from "lucide-react/dist/esm/icons/check"
 import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
-import type { BrowserProfile } from "@deskto/protocol"
+import { isCookieImportHost, type BrowserProfile } from "@deskto/protocol"
 import type {
   CookieImportResult,
   DetectedBrowserProfile,
@@ -56,18 +56,8 @@ function hostOf(token: string): string | undefined {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return undefined
   }
-  const host = parsed.hostname.toLowerCase().replace(/^\.+/u, "")
-  if (!host || !isValidHost(host)) return undefined
-  return host.replace(/^www\./u, "")
-}
-
-function isValidHost(host: string): boolean {
-  if (host === "localhost") return true
-  if (/^\[[\da-f:]+\]$/iu.test(host)) return true
-  if (host.length > 253) return false
-  return host
-    .split(".")
-    .every((label) => /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/iu.test(label))
+  const host = parsed.hostname.toLowerCase().replace(/^www\./u, "")
+  return isCookieImportHost(host) ? host : undefined
 }
 
 export function CookieImportSection() {
@@ -236,8 +226,8 @@ export function CookieImportSection() {
           onChange={(event) => setHosts(event.currentTarget.value)}
         />
         <p className="text-xs text-muted-foreground">
-          One website per line. Cookies for these sites and their subdomains are
-          copied.
+          One website per line. Cookies that apply to each site are copied;
+          list a subdomain such as mail.example.com to include its own sign-in.
         </p>
       </div>
 
