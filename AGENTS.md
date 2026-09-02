@@ -1,6 +1,6 @@
 # Deskto
 
-Deskto is an Electron desktop app that lets non-technical people hand folder-based work to local AI agents. A local Runtime in the Electron main process owns projects, tasks, and SQLite state; the React Surface reaches it only through a serializable protocol over IPC; Harness Adapters translate Claude Code and Codex into one provider-neutral contract.
+Deskto is an Electron desktop app that lets non-technical people hand folder-based work to local AI agents. A local Runtime in the Electron main process owns projects, tasks, and SQLite state; the React Surface reaches it only through a serializable protocol over IPC; Harness Adapters translate Claude Code, Codex, and Pi into one provider-neutral contract.
 
 ## The person we build for
 
