@@ -22,6 +22,13 @@ interface MessageListHandle {
    * on the element, so a jump reads as arriving somewhere.
    */
   scrollToElement(element: HTMLElement, offset?: number): void
+  /**
+   * Pins the list to its end again. For the reader's own action, such as
+   * sending a message while scrolled up into history: what they just did
+   * should be in view, where new content arriving on its own must not move
+   * them.
+   */
+  follow(): void
 }
 
 function prefersReducedMotion(): boolean {
@@ -93,6 +100,13 @@ function MessageList({
           behavior: prefersReducedMotion() ? "auto" : "smooth",
         })
         element.focus({ preventScroll: true })
+      },
+      follow() {
+        const viewport = viewportRef.current
+        if (!viewport) return
+        endJump()
+        pinnedRef.current = true
+        viewport.scrollTop = viewport.scrollHeight
       },
     }
   }, [endJump])

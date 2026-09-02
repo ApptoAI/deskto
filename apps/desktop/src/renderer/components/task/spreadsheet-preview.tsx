@@ -56,9 +56,10 @@ export function SpreadsheetPreview({ dataBase64 }: { dataBase64: string }) {
             <button
               key={candidate.sheet}
               type="button"
+              aria-pressed={candidate.sheet === sheet.sheet}
               onClick={() => setSelectedSheet(candidate.sheet)}
               className={cn(
-                "shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground",
+                "shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
                 candidate.sheet === sheet.sheet &&
                   "bg-muted font-medium text-foreground"
               )}
@@ -121,7 +122,7 @@ function SpreadsheetGrid({ sheet }: { sheet: PreviewSheet }) {
               {Array.from({ length: width }, (_, columnIndex) => (
                 <td
                   key={columnIndex}
-                  className="max-w-72 min-w-24 border-r border-b border-border px-2 py-1.5 align-top break-words"
+                  className="max-w-72 min-w-24 border-r border-b border-border px-2 py-1.5 align-top break-words tabular-nums"
                 >
                   {formatCell(row[columnIndex])}
                 </td>

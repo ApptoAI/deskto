@@ -3,7 +3,10 @@ import { contextBridge, ipcRenderer } from "electron"
 import {
   browserActionChannel,
   browserCancelSelectionChannel,
+  browserClearProfileChannel,
   browserEventChannel,
+  browserOpenProfileFolderChannel,
+  browserProfilesChannel,
   browserHideChannel,
   browserNavigateChannel,
   browserOpenArtifactChannel,
@@ -97,6 +100,11 @@ const api: DesktopApi = {
       ipcRenderer.on(browserEventChannel, handler)
       return () => ipcRenderer.removeListener(browserEventChannel, handler)
     },
+    profiles: () => ipcRenderer.invoke(browserProfilesChannel),
+    clearProfile: (workspaceId) =>
+      ipcRenderer.invoke(browserClearProfileChannel, workspaceId),
+    openProfileFolder: (workspaceId) =>
+      ipcRenderer.invoke(browserOpenProfileFolderChannel, workspaceId),
   },
   platform: process.platform,
   // Main decides per platform and version; the answer rides in on argv

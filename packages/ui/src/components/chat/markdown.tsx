@@ -153,7 +153,7 @@ function CodeBlock({
         title={`${label} code`}
         className={cn(
           "absolute top-2 right-2 opacity-0 transition-opacity duration-150 ease-out",
-          "group-hover/code:opacity-100 focus-visible:opacity-100",
+          "group-hover/code:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100",
           state !== "idle" && "opacity-100"
         )}
       >

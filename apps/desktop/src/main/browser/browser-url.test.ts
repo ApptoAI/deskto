@@ -1,6 +1,45 @@
 import { describe, expect, it } from "vitest"
 
-import { isBrowserWebUrl, normalizeBrowserUrl } from "./browser-url.js"
+import {
+  isBrowserHostPermitted,
+  isBrowserWebUrl,
+  normalizeBrowserUrl,
+} from "./browser-url.js"
+
+describe("browser host permission", () => {
+  it("applies the person's host rules to web pages only", () => {
+    const rules = { allow: ["*.example.com"], deny: ["ads.example.com"] }
+    expect(isBrowserHostPermitted("https://app.example.com/x", rules)).toBe(
+      true
+    )
+    expect(isBrowserHostPermitted("https://ads.example.com/", rules)).toBe(
+      false
+    )
+    expect(isBrowserHostPermitted("https://other.com/", rules)).toBe(false)
+    expect(isBrowserHostPermitted("about:blank", rules)).toBe(true)
+    expect(
+      isBrowserHostPermitted("deskto-artifact://thread/artifact", rules)
+    ).toBe(true)
+    expect(isBrowserHostPermitted("not a url", rules)).toBe(false)
+  })
+
+  it("permits everything when no rules are set", () => {
+    expect(
+      isBrowserHostPermitted("https://example.com", { allow: [], deny: [] })
+    ).toBe(true)
+  })
+
+  it("rechecks an existing history target after host rules change", () => {
+    const target = "https://signed-in.example/account"
+    expect(isBrowserHostPermitted(target, { allow: [], deny: [] })).toBe(true)
+    expect(
+      isBrowserHostPermitted(target, {
+        allow: [],
+        deny: ["signed-in.example"],
+      })
+    ).toBe(false)
+  })
+})
 
 describe("browser URL policy", () => {
   it("opens domains with HTTPS and local servers with HTTP", () => {

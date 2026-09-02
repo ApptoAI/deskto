@@ -49,7 +49,7 @@ export function WorkingIndicator({
   const elapsed = formatElapsed(elapsedMs, { precise: true })
   const silenceLabel = progressSilenceLabel(elapsedMs, since, lastSignalAt)
   return (
-    <div className="flex w-fit items-center gap-2.5">
+    <div className="flex w-fit max-w-full flex-wrap items-center gap-x-2.5 gap-y-1">
       <span aria-hidden className="grid grid-cols-[repeat(3,4px)] gap-[1.5px]">
         {CELL_DELAYS.map((delay, index) => (
           <span
@@ -59,18 +59,21 @@ export function WorkingIndicator({
           />
         ))}
       </span>
-      <span aria-hidden className="shimmer-label text-ui font-medium">
+      <span aria-hidden className="shimmer-label min-w-0 text-ui font-medium">
         {label}
       </span>
       <span
         aria-hidden
-        className="text-xs text-muted-foreground/70 tabular-nums"
+        className="font-mono text-xs tracking-normal text-muted-foreground/70 tabular-nums"
       >
         {elapsed}
       </span>
       {silenceLabel ? (
         <span aria-hidden className="text-micro text-muted-foreground">
-          No update for {silenceLabel}
+          No update for{" "}
+          <span className="font-mono tracking-normal tabular-nums">
+            {silenceLabel}
+          </span>
         </span>
       ) : null}
       <span role="status" className="sr-only">
