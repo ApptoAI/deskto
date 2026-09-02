@@ -154,18 +154,25 @@ function SettingRow({
           stacked ? "flex-col" : "items-center justify-between"
         )}
       >
-        <div className="min-w-0 flex-1">
-          <label htmlFor={id} className="text-sm font-medium">
-            {label}
-          </label>
-          {description ? (
-            <p className="pt-0.5 text-xs leading-snug text-muted-foreground">
-              {description}
-            </p>
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <label htmlFor={id} className="text-sm font-medium">
+              {label}
+            </label>
+            {description ? (
+              <p className="pt-0.5 text-xs leading-snug text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {stacked && overridden && onReset ? (
+            <Button variant="ghost" size="sm" onClick={onReset}>
+              Reset
+            </Button>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {overridden && onReset ? (
+          {!stacked && overridden && onReset ? (
             <Button variant="ghost" size="sm" onClick={onReset}>
               Reset
             </Button>
