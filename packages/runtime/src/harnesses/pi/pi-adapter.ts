@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import {
@@ -50,6 +50,7 @@ import {
   piStateSchema,
   type PiEvent,
   type PiModel,
+  type PiState,
 } from "./pi-protocol.js"
 import { PiRpcClient, type PiRpcClientOptions } from "./pi-rpc-client.js"
 
@@ -267,7 +268,7 @@ export class PiAdapter implements HarnessAdapterFactory {
       signal,
       this.clientFactory,
       this.options.extensionsPath ?? join(tmpdir(), "deskto-pi"),
-      launch
+      this.#childEnv() ? { ...launch, env: this.#childEnv() } : launch
     )
   }
 
@@ -281,10 +282,11 @@ export class PiAdapter implements HarnessAdapterFactory {
   // `pi --list-models` prints a table without each model's thinking levels;
   // the RPC snapshot carries the same models with their thinkingLevelMap.
   async #availableModels(): Promise<PiModel[]> {
+    const env = this.#childEnv()
     const client = this.clientFactory(
       "pi",
       this.options.discoveryCwd ?? process.cwd(),
-      { args: discoveryLaunchArgs }
+      env ? { args: discoveryLaunchArgs, env } : { args: discoveryLaunchArgs }
     )
     try {
       const { models } = await client.request(
@@ -301,8 +303,18 @@ export class PiAdapter implements HarnessAdapterFactory {
     if (this.options.configPath) return this.options.configPath
     const override = process.env.PI_CODING_AGENT_DIR
     return override
-      ? piNormalizedPath(override)
+      ? resolve(piNormalizedPath(override))
       : join(homedir(), ".pi", "agent")
+  }
+
+  // Pi resolves a relative PI_CODING_AGENT_DIR against its own working
+  // directory, which is the discovery folder for one process and the project
+  // for another; every Pi gets the one absolute path the settings came from.
+  #childEnv(): NodeJS.ProcessEnv | undefined {
+    if (this.options.configPath || !process.env.PI_CODING_AGENT_DIR) {
+      return undefined
+    }
+    return { ...process.env, PI_CODING_AGENT_DIR: this.#configPath() }
   }
 
   async #readSettings(): Promise<PiSettings> {
@@ -380,15 +392,18 @@ class PiSession implements HarnessSession {
       input.executionProfile.permissionMode === "approval-required"
         ? await existingDirectory(join(input.projectPath, ".pi", "skills"))
         : undefined
-    const client = clientFactory("pi", input.projectPath, {
-      args: piLaunchArgs(
-        input,
-        approvalExtension,
-        launch,
-        instructionsFile,
-        projectSkills
-      ),
-    })
+    const args = piLaunchArgs(
+      input,
+      approvalExtension,
+      launch,
+      instructionsFile,
+      projectSkills
+    )
+    const client = clientFactory(
+      "pi",
+      input.projectPath,
+      launch.env ? { args, env: launch.env } : { args }
+    )
     const session = new PiSession(client, input, launch, instructionsFile)
     session.skillProvisioning.push(
       ...input.customization.skillRoots.map((root) => piProvisioning(root))
@@ -445,7 +460,12 @@ class PiSession implements HarnessSession {
       piStateSchema
     )
     if (!state.sessionId) throw new Error("Pi did not report a session id")
-    const modelInputs = state.model?.input
+    // Pi stands in an `unknown/unknown` model with no inputs when nothing is
+    // selected or no credentials exist; the prompt then fails with Pi's own
+    // account message, which names the way out better than a modality check.
+    const modelInputs = piHasSelectedModel(state.model)
+      ? state.model.input
+      : undefined
     if (
       (this.input.attachments?.length ?? 0) > 0 &&
       modelInputs &&
@@ -702,9 +722,22 @@ class PiSession implements HarnessSession {
   }
 }
 
+const piUnknownModel = "unknown"
+
+function piHasSelectedModel(
+  model: PiState["model"]
+): model is NonNullable<PiState["model"]> {
+  return (
+    model !== undefined &&
+    !(model.provider === piUnknownModel && model.id === piUnknownModel)
+  )
+}
+
 export type PiLaunchOptions = {
   /** Skip Pi's session store; the provider session id is then single-use. */
   ephemeral: boolean
+  /** Environment for the Pi process when it must differ from this one. */
+  env?: NodeJS.ProcessEnv
 }
 
 export function piLaunchArgs(
@@ -778,6 +811,7 @@ export function piModels(
     settings.defaultProvider && settings.defaultModel
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : undefined
+  const enabled = piModelScope(settings.enabledModels ?? [], available)
   const options = new Map<PiModel, HarnessModelOption>()
   for (const model of available) {
     const id = `${model.provider}/${model.id}`
@@ -791,8 +825,11 @@ export function piModels(
       supportedPermissionModes: ["approval-required", "full-access"],
     }
     if (efforts.length > 0) {
+      // Pi's order: the `:level` on the enabledModels entry, then the
+      // per-model setting, then the global default.
       option.defaultEffort = clampThinkingLevel(
-        settings.modelThinkingLevels?.[id] ??
+        enabled.find((scoped) => scoped.model === model)?.thinkingLevel ??
+          settings.modelThinkingLevels?.[id] ??
           settings.defaultThinkingLevel ??
           piDefaultThinkingLevel,
         efforts
@@ -800,11 +837,10 @@ export function piModels(
     }
     options.set(model, option)
   }
-  const enabled = piModelScope(settings.enabledModels ?? [], available)
   // A filter that matches nothing must not leave the person without a model.
   const offered =
     enabled.length > 0
-      ? enabled.map((model) => options.get(model)!)
+      ? enabled.map((scoped) => options.get(scoped.model)!)
       : [...options.values()]
   if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
     offered[0]!.isDefault = true
@@ -845,25 +881,30 @@ function clampThinkingLevel(level: string, supported: string[]): string {
   )
 }
 
+type ScopedModel = { model: PiModel; thinkingLevel?: string }
+type ParsedModelPattern = ScopedModel | { model?: undefined }
+
 // Mirrors Pi's own scope resolution for `enabledModels`. A glob (`*`, `?`,
-// `[...]`) drops a `:<thinking>` suffix, then takes an exact `provider/id`
-// reference or a case-insensitive minimatch on `provider/id` or the bare
-// id. Plain text takes an exact reference or a substring of the id or name,
-// preferring an alias over a dated version, and retries without its last
-// `:suffix` until nothing is left.
-function piModelScope(patterns: string[], models: PiModel[]): PiModel[] {
-  const scoped: PiModel[] = []
-  const add = (matches: PiModel[]) => {
+// `[...]`) keeps a `:<thinking>` suffix as the level, then takes an exact
+// `provider/id` reference or a case-insensitive minimatch on `provider/id`
+// or the bare id. Plain text takes an exact reference or a substring of the
+// id or name, preferring an alias over a dated version, and retries without
+// its last `:suffix` until nothing is left. The first entry naming a model
+// wins, as in Pi.
+function piModelScope(patterns: string[], models: PiModel[]): ScopedModel[] {
+  const scoped: ScopedModel[] = []
+  const add = (matches: PiModel[], thinkingLevel: string | undefined) => {
     for (const model of matches) {
-      if (!scoped.includes(model)) scoped.push(model)
+      if (scoped.some((entry) => entry.model === model)) continue
+      scoped.push(thinkingLevel ? { model, thinkingLevel } : { model })
     }
   }
   for (const pattern of patterns) {
     if (/[*?[]/.test(pattern)) {
-      const glob = withoutThinkingSuffix(pattern)
+      const { reference: glob, thinkingLevel } = splitThinkingSuffix(pattern)
       const exact = exactModel(glob, models)
       if (exact) {
-        add([exact])
+        add([exact], thinkingLevel)
         continue
       }
       add(
@@ -872,31 +913,48 @@ function piModelScope(patterns: string[], models: PiModel[]): PiModel[] {
             minimatch(`${model.provider}/${model.id}`, glob, {
               nocase: true,
             }) || minimatch(model.id, glob, { nocase: true })
-        )
+        ),
+        thinkingLevel
       )
       continue
     }
-    let reference = pattern
-    for (;;) {
-      const match =
-        exactModel(reference, models) ?? partialModel(reference, models)
-      if (match) {
-        add([match])
-        break
-      }
-      const colon = reference.lastIndexOf(":")
-      if (colon === -1) break
-      reference = reference.slice(0, colon)
-    }
+    const parsed = parseModelPattern(pattern, models)
+    if (parsed.model) add([parsed.model], parsed.thinkingLevel)
   }
   return scoped
 }
 
-function withoutThinkingSuffix(pattern: string): string {
+// Pi's parse of a plain entry: the whole text first, then without its last
+// `:suffix`. A suffix from the thinking vocabulary becomes the level; any
+// other is dropped with a warning that also voids a level named further in.
+function parseModelPattern(
+  pattern: string,
+  models: PiModel[]
+): ParsedModelPattern & { warned: boolean } {
+  const match = exactModel(pattern, models) ?? partialModel(pattern, models)
+  if (match) return { model: match, warned: false }
   const colon = pattern.lastIndexOf(":")
-  return colon !== -1 && piThinkingLevels.includes(pattern.slice(colon + 1))
-    ? pattern.slice(0, colon)
-    : pattern
+  if (colon === -1) return { warned: false }
+  const inner = parseModelPattern(pattern.slice(0, colon), models)
+  if (!inner.model) return inner
+  const suffix = pattern.slice(colon + 1)
+  if (!piThinkingLevels.includes(suffix)) {
+    return { model: inner.model, warned: true }
+  }
+  return inner.warned
+    ? inner
+    : { model: inner.model, thinkingLevel: suffix, warned: false }
+}
+
+function splitThinkingSuffix(pattern: string): {
+  reference: string
+  thinkingLevel?: string
+} {
+  const colon = pattern.lastIndexOf(":")
+  const suffix = pattern.slice(colon + 1)
+  return colon !== -1 && piThinkingLevels.includes(suffix)
+    ? { reference: pattern.slice(0, colon), thinkingLevel: suffix }
+    : { reference: pattern }
 }
 
 function exactModel(reference: string, models: PiModel[]): PiModel | undefined {

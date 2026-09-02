@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { pathToFileURL } from "node:url"
 
 import type { HarnessEvent, HarnessRunInput } from "@deskto/harness-sdk"
@@ -649,6 +649,34 @@ describe("Pi session", () => {
     await session.cancel()
   })
 
+  it("lets Pi explain a missing account instead of blaming the model", async () => {
+    // Pi 0.84.4 with no credentials reports pi-agent-core's stand-in model.
+    const noAccount = new FakePiClient({
+      sessionId: "session-1",
+      model: { id: "unknown", provider: "unknown", contextWindow: 0, input: [] },
+    })
+    const session = await new PiAdapter(() => noAccount, {
+      extensionsPath: await tempDirectory(),
+    }).start(
+      runInput({
+        attachments: [
+          {
+            type: "image",
+            name: "shot.png",
+            mimeType: "image/png",
+            dataUrl: "data:image/png;base64,AAAA",
+          },
+        ],
+      }),
+      new AbortController().signal
+    )
+    expect(noAccount.commands.map((command) => command.type)).toEqual([
+      "get_state",
+      "prompt",
+    ])
+    await session.cancel()
+  })
+
   it("hands Pi the project instructions as a file it removes afterwards", async () => {
     const client = new FakePiClient()
     const extensionsPath = await tempDirectory()
@@ -1053,6 +1081,38 @@ describe("Pi models", () => {
     ).toBe("off")
   })
 
+  it("keeps the thinking level an enabled entry names", () => {
+    const efforts = (patterns: string[], settings = {}) =>
+      piModels(availableModels, { enabledModels: patterns, ...settings }).map(
+        (model) => [model.id, model.defaultEffort]
+      )
+    // The entry's own level outranks the per-model and global settings,
+    // which is what Pi's get_state reports for a scoped model.
+    expect(
+      efforts(["xai/grok-4.6:high"], {
+        defaultThinkingLevel: "low",
+        modelThinkingLevels: { "xai/grok-4.6": "minimal" },
+      })
+    ).toEqual([["xai/grok-4.6", "high"]])
+    expect(efforts(["openai-codex/*:low", "GROK-4.6:xhigh"])).toEqual([
+      ["openai-codex/gpt-5.6-sol", "low"],
+      // A level the model does not reach clamps the way Pi clamps.
+      ["xai/grok-4.6", "high"],
+    ])
+    // An unknown suffix voids the level in front of it, as in Pi, and the
+    // first entry naming a model keeps its level.
+    expect(
+      efforts(["gpt-5.6-sol:high:banana", "xai/grok-4.6", "xai/grok-4.6:high"])
+    ).toEqual([
+      ["openai-codex/gpt-5.6-sol", "medium"],
+      ["xai/grok-4.6", "medium"],
+    ])
+    // A glob sheds only its last suffix, so the rest stays part of the glob.
+    expect(efforts(["*grok*:banana:low", "openai-codex/*"])).toEqual([
+      ["openai-codex/gpt-5.6-sol", "medium"],
+    ])
+  })
+
   it("takes a bare model id exactly before searching substrings", () => {
     const withBatch: PiModel[] = [
       ...availableModels,
@@ -1103,6 +1163,33 @@ describe("Pi models", () => {
     } finally {
       vi.unstubAllEnvs()
     }
+
+    // A relative override is resolved once, here, and handed to every Pi
+    // process, since Pi would resolve it against each process's own folder.
+    const relativeOverride = relative(process.cwd(), configPath)
+    const launches: (NodeJS.ProcessEnv | undefined)[] = []
+    const adapter = new PiAdapter((_command, _cwd, options) => {
+      launches.push(options?.env)
+      return client
+    })
+    vi.stubEnv("PI_CODING_AGENT_DIR", relativeOverride)
+    try {
+      expect((await adapter.listModels()).map((model) => model.id)).toEqual([
+        "xai/grok-4.6",
+      ])
+      const session = await adapter.start(
+        runInput(),
+        new AbortController().signal
+      )
+      await session.cancel()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    expect(launches.map((env) => env?.PI_CODING_AGENT_DIR)).toEqual([
+      configPath,
+      configPath,
+    ])
+
     expect(piNormalizedPath("~", "linux", "/home/me")).toBe("/home/me")
     expect(piNormalizedPath("~/pi", "linux", "/home/me")).toBe("/home/me/pi")
     expect(piNormalizedPath("~/pi")).toBe(join(homedir(), "pi"))

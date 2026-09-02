@@ -117,7 +117,11 @@ questions nobody can answer over RPC.
   adapters close a wrapper's descendants on Windows the same way.
 - `PI_CODING_AGENT_DIR` is honoured when reading Pi's settings, read the way
   Pi reads it: `~` expands, a Git Bash or MSYS drive path becomes a Windows
-  one, and a leading byte order mark in `settings.json` is ignored.
+  one, and a leading byte order mark in `settings.json` is ignored. A
+  relative value is resolved once against Deskto's working directory and
+  handed to every Pi process as an absolute path, because Pi would resolve
+  it against each process's own folder and read a different directory for
+  discovery than for a task.
 - A model whose Pi snapshot lists only `text` input fails a Turn that carries
   an image attachment before the prompt is sent, with the model named and the
   two ways out.
