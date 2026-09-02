@@ -1,4 +1,4 @@
-# ADR 0032: Screen control of the Task Browser over MCP
+# ADR 0035: Screen control of the Task Browser over MCP
 
 - Status: accepted
 - Date: 2026-09-02
@@ -43,7 +43,7 @@ through the translation ADR 0016 already established, so neither adapter
 changes. `SessionToolInput` now carries the settings snapshot the Turn
 started with; the provider returns no lease when
 `computerUse.screen-control.enabled` is off. The setting is on by default
-and lives in the Computer use settings tab (ADR 0030) as "Screen control".
+and lives in the Computer use settings tab (ADR 0031) as "Screen control".
 
 ## Consequences
 

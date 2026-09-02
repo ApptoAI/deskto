@@ -3,7 +3,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-// The floors in docs/adr/0030-palette-contrast-floors.md, measured the way a
+// The floors in docs/adr/0034-palette-contrast-floors.md, measured the way a
 // browser paints them: a translucent token is composited over the surface in
 // sRGB, then both are compared by WCAG relative luminance.
 

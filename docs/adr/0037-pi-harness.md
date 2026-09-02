@@ -1,4 +1,4 @@
-# ADR 0030: Pi as a third Harness
+# ADR 0037: Pi as a third Harness
 
 - Status: accepted
 - Date: 2026-09-02

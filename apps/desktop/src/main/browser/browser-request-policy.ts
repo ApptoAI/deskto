@@ -3,7 +3,7 @@ import { browserHostAllowed } from "@deskto/settings"
 /**
  * Every URL scheme the host rules govern. Anything else (`about:blank`,
  * `data:`, `blob:`, the private Artifact protocol) carries no third-party
- * host and stays outside the rules, as ADR 0030 promised.
+ * host and stays outside the rules, as ADR 0031 promised.
  */
 const governedProtocols = new Set(["http:", "https:", "ws:", "wss:"])
 
