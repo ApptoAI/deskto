@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import { appSettings, settingValue } from "@deskto/settings"
 
 import { personalWorkspaceId, type Thread } from "@deskto/protocol"
@@ -577,6 +584,11 @@ export function Workbench() {
       null)
     : null
 
+  // The panel toggle says which way it will go, like the sidebar toggle does.
+  const taskPanelOpen = useSyncExternalStore(surface.panel.subscribe, () =>
+    openThreadId ? surface.panel.state(openThreadId).open : false
+  )
+
   // The open screen's own actions ride in the titlebar rather than in a second
   // strip beneath it: one row of window chrome, not two.
   const titleActions = activeThread ? (
@@ -596,9 +608,15 @@ export function Workbench() {
       <Button
         variant="ghost"
         size="icon-sm"
-        className="text-muted-foreground"
-        title="Show or hide the task panel"
-        aria-label="Show or hide the task panel"
+        className={cn(
+          "text-muted-foreground",
+          taskPanelOpen && "text-foreground"
+        )}
+        title={taskPanelOpen ? "Hide the task panel" : "Show the task panel"}
+        aria-label={
+          taskPanelOpen ? "Hide the task panel" : "Show the task panel"
+        }
+        aria-pressed={taskPanelOpen}
         onClick={() => surface.panel.toggle({ threadId: activeThread.id })}
       >
         <PanelRightIcon />
