@@ -141,6 +141,7 @@ export function NewTaskView({
                 projectId={project.id}
                 harnessId={harnessId}
                 label="What should the agent do?"
+                draftKey={`new:${project.id}`}
                 placeholder="Describe the task"
                 onSend={handleSend}
                 blockedReason={blockedReason}

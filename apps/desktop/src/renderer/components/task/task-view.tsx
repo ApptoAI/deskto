@@ -1,18 +1,29 @@
 import { useCallback, useEffect, useState } from "react"
+import CircleCheckIcon from "lucide-react/dist/esm/icons/circle-check"
+import ClockIcon from "lucide-react/dist/esm/icons/clock"
 import FolderIcon from "lucide-react/dist/esm/icons/folder"
-import { hasUnreadCompletion, threadCameBack } from "@deskto/client"
-import type {
-  BrowserElementContext,
-  ExecutionProfile,
-  Harness,
-  Project,
-  TurnOutput,
+import {
+  autoDoneAfterDays,
+  effectiveDone,
+  effectiveSnoozed,
+  hasUnreadCompletion,
+  snoozeWakeLabel,
+  threadCameBack,
+} from "@deskto/client"
+import {
+  browserContextLimit,
+  type BrowserElementContext,
+  type ExecutionProfile,
+  type Harness,
+  type Project,
+  type TurnOutput,
 } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
+import { useNowMinute } from "../../lib/use-now-minute.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import { useRuntimeEvent } from "../../runtime/use-runtime-event.js"
@@ -107,10 +118,11 @@ export function TaskView({
   // This also covers a turn finishing while the user is already looking —
   // the refetched view arrives unread, the stamp clears it, and the next
   // refetch reads as seen, so it cannot loop.
+  const now = useNowMinute()
   const needsVisitStamp =
     state.status === "ready" &&
     (hasUnreadCompletion(state.data.thread) ||
-      threadCameBack(state.data.thread, { now: new Date().toISOString() }))
+      threadCameBack(state.data.thread, { now }))
   useEffect(() => {
     if (needsVisitStamp) client.markThreadVisited(threadId).catch(() => {})
   }, [client, threadId, needsVisitStamp])
@@ -235,6 +247,24 @@ export function TaskView({
   const blockedReason = pendingApproval
     ? "Answer the request above before sending anything else."
     : describeHarnessBlock(harnesses, thread.harnessId)
+  // The same classification the task list uses, so the view and the row it
+  // was opened from never disagree about whether a task is parked.
+  const snoozedUntil = thread.snoozedUntil
+  const wakeLabel =
+    snoozedUntil !== null && effectiveSnoozed(thread, { now })
+      ? snoozeWakeLabel(snoozedUntil, { now })
+      : null
+  const done =
+    wakeLabel === null && effectiveDone(thread, { now, autoDoneAfterDays })
+
+  async function runTaskAction(action: () => Promise<void>) {
+    setTaskActionError(null)
+    try {
+      await action()
+    } catch (error) {
+      setTaskActionError(describedErrorSchema.parse(error))
+    }
+  }
 
   async function handleProfileChange(next: ExecutionProfile) {
     setProfileError(null)
@@ -319,6 +349,48 @@ export function TaskView({
                   <InlineError message={visibleTaskActionError} />
                 ) : null}
                 {profileError ? <InlineError message={profileError} /> : null}
+                {/* A parked task says so where the person is about to type,
+                    with the way back beside it: the row in the list that
+                    parked it may be scrolled away or in another section. */}
+                {wakeLabel !== null || done ? (
+                  <div className="flex items-center gap-2 text-caption text-muted-foreground">
+                    {wakeLabel !== null ? (
+                      <ClockIcon aria-hidden className="size-3.5 shrink-0" />
+                    ) : (
+                      <CircleCheckIcon
+                        aria-hidden
+                        className="size-3.5 shrink-0"
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      {wakeLabel !== null ? (
+                        <>
+                          Snoozed, back in{" "}
+                          <span className="font-mono tracking-normal tabular-nums">
+                            {wakeLabel}
+                          </span>
+                        </>
+                      ) : (
+                        "Marked done"
+                      )}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() =>
+                        void runTaskAction(async () => {
+                          if (wakeLabel !== null) {
+                            await client.wakeThread(thread.id)
+                          } else {
+                            await client.setThreadDone(thread.id, false)
+                          }
+                        })
+                      }
+                    >
+                      {wakeLabel !== null ? "Wake now" : "Restore"}
+                    </Button>
+                  </div>
+                ) : null}
                 {turnOutputs.state.status === "error" ? (
                   <div className="flex items-center gap-2">
                     <InlineError
@@ -353,6 +425,7 @@ export function TaskView({
                 <Composer
                   projectId={thread.projectId}
                   harnessId={thread.harnessId}
+                  draftKey={thread.id}
                   label={`Message for ${thread.title}`}
                   placeholder={
                     active ? "The agent is working…" : "Do anything…"
@@ -389,15 +462,26 @@ export function TaskView({
                     : {})}
                   toolbar={
                     models.length > 0 ? (
-                      <ExecutionProfileToolbar
-                        models={models}
-                        profile={thread.executionProfile}
-                        onChange={handleProfileChange}
-                        harnessId={thread.harnessId}
-                        disabled={active}
-                        modelMenuOpen={modelMenuOpen}
-                        onModelMenuOpenChange={setModelMenuOpen}
-                      />
+                      // The wrapper carries the reason: a disabled menu
+                      // button never shows its own tooltip.
+                      <span
+                        className="flex min-w-0 items-center"
+                        title={
+                          active
+                            ? "Model, thinking and permissions can change once the agent finishes."
+                            : undefined
+                        }
+                      >
+                        <ExecutionProfileToolbar
+                          models={models}
+                          profile={thread.executionProfile}
+                          onChange={handleProfileChange}
+                          harnessId={thread.harnessId}
+                          disabled={active}
+                          modelMenuOpen={modelMenuOpen}
+                          onModelMenuOpenChange={setModelMenuOpen}
+                        />
+                      </span>
                     ) : null
                   }
                   trailing={
@@ -418,7 +502,9 @@ export function TaskView({
                       can give ground, so the label never wraps and the path
                       truncates from the front-heavy end instead. */}
                   <span className="shrink-0 whitespace-nowrap">
-                    Managed by Deskto
+                    {project.locationKind === "managed"
+                      ? "Managed by Deskto"
+                      : "Linked folder"}
                   </span>
                   {active ? (
                     <span className="flex items-center gap-2 pl-3">
@@ -432,7 +518,10 @@ export function TaskView({
                     </span>
                   ) : null}
                   {projectPath ? (
-                    <span className="ml-auto min-w-0 truncate pl-4 text-micro">
+                    <span
+                      className="ml-auto min-w-0 truncate pl-4 font-mono text-micro tracking-normal"
+                      title={projectPath}
+                    >
                       {projectPath}
                     </span>
                   ) : null}
@@ -468,10 +557,11 @@ export function TaskView({
           {...(sideFocusRequest ? { focusRequest: sideFocusRequest } : {})}
           onFocusHandled={handleSideFocusHandled}
           files={files.state}
+          onReloadFiles={revalidateFiles}
           browserContexts={browserContexts}
           onSelectBrowserElement={(context) =>
             setBrowserContexts((current) =>
-              current.length >= 16 ||
+              current.length >= browserContextLimit ||
               current.some((candidate) => candidate.id === context.id)
                 ? current
                 : [...current, context]

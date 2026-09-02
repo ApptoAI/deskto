@@ -89,7 +89,7 @@ export const ActivityAside = memo(function ActivityAside({
 
           {childThreads.length > 0 ? (
             <section className="border-t border-border/60 px-1.5 py-2">
-              <h3 className="px-1.5 pb-1 text-[11px] tracking-wide text-muted-foreground uppercase">
+              <h3 className="px-1.5 pb-1 text-micro tracking-wide text-muted-foreground uppercase">
                 Background tasks
               </h3>
               <BackgroundThreadList
