@@ -95,7 +95,11 @@ export function createMainWindow(): BrowserWindow {
     // still summons it.
     autoHideMenuBar: true,
     // A frosted window paints nothing of its own: the shell colour the
-    // Surface lays over the blur is the only paint.
+    // Surface lays over the blur is the only paint. The alpha channel in
+    // that background colour is only honoured once the window itself is
+    // marked transparent; without it Electron falls back to opaque and the
+    // vibrancy or acrylic never shows through.
+    transparent: frost !== null,
     backgroundColor: frost ? "#00000000" : canvasColor(),
     webPreferences: {
       preload: path.join(bundleDirectory, "../preload/index.cjs"),
