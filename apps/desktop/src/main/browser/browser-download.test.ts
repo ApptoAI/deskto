@@ -1,5 +1,13 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
-import { mkdir, readdir, rename, symlink, writeFile } from "node:fs/promises"
+import {
+  mkdir,
+  readdir,
+  rename,
+  stat,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -7,6 +15,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import {
   commitBrowserDownload,
+  scavengeBrowserDownloadStaging,
   stageBrowserDownload,
 } from "./browser-download.js"
 import { prepareBrowserDownloadDirectory } from "./browser-settings.js"
@@ -142,5 +151,97 @@ describe("browser download commit", () => {
       })
     ).toHaveProperty("refused")
     expect(existsSync(staged)).toBe(false)
+  })
+
+  it("refuses when the folder is swapped after the bytes are written but before publish", async () => {
+    const project = temporaryDirectory("deskto-project-")
+    const outside = temporaryDirectory("deskto-outside-")
+    const moved = path.join(project, "downloads.moved")
+    const staged = await stage("secret payload")
+    const directory = prepareBrowserDownloadDirectory(project, "downloads") ?? ""
+
+    const result = await commitBrowserDownload({
+      stagedPath: staged,
+      projectPath: project,
+      downloadFolder: "downloads",
+      fileName: "report.pdf",
+      beforePublish: async () => {
+        await rename(directory, moved)
+        await symlink(outside, directory, "dir")
+      },
+    })
+
+    expect(result).toHaveProperty("refused")
+    expect(await readdir(outside)).toEqual([])
+    // The temporary now lives where the folder went; its bytes were dropped
+    // through the handle so nothing downloaded survives there.
+    for (const entry of await readdir(moved)) {
+      expect((await stat(path.join(moved, entry))).size).toBe(0)
+    }
+    expect(existsSync(staged)).toBe(false)
+  })
+
+  it("leaves no final file and no temporary when the copy fails", async () => {
+    const project = temporaryDirectory("deskto-project-")
+    const staging = temporaryDirectory("deskto-staging-")
+    const directory = prepareBrowserDownloadDirectory(project, "downloads") ?? ""
+
+    const result = await commitBrowserDownload({
+      stagedPath: stageBrowserDownload(staging),
+      projectPath: project,
+      downloadFolder: "downloads",
+      fileName: "report.pdf",
+    })
+
+    expect(result).toHaveProperty("refused")
+    expect(await readdir(directory)).toEqual([])
+  })
+
+  it("never shows partial bytes under the final name", async () => {
+    const project = temporaryDirectory("deskto-project-")
+    const staged = await stage("complete body")
+    const directory = prepareBrowserDownloadDirectory(project, "downloads") ?? ""
+    let seenBeforePublish: string[] = []
+
+    const result = await commitBrowserDownload({
+      stagedPath: staged,
+      projectPath: project,
+      downloadFolder: "downloads",
+      fileName: "report.pdf",
+      beforePublish: async () => {
+        seenBeforePublish = await readdir(directory)
+      },
+    })
+
+    expect(result).toEqual({ path: path.join(directory, "report.pdf") })
+    expect(seenBeforePublish).toHaveLength(1)
+    expect(seenBeforePublish[0]).toMatch(/^\.deskto-download-/)
+    expect(await readdir(directory)).toEqual(["report.pdf"])
+    expect(readFileSync(path.join(directory, "report.pdf"), "utf8")).toBe(
+      "complete body"
+    )
+  })
+})
+
+describe("browser download staging scavenge", () => {
+  it("removes entries older than an hour and keeps recent ones", async () => {
+    const staging = temporaryDirectory("deskto-staging-")
+    const stale = stageBrowserDownload(staging)
+    const fresh = stageBrowserDownload(staging)
+    await writeFile(stale, "abandoned")
+    await writeFile(fresh, "in flight")
+    const twoHoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000
+    await utimes(stale, twoHoursAgo, twoHoursAgo)
+
+    await scavengeBrowserDownloadStaging(staging)
+
+    expect(existsSync(stale)).toBe(false)
+    expect(existsSync(fresh)).toBe(true)
+  })
+
+  it("tolerates a missing staging folder", async () => {
+    await expect(
+      scavengeBrowserDownloadStaging(path.join(os.tmpdir(), "deskto-none"))
+    ).resolves.toBeUndefined()
   })
 })

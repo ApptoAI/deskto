@@ -61,6 +61,7 @@ import {
 import type { CookieSink } from "../cookie-import/cookie-import.js"
 import {
   commitBrowserDownload,
+  scavengeBrowserDownloadStaging,
   stageBrowserDownload,
 } from "./browser-download.js"
 import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
@@ -182,6 +183,7 @@ export class BrowserManager
     private readonly host: BrowserManagerHost = {}
   ) {
     this.#configureSession(this.#browserSession)
+    void scavengeBrowserDownloadStaging(this.#downloadStaging)
   }
 
   /**

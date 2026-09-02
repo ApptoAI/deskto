@@ -38,10 +38,16 @@ allowed like any other request.
 under `userData/browser-downloads`. When the download completes, main
 re-derives the destination from the project and the download folder, walks
 every component without following links, checks the folder's real path
-against the project's real path, creates the destination exclusively so an
-existing file or link is never replaced, and proves the open handle is the
-entry at that verified path before copying a byte. A refused commit removes
-the staged file and writes nothing.
+against the project's real path, copies the bytes into a uniquely named
+temporary file created exclusively in that folder, flushes it, re-checks
+that the folder is still the verified one by real path and dev/inode, and
+publishes it under the final name with a link that never replaces an
+existing file or follows one. A partial file is never visible under the
+final name; a failed or refused commit empties the temporary through its
+own handle and removes it. Staging entries untouched for an hour are
+removed when the browser manager starts, since a crash is the only way one
+outlives its download. A refused commit removes the staged file and writes
+nothing.
 
 ## Consequences
 
