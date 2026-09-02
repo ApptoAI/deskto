@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 
 import {
+  app,
   BrowserWindow,
   session,
   WebContentsView,
@@ -18,7 +19,9 @@ import type {
 import {
   browserElementContextSchema,
   browserElementSelectionSchema,
+  browserProfilePartition,
   type BrowserElementContext,
+  type BrowserProfileClearResult,
 } from "@deskto/protocol"
 import { z } from "zod"
 
@@ -52,6 +55,7 @@ import {
   browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
+import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
 import {
   browserDownloadFileName,
   defaultBrowserSettings,
@@ -63,7 +67,13 @@ import {
   isBrowserWebUrl,
   normalizeBrowserUrl,
 } from "./browser-url.js"
+import { BrowserTabCreations } from "./browser-tab-creations.js"
 
+/**
+ * Tabs whose Workspace cannot be resolved share this partition rather than
+ * borrowing another Workspace's logins. It also holds data from before
+ * profiles were per Workspace.
+ */
 const browserPartition = "persist:deskto-browser"
 /** Prefix of the in-memory partition a task gets when logins must not carry over. */
 const taskBrowserPartitionPrefix = "deskto-browser-task-"
@@ -97,11 +107,16 @@ const rawBrowserElementContextSchema = browserElementSelectionSchema.nullable()
 export type BrowserManagerHost = {
   /** The task's project folder, for downloads; undefined blocks them. */
   projectPathForThread?: (threadId: string) => Promise<string | undefined>
+  /** The task's Workspace, whose profile the tab opens in; undefined falls
+      back to the shared partition. */
+  workspaceForThread?: (threadId: string) => Promise<string | undefined>
 }
 
 type BrowserTab = {
   view: WebContentsView
   session: Session
+  /** Undefined when the tab fell back to the shared partition. */
+  workspaceId?: string
   refs: Set<string>
   /** Resolved once per tab; downloads before it lands are blocked. */
   projectPath?: string
@@ -133,6 +148,9 @@ export class BrowserManager implements BrowserAutomationHost {
   readonly #browserSession = session.fromPartition(browserPartition)
   /** Every session this manager configured, so close() can release them all. */
   readonly #sessions = new Set<Session>()
+  /** Persistent Workspace profiles by partition; they outlive their tabs. */
+  readonly #workspaceSessions = new Map<string, Session>()
+  readonly #tabCreations = new BrowserTabCreations<BrowserTab>()
   readonly #defaultUserAgent = this.#browserSession.getUserAgent()
   #settings: BrowserSettings = defaultBrowserSettings
   #backgroundBounds: Rectangle = this.#offscreenBounds()
@@ -167,7 +185,7 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   async show(threadId: string, bounds: Rectangle): Promise<BrowserViewState> {
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     this.#openRequests.delete(threadId)
     if (this.#visibleThreadId && this.#visibleThreadId !== threadId) {
       this.#tabs
@@ -237,7 +255,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const resource = await loadResource()
       if (!this.#artifactOpens.isCurrent(request)) return this.state(threadId)
       this.#requestPanel(threadId)
-      const tab = this.#ensureTab(threadId)
+      const tab = await this.#ensureTab(threadId)
       await this.#cancelElementPicker(tab)
       if (!this.#artifactOpens.isCurrent(request)) return this.state(threadId)
       const artifact = { ...resource, threadId }
@@ -285,7 +303,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async selectElement(
     threadId: string
   ): Promise<BrowserElementContext | undefined> {
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     this.#artifactOpens.invalidate(threadId)
     const status = this.#status(tab)
     if (!status.url) throw new Error("Open a page before selecting an element.")
@@ -344,20 +362,20 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   async status(threadId: string): Promise<BrowserStatus> {
-    return this.#status(this.#ensureTab(threadId))
+    return this.#status(await this.#ensureTab(threadId))
   }
 
   async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
     if (url) return this.navigate(threadId, url)
-    await this.#openHome(threadId, this.#ensureTab(threadId))
+    await this.#openHome(threadId, await this.#ensureTab(threadId))
     return this.snapshot(threadId)
   }
 
   async navigate(threadId: string, value: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     tab.refs.clear()
     tab.registryKey = undefined
@@ -374,7 +392,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   async snapshot(threadId: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     const snapshotId = randomUUID()
     const registryKey = `__deskto_browser_${snapshotId.replaceAll("-", "")}`
     const raw = rawBrowserSnapshotSchema.parse(
@@ -403,7 +421,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async click(threadId: string, ref: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       const point = await this.#elementPoint(tab, ref)
       tab.view.webContents.sendInputEvent({
@@ -433,7 +451,7 @@ export class BrowserManager implements BrowserAutomationHost {
   ): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       const registryKey = this.#registry(tab, ref)
       const changed = z
@@ -459,7 +477,7 @@ export class BrowserManager implements BrowserAutomationHost {
     if (!/^[A-Za-z0-9+_-]{1,40}$/.test(key)) {
       throw new Error(`Unsupported browser key: ${key}`)
     }
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       await this.#sendKey(tab, key)
       await settleInput()
@@ -470,7 +488,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async back(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const history = tab.view.webContents.navigationHistory
     if (history.canGoBack()) {
@@ -488,7 +506,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async forward(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const history = tab.view.webContents.navigationHistory
     if (history.canGoForward()) {
@@ -506,7 +524,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async reload(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const currentUrl = this.#status(tab).url
     if (!currentUrl) return this.snapshot(threadId)
@@ -522,7 +540,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   async screenshot(threadId: string) {
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     const image = await tab.view.webContents.capturePage()
     const png = image.toPNG()
     if (png.byteLength > maximumScreenshotBytes) {
@@ -537,6 +555,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   closeThread(threadId: string): void {
     this.#artifactOpens.clear(threadId)
+    this.#tabCreations.cancel(threadId)
     const tab = this.#tabs.get(threadId)
     if (!tab) return
     if (this.#visibleThreadId === threadId) this.#visibleThreadId = undefined
@@ -547,10 +566,63 @@ export class BrowserManager implements BrowserAutomationHost {
     this.window.contentView.removeChildView(tab.view)
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
     this.#tabs.delete(threadId)
-    if (tab.session !== this.#browserSession) this.#releaseSession(tab.session)
+    if (tab.session !== this.#browserSession && !tab.workspaceId) {
+      this.#releaseSession(tab.session)
+    }
+  }
+
+  workspaceChanged(): void {
+    const threadIds = new Set([
+      ...this.#tabs.keys(),
+      ...this.#tabCreations.cancelAll(),
+    ])
+    for (const threadId of threadIds) {
+      this.closeThread(threadId)
+      this.publish({ type: "state", state: this.state(threadId) })
+    }
+  }
+
+  profilePath(workspaceId: string): string {
+    return (
+      this.#workspaceSessions.get(browserProfilePartition(workspaceId))
+        ?.storagePath ??
+      browserProfilePath(app.getPath("userData"), workspaceId)
+    )
+  }
+
+  async profileUsage(workspaceId: string) {
+    return measureBrowserProfile(this.profilePath(workspaceId))
+  }
+
+  /**
+   * Clears what the Workspace's profile holds: cookies, storage, cache and
+   * cached logins. Open tabs in that Workspace close first so nothing
+   * writes back afterwards. The folder itself stays; Chromium owns it.
+   */
+  async clearProfile(workspaceId: string): Promise<BrowserProfileClearResult> {
+    const before = await this.profileUsage(workspaceId)
+    for (const [threadId, tab] of this.#tabs) {
+      if (tab.workspaceId !== workspaceId) continue
+      this.closeThread(threadId)
+      // The task view may still be showing this page; it learns here that
+      // the page is gone rather than at its next request.
+      this.publish({ type: "state", state: this.state(threadId) })
+    }
+    const browserSession = this.#workspaceSession(workspaceId)
+    await browserSession.clearStorageData()
+    await browserSession.clearCache()
+    await browserSession.clearAuthCache()
+    await browserSession.clearHostResolverCache()
+    await browserSession.clearData()
+    const after = await this.profileUsage(workspaceId)
+    return {
+      workspaceId,
+      clearedBytes: Math.max(0, before.sizeBytes - after.sizeBytes),
+    }
   }
 
   close(): void {
+    this.#tabCreations.cancelAll()
     for (const threadId of this.#tabs.keys()) this.closeThread(threadId)
     for (const browserSession of this.#sessions) {
       this.#releaseSession(browserSession)
@@ -603,20 +675,42 @@ export class BrowserManager implements BrowserAutomationHost {
     })
   }
 
+  /** Only a task's throwaway session is emptied on release; a Workspace
+      profile persists by design and is cleared only from settings. */
   #releaseSession(browserSession: Session): void {
     if (!this.#sessions.delete(browserSession)) return
     browserSession.protocol.unhandle(browserArtifactScheme)
-    if (browserSession !== this.#browserSession) {
+    if (
+      browserSession !== this.#browserSession &&
+      !isWorkspaceSession(this.#workspaceSessions, browserSession)
+    ) {
       void browserSession.clearStorageData().catch(() => undefined)
     }
   }
 
-  #sessionFor(threadId: string): Session {
-    const browserSession = this.#settings.clearSessionBetweenTasks
-      ? session.fromPartition(`${taskBrowserPartitionPrefix}${threadId}`)
-      : this.#browserSession
+  #workspaceSession(workspaceId: string): Session {
+    const partition = browserProfilePartition(workspaceId)
+    const existing = this.#workspaceSessions.get(partition)
+    if (existing) {
+      this.#configureSession(existing)
+      return existing
+    }
+    const browserSession = session.fromPartition(partition)
+    this.#workspaceSessions.set(partition, browserSession)
     this.#configureSession(browserSession)
     return browserSession
+  }
+
+  /** "Clear between tasks" and unresolved Workspaces use isolated memory. */
+  #sessionFor(threadId: string, workspaceId: string | undefined): Session {
+    if (this.#settings.clearSessionBetweenTasks || !workspaceId) {
+      const browserSession = session.fromPartition(
+        `${taskBrowserPartitionPrefix}${threadId}`
+      )
+      this.#configureSession(browserSession)
+      return browserSession
+    }
+    return this.#workspaceSession(workspaceId)
   }
 
   /** Loads the start page into a tab that has not shown anything yet. */
@@ -651,11 +745,34 @@ export class BrowserManager implements BrowserAutomationHost {
     }
   }
 
-  #ensureTab(threadId: string): BrowserTab {
+  /**
+   * Resolving the Workspace is asynchronous, so two callers racing for the
+   * same task share one pending tab rather than each opening a view.
+   */
+  #ensureTab(threadId: string): Promise<BrowserTab> {
+    const current = this.#tabs.get(threadId)
+    if (current && !current.view.webContents.isDestroyed()) {
+      return Promise.resolve(current)
+    }
+    const lookup = this.host.workspaceForThread
+    return this.#tabCreations.run(
+      threadId,
+      () =>
+        (lookup ? lookup(threadId) : Promise.resolve(undefined)).catch(
+          () => undefined
+        ),
+      (workspaceId) => this.#createTab(threadId, workspaceId)
+    )
+  }
+
+  #createTab(threadId: string, workspaceId: string | undefined): BrowserTab {
     const current = this.#tabs.get(threadId)
     if (current && !current.view.webContents.isDestroyed()) return current
     if (current) this.closeThread(threadId)
-    const browserSession = this.#sessionFor(threadId)
+    const browserSession = this.#sessionFor(threadId, workspaceId)
+    const tabWorkspaceId = this.#settings.clearSessionBetweenTasks
+      ? undefined
+      : workspaceId
     const view = new WebContentsView({
       webPreferences: {
         session: browserSession,
@@ -665,7 +782,12 @@ export class BrowserManager implements BrowserAutomationHost {
         webSecurity: true,
       },
     })
-    const tab: BrowserTab = { view, session: browserSession, refs: new Set() }
+    const tab: BrowserTab = {
+      view,
+      session: browserSession,
+      workspaceId: tabWorkspaceId,
+      refs: new Set(),
+    }
     this.#tabs.set(threadId, tab)
     if (this.#settings.userAgent) {
       view.webContents.setUserAgent(this.#settings.userAgent)
@@ -1053,4 +1175,14 @@ function waitForNavigation(
       reject(error)
     }
   })
+}
+
+function isWorkspaceSession(
+  workspaceSessions: ReadonlyMap<string, Session>,
+  candidate: Session
+): boolean {
+  for (const browserSession of workspaceSessions.values()) {
+    if (browserSession === candidate) return true
+  }
+  return false
 }
