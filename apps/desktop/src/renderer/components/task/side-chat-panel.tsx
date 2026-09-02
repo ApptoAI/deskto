@@ -95,7 +95,7 @@ export function SideChatPanel({
   if (state.status === "loading" || state.status === "idle") {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-        <GitBranchIcon aria-hidden className="size-4 animate-pulse" />
+        <GitBranchIcon aria-hidden className="size-4 motion-safe:animate-pulse" />
         Opening side chat…
       </div>
     )

@@ -30,7 +30,7 @@ export function ComposerAttachments({
             type="button"
             variant="secondary"
             size="icon"
-            className="absolute top-1 right-1 size-6 opacity-0 shadow-sm group-hover/image:opacity-100 focus-visible:opacity-100"
+            className="absolute top-1 right-1 size-6 opacity-0 shadow-sm group-hover/image:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
             onClick={() => onRemove(attachment.id)}
             aria-label={`Remove ${attachment.name}`}
           >

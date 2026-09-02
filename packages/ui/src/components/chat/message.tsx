@@ -72,7 +72,10 @@ function MessageActivity({
     <p
       data-slot="message-activity"
       aria-live="polite"
-      className={cn("animate-pulse text-sm text-muted-foreground", className)}
+      className={cn(
+        "text-sm text-muted-foreground motion-safe:animate-pulse",
+        className
+      )}
       {...props}
     >
       {children}
