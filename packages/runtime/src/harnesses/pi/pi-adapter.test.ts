@@ -1208,7 +1208,35 @@ describe("Pi models", () => {
       enabledModels: ["anthropic/*"],
     })
     expect(models).toHaveLength(3)
-    expect(models[0]?.isDefault).toBe(true)
+    expect(models.map((model) => model.isDefault)).toEqual([
+      false,
+      false,
+      true,
+    ])
+  })
+
+  it("falls back to the provider default pi would start with", () => {
+    // Pi walks its provider default table, not the snapshot order: the
+    // codex entry is not that provider's default, grok is xai's.
+    expect(
+      piModels(availableModels).map((model) => model.isDefault)
+    ).toEqual([false, false, true])
+    // A settings default without credentials is skipped the same way.
+    expect(
+      piModels(availableModels, {
+        defaultProvider: "anthropic",
+        defaultModel: "claude-opus-4-8",
+      }).map((model) => model.isDefault)
+    ).toEqual([false, false, true])
+    // Table order wins over snapshot order between two provider defaults.
+    expect(
+      piModels([
+        availableModels[2]!,
+        { ...availableModels[0]!, id: "gpt-5.5" },
+      ]).map((model) => model.id + (model.isDefault ? "*" : ""))
+    ).toEqual(["xai/grok-4.6", "openai-codex/gpt-5.5*"])
+    // Nothing in the table: the first model, as in Pi.
+    expect(piModels([availableModels[0]!])[0]?.isDefault).toBe(true)
   })
 })
 
