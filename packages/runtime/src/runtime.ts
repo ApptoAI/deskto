@@ -91,7 +91,10 @@ export class Runtime implements RuntimeTransport {
       options.harnesses,
       this.#store.settings,
       {
-        onChanged: () => this.#emit({ type: "harness.changed" }),
+        onChanged: () => {
+          this.#emit({ type: "harness.changed" })
+          this.#turns.retryFollowUps()
+        },
         probeGate: options.probeGate,
       }
     )
@@ -137,6 +140,7 @@ export class Runtime implements RuntimeTransport {
           this.#emit({ type: "artifact.changed", threadId }),
       }
     )
+    this.#turns.resumeFollowUps()
   }
 
   request<M extends RuntimeMethod>(

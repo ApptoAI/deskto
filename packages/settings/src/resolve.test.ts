@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest"
 import {
   appSettings,
   harnessModelSettings,
+  harnessModelVisibilitySchema,
   interfaceFontSizeSchema,
+  isHarnessModelVisible,
+  visibleHarnessModels,
 } from "./app-settings.js"
 import {
   findKeybindingConflict,
@@ -16,6 +19,7 @@ const newTask = appSettings.newTaskKeybinding
 const threadTitleModel = appSettings.threadTitleModel
 const workspaceLayout = appSettings.workspaceLayout
 const interfaceFontSize = appSettings.interfaceFontSize
+const modelVisibility = appSettings.modelVisibility
 
 describe("resolveSettings", () => {
   it("serves defaults when nothing is stored", () => {
@@ -27,6 +31,7 @@ describe("resolveSettings", () => {
     })
     expect(settingValue(snapshot, workspaceLayout)).toBe("workspace")
     expect(settingValue(snapshot, interfaceFontSize)).toBe(16)
+    expect(settingValue(snapshot, modelVisibility)).toEqual({})
     expect(snapshot.overrides).toEqual({})
   })
 
@@ -40,6 +45,43 @@ describe("resolveSettings", () => {
     expect(interfaceFontSizeSchema.safeParse(11).success).toBe(false)
     expect(interfaceFontSizeSchema.safeParse(21).success).toBe(false)
     expect(interfaceFontSizeSchema.safeParse(16.5).success).toBe(false)
+  })
+
+  it("validates hidden model ids and defaults unlisted models to visible", () => {
+    const visibility = { pi: ["openai/gpt-5"] }
+    expect(harnessModelVisibilitySchema.safeParse(visibility).success).toBe(
+      true
+    )
+    expect(
+      harnessModelVisibilitySchema.safeParse({ pi: ["openai/gpt-5", ""] })
+        .success
+    ).toBe(false)
+    expect(isHarnessModelVisible(visibility, "pi", "openai/gpt-5")).toBe(false)
+    expect(isHarnessModelVisible(visibility, "pi", "xai/grok-4")).toBe(true)
+    expect(isHarnessModelVisible(visibility, "claude", "claude-opus")).toBe(
+      true
+    )
+  })
+
+  it("falls back to the default model when every model is hidden", () => {
+    const models = [
+      { id: "openai/gpt-5", isDefault: false },
+      { id: "xai/grok-4", isDefault: true },
+    ]
+    expect(
+      visibleHarnessModels({ pi: ["openai/gpt-5"] }, "pi", models)
+    ).toEqual([{ id: "xai/grok-4", isDefault: true }])
+    expect(
+      visibleHarnessModels({ pi: ["openai/gpt-5", "xai/grok-4"] }, "pi", models)
+    ).toEqual([{ id: "xai/grok-4", isDefault: true }])
+    expect(
+      visibleHarnessModels(
+        { pi: ["openai/gpt-5", "xai/grok-4"] },
+        "pi",
+        models.map((model) => ({ ...model, isDefault: false }))
+      )
+    ).toEqual([{ id: "openai/gpt-5", isDefault: false }])
+    expect(visibleHarnessModels({}, "pi", [])).toEqual([])
   })
 
   it("applies a valid override and reports it", () => {
@@ -87,9 +129,9 @@ describe("findKeybindingConflict", () => {
 
   it("lets a setting keep its own binding and ignores unused ones", () => {
     const snapshot = resolveSettings({})
-    expect(findKeybindingConflict(snapshot, newTask, newTask.defaultValue)).toBe(
-      null
-    )
+    expect(
+      findKeybindingConflict(snapshot, newTask, newTask.defaultValue)
+    ).toBe(null)
     expect(findKeybindingConflict(snapshot, newTask, "mod+alt+9")).toBe(null)
   })
 })

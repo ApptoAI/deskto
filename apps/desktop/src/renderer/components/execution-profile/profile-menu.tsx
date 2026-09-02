@@ -47,6 +47,7 @@ export function ProfileMenu({
   onOpenChange?: (open: boolean) => void
 }) {
   const selected = options.find((option) => option.value === value)
+  const accessibleValue = selected?.label ?? triggerLabel ?? "not set"
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -65,8 +66,8 @@ export function ProfileMenu({
               triggerClassName
             )}
             disabled={disabled}
-            title={`${label}: ${selected?.label ?? "not set"}`}
-            aria-label={`${label}: ${selected?.label ?? "not set"}`}
+            title={`${label}: ${accessibleValue}`}
+            aria-label={`${label}: ${accessibleValue}`}
           />
         }
       >

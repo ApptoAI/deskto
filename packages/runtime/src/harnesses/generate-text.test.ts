@@ -77,6 +77,8 @@ describe("generateTextWithSession", () => {
           }
         },
       },
+      queue: () => Promise.resolve(),
+      steer: () => Promise.resolve(),
       cancel: () => {
         cancelled = true
         return Promise.resolve()

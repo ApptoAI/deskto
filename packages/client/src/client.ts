@@ -398,6 +398,13 @@ export class RuntimeClient {
     return this.request({ method: "turn.cancel", params: { threadId } })
   }
 
+  followUp(threadId: string, input: TurnInput) {
+    return this.request({
+      method: "turn.followUp",
+      params: { threadId, input: turnInputSchema.parse(input) },
+    })
+  }
+
   resolveApproval(
     threadId: string,
     approvalId: string,

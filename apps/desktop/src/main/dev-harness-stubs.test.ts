@@ -7,7 +7,11 @@ type HarnessFactory = RuntimeOptions["harnesses"][number]
 
 function fakeFactory(extras: Partial<HarnessFactory> = {}): HarnessFactory {
   return {
-    descriptor: { id: "claude", name: "Claude Code" },
+    descriptor: {
+      id: "claude",
+      name: "Claude Code",
+      followUps: { queue: false, steer: false },
+    },
     checkAvailability: vi.fn(() =>
       Promise.resolve({ status: "available" as const })
     ),

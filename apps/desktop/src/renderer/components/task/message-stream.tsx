@@ -403,6 +403,11 @@ const MessageEntry = memo(function MessageEntry({
             </div>
           ) : null}
           {message.content ? <div>{message.content}</div> : null}
+          {message.delivery === "queued" || message.delivery === "steering" ? (
+            <div className="text-caption text-muted-foreground" role="status">
+              {message.delivery === "steering" ? "Steering…" : "Queued"}
+            </div>
+          ) : null}
         </MessageBody>
       </MessageRow>
     )

@@ -1,6 +1,16 @@
 export type HarnessDescriptor = {
   id: string
   name: string
+  /** Native live-session input support. Runtime queueing remains available
+      even when a Harness cannot hold a follow-up itself. */
+  followUps: HarnessFollowUpCapabilities
+}
+
+export type HarnessFollowUpCapabilities = {
+  /** Can accept input to run after the current provider response boundary. */
+  queue: boolean
+  /** Can amend the provider execution that is currently in flight. */
+  steer: boolean
 }
 
 export type HarnessAvailability =
@@ -126,6 +136,15 @@ export type HarnessRunInput = {
   forkProviderSession?: boolean
 }
 
+/** Additional user input for a HarnessSession that is already running. */
+export type HarnessFollowUpInput = {
+  /** Runtime message id, used as the provider idempotency/correlation key. */
+  id: string
+  prompt: string
+  references: HarnessPromptReference[]
+  attachments: HarnessImageAttachment[]
+}
+
 /** One stateless model call for small app-owned text, such as a Thread title. */
 export type TextGenerationInput = {
   projectPath: string
@@ -228,6 +247,10 @@ export interface HarnessSession {
   readonly events: AsyncIterable<HarnessEvent>
   /** Root configuration completed before the session was returned. */
   readonly skillProvisioning?: SkillProvisioningResult[]
+  /** Returns when the provider accepts the follow-up, not when it runs. */
+  queue(input: HarnessFollowUpInput): Promise<void>
+  /** Returns when the provider accepts the live amendment. */
+  steer(input: HarnessFollowUpInput): Promise<void>
   cancel(): Promise<void>
   respondToApproval(
     approvalId: string,

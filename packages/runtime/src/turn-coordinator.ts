@@ -8,6 +8,7 @@ import {
   type ContextUsage,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessFollowUpInput,
   type HarnessRunInput,
   type HarnessSession,
 } from "@deskto/harness-sdk"
@@ -37,7 +38,7 @@ import type {
 } from "./storage/activities.js"
 import type { PreparedArtifactCapture } from "./storage/artifacts.js"
 import type { Store } from "./storage/store.js"
-import type { ActiveTurnRecord } from "./storage/turns.js"
+import type { ActiveTurnRecord, QueuedFollowUp } from "./storage/turns.js"
 import { ThreadTitleGenerator } from "./thread-title-generator.js"
 import type { UserSettings } from "./user-settings.js"
 
@@ -57,6 +58,7 @@ type StartingRun = ActiveTurnRecord & {
   cancelled: boolean
   progress: TurnProgress
   tools?: SessionToolLeases
+  outputs?: ProjectOutputSweep
   releaseProject: () => void
 }
 
@@ -85,6 +87,8 @@ type ActiveRun = ActiveTurnRecord & {
 
 const streamFlushIntervalMs = 50
 const progressHeartbeatIntervalMs = 1_000
+const followUpRetryBaseMs = 100
+const followUpRetryMaximumMs = 30_000
 type ProgressState = Pick<TurnProgress, "stage" | "label">
 
 function turnProgress(
@@ -154,9 +158,16 @@ function reportsItsFileEffects(payload: ActivityPayload | undefined): boolean {
 export class TurnCoordinator {
   readonly #runs = new Map<string, StartingRun | ActiveRun>()
   readonly #discarding = new Set<string>()
+  readonly #pumpingFollowUps = new Set<string>()
+  readonly #followUpRetryAttempts = new Map<string, number>()
+  readonly #followUpRetryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
   readonly #titles: ThreadTitleGenerator
 
   readonly #skills: SkillInventory
+  #disposing = false
 
   constructor(
     private readonly store: Store,
@@ -223,7 +234,18 @@ export class TurnCoordinator {
     return view
   }
 
-  async start(threadId: string, input: TurnInput): Promise<ThreadView> {
+  start(threadId: string, input: TurnInput): Promise<ThreadView> {
+    if (!this.#runs.has(threadId) && this.store.turns.hasFollowUps(threadId)) {
+      return this.followUp(threadId, input).then(({ view }) => view)
+    }
+    return this.#start(threadId, input)
+  }
+
+  async #start(
+    threadId: string,
+    input: TurnInput,
+    queued?: QueuedFollowUp
+  ): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
       throw new RuntimeError(
         "turn-active",
@@ -236,12 +258,14 @@ export class TurnCoordinator {
     const prepare = () =>
       Promise.all([
         this.harnesses.requireAvailable(thread.harness_id),
-        resolvePromptReferences(
-          this.store,
-          this.#skills,
-          threadId,
-          input.references
-        ),
+        queued
+          ? Promise.resolve(queued.harnessReferences)
+          : resolvePromptReferences(
+              this.store,
+              this.#skills,
+              threadId,
+              input.references
+            ),
       ] as const)
     let preparation: Awaited<ReturnType<typeof prepare>>
     try {
@@ -253,7 +277,9 @@ export class TurnCoordinator {
     const [harness, references] = preparation
     let turn: ActiveTurnRecord
     try {
-      turn = this.store.turns.begin(threadId, input)
+      turn = queued
+        ? this.store.turns.beginQueued(threadId, queued)
+        : this.store.turns.begin(threadId, input)
     } catch (error) {
       releaseProject()
       throw error
@@ -270,6 +296,7 @@ export class TurnCoordinator {
     this.#runs.set(threadId, starting)
     this.#changed(threadId)
 
+    let startingSession: HarnessSession | undefined
     try {
       if (turn.forkProviderSession) this.#requireParentQuiet(threadId)
       const tools = await SessionToolLeases.open(
@@ -290,10 +317,9 @@ export class TurnCoordinator {
         threadId,
         turnId: turn.turnId,
         projectPath: turn.projectPath,
-        prompt: appendBrowserPromptContext(
-          input.text,
-          input.browserContexts ?? []
-        ),
+        prompt:
+          queued?.harnessPrompt ??
+          appendBrowserPromptContext(input.text, input.browserContexts ?? []),
         references,
         attachments: input.attachments.map(
           ({ type, name, mimeType, dataUrl }) => ({
@@ -321,6 +347,7 @@ export class TurnCoordinator {
         turn.projectPath,
         (paths) => this.#captureSweptOutputs(threadId, turn.turnId, paths)
       )
+      starting.outputs = outputs
       // Last possible moment before forking: the setup above awaited twice,
       // and the parent may have begun responding during it.
       if (turn.forkProviderSession) {
@@ -332,6 +359,7 @@ export class TurnCoordinator {
         }
       }
       const session = await harness.start(runInput, starting.controller.signal)
+      startingSession = session
       try {
         this.store.skillProvisioning.record(
           turn.turnId,
@@ -347,6 +375,16 @@ export class TurnCoordinator {
         await session.cancel().catch(() => undefined)
         await tools.close()
         return this.view(threadId)
+      }
+      if (turn.followUpMessageId) {
+        const started = this.store.turns.markFollowUpStarted(
+          turn.followUpMessageId,
+          turn.turnId
+        )
+        this.events.delta(threadId, {
+          type: "message.upserted",
+          message: started,
+        })
       }
       const run: ActiveRun = {
         ...turn,
@@ -385,20 +423,191 @@ export class TurnCoordinator {
       }
       void this.#consume(threadId, run)
     } catch (error) {
+      starting.outputs?.close()
+      await startingSession?.cancel().catch(() => undefined)
       await starting.tools?.close()
       if (!starting.cancelled) {
-        this.store.turns.fail(
-          threadId,
-          turn.turnId,
-          turn.assistantMessageId,
-          harnessFailure(runtimeErrorMessageSchema.parse(error))
-        )
-        this.#changed(threadId)
+        if (turn.followUpMessageId) {
+          const queued = this.store.turns.requeuePromotedFollowUp(
+            turn.followUpMessageId,
+            turn.turnId
+          )
+          this.events.delta(threadId, {
+            type: "message.upserted",
+            message: queued,
+          })
+        } else {
+          this.store.turns.fail(
+            threadId,
+            turn.turnId,
+            turn.assistantMessageId,
+            harnessFailure(runtimeErrorMessageSchema.parse(error))
+          )
+        }
       }
       this.#settleRun(threadId, starting)
+      if (!starting.cancelled) this.#changed(threadId)
     }
 
     return this.view(threadId)
+  }
+
+  async followUp(
+    threadId: string,
+    input: TurnInput
+  ): Promise<{
+    disposition: "queued" | "steered"
+    view: ThreadView
+  }> {
+    const target = this.#runs.get(threadId)
+    if (!target && !this.store.turns.hasFollowUps(threadId)) {
+      return { disposition: "queued", view: await this.start(threadId, input) }
+    }
+
+    const references = await resolvePromptReferences(
+      this.store,
+      this.#skills,
+      threadId,
+      input.references
+    )
+    const harnessInput = {
+      prompt: appendBrowserPromptContext(
+        input.text,
+        input.browserContexts ?? []
+      ),
+      references,
+    }
+    const canSteer =
+      target?.phase === "active" &&
+      !target.terminal &&
+      this.#runs.get(threadId) === target &&
+      this.store.threads.getRow(threadId).status === "running" &&
+      !this.store.turns.hasFollowUps(threadId) &&
+      this.harnesses.get(target.harnessId).descriptor.followUps.steer
+    const message = this.store.turns.enqueueFollowUp(
+      threadId,
+      input,
+      harnessInput,
+      canSteer ? "steering" : "queued"
+    )
+    this.events.delta(threadId, { type: "message.upserted", message })
+    this.events.delta(threadId, {
+      type: "thread.updated",
+      thread: this.store.threads.get(threadId),
+    })
+
+    if (!canSteer) {
+      if (!this.#runs.has(threadId)) this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    const followUp: HarnessFollowUpInput = {
+      id: message.id,
+      ...harnessInput,
+      attachments: input.attachments.map(
+        ({ type, name, mimeType, dataUrl }) => ({
+          type,
+          name,
+          mimeType,
+          dataUrl,
+        })
+      ),
+    }
+    try {
+      await target.session.steer(followUp)
+    } catch {
+      const queued = this.store.turns.markFollowUpQueued(message.id)
+      this.events.delta(threadId, {
+        type: "message.upserted",
+        message: queued,
+      })
+      this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    if (
+      target.terminal ||
+      target.cancelled ||
+      this.#runs.get(threadId) !== target
+    ) {
+      const queued = this.store.turns.markFollowUpQueued(message.id)
+      this.events.delta(threadId, {
+        type: "message.upserted",
+        message: queued,
+      })
+      this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    this.#closeSegment(threadId, target)
+    const steered = this.store.turns.markFollowUpSteered(
+      message.id,
+      target.turnId,
+      target.ordinal++
+    )
+    this.events.delta(threadId, {
+      type: "message.upserted",
+      message: steered,
+    })
+    return { disposition: "steered", view: this.view(threadId) }
+  }
+
+  /** Starts durable follow-ups left by an earlier Turn or process. */
+  resumeFollowUps(): void {
+    this.#pumpFollowUps()
+  }
+
+  /** Retries durable starts promptly after a Harness health transition. */
+  retryFollowUps(): void {
+    for (const timer of this.#followUpRetryTimers.values()) clearTimeout(timer)
+    this.#followUpRetryTimers.clear()
+    this.#followUpRetryAttempts.clear()
+    this.#pumpFollowUps()
+  }
+
+  #pumpFollowUps(): void {
+    if (this.#disposing) return
+    for (const threadId of this.store.turns.followUpThreadIds()) {
+      if (
+        this.#runs.has(threadId) ||
+        this.#pumpingFollowUps.has(threadId) ||
+        this.#followUpRetryTimers.has(threadId)
+      ) {
+        continue
+      }
+      const queued = this.store.turns.oldestFollowUp(threadId)
+      if (!queued) continue
+      this.#pumpingFollowUps.add(threadId)
+      void this.#start(threadId, queued.input, queued)
+        .catch(() => undefined)
+        .finally(() => {
+          this.#pumpingFollowUps.delete(threadId)
+          if (this.#disposing) return
+          const head = this.store.turns.oldestFollowUp(threadId)
+          if (head?.messageId === queued.messageId) {
+            this.#scheduleFollowUpRetry(threadId)
+          } else {
+            this.#followUpRetryAttempts.delete(threadId)
+          }
+          this.#pumpFollowUps()
+        })
+    }
+  }
+
+  #scheduleFollowUpRetry(threadId: string): void {
+    if (this.#followUpRetryTimers.has(threadId) || this.#disposing) return
+    const attempt = (this.#followUpRetryAttempts.get(threadId) ?? 0) + 1
+    this.#followUpRetryAttempts.set(threadId, attempt)
+    const delay = Math.min(
+      followUpRetryBaseMs * 2 ** (attempt - 1),
+      followUpRetryMaximumMs
+    )
+    const timer = setTimeout(() => {
+      this.#followUpRetryTimers.delete(threadId)
+      this.#pumpFollowUps()
+    }, delay)
+    timer.unref?.()
+    this.#followUpRetryTimers.set(threadId, timer)
   }
 
   async cancel(threadId: string): Promise<ThreadView> {
@@ -409,10 +618,14 @@ export class TurnCoordinator {
     if (run.phase === "starting") {
       run.cancelled = true
       run.controller.abort()
+      if (run.followUpMessageId) {
+        this.store.turns.markFollowUpStarted(run.followUpMessageId, run.turnId)
+      }
       this.store.turns.cancel(threadId, run.turnId, run.assistantMessageId)
       this.#settleRun(threadId, run)
       await run.tools?.close()
       this.#changed(threadId)
+      if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
       return this.view(threadId)
     }
 
@@ -435,6 +648,7 @@ export class TurnCoordinator {
       this.#changed(threadId)
       await run.outputs?.finish()
       this.#settleRun(threadId, run)
+      if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -449,6 +663,7 @@ export class TurnCoordinator {
     }
     await run.outputs?.finish()
     this.#settleRun(threadId, run)
+    if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
     return this.view(threadId)
   }
 
@@ -520,6 +735,10 @@ export class TurnCoordinator {
   }
 
   async dispose(): Promise<void> {
+    this.#disposing = true
+    for (const timer of this.#followUpRetryTimers.values()) clearTimeout(timer)
+    this.#followUpRetryTimers.clear()
+    this.#followUpRetryAttempts.clear()
     await this.#titles.dispose()
     const runs = [...this.#runs.entries()]
     for (const [threadId, run] of runs) {
@@ -586,7 +805,10 @@ export class TurnCoordinator {
       // files that this one could claim.
       await run.tools.close()
       if (!run.cancelled) await run.outputs?.finish()
-      if (!run.cancelled) this.#settleRun(threadId, run)
+      if (!run.cancelled) {
+        this.#settleRun(threadId, run)
+        this.#pumpFollowUps()
+      }
     }
   }
 

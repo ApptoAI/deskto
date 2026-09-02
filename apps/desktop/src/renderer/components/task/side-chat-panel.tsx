@@ -116,6 +116,10 @@ export function SideChatPanel({
   // The shared guard keeps this panel's disable rules in step with the
   // Runtime's rejection rules.
   const active = isActivityBlocked(view.thread)
+  const followUpPending = view.messages.some(
+    (message) =>
+      message.delivery === "queued" || message.delivery === "steering"
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -218,7 +222,7 @@ export function SideChatPanel({
         <SideComposer
           thread={view.thread}
           active={active}
-          blocked={approval !== undefined}
+          followUpPending={followUpPending}
           focusToken={focusRequest}
           replace={replace}
         />
@@ -252,13 +256,13 @@ function EmptySideChat() {
 function SideComposer({
   thread,
   active,
-  blocked,
+  followUpPending,
   focusToken,
   replace,
 }: {
   thread: Thread
   active: boolean
-  blocked: boolean
+  followUpPending: boolean
   focusToken?: number
   replace: (view: ThreadView) => void
 }) {
@@ -269,20 +273,21 @@ function SideComposer({
       harnessId={thread.harnessId}
       label="Side question"
       draftKey={`side:${thread.id}`}
-      placeholder={active ? "The agent is working…" : "Ask a side question"}
+      placeholder={
+        active || followUpPending ? "Add a follow-up…" : "Ask a side question"
+      }
       running={active}
       focusToken={focusToken}
       textareaClassName="min-h-12 py-3"
       textareaRows={1}
-      {...(blocked
-        ? {
-            blockedReason:
-              "Answer the request above before sending anything else.",
-          }
-        : {})}
-      onSend={async (input) =>
-        replace(await client.startTurn(thread.id, input))
-      }
+      onSend={async (input) => {
+        if (active || followUpPending) {
+          const followUp = await client.followUp(thread.id, input)
+          replace(followUp.view)
+        } else {
+          replace(await client.startTurn(thread.id, input))
+        }
+      }}
       onCancel={async () => replace(await client.cancelTurn(thread.id))}
     />
   )

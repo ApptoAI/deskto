@@ -18,6 +18,10 @@ import {
   type Project,
   type TurnOutput,
 } from "@deskto/protocol"
+import {
+  visibleHarnessModels,
+  type HarnessModelVisibility,
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -54,10 +58,12 @@ const sideChatBlockedMessage =
 export function TaskView({
   threadId,
   harnesses,
+  modelVisibility = {},
   projects,
 }: {
   threadId: string
   harnesses: QueryState<Harness[]>
+  modelVisibility?: HarnessModelVisibility
   projects: Project[]
 }) {
   const client = useRuntimeClient()
@@ -83,6 +89,12 @@ export function TaskView({
     state.status === "ready" &&
     (state.data.thread.status === "running" ||
       state.data.thread.status === "waiting-approval")
+  const followUpPending =
+    state.status === "ready" &&
+    state.data.messages.some(
+      (message) =>
+        message.delivery === "queued" || message.delivery === "steering"
+    )
 
   useEffect(() => {
     let active = true
@@ -239,14 +251,20 @@ export function TaskView({
   }
   const projectPath = project.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
+  const selectableModels = visibleHarnessModels(
+    modelVisibility,
+    thread.harnessId,
+    models
+  )
   const visibleTaskActionError =
     !active && taskActionError === sideChatBlockedMessage
       ? null
       : taskActionError
 
-  const blockedReason = pendingApproval
-    ? "Answer the request above before sending anything else."
-    : describeHarnessBlock(harnesses, thread.harnessId)
+  const blockedReason =
+    active || followUpPending
+      ? undefined
+      : describeHarnessBlock(harnesses, thread.harnessId)
   // The same classification the task list uses, so the view and the row it
   // was opened from never disagree about whether a task is parked.
   const snoozedUntil = thread.snoozedUntil
@@ -428,7 +446,9 @@ export function TaskView({
                   draftKey={thread.id}
                   label={`Message for ${thread.title}`}
                   placeholder={
-                    active ? "The agent is working…" : "Do anything…"
+                    active || followUpPending
+                      ? "Add a follow-up…"
+                      : "Do anything…"
                   }
                   running={active}
                   browserContexts={browserContexts}
@@ -446,7 +466,12 @@ export function TaskView({
                   blockedReason={blockedReason}
                   onSend={async (input) => {
                     setTaskActionError(null)
-                    replace(await client.startTurn(thread.id, input))
+                    if (active || followUpPending) {
+                      const followUp = await client.followUp(thread.id, input)
+                      replace(followUp.view)
+                    } else {
+                      replace(await client.startTurn(thread.id, input))
+                    }
                   }}
                   {...(models.length > 0 && !active
                     ? { onOpenModelPicker: () => setModelMenuOpen(true) }
@@ -474,6 +499,7 @@ export function TaskView({
                       >
                         <ExecutionProfileToolbar
                           models={models}
+                          selectableModels={selectableModels}
                           profile={thread.executionProfile}
                           onChange={handleProfileChange}
                           harnessId={thread.harnessId}

@@ -22,6 +22,7 @@ import {
   type HarnessAdapterFactory,
   type HarnessAvailability,
   type HarnessEvent,
+  type HarnessFollowUpInput,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
@@ -53,6 +54,7 @@ import {
   type PiState,
 } from "./pi-protocol.js"
 import { PiRpcClient, type PiRpcClientOptions } from "./pi-rpc-client.js"
+import { piMcpEnvironment, writeMcpExtension } from "./pi-mcp-extension.js"
 
 export interface PiClient {
   request<T extends JsonValue>(
@@ -180,7 +182,11 @@ type PendingApproval = {
 }
 
 export class PiAdapter implements HarnessAdapterFactory {
-  readonly descriptor = { id: "pi", name: "Pi" }
+  readonly descriptor = {
+    id: "pi",
+    name: "Pi",
+    followUps: { queue: true, steer: true },
+  }
 
   constructor(
     private readonly clientFactory: PiClientFactory = createPiClient,
@@ -387,6 +393,11 @@ class PiSession implements HarnessSession {
     extensionsPath: string,
     launch: PiLaunchOptions
   ): Promise<PiSession> {
+    const mcpServers = input.customization.mcpServers ?? []
+    const mcpExtension =
+      mcpServers.length > 0
+        ? await writeMcpExtension(extensionsPath)
+        : undefined
     const approvalExtension =
       input.executionProfile.permissionMode === "approval-required"
         ? await writeApprovalExtension(extensionsPath)
@@ -406,12 +417,17 @@ class PiSession implements HarnessSession {
       approvalExtension,
       launch,
       instructionsFile,
-      projectSkills
+      projectSkills,
+      mcpExtension
     )
+    const childEnv =
+      mcpServers.length > 0
+        ? piMcpEnvironment(mcpServers, launch.env ?? process.env)
+        : launch.env
     const client = clientFactory(
       "pi",
       input.projectPath,
-      launch.env ? { args, env: launch.env } : { args }
+      childEnv ? { args, env: childEnv } : { args }
     )
     const session = new PiSession(client, input, launch, instructionsFile)
     session.skillProvisioning.push(
@@ -443,6 +459,26 @@ class PiSession implements HarnessSession {
     } finally {
       this.#finish()
     }
+  }
+
+  async queue(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#settling) {
+      throw new Error("Pi is no longer running")
+    }
+    await this.client.request(
+      piFollowUpCommand("follow_up", input),
+      jsonObjectSchema
+    )
+  }
+
+  async steer(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#settling) {
+      throw new Error("Pi is no longer running")
+    }
+    await this.client.request(
+      piFollowUpCommand("steer", input),
+      jsonObjectSchema
+    )
   }
 
   respondToApproval(
@@ -754,7 +790,8 @@ export function piLaunchArgs(
   approvalExtension?: string,
   launch: PiLaunchOptions = { ephemeral: false },
   instructionsFile?: string,
-  projectSkills?: string
+  projectSkills?: string,
+  mcpExtension?: string
 ): string[] {
   // Discovered extensions would ask questions nobody can answer over RPC.
   // RPC mode cannot show Pi's trust prompt either, so trust follows the
@@ -780,6 +817,7 @@ export function piLaunchArgs(
   if (modelId) args.push("--model", modelId)
   if (effort) args.push("--thinking", effort)
   if (approvalExtension) args.push("--extension", approvalExtension)
+  if (mcpExtension) args.push("--extension", mcpExtension)
   for (const root of input.customization.skillRoots) {
     args.push("--skill", root.path)
   }
@@ -790,7 +828,27 @@ export function piLaunchArgs(
 }
 
 export function piPromptCommand(
-  input: Pick<HarnessRunInput, "prompt" | "references" | "attachments">
+  input: Pick<
+    HarnessRunInput | HarnessFollowUpInput,
+    "prompt" | "references" | "attachments"
+  >
+): JsonObject {
+  return piInputCommand("prompt", input)
+}
+
+export function piFollowUpCommand(
+  type: "follow_up" | "steer",
+  input: HarnessFollowUpInput
+): JsonObject {
+  return piInputCommand(type, input)
+}
+
+function piInputCommand(
+  type: "prompt" | "follow_up" | "steer",
+  input: Pick<
+    HarnessRunInput | HarnessFollowUpInput,
+    "prompt" | "references" | "attachments"
+  >
 ): JsonObject {
   const lines = [input.prompt]
   for (const reference of input.references) {
@@ -801,7 +859,7 @@ export function piPromptCommand(
     )
   }
   const command: JsonObject = {
-    type: "prompt",
+    type,
     message: lines.filter(Boolean).join("\n\n"),
   }
   const images = (input.attachments ?? []).flatMap((attachment) => {
@@ -828,6 +886,8 @@ export function piModels(
   const defaultId = piHasSelectedModel(initial)
     ? `${initial.provider}/${initial.id}`
     : settingsDefaultId
+  // enabledModels still supplies Pi's per-entry thinking level, but it does
+  // not decide what Deskto offers. Model visibility belongs to Deskto.
   const enabled = piModelScope(settings.enabledModels ?? [], available)
   const options = new Map<PiModel, HarnessModelOption>()
   for (const model of available) {
@@ -854,13 +914,9 @@ export function piModels(
     }
     options.set(model, option)
   }
-  // A filter that matches nothing must not leave the person without a model.
-  const offered =
-    enabled.length > 0
-      ? enabled.map((scoped) => options.get(scoped.model)!)
-      : [...options.values()]
+  const offered = [...options.values()]
   if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
-    // Pi reported nothing usable (or a model outside the offered list):
+    // Pi reported nothing usable (or a model outside the current catalog):
     // the first entry, which is Pi's own last resort.
     offered[0]!.isDefault = true
   }

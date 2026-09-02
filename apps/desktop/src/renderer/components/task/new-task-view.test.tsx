@@ -65,6 +65,37 @@ describe("NewTaskView", () => {
     ).toBeNull()
   })
 
+  it("does not offer models hidden for the selected provider", async () => {
+    const claude = harnesses[0]!
+    renderNewTaskView({
+      instructions: "",
+      panelPreference: "collapsed",
+      modelVisibility: { claude: ["claude-opus"] },
+      availableHarnesses: [
+        {
+          ...claude,
+          models: [
+            ...claude.models,
+            {
+              ...claude.models[0]!,
+              id: "claude-haiku",
+              name: "Claude Haiku",
+              isDefault: false,
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(
+      await screen.findByRole("button", { name: "Model: Claude Haiku" })
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Model: Claude Haiku" }))
+    expect(
+      screen.queryByRole("menuitemradio", { name: "Claude Opus" })
+    ).toBeNull()
+  })
+
   it("disables instruction editing until project details load", async () => {
     let resolveDetails!: (value: ReturnType<typeof projectDetails>) => void
     const details = new Promise<ReturnType<typeof projectDetails>>(
@@ -194,7 +225,9 @@ describe("NewTaskView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agent: Claude Code" }))
     // Matched loosely: each row now carries a line on what the agent is, so
     // the accessible name is the agent's name plus that sentence.
-    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Codex/ }))
+    fireEvent.click(
+      await screen.findByRole("menuitemradio", { name: /^Codex/ })
+    )
 
     expect(
       await screen.findByRole("button", { name: "Model: Codex Sol" })
@@ -229,10 +262,14 @@ function renderNewTaskView({
   instructions,
   panelPreference,
   details = Promise.resolve(projectDetails(instructions)),
+  modelVisibility,
+  availableHarnesses = harnesses,
 }: {
   instructions: string
   panelPreference: "open" | "collapsed" | "auto"
   details?: Promise<ReturnType<typeof projectDetails>>
+  modelVisibility?: Record<string, string[]>
+  availableHarnesses?: Harness[]
 }) {
   const request = vi.fn((body: { method: string }) => {
     if (body.method === "preferences.get") {
@@ -257,7 +294,8 @@ function renderNewTaskView({
     >
       <NewTaskView
         project={project}
-        harnesses={{ status: "ready", data: harnesses }}
+        harnesses={{ status: "ready", data: availableHarnesses }}
+        modelVisibility={modelVisibility}
         onTaskCreated={vi.fn()}
         onTaskStarted={vi.fn()}
         panelPreference={panelPreference}
@@ -278,6 +316,7 @@ function harness(id: string, name: string, modelId: string): Harness {
   return {
     id,
     name,
+    followUps: { queue: false, steer: false },
     enabled: true,
     availability: { status: "available" },
     checkedAt: "2026-08-18T08:00:00.000Z",

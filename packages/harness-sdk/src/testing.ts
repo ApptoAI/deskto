@@ -5,6 +5,7 @@ import type {
   HarnessAvailability,
   HarnessDescriptor,
   HarnessEvent,
+  HarnessFollowUpInput,
   HarnessModelOption,
   HarnessRunInput,
   HarnessSession,
@@ -16,18 +17,30 @@ export type ScriptedHarnessRun = {
   finish(): void
   cancelled: boolean
   approvals: Map<string, ApprovalDecision>
+  queued: HarnessFollowUpInput[]
+  steered: HarnessFollowUpInput[]
+}
+
+type ScriptedHarnessDescriptor = Omit<HarnessDescriptor, "followUps"> & {
+  followUps?: HarnessDescriptor["followUps"]
 }
 
 export class ScriptedHarness implements HarnessAdapterFactory {
   readonly runs: ScriptedHarnessRun[] = []
+  readonly descriptor: HarnessDescriptor
 
   constructor(
-    readonly descriptor: HarnessDescriptor = {
+    descriptor: ScriptedHarnessDescriptor = {
       id: "scripted",
       name: "Scripted",
     },
     private readonly availability: HarnessAvailability = { status: "available" }
-  ) {}
+  ) {
+    this.descriptor = {
+      ...descriptor,
+      followUps: descriptor.followUps ?? { queue: false, steer: false },
+    }
+  }
 
   checkAvailability(): Promise<HarnessAvailability> {
     return Promise.resolve(this.availability)
@@ -54,6 +67,8 @@ export class ScriptedHarness implements HarnessAdapterFactory {
       finish: () => queue.close(),
       cancelled: false,
       approvals: new Map(),
+      queued: [],
+      steered: [],
     }
     this.runs.push(run)
     signal.addEventListener(
@@ -67,6 +82,14 @@ export class ScriptedHarness implements HarnessAdapterFactory {
 
     return Promise.resolve({
       events: queue,
+      queue: (input) => {
+        run.queued.push(input)
+        return Promise.resolve()
+      },
+      steer: (input) => {
+        run.steered.push(input)
+        return Promise.resolve()
+      },
       cancel: () => {
         run.cancelled = true
         queue.close()

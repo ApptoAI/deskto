@@ -35,7 +35,9 @@ class FakeCodexClient implements CodexClient {
         ? { thread: { id: "thread-1" } }
         : method === "turn/start"
           ? { turn: { id: "turn-1" } }
-          : {}
+          : method === "turn/steer"
+            ? { turnId: "turn-1" }
+            : {}
     return Promise.resolve(schema.parse(response))
   }
 
@@ -166,7 +168,9 @@ describe("Codex text generation", () => {
       new AbortController().signal
     )
 
-    await vi.waitFor(() => expect(clientState.notification).toBeTypeOf("function"))
+    await vi.waitFor(() =>
+      expect(clientState.notification).toBeTypeOf("function")
+    )
     clientState.notification!({
       method: "item/agentMessage/delta",
       params: {
@@ -185,7 +189,8 @@ describe("Codex text generation", () => {
 
     await expect(generated).resolves.toBe("Renewal pipeline review")
     expect(
-      client.requests.find(({ method }) => method === "turn/start")?.params.input
+      client.requests.find(({ method }) => method === "turn/start")?.params
+        .input
     ).toEqual([{ type: "text", text: prompt, text_elements: [] }])
   })
 })
@@ -692,6 +697,73 @@ describe("codexPlanSteps", () => {
 })
 
 describe("CodexAdapter activity notifications", () => {
+  it("steers an active turn and leaves durable queueing to the Runtime", async () => {
+    const client = new RecordingCodexClient()
+    const adapter = new CodexAdapter(() => client)
+
+    expect(adapter.descriptor.followUps).toEqual({ queue: false, steer: true })
+    const session = await adapter.start(
+      {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        projectPath: "/tmp/project",
+        prompt: "Continue",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+
+    await expect(
+      session.queue({
+        id: "message-queued",
+        prompt: "Later",
+        references: [],
+        attachments: [],
+      })
+    ).rejects.toThrow("cannot queue")
+    await session.steer({
+      id: "message-steered",
+      prompt: "Use the revised scope",
+      references: [
+        {
+          kind: "project-entry",
+          name: "scope.md",
+          path: "/tmp/project/scope.md",
+          entryKind: "file",
+        },
+      ],
+      attachments: [],
+    })
+
+    expect(client.requests.at(-1)).toEqual({
+      method: "turn/steer",
+      params: {
+        threadId: "thread-1",
+        expectedTurnId: "turn-1",
+        clientUserMessageId: "message-steered",
+        input: [
+          {
+            type: "text",
+            text: "Use the revised scope",
+            text_elements: [],
+          },
+          {
+            type: "mention",
+            name: "scope.md",
+            path: "/tmp/project/scope.md",
+          },
+        ],
+      },
+    })
+    await session.cancel()
+  })
+
   it("reports reasoning and tool-output heartbeats without their contents", async () => {
     const session = await new CodexAdapter(clientFactory).start(
       {

@@ -34,23 +34,21 @@ export function OpenAILogo(props: ComponentProps<"svg">) {
   )
 }
 
-/** Pi has no brand mark; its letter, drawn in the icon grid, is the mark. */
+/** Official Pi primary mark; currentColor keeps it legible in both themes. */
 export function PiLogo(props: ComponentProps<"svg">) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 800 800"
+      fill="currentColor"
       aria-hidden
       {...props}
     >
-      <path d="M4 7h16" />
-      <path d="M8 7v11" />
-      <path d="M15 7v9a2 2 0 0 0 2 2h1" />
+      <path
+        fillRule="evenodd"
+        d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+      />
+      <path d="M517.36 400H634.72V634.72H517.36Z" />
     </svg>
   )
 }

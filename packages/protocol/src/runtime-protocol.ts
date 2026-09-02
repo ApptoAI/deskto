@@ -381,6 +381,10 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
     params: z.object({ threadId: z.string() }),
   }),
   z.object({
+    method: z.literal("turn.followUp"),
+    params: z.object({ threadId: z.string(), input: turnInputSchema }),
+  }),
+  z.object({
     method: z.literal("approval.resolve"),
     params: z.object({
       threadId: z.string(),
@@ -456,6 +460,10 @@ export interface RuntimeResponses {
   "attachment.preview": z.infer<typeof imageAttachmentPreviewSchema>
   "turn.start": z.infer<typeof threadViewSchema>
   "turn.cancel": z.infer<typeof threadViewSchema>
+  "turn.followUp": {
+    disposition: "queued" | "steered"
+    view: z.infer<typeof threadViewSchema>
+  }
   "approval.resolve": z.infer<typeof threadViewSchema>
 }
 

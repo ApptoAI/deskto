@@ -77,6 +77,7 @@ export type MessageRow = {
   content: string
   prompt_references: string | null
   state: Message["state"]
+  delivery_state: Message["delivery"] | null
   error: string | null
   failure_kind: "usage-limit" | "error" | null
   failure_reset_at: string | null
@@ -247,6 +248,7 @@ export function toMessage(
   const references = parsedPromptReferences(row.prompt_references)
   if (references) message.references = references.references
   if (attachments.length > 0) message.attachments = attachments
+  if (row.delivery_state) message.delivery = row.delivery_state
   if (failure) message.failure = failure
   if (row.error) message.error = row.error
   if (row.ordinal !== null) message.ordinal = row.ordinal

@@ -274,8 +274,7 @@ export function Composer({
     prompt.trim().length > 0 ||
     attachments.length > 0 ||
     browserContexts.length > 0
-  const canSend =
-    hasContent && preparingCount === 0 && !sending && !running && !blocked
+  const canSend = hasContent && preparingCount === 0 && !sending && !blocked
   // A send that will not go says why, in the tooltip and to the screen
   // reader: a dead button with no reason is a person retyping their message.
   const sendHoldReason = blocked
@@ -754,38 +753,30 @@ export function Composer({
                 >
                   <SquareIcon className="size-3 fill-current" />
                 </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  size="icon-lg"
-                  disabled={!canSend}
-                  aria-label="Send"
-                  aria-describedby={sendHoldReason ? sendHoldId : undefined}
-                  title={sendHoldReason ?? "Send"}
-                  // The one filled pill on the composer, and the only control
-                  // here that sits on a drop shadow: send is what the whole
-                  // surface is for, so it is the thing floating closest.
-                  className="rounded-full text-primary-foreground shadow-send"
-                >
-                  <ArrowUpIcon />
-                </Button>
-              )}
+              ) : null}
+              <Button
+                type="submit"
+                size="icon-lg"
+                disabled={!canSend}
+                aria-label={running ? "Send follow-up" : "Send"}
+                aria-describedby={sendHoldReason ? sendHoldId : undefined}
+                title={sendHoldReason ?? (running ? "Send follow-up" : "Send")}
+                // The one filled pill on the composer, and the only control
+                // here that sits on a drop shadow: send is what the whole
+                // surface is for, so it is the thing floating closest.
+                className="rounded-full text-primary-foreground shadow-send"
+              >
+                <ArrowUpIcon />
+              </Button>
             </div>
           </PromptInputToolbar>
         </PromptInput>
       </div>
 
-      {running && hasContent && !sending ? (
-        // Send is replaced by Stop while the agent works, so Enter goes
-        // nowhere; without this line the person is left guessing whether
-        // what they typed was dropped.
-        <p role="status" className="px-1 text-caption text-muted-foreground">
-          Your message stays here until the agent finishes, or you stop it.
-        </p>
-      ) : null}
       <p id={hintId} className="sr-only">
-        Press Enter to send. Shift and Enter start a new line. Paste or attach
-        images. Type at, slash, or dollar for suggestions.
+        Press Enter to {running ? "send a follow-up" : "send"}. Shift and Enter
+        start a new line. Paste or attach images. Type at, slash, or dollar for
+        suggestions.
       </p>
       <p id={sendHoldId} className="sr-only">
         {sendHoldReason ?? ""}
