@@ -16,9 +16,17 @@ import { RuntimeClientProvider } from "../../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../../settings/settings-context.js"
 import { ComputerUseSettings } from "./computer-use-settings.js"
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 function renderComputerUse(stored: SettingValues = {}) {
+  // The profiles section reads the desktop bridge, which jsdom lacks; an
+  // empty list keeps it quiet so the browser block's own alert is the only one.
+  vi.stubGlobal("deskto", {
+    browser: { profiles: () => Promise.resolve([]) },
+  })
   const overrides = { ...stored }
   const updates: SettingValues[] = []
   const request = vi.fn(

@@ -165,6 +165,20 @@ async function openApplication(): Promise<void> {
         })
         return project.ok ? project.data.project.path : undefined
       },
+      async workspaceForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await current.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.workspaceId : undefined
+      },
     }
   )
   let browserMcp: BrowserMcpServer
@@ -292,6 +306,7 @@ async function openApplication(): Promise<void> {
   await applyBrowserSettings()
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+    if (event.type === "workspace.changed") browser.workspaceChanged()
     if (event.type === "settings.changed") void applyBrowserSettings()
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)

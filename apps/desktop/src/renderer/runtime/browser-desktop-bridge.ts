@@ -102,6 +102,9 @@ export function createBrowserDesktopBridge(): DesktopApi {
       selectElement: () => Promise.resolve(undefined),
       cancelElementSelection: () => Promise.resolve(),
       subscribe: () => () => {},
+      profiles: () => Promise.resolve([]),
+      clearProfile: () => Promise.reject(browserUnsupported()),
+      openProfileFolder: () => Promise.reject(browserUnsupported()),
     },
   }
 }

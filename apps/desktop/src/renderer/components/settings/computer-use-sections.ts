@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 
 import { BrowserSettingsSection } from "./computer-use-browser-section.js"
+import { BrowserProfilesSection } from "./computer-use-profiles-section.js"
 import { ScreenControlSettingsSection } from "./computer-use-screen-control-section.js"
 
 /**
@@ -25,6 +26,13 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     description:
       "The browser agents use inside a task. Changes apply to pages opened from now on.",
     Component: BrowserSettingsSection,
+  },
+  {
+    id: "profiles",
+    label: "Browser profiles",
+    description:
+      "Each workspace keeps its own cookies, storage and logins. Deleting a workspace does not clear them, so clear them here first.",
+    Component: BrowserProfilesSection,
   },
   {
     id: "screen-control",
