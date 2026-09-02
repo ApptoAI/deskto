@@ -257,7 +257,7 @@ export function TaskList({
             <h2 className="eyebrow">Pinned</h2>
             <span
               className="text-tiny tabular-nums"
-              aria-label={`${partition.pinned.length} tasks`}
+              aria-label={taskCountLabel(partition.pinned.length)}
             >
               {partition.pinned.length}
             </span>
@@ -274,7 +274,7 @@ export function TaskList({
             <h2 className="eyebrow">Inbox</h2>
             <span
               className="text-tiny tabular-nums"
-              aria-label={`${partition.active.length} tasks`}
+              aria-label={taskCountLabel(partition.active.length)}
             >
               {partition.active.length}
             </span>
@@ -633,6 +633,11 @@ function TaskRow({
 }
 
 /** Lets the list hand focus back to the row a dialog was opened from. */
+/** Read aloud beside a shelf heading, so it has to agree in number. */
+function taskCountLabel(count: number): string {
+  return count === 1 ? "1 task" : `${count} tasks`
+}
+
 function taskRowButtonId(threadId: string): string {
   return `task-row-${threadId}`
 }

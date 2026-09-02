@@ -70,4 +70,25 @@ describe("TaskList", () => {
     expect(withId).toHaveLength(1)
     expect(withId[0]?.closest("[inert]")).toBeNull()
   })
+
+  it("reads a shelf count that agrees in number", () => {
+    const pinnedThread: Thread = {
+      ...doneThread,
+      doneOverride: null,
+      doneAt: null,
+      pinnedAt: now,
+    }
+    const { container } = render(
+      createElement(TaskList, {
+        state: { status: "ready", data: [pinnedThread] },
+        openThreadId: null,
+        onOpenThread: vi.fn(),
+        onRetry: vi.fn(),
+        actions,
+      })
+    )
+
+    expect(container.querySelector('[aria-label="1 task"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="1 tasks"]')).toBeNull()
+  })
 })
