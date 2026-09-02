@@ -20,14 +20,15 @@
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
     "cross-spawn": "7.0.6",
+    "minimatch": "10.2.5",
     "yaml": "^2.8.1",
     "yauzl": "^3.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.0.0",
-    "@types/node": "^24",
     "@types/cross-spawn": "6.0.6",
+    "@types/node": "^24",
     "@types/yauzl": "^3.4.0",
     "@workspace/eslint-config": "workspace:*",
     "@workspace/typescript-config": "workspace:*",
