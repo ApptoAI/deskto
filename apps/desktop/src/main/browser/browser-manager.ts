@@ -563,7 +563,7 @@ export class BrowserManager
   ): Promise<T> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, () => {
       const contents = tab.view.webContents
       return run({
