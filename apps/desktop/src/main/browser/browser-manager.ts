@@ -171,12 +171,16 @@ export class BrowserManager implements BrowserAutomationHost {
     const tab = this.#ensureTab(threadId)
     this.#openRequests.delete(threadId)
     if (this.#visibleThreadId && this.#visibleThreadId !== threadId) {
-      this.#tabs.get(this.#visibleThreadId)?.view.setBounds(this.#backgroundBounds)
+      this.#tabs
+        .get(this.#visibleThreadId)
+        ?.view.setBounds(this.#backgroundBounds)
     }
     this.#visibleThreadId = threadId
     this.#visibleBounds = bounds
     await this.#restoreArtifact(threadId, tab)
-    await this.#openHome(tab)
+    // Not awaited: the panel opens at once and the page lands through the
+    // navigation events, so a slow start page cannot hold the Surface.
+    void this.#openHome(tab)
     if (
       this.#visibleThreadId !== threadId ||
       this.#tabs.get(threadId) !== tab
