@@ -1,3 +1,4 @@
+import { resolveSettings } from "@deskto/settings"
 import { describe, expect, it, vi } from "vitest"
 
 import {
@@ -13,6 +14,7 @@ const input: SessionToolInput = {
   projectId: "project-1",
   workspaceId: "personal",
   projectPath: "/repo",
+  settings: resolveSettings({}),
 }
 
 describe("SessionToolLeases", () => {

@@ -106,6 +106,15 @@ export function createBrowserDesktopBridge(): DesktopApi {
       clearProfile: () => Promise.reject(browserUnsupported()),
       openProfileFolder: () => Promise.reject(browserUnsupported()),
     },
+    cookieImport: {
+      discover: () => Promise.resolve([]),
+      run: () =>
+        Promise.resolve({
+          imported: 0,
+          skipped: 0,
+          error: "Cookie import needs the desktop app.",
+        }),
+    },
   }
 }
 

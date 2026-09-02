@@ -25,6 +25,8 @@ export const browserProfilesChannel = "deskto:browser:profiles"
 export const browserClearProfileChannel = "deskto:browser:clear-profile"
 export const browserOpenProfileFolderChannel =
   "deskto:browser:open-profile-folder"
+export const cookieImportDiscoverChannel = "deskto:cookie-import:discover"
+export const cookieImportRunChannel = "deskto:cookie-import:run"
 export const windowMinimizeChannel = "deskto:window:minimize"
 export const windowMaximizeToggleChannel = "deskto:window:maximize-toggle"
 export const windowCloseChannel = "deskto:window:close"

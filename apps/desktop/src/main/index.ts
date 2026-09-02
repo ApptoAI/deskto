@@ -9,6 +9,7 @@ import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
 import {
   BrowserMcpServer,
   ClaudeAdapter,
+  ComputerUseMcpServer,
   claudeNotSignedInReason,
   CodexAdapter,
   codexNotInstalledReason,
@@ -189,6 +190,14 @@ async function openApplication(): Promise<void> {
     browser.close()
     throw error
   }
+  let computerUseMcp: ComputerUseMcpServer
+  try {
+    computerUseMcp = await ComputerUseMcpServer.create(browser)
+  } catch (error) {
+    await browserMcp.close()
+    browser.close()
+    throw error
+  }
 
   const artifactRuntime = await discoverArtifactRuntime()
   const claudeExecutable = packagedClaudeExecutable()
@@ -234,20 +243,28 @@ async function openApplication(): Promise<void> {
       projectsPath: path.join(app.getPath("userData"), "projects"),
       harnesses,
       probeGate: cliPathConfigured,
-      sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],
+      sessionTools: [
+        browserMcp,
+        computerUseMcp,
+        taskOrchestrationProvider(mcpServerRef),
+      ],
       fileActions: {
         trashItem: (targetPath) => shell.trashItem(targetPath),
       },
     })
   } catch (error) {
-    await browserMcp.close()
+    await Promise.allSettled([browserMcp.close(), computerUseMcp.close()])
     browser.close()
     throw error
   }
   // Install cleanup before the orchestration server starts so a startup
   // failure still closes the Runtime and Browser resources.
   closeRuntime = async () => {
-    await Promise.allSettled([runtime.close(), browserMcp.close()])
+    await Promise.allSettled([
+      runtime.close(),
+      browserMcp.close(),
+      computerUseMcp.close(),
+    ])
     browser.close()
   }
   let mcpServer: DesktoMcpServer
@@ -269,6 +286,7 @@ async function openApplication(): Promise<void> {
       runtime.close(),
       mcpServer.close(),
       browserMcp.close(),
+      computerUseMcp.close(),
     ])
     browser.close()
   }

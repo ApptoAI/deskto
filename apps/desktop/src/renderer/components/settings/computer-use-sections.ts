@@ -1,7 +1,9 @@
 import type { ComponentType } from "react"
 
 import { BrowserSettingsSection } from "./computer-use-browser-section.js"
+import { CookieImportSection } from "./computer-use-cookie-section.js"
 import { BrowserProfilesSection } from "./computer-use-profiles-section.js"
+import { ScreenControlSettingsSection } from "./computer-use-screen-control-section.js"
 
 /**
  * One block on the Computer use page. A new capability (cookie import,
@@ -32,5 +34,19 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     description:
       "Each workspace keeps its own cookies, storage and logins. Deleting a workspace does not clear them, so clear them here first.",
     Component: BrowserProfilesSection,
+  },
+  {
+    id: "screen-control",
+    label: "Screen control",
+    description:
+      "Lets agents work the built-in browser the way a person does: look at it, then click, type, and scroll by position. Everything stays inside the task's browser; agents never reach other apps or your desktop.",
+    Component: ScreenControlSettingsSection,
+  },
+  {
+    id: "cookie-import",
+    label: "Import sign-ins",
+    description:
+      "Copy cookies from a browser on this computer so agents open sites already signed in.",
+    Component: CookieImportSection,
   },
 ]

@@ -7,26 +7,26 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { RuntimeClient } from "@deskto/client"
 import type { RuntimeTransport } from "@deskto/protocol"
 import { resolveSettings, type SettingValues } from "@deskto/settings"
 
+import { createBrowserDesktopBridge } from "../../runtime/browser-desktop-bridge.js"
 import { RuntimeClientProvider } from "../../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../../settings/settings-context.js"
 import { ComputerUseSettings } from "./computer-use-settings.js"
 
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
+beforeEach(() => {
+  // The cookie-import and profiles sections read the desktop bridge on mount;
+  // the stub reports no browsers and no profiles, so the browser-section
+  // assertions stand alone.
+  window.deskto = createBrowserDesktopBridge()
 })
 
+afterEach(() => cleanup())
+
 function renderComputerUse(stored: SettingValues = {}) {
-  // The profiles section reads the desktop bridge, which jsdom lacks; an
-  // empty list keeps it quiet so the browser block's own alert is the only one.
-  vi.stubGlobal("deskto", {
-    browser: { profiles: () => Promise.resolve([]) },
-  })
   const overrides = { ...stored }
   const updates: SettingValues[] = []
   const request = vi.fn(

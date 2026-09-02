@@ -54,6 +54,8 @@ describe("Browser profiles section", () => {
     expect(computerUseSections.map((section) => section.id)).toEqual([
       "browser",
       "profiles",
+      "screen-control",
+      "cookie-import",
     ])
   })
 

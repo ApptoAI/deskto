@@ -4,6 +4,7 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client"
+import { resolveSettings } from "@deskto/settings"
 import { describe, expect, it, vi } from "vitest"
 
 import type {
@@ -41,6 +42,7 @@ describe("BrowserMcpServer", () => {
         projectId: "project-6",
         workspaceId: "personal",
         projectPath: "/repo",
+        settings: resolveSettings({}),
       },
       controller.signal
     )
@@ -179,6 +181,7 @@ const testInput = {
   projectId: "project-test",
   workspaceId: "personal",
   projectPath: "/repo",
+  settings: resolveSettings({}),
 }
 
 const initializeRequest = {
