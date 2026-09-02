@@ -10,6 +10,7 @@ export type JsonObject = z.infer<typeof jsonObjectSchema>
 export const harnessSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  followUps: z.object({ queue: z.boolean(), steer: z.boolean() }),
   enabled: z.boolean(),
   availability: z.discriminatedUnion("status", [
     z.object({
@@ -442,6 +443,8 @@ export const messageSchema = z.object({
   references: z.array(promptReferenceSchema).optional(),
   attachments: z.array(imageAttachmentSchema).optional(),
   state: z.enum(["streaming", "complete", "error"]),
+  /** Present while a follow-up is waiting or when it amended a live Turn. */
+  delivery: z.enum(["queued", "steering", "steered"]).optional(),
   failure: harnessFailureSchema.optional(),
   /** Kept while existing databases migrate to the structured failure. */
   error: z.string().optional(),

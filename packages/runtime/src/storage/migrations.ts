@@ -358,6 +358,21 @@ const migrations = [
     CREATE UNIQUE INDEX threads_one_side_idx
       ON threads(parent_thread_id) WHERE is_side = 1;
   `,
+  `
+    ALTER TABLE messages ADD COLUMN delivery_state TEXT
+      CHECK (delivery_state IS NULL OR delivery_state IN ('queued', 'steering', 'steered'));
+
+    CREATE TABLE follow_ups (
+      message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      harness_prompt TEXT NOT NULL,
+      harness_references TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX follow_ups_thread_created_idx
+      ON follow_ups(thread_id, created_at);
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

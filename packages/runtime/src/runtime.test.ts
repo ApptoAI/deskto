@@ -254,6 +254,384 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it("persists a follow-up before steering it into the active Turn", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness({
+      id: "claude",
+      name: "Claude",
+      followUps: { queue: true, steer: true },
+    })
+    let persistedBeforeSteer = false
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => {
+        const session = await scripted.start(input, signal)
+        return {
+          ...session,
+          steer: async (followUp) => {
+            const persisted = unwrap(
+              await runtime.request({
+                method: "thread.get",
+                params: { threadId: input.threadId },
+              })
+            )
+            persistedBeforeSteer = persisted.messages.some(
+              (message) =>
+                message.id === followUp.id && message.delivery === "steering"
+            )
+            await session.steer(followUp)
+          },
+        }
+      },
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "claude" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Prepare the report" },
+      })
+    )
+    scripted.runs[0]!.emit({ type: "message.delta", text: "First answer" })
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.messages.some((message) => message.content === "First answer")
+    })
+
+    const result = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Use the revised totals",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+
+    expect(result.disposition).toBe("steered")
+    expect(persistedBeforeSteer).toBe(true)
+    expect(scripted.runs[0]!.steered).toMatchObject([
+      { prompt: "Use the revised totals" },
+    ])
+    const steered = result.view.messages.find(
+      (message) => message.content === "Use the revised totals"
+    )
+    expect(steered).toMatchObject({
+      turnId: scripted.runs[0]!.input.turnId,
+      delivery: "steered",
+      ordinal: 2,
+    })
+
+    scripted.runs[0]!.emit({ type: "message.delta", text: "Revised answer" })
+    scripted.runs[0]!.emit({ type: "turn.completed" })
+    scripted.runs[0]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+    const settled = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      settled.messages.map(({ role, content, ordinal }) => ({
+        role,
+        content,
+        ordinal,
+      }))
+    ).toEqual([
+      { role: "user", content: "Prepare the report", ordinal: 0 },
+      { role: "assistant", content: "First answer", ordinal: 1 },
+      { role: "user", content: "Use the revised totals", ordinal: 2 },
+      { role: "assistant", content: "Revised answer", ordinal: 3 },
+    ])
+    await runtime.close()
+  })
+
+  it("falls back to its durable FIFO queue when steering is rejected", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness({
+      id: "codex",
+      name: "Codex",
+      followUps: { queue: false, steer: true },
+    })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: async (input, signal) => {
+        const session = await scripted.start(input, signal)
+        return {
+          ...session,
+          steer: async (followUp) => {
+            await session.steer(followUp)
+            throw new Error("Turn already completed")
+          },
+        }
+      },
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "codex" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Start" },
+      })
+    )
+    const attachment = {
+      type: "image" as const,
+      id: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+      name: "scope.png",
+      mimeType: "image/png" as const,
+      sizeBytes: 8,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    }
+
+    const first = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "First follow-up",
+            references: [],
+            attachments: [attachment],
+          },
+        },
+      })
+    )
+    const second = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Second follow-up",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+
+    expect(first.disposition).toBe("queued")
+    expect(second.disposition).toBe("queued")
+    expect(scripted.runs[0]!.steered).toHaveLength(1)
+    expect(scripted.runs[0]!.queued).toEqual([])
+    expect(
+      second.view.messages
+        .filter((message) => message.delivery === "queued")
+        .map((message) => message.content)
+    ).toEqual(["First follow-up", "Second follow-up"])
+
+    scripted.runs[0]!.emit({ type: "turn.completed" })
+    scripted.runs[0]!.finish()
+    await waitFor(async () => scripted.runs.length === 2)
+    expect(scripted.runs[1]!.input).toMatchObject({
+      prompt: "First follow-up",
+      attachments: [
+        {
+          type: "image",
+          name: "scope.png",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+        },
+      ],
+    })
+    const promoted = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      promoted.messages.find((message) => message.content === "First follow-up")
+    ).toMatchObject({
+      turnId: scripted.runs[1]!.input.turnId,
+      ordinal: 0,
+    })
+
+    scripted.runs[1]!.emit({ type: "turn.completed" })
+    scripted.runs[1]!.finish()
+    await waitFor(async () => scripted.runs.length === 3)
+    expect(scripted.runs[2]!.input.prompt).toBe("Second follow-up")
+    scripted.runs[2]!.emit({ type: "turn.completed" })
+    scripted.runs[2]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+    await runtime.close()
+  })
+
+  it("recovers and resumes FIFO follow-ups after the Runtime restarts", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const firstHarness = new ScriptedHarness()
+    const runtime = createRuntime({
+      databasePath,
+      harnesses: [firstHarness],
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Start" },
+      })
+    )
+    const queued = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Do not lose this",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+    const queuedMessage = queued.view.messages.find(
+      (message) => message.content === "Do not lose this"
+    )!
+    expect(queuedMessage.delivery).toBe("queued")
+    await runtime.close()
+
+    const interruptedDatabase = new DatabaseSync(databasePath)
+    interruptedDatabase
+      .prepare("UPDATE messages SET delivery_state = 'steering' WHERE id = ?")
+      .run(queuedMessage.id)
+    interruptedDatabase.close()
+
+    const unavailableHarness = new ScriptedHarness(undefined, {
+      status: "unavailable",
+      reason: "Harness is offline",
+    })
+    const unavailableRuntime = createRuntime({
+      databasePath,
+      harnesses: [unavailableHarness],
+    })
+    const appended = unwrap(
+      await unavailableRuntime.request({
+        method: "turn.start",
+        params: {
+          threadId: thread.id,
+          prompt: "Run after the first follow-up",
+        },
+      })
+    )
+    expect(
+      appended.messages
+        .filter((message) => message.delivery === "queued")
+        .map((message) => message.content)
+    ).toEqual(["Do not lose this", "Run after the first follow-up"])
+    await unavailableRuntime.close()
+
+    const resumedHarness = new ScriptedHarness()
+    const resumedRuntime = createRuntime({
+      databasePath,
+      harnesses: [resumedHarness],
+    })
+    await waitFor(async () => resumedHarness.runs.length === 1)
+    expect(resumedHarness.runs[0]!.input.prompt).toBe("Do not lose this")
+    const resumed = unwrap(
+      await resumedRuntime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      resumed.messages.find((message) => message.id === queuedMessage.id)
+    ).toMatchObject({
+      turnId: resumedHarness.runs[0]!.input.turnId,
+      ordinal: 0,
+    })
+    resumedHarness.runs[0]!.emit({ type: "turn.completed" })
+    resumedHarness.runs[0]!.finish()
+    await waitFor(async () => resumedHarness.runs.length === 2)
+    expect(resumedHarness.runs[1]!.input.prompt).toBe(
+      "Run after the first follow-up"
+    )
+    resumedHarness.runs[1]!.emit({ type: "turn.completed" })
+    resumedHarness.runs[1]!.finish()
+    await waitFor(async () => {
+      const view = unwrap(
+        await resumedRuntime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      return view.thread.status === "idle"
+    })
+    await resumedRuntime.close()
+  })
+
   it("rejects duplicate attachment IDs before storage", () => {
     const attachment = {
       type: "image" as const,
@@ -2926,7 +3304,11 @@ describe("Runtime", () => {
       markStartEntered = resolve
     })
     const harness: HarnessAdapterFactory = {
-      descriptor: { id: "slow", name: "Slow harness" },
+      descriptor: {
+        id: "slow",
+        name: "Slow harness",
+        followUps: { queue: false, steer: false },
+      },
       checkAvailability: () => Promise.resolve({ status: "available" }),
       listModels: () =>
         Promise.resolve([

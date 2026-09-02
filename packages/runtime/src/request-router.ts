@@ -503,6 +503,11 @@ export class RequestRouter {
         )
       case "turn.cancel":
         return this.turns.cancel(request.params.threadId)
+      case "turn.followUp":
+        return this.turns.followUp(
+          request.params.threadId,
+          request.params.input
+        )
       case "approval.resolve":
         return this.turns.resolveApproval(
           request.params.threadId,

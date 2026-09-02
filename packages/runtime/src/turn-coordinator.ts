@@ -8,6 +8,7 @@ import {
   type ContextUsage,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessFollowUpInput,
   type HarnessRunInput,
   type HarnessSession,
 } from "@deskto/harness-sdk"
@@ -37,7 +38,7 @@ import type {
 } from "./storage/activities.js"
 import type { PreparedArtifactCapture } from "./storage/artifacts.js"
 import type { Store } from "./storage/store.js"
-import type { ActiveTurnRecord } from "./storage/turns.js"
+import type { ActiveTurnRecord, QueuedFollowUp } from "./storage/turns.js"
 import { ThreadTitleGenerator } from "./thread-title-generator.js"
 import type { UserSettings } from "./user-settings.js"
 
@@ -154,9 +155,11 @@ function reportsItsFileEffects(payload: ActivityPayload | undefined): boolean {
 export class TurnCoordinator {
   readonly #runs = new Map<string, StartingRun | ActiveRun>()
   readonly #discarding = new Set<string>()
+  readonly #pumpingFollowUps = new Set<string>()
   readonly #titles: ThreadTitleGenerator
 
   readonly #skills: SkillInventory
+  #disposing = false
 
   constructor(
     private readonly store: Store,
@@ -223,7 +226,18 @@ export class TurnCoordinator {
     return view
   }
 
-  async start(threadId: string, input: TurnInput): Promise<ThreadView> {
+  start(threadId: string, input: TurnInput): Promise<ThreadView> {
+    if (!this.#runs.has(threadId) && this.store.turns.hasFollowUps(threadId)) {
+      return this.followUp(threadId, input).then(({ view }) => view)
+    }
+    return this.#start(threadId, input)
+  }
+
+  async #start(
+    threadId: string,
+    input: TurnInput,
+    queued?: QueuedFollowUp
+  ): Promise<ThreadView> {
     if (this.#runs.has(threadId)) {
       throw new RuntimeError(
         "turn-active",
@@ -236,12 +250,14 @@ export class TurnCoordinator {
     const prepare = () =>
       Promise.all([
         this.harnesses.requireAvailable(thread.harness_id),
-        resolvePromptReferences(
-          this.store,
-          this.#skills,
-          threadId,
-          input.references
-        ),
+        queued
+          ? Promise.resolve(queued.harnessReferences)
+          : resolvePromptReferences(
+              this.store,
+              this.#skills,
+              threadId,
+              input.references
+            ),
       ] as const)
     let preparation: Awaited<ReturnType<typeof prepare>>
     try {
@@ -253,7 +269,9 @@ export class TurnCoordinator {
     const [harness, references] = preparation
     let turn: ActiveTurnRecord
     try {
-      turn = this.store.turns.begin(threadId, input)
+      turn = queued
+        ? this.store.turns.beginQueued(threadId, queued)
+        : this.store.turns.begin(threadId, input)
     } catch (error) {
       releaseProject()
       throw error
@@ -290,10 +308,9 @@ export class TurnCoordinator {
         threadId,
         turnId: turn.turnId,
         projectPath: turn.projectPath,
-        prompt: appendBrowserPromptContext(
-          input.text,
-          input.browserContexts ?? []
-        ),
+        prompt:
+          queued?.harnessPrompt ??
+          appendBrowserPromptContext(input.text, input.browserContexts ?? []),
         references,
         attachments: input.attachments.map(
           ({ type, name, mimeType, dataUrl }) => ({
@@ -396,9 +413,132 @@ export class TurnCoordinator {
         this.#changed(threadId)
       }
       this.#settleRun(threadId, starting)
+      this.#pumpFollowUps()
     }
 
     return this.view(threadId)
+  }
+
+  async followUp(
+    threadId: string,
+    input: TurnInput
+  ): Promise<{
+    disposition: "queued" | "steered"
+    view: ThreadView
+  }> {
+    const target = this.#runs.get(threadId)
+    if (!target && !this.store.turns.hasFollowUps(threadId)) {
+      return { disposition: "queued", view: await this.start(threadId, input) }
+    }
+
+    const references = await resolvePromptReferences(
+      this.store,
+      this.#skills,
+      threadId,
+      input.references
+    )
+    const harnessInput = {
+      prompt: appendBrowserPromptContext(
+        input.text,
+        input.browserContexts ?? []
+      ),
+      references,
+    }
+    const canSteer =
+      target?.phase === "active" &&
+      !target.terminal &&
+      this.#runs.get(threadId) === target &&
+      this.store.threads.getRow(threadId).status === "running" &&
+      !this.store.turns.hasFollowUps(threadId) &&
+      this.harnesses.get(target.harnessId).descriptor.followUps.steer
+    const message = this.store.turns.enqueueFollowUp(
+      threadId,
+      input,
+      harnessInput,
+      canSteer ? "steering" : "queued"
+    )
+    this.events.delta(threadId, { type: "message.upserted", message })
+    this.events.delta(threadId, {
+      type: "thread.updated",
+      thread: this.store.threads.get(threadId),
+    })
+
+    if (!canSteer) {
+      if (!this.#runs.has(threadId)) this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    const followUp: HarnessFollowUpInput = {
+      id: message.id,
+      ...harnessInput,
+      attachments: input.attachments.map(
+        ({ type, name, mimeType, dataUrl }) => ({
+          type,
+          name,
+          mimeType,
+          dataUrl,
+        })
+      ),
+    }
+    try {
+      await target.session.steer(followUp)
+    } catch {
+      const queued = this.store.turns.markFollowUpQueued(message.id)
+      this.events.delta(threadId, {
+        type: "message.upserted",
+        message: queued,
+      })
+      this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    if (
+      target.terminal ||
+      target.cancelled ||
+      this.#runs.get(threadId) !== target
+    ) {
+      const queued = this.store.turns.markFollowUpQueued(message.id)
+      this.events.delta(threadId, {
+        type: "message.upserted",
+        message: queued,
+      })
+      this.#pumpFollowUps()
+      return { disposition: "queued", view: this.view(threadId) }
+    }
+
+    this.#closeSegment(threadId, target)
+    const steered = this.store.turns.markFollowUpSteered(
+      message.id,
+      target.turnId,
+      target.ordinal++
+    )
+    this.events.delta(threadId, {
+      type: "message.upserted",
+      message: steered,
+    })
+    return { disposition: "steered", view: this.view(threadId) }
+  }
+
+  /** Starts durable follow-ups left by an earlier Turn or process. */
+  resumeFollowUps(): void {
+    this.#pumpFollowUps()
+  }
+
+  #pumpFollowUps(): void {
+    if (this.#disposing) return
+    for (const threadId of this.store.turns.followUpThreadIds()) {
+      if (this.#runs.has(threadId) || this.#pumpingFollowUps.has(threadId)) {
+        continue
+      }
+      const queued = this.store.turns.oldestFollowUp(threadId)
+      if (!queued) continue
+      this.#pumpingFollowUps.add(threadId)
+      void this.#start(threadId, queued.input, queued)
+        .catch(() => undefined)
+        .finally(() => {
+          this.#pumpingFollowUps.delete(threadId)
+        })
+    }
   }
 
   async cancel(threadId: string): Promise<ThreadView> {
@@ -413,6 +553,7 @@ export class TurnCoordinator {
       this.#settleRun(threadId, run)
       await run.tools?.close()
       this.#changed(threadId)
+      if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
       return this.view(threadId)
     }
 
@@ -435,6 +576,7 @@ export class TurnCoordinator {
       this.#changed(threadId)
       await run.outputs?.finish()
       this.#settleRun(threadId, run)
+      if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
       throw new RuntimeError("cancel-failed", message)
     }
     if (!run.terminal) {
@@ -449,6 +591,7 @@ export class TurnCoordinator {
     }
     await run.outputs?.finish()
     this.#settleRun(threadId, run)
+    if (!this.#discarding.has(threadId)) this.#pumpFollowUps()
     return this.view(threadId)
   }
 
@@ -520,6 +663,7 @@ export class TurnCoordinator {
   }
 
   async dispose(): Promise<void> {
+    this.#disposing = true
     await this.#titles.dispose()
     const runs = [...this.#runs.entries()]
     for (const [threadId, run] of runs) {
@@ -586,7 +730,10 @@ export class TurnCoordinator {
       // files that this one could claim.
       await run.tools.close()
       if (!run.cancelled) await run.outputs?.finish()
-      if (!run.cancelled) this.#settleRun(threadId, run)
+      if (!run.cancelled) {
+        this.#settleRun(threadId, run)
+        this.#pumpFollowUps()
+      }
     }
   }
 

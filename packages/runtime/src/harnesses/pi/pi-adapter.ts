@@ -22,6 +22,7 @@ import {
   type HarnessAdapterFactory,
   type HarnessAvailability,
   type HarnessEvent,
+  type HarnessFollowUpInput,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
@@ -181,7 +182,11 @@ type PendingApproval = {
 }
 
 export class PiAdapter implements HarnessAdapterFactory {
-  readonly descriptor = { id: "pi", name: "Pi" }
+  readonly descriptor = {
+    id: "pi",
+    name: "Pi",
+    followUps: { queue: true, steer: true },
+  }
 
   constructor(
     private readonly clientFactory: PiClientFactory = createPiClient,
@@ -454,6 +459,26 @@ class PiSession implements HarnessSession {
     } finally {
       this.#finish()
     }
+  }
+
+  async queue(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#settling) {
+      throw new Error("Pi is no longer running")
+    }
+    await this.client.request(
+      piFollowUpCommand("follow_up", input),
+      jsonObjectSchema
+    )
+  }
+
+  async steer(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#settling) {
+      throw new Error("Pi is no longer running")
+    }
+    await this.client.request(
+      piFollowUpCommand("steer", input),
+      jsonObjectSchema
+    )
   }
 
   respondToApproval(
@@ -803,7 +828,27 @@ export function piLaunchArgs(
 }
 
 export function piPromptCommand(
-  input: Pick<HarnessRunInput, "prompt" | "references" | "attachments">
+  input: Pick<
+    HarnessRunInput | HarnessFollowUpInput,
+    "prompt" | "references" | "attachments"
+  >
+): JsonObject {
+  return piInputCommand("prompt", input)
+}
+
+export function piFollowUpCommand(
+  type: "follow_up" | "steer",
+  input: HarnessFollowUpInput
+): JsonObject {
+  return piInputCommand(type, input)
+}
+
+function piInputCommand(
+  type: "prompt" | "follow_up" | "steer",
+  input: Pick<
+    HarnessRunInput | HarnessFollowUpInput,
+    "prompt" | "references" | "attachments"
+  >
 ): JsonObject {
   const lines = [input.prompt]
   for (const reference of input.references) {
@@ -814,7 +859,7 @@ export function piPromptCommand(
     )
   }
   const command: JsonObject = {
-    type: "prompt",
+    type,
     message: lines.filter(Boolean).join("\n\n"),
   }
   const images = (input.attachments ?? []).flatMap((attachment) => {

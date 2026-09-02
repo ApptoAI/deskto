@@ -13,6 +13,7 @@ import {
   type HarnessAdapterFactory,
   type HarnessAvailability,
   type HarnessEvent,
+  type HarnessFollowUpInput,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
@@ -56,6 +57,8 @@ type CodexModelListResponse = z.infer<typeof codexModelListSchema>
 const codexInitializeResponseSchema = z.object({
   userAgent: z.string().optional(),
 })
+
+const codexSteerResponseSchema = z.object({ turnId: z.string() })
 
 const codexAccountSchema = z.object({
   account: jsonObjectSchema.nullable().optional(),
@@ -143,7 +146,11 @@ type DelegationLifecycle = {
 }
 
 export class CodexAdapter implements HarnessAdapterFactory {
-  readonly descriptor = { id: "codex", name: "Codex" }
+  readonly descriptor = {
+    id: "codex",
+    name: "Codex",
+    followUps: { queue: false, steer: true },
+  }
 
   constructor(
     private readonly clientFactory: CodexClientFactory = createCodexClient,
@@ -346,6 +353,26 @@ class CodexSession implements HarnessSession {
     } finally {
       this.#finish()
     }
+  }
+
+  queue(): Promise<void> {
+    return Promise.reject(new Error("Codex cannot queue a native follow-up"))
+  }
+
+  async steer(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || !this.#threadId || !this.#turnId) {
+      throw new Error("Codex is no longer running")
+    }
+    await this.client.request(
+      "turn/steer",
+      {
+        threadId: this.#threadId,
+        expectedTurnId: this.#turnId,
+        clientUserMessageId: input.id,
+        input: codexTurnInput(input),
+      },
+      codexSteerResponseSchema
+    )
   }
 
   respondToApproval(
@@ -800,7 +827,10 @@ class CodexSession implements HarnessSession {
 }
 
 export function codexTurnInput(
-  input: Pick<HarnessRunInput, "prompt" | "references" | "attachments">
+  input: Pick<
+    HarnessRunInput | HarnessFollowUpInput,
+    "prompt" | "references" | "attachments"
+  >
 ): JsonObject[] {
   return [
     ...(input.prompt

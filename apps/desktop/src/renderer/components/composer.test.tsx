@@ -63,6 +63,39 @@ describe("Composer", () => {
     ).toBe(true)
   })
 
+  it("sends a follow-up without replacing the Stop control", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    render(
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          label="Message"
+          placeholder="Add a follow-up"
+          running
+          onCancel={vi.fn().mockResolvedValue(undefined)}
+          onSend={onSend}
+        />
+      </RuntimeClientProvider>
+    )
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+
+    fireEvent.change(textarea, { target: { value: "Use the new totals" } })
+    expect(screen.getByRole("button", { name: "Stop this task" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Send follow-up" }))
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith({
+        text: "Use the new totals",
+        references: [],
+        attachments: [],
+        browserContexts: [],
+      })
+    )
+    await waitFor(() => expect(textarea.value).toBe(""))
+  })
+
   it("opens a side chat from the slash command", () => {
     vi.stubGlobal("CSS", { escape: (value: string) => value })
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {

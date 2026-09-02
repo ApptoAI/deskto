@@ -335,6 +335,48 @@ describe("Pi session", () => {
     expect(client.closed).toBe(true)
   })
 
+  it("queues and steers at Pi's agent-loop boundary", async () => {
+    const client = new FakePiClient()
+    const adapter = new PiAdapter(() => client, {
+      extensionsPath: await tempDirectory(),
+    })
+
+    expect(adapter.descriptor.followUps).toEqual({ queue: true, steer: true })
+    const session = await adapter.start(
+      runInput(),
+      new AbortController().signal
+    )
+    await session.queue({
+      id: "message-queued",
+      prompt: "Check this next",
+      references: [],
+      attachments: [],
+    })
+    await session.steer({
+      id: "message-steered",
+      prompt: "Use this screenshot instead",
+      references: [],
+      attachments: [
+        {
+          type: "image",
+          name: "screen.png",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,cG5n",
+        },
+      ],
+    })
+
+    expect(client.commands.slice(2)).toEqual([
+      { type: "follow_up", message: "Check this next" },
+      {
+        type: "steer",
+        message: "Use this screenshot instead",
+        images: [{ type: "image", data: "cG5n", mimeType: "image/png" }],
+      },
+    ])
+    await session.cancel()
+  })
+
   it("waits for Pi to settle after multiple agent runs", async () => {
     const client = new FakePiClient()
     const adapter = new PiAdapter(() => client, {

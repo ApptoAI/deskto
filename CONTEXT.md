@@ -19,7 +19,8 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Thread**: A task and its conversation inside one Project. Use "task" in UI copy and `Thread` in code.
 - **Background task**: A Thread created by another Thread through Deskto's local MCP server. It stays in the same Project, keeps its own Harness session and conversation, and points to its parent Thread.
 - **Side chat**: A temporary Thread opened by a person from another Thread. It branches the current Harness session, stays out of task lists and search, and appears only in the parent task's panel.
-- **Turn**: One user request and one Harness execution in a Thread.
+- **Turn**: One user request and one Harness execution in a Thread. Live steering may amend it with further user Messages before that execution settles.
+- **Follow-up**: A user Message submitted while a Turn is active. The Runtime either steers it into that Turn or durably queues it as the request for the next Turn.
 - **Message Attachment**: An image supplied with a user Message. The Runtime owns its bytes and metadata, deletes it with the Message, exposes only metadata in Thread views, and returns image data on demand for previews.
 - **Activity**: A bounded summary of one unit of Harness work inside a Turn. Its kind is provider-neutral: a tool call, a file change, a working plan, or a subagent. Subagent work nests under the Activity that spawned it.
 - **Artifact**: A file inside a Project that a Turn produced, either named by a completed file-change Activity or found in the Project folder by a sweep. The UI calls it a file. An Artifact keeps a stable identity for its project-relative path.
@@ -47,7 +48,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A Side chat uses the parent Thread's Harness and Project. Its first Turn forks the parent's provider session so neither conversation changes the other's context; discarding it deletes only the side conversation and never touches Project files.
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
-- The Runtime persists user messages before starting a Harness.
+- The Runtime persists user messages before starting a Harness or steering a live one. Follow-ups that cannot be steered stay in a durable FIFO queue and start only after the current Turn and its output capture settle.
 - Message Attachment bytes stay in Runtime storage and are read on demand. Thread views and Runtime events carry metadata only.
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.

@@ -59,6 +59,14 @@ export class Store {
           "UPDATE messages SET state = 'error', error = COALESCE(error, 'Application stopped during this turn') WHERE state = 'streaming'"
         )
         .run()
+      // A provider may have accepted this input just before the process died.
+      // Retry it rather than dropping a message that is still in the durable
+      // queue; providers with idempotency keys can collapse the duplicate.
+      this.database
+        .prepare(
+          "UPDATE messages SET delivery_state = 'queued' WHERE delivery_state = 'steering' AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id)"
+        )
+        .run()
       this.database
         .prepare(
           "UPDATE approvals SET status = 'denied', resolved_at = ? WHERE status = 'pending'"

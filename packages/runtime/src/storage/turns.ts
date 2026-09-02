@@ -2,21 +2,30 @@ import { randomUUID } from "node:crypto"
 import type { DatabaseSync } from "node:sqlite"
 
 import type {
+  HarnessFollowUpInput,
+  HarnessPromptReference,
+} from "@deskto/harness-sdk"
+import type {
   Approval,
   ExecutionProfile,
   HarnessFailure,
   Message,
+  PromptReference,
   Thread,
   TurnInput,
 } from "@deskto/protocol"
+import { promptReferenceSchema } from "@deskto/protocol"
+import { z } from "zod"
 
 import { RuntimeError } from "../errors.js"
 import { transaction } from "./database.js"
 import { decodeImageAttachment } from "./image-attachment-data.js"
 import {
   toMessage,
+  toImageAttachment,
   isThreadRowActive,
   type MessageRow,
+  type MessageAttachmentRow,
   type ThreadRow,
 } from "./records.js"
 import { newThreadTitle } from "./threads.js"
@@ -34,17 +43,53 @@ export type ActiveTurnRecord = {
   generateTitle: boolean
 }
 
+export type QueuedFollowUp = {
+  messageId: string
+  input: TurnInput
+  harnessPrompt: string
+  harnessReferences: HarnessPromptReference[]
+}
+
+const harnessPromptReferenceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("project-entry"),
+    name: z.string(),
+    path: z.string(),
+    entryKind: z.enum(["file", "directory"]),
+  }),
+  z.object({
+    kind: z.literal("skill"),
+    origin: z.enum(["pack", "native"]),
+    name: z.string(),
+    path: z.string(),
+  }),
+])
+
 export class Turns {
   constructor(private readonly database: DatabaseSync) {}
 
   begin(threadId: string, input: TurnInput): ActiveTurnRecord {
+    return this.#begin(threadId, input)
+  }
+
+  beginQueued(threadId: string, queued: QueuedFollowUp): ActiveTurnRecord {
+    return this.#begin(threadId, queued.input, queued.messageId)
+  }
+
+  #begin(
+    threadId: string,
+    input: TurnInput,
+    queuedMessageId?: string
+  ): ActiveTurnRecord {
     const prompt = input.text
     const promptReferences =
       input.references.length > 0 ? JSON.stringify(input.references) : null
-    const attachments = input.attachments.map((attachment) => ({
-      attachment,
-      data: decodeImageAttachment(attachment),
-    }))
+    const attachments = queuedMessageId
+      ? []
+      : input.attachments.map((attachment) => ({
+          attachment,
+          data: decodeImageAttachment(attachment),
+        }))
     // SAFETY: the query selects a complete ThreadRow plus the three named
     // project and EXISTS fields declared in this intersection. The subquery
     // reads the parent's status for fork turns, whose provider session must
@@ -101,25 +146,42 @@ export class Turns {
           context.permission_mode,
           now
         )
-      this.database
-        .prepare(
-          "INSERT INTO messages (id, thread_id, turn_id, role, content, prompt_references, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, ?, 'complete', 0, ?)"
+      if (queuedMessageId) {
+        const promoted = this.database
+          .prepare(
+            "UPDATE messages SET turn_id = ?, delivery_state = NULL, ordinal = 0 WHERE id = ? AND thread_id = ? AND turn_id IS NULL AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id)"
+          )
+          .run(turnId, queuedMessageId, threadId)
+        if (promoted.changes === 0) {
+          throw new RuntimeError(
+            "follow-up-not-found",
+            "Queued message not found"
+          )
+        }
+        this.database
+          .prepare("DELETE FROM follow_ups WHERE message_id = ?")
+          .run(queuedMessageId)
+      } else {
+        this.database
+          .prepare(
+            "INSERT INTO messages (id, thread_id, turn_id, role, content, prompt_references, state, ordinal, created_at) VALUES (?, ?, ?, 'user', ?, ?, 'complete', 0, ?)"
+          )
+          .run(userMessageId, threadId, turnId, prompt, promptReferences, now)
+        const insertAttachment = this.database.prepare(
+          "INSERT INTO message_attachments (id, message_id, type, name, mime_type, size_bytes, data, sort_order) VALUES (?, ?, 'image', ?, ?, ?, ?, ?)"
         )
-        .run(userMessageId, threadId, turnId, prompt, promptReferences, now)
-      const insertAttachment = this.database.prepare(
-        "INSERT INTO message_attachments (id, message_id, type, name, mime_type, size_bytes, data, sort_order) VALUES (?, ?, 'image', ?, ?, ?, ?, ?)"
-      )
-      attachments.forEach(({ attachment, data }, index) => {
-        insertAttachment.run(
-          attachment.id,
-          userMessageId,
-          attachment.name,
-          attachment.mimeType,
-          attachment.sizeBytes,
-          data,
-          index
-        )
-      })
+        attachments.forEach(({ attachment, data }, index) => {
+          insertAttachment.run(
+            attachment.id,
+            userMessageId,
+            attachment.name,
+            attachment.mimeType,
+            attachment.sizeBytes,
+            data,
+            index
+          )
+        })
+      }
       this.database
         .prepare(
           "INSERT INTO messages (id, thread_id, turn_id, role, content, state, ordinal, created_at) VALUES (?, ?, ?, 'assistant', '', 'streaming', 1, ?)"
@@ -157,6 +219,167 @@ export class Turns {
       activeTurn.forkProviderSession = true
     }
     return activeTurn
+  }
+
+  enqueueFollowUp(
+    threadId: string,
+    input: TurnInput,
+    harnessInput: Pick<HarnessFollowUpInput, "prompt" | "references">,
+    delivery: "queued" | "steering"
+  ): Message {
+    const messageId = randomUUID()
+    const promptReferences =
+      input.references.length > 0 ? JSON.stringify(input.references) : null
+    const attachments = input.attachments.map((attachment) => ({
+      attachment,
+      data: decodeImageAttachment(attachment),
+    }))
+    const now = new Date().toISOString()
+    transaction(this.database, () => {
+      const thread = this.database
+        .prepare("SELECT id FROM threads WHERE id = ?")
+        .get(threadId)
+      if (!thread) throw new RuntimeError("thread-not-found", "Task not found")
+      this.database
+        .prepare(
+          "INSERT INTO messages (id, thread_id, role, content, prompt_references, state, delivery_state, created_at) VALUES (?, ?, 'user', ?, ?, 'complete', ?, ?)"
+        )
+        .run(messageId, threadId, input.text, promptReferences, delivery, now)
+      const insertAttachment = this.database.prepare(
+        "INSERT INTO message_attachments (id, message_id, type, name, mime_type, size_bytes, data, sort_order) VALUES (?, ?, 'image', ?, ?, ?, ?, ?)"
+      )
+      attachments.forEach(({ attachment, data }, index) => {
+        insertAttachment.run(
+          attachment.id,
+          messageId,
+          attachment.name,
+          attachment.mimeType,
+          attachment.sizeBytes,
+          data,
+          index
+        )
+      })
+      this.database
+        .prepare(
+          "INSERT INTO follow_ups (message_id, thread_id, harness_prompt, harness_references, created_at) VALUES (?, ?, ?, ?, ?)"
+        )
+        .run(
+          messageId,
+          threadId,
+          harnessInput.prompt,
+          JSON.stringify(harnessInput.references),
+          now
+        )
+      this.database
+        .prepare(
+          "UPDATE threads SET last_user_message_at = ?, done_override = NULL, done_at = NULL, snoozed_until = NULL, snoozed_at = NULL WHERE id = ?"
+        )
+        .run(now, threadId)
+    })
+    return this.#followUpMessage(messageId)
+  }
+
+  markFollowUpQueued(messageId: string): Message {
+    this.database
+      .prepare(
+        "UPDATE messages SET delivery_state = 'queued' WHERE id = ? AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id)"
+      )
+      .run(messageId)
+    return this.#followUpMessage(messageId)
+  }
+
+  markFollowUpSteered(
+    messageId: string,
+    turnId: string,
+    ordinal: number
+  ): Message {
+    transaction(this.database, () => {
+      const result = this.database
+        .prepare(
+          "UPDATE messages SET turn_id = ?, delivery_state = 'steered', ordinal = ? WHERE id = ? AND turn_id IS NULL AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id)"
+        )
+        .run(turnId, ordinal, messageId)
+      if (result.changes === 0) {
+        throw new RuntimeError(
+          "follow-up-not-found",
+          "Queued message not found"
+        )
+      }
+      this.database
+        .prepare("DELETE FROM follow_ups WHERE message_id = ?")
+        .run(messageId)
+    })
+    return this.#followUpMessage(messageId)
+  }
+
+  hasFollowUps(threadId: string): boolean {
+    return Boolean(
+      this.database
+        .prepare("SELECT 1 FROM follow_ups WHERE thread_id = ? LIMIT 1")
+        .get(threadId)
+    )
+  }
+
+  oldestFollowUp(threadId: string): QueuedFollowUp | undefined {
+    // SAFETY: the query selects every MessageRow column plus the two named
+    // follow-up columns; LIMIT 1 returns one complete row or undefined.
+    const row = this.database
+      .prepare(
+        "SELECT message.*, follow_up.harness_prompt, follow_up.harness_references FROM follow_ups follow_up JOIN messages message ON message.id = follow_up.message_id WHERE follow_up.thread_id = ? ORDER BY follow_up.created_at, follow_up.rowid LIMIT 1"
+      )
+      .get(threadId) as
+      | (MessageRow & {
+          harness_prompt: string
+          harness_references: string
+        })
+      | undefined
+    if (!row) return undefined
+    // An adapter call is still deciding the head item's disposition. Nothing
+    // behind it may overtake it; recovery changes stranded steering to queued.
+    if (row.delivery_state !== "queued") return undefined
+    const references = parsePromptReferences(row.prompt_references)
+    const attachments = this.#followUpAttachments(row.id).map((attachment) => ({
+      type: attachment.type,
+      id: attachment.id,
+      name: attachment.name,
+      mimeType: attachment.mime_type,
+      sizeBytes: attachment.size_bytes,
+      dataUrl: `data:${attachment.mime_type};base64,${Buffer.from(attachment.data).toString("base64")}`,
+    }))
+    return {
+      messageId: row.id,
+      input: { text: row.content, references, attachments },
+      harnessPrompt: row.harness_prompt,
+      harnessReferences: parseHarnessReferences(row.harness_references),
+    }
+  }
+
+  followUpThreadIds(): string[] {
+    // SAFETY: the query selects only the non-null thread_id declared here.
+    const rows = this.database
+      .prepare(
+        "SELECT thread_id FROM follow_ups GROUP BY thread_id ORDER BY MIN(created_at)"
+      )
+      .all() as Array<{ thread_id: string }>
+    return rows.map((row) => row.thread_id)
+  }
+
+  #followUpMessage(messageId: string): Message {
+    const message = this.requireMessage(messageId)
+    const attachments =
+      this.#followUpAttachments(messageId).map(toImageAttachment)
+    if (attachments.length > 0) message.attachments = attachments
+    return message
+  }
+
+  #followUpAttachments(messageId: string): MessageAttachmentRow[] {
+    // SAFETY: SELECT * matches MessageAttachmentRow and returns zero or more
+    // complete rows in their persisted display order.
+    return this.database
+      .prepare(
+        "SELECT * FROM message_attachments WHERE message_id = ? ORDER BY sort_order"
+      )
+      .all(messageId) as MessageAttachmentRow[]
   }
 
   setProviderSession(
@@ -414,4 +637,27 @@ export class Turns {
       )
       .run(threadStatus, threadStatus === "failed" ? now : null, now, threadId)
   }
+}
+
+function parsePromptReferences(raw: string | null): PromptReference[] {
+  if (!raw) return []
+  try {
+    const parsed = promptReferenceSchema.array().safeParse(JSON.parse(raw))
+    if (parsed.success) return parsed.data
+  } catch {
+    // The invalid durable record is reported below with one stable error.
+  }
+  throw new RuntimeError("follow-up-invalid", "Queued message is invalid")
+}
+
+function parseHarnessReferences(raw: string): HarnessPromptReference[] {
+  try {
+    const parsed = harnessPromptReferenceSchema
+      .array()
+      .safeParse(JSON.parse(raw))
+    if (parsed.success) return parsed.data
+  } catch {
+    // The invalid durable record is reported below with one stable error.
+  }
+  throw new RuntimeError("follow-up-invalid", "Queued message is invalid")
 }

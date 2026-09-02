@@ -19,6 +19,7 @@ import {
   type HarnessAdapterFactory,
   type HarnessEvent,
   type HarnessFailure,
+  type HarnessFollowUpInput,
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
@@ -134,7 +135,11 @@ type PendingApproval = {
 }
 
 export class ClaudeAdapter implements HarnessAdapterFactory {
-  readonly descriptor = { id: "claude", name: "Claude Code" }
+  readonly descriptor = {
+    id: "claude",
+    name: "Claude Code",
+    followUps: { queue: true, steer: true },
+  }
 
   constructor(private readonly options: ClaudeAdapterOptions = {}) {}
 
@@ -256,6 +261,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
 
 class ClaudeSession implements HarnessSession {
   readonly #queue = new AsyncQueue<HarnessEvent>()
+  readonly #input = new AsyncQueue<SDKUserMessage>()
   readonly #approvalQueue: PendingApproval[] = []
   readonly #abortController = new AbortController()
   readonly #backgroundActivities = new Set<string>()
@@ -267,6 +273,7 @@ class ClaudeSession implements HarnessSession {
     string,
     { id: string; name: string }
   >()
+  readonly #skillRoots: SkillRoot[]
   readonly #taskActivities = new Map<string, string>()
   /** Task-tool calls whose results feed the plan instead of settling a row. */
   readonly #taskPlanCalls = new Set<string>()
@@ -287,6 +294,8 @@ class ClaudeSession implements HarnessSession {
   #backgroundTaskLevelSeen = false
   #backgroundActivityStartedAfterLevel = false
   #planStarted = false
+  /** Result boundaries superseded by accepted queued or steering input. */
+  #supersededResults = 0
 
   constructor(
     input: HarnessRunInput,
@@ -299,6 +308,7 @@ class ClaudeSession implements HarnessSession {
       queryFactory = query,
     }: ClaudeAdapterOptions
   ) {
+    this.#skillRoots = input.customization.skillRoots
     if (signal.aborted) this.#abortController.abort()
     signal.addEventListener("abort", () => this.#abortController.abort(), {
       once: true,
@@ -418,7 +428,14 @@ class ClaudeSession implements HarnessSession {
     if (executablePath) options.pathToClaudeCodeExecutable = executablePath
     if (input.providerSessionId) options.resume = input.providerSessionId
     if (input.forkProviderSession) options.forkSession = true
-    this.#query = queryFactory({ prompt: claudeQueryPrompt(input), options })
+    this.#input.push(
+      claudeUserMessage(
+        claudePrompt(input),
+        input.attachments ?? [],
+        input.turnId
+      )
+    )
+    this.#query = queryFactory({ prompt: this.#input, options })
 
     this.#startupDeadline = setTimeout(() => {
       if (this.#abortController.signal.aborted) {
@@ -432,6 +449,37 @@ class ClaudeSession implements HarnessSession {
     this.#startupDeadline.unref?.()
 
     void this.#consume()
+  }
+
+  queue(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#terminalEventEmitted)
+      return Promise.reject(new Error("Claude is no longer running"))
+    this.#supersededResults += 1
+    this.#input.push(
+      claudeUserMessage(
+        claudePromptForFollowUp(input, this.#skillRoots),
+        input.attachments,
+        input.id,
+        "later"
+      )
+    )
+    return Promise.resolve()
+  }
+
+  async steer(input: HarnessFollowUpInput): Promise<void> {
+    if (this.#closed || this.#terminalEventEmitted) {
+      throw new Error("Claude is no longer running")
+    }
+    this.#supersededResults += 1
+    this.#input.push(
+      claudeUserMessage(
+        claudePromptForFollowUp(input, this.#skillRoots),
+        input.attachments,
+        input.id,
+        "now"
+      )
+    )
+    await this.#query.interrupt()
   }
 
   async cancel(): Promise<void> {
@@ -755,6 +803,12 @@ class ClaudeSession implements HarnessSession {
 
     if (message.type !== "result") return
 
+    if (this.#supersededResults > 0) {
+      this.#supersededResults -= 1
+      this.#successfulResultPending = false
+      return
+    }
+
     // Fallback for CLIs without the context-usage control request: learn the
     // window from modelUsage once, then re-emit the last reading with it. When
     // the window is already known this stays silent — modelUsage spans subagent
@@ -908,6 +962,7 @@ class ClaudeSession implements HarnessSession {
     this.#denyPending()
     this.#streamedToolActivities.clear()
     this.#streamedToolsByIndex.clear()
+    this.#input.close()
     this.#query.close()
     this.#queue.close()
   }
@@ -928,27 +983,34 @@ class ClaudeSession implements HarnessSession {
 
 /** Claude skills are exposed as plugin slash commands; keep that syntax local. */
 export function claudePrompt(input: HarnessRunInput): string {
+  return claudePromptForFollowUp(input, input.customization.skillRoots)
+}
+
+function claudePromptForFollowUp(
+  input: Pick<HarnessFollowUpInput, "prompt" | "references">,
+  skillRoots: SkillRoot[]
+): string {
   let prompt = input.prompt
   for (const reference of input.references) {
     if (reference.kind !== "skill") continue
     prompt = replaceStandaloneToken(
       prompt,
       `$${reference.name}`,
-      claudeSkillCommand(reference, input.customization.skillRoots)
+      claudeSkillCommand(reference, skillRoots)
     )
   }
   return prompt
 }
 
-function claudeQueryPrompt(
-  input: HarnessRunInput
-): string | AsyncIterable<SDKUserMessage> {
-  const text = claudePrompt(input)
-  if (!input.attachments?.length) return text
-
+function claudeUserMessage(
+  text: string,
+  attachments: HarnessFollowUpInput["attachments"],
+  id: string,
+  priority?: SDKUserMessage["priority"]
+): SDKUserMessage {
   const content: Exclude<SDKUserMessage["message"]["content"], string> = []
   if (text) content.push({ type: "text", text })
-  for (const attachment of input.attachments) {
+  for (const attachment of attachments) {
     content.push({
       type: "image",
       source: {
@@ -959,19 +1021,19 @@ function claudeQueryPrompt(
     })
   }
 
-  const prompt = new AsyncQueue<SDKUserMessage>()
   const userMessage: SDKUserMessage = {
     type: "user",
+    // SAFETY: Runtime Turn and Message ids are generated with randomUUID().
+    uuid: id as SDKUserMessage["uuid"],
     session_id: "",
     parent_tool_use_id: null,
+    priority,
     message: {
       role: "user",
       content,
     },
   }
-  prompt.push(userMessage)
-  prompt.close()
-  return prompt
+  return userMessage
 }
 
 function replaceStandaloneToken(

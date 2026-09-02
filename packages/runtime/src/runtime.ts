@@ -137,6 +137,7 @@ export class Runtime implements RuntimeTransport {
           this.#emit({ type: "artifact.changed", threadId }),
       }
     )
+    this.#turns.resumeFollowUps()
   }
 
   request<M extends RuntimeMethod>(

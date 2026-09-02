@@ -316,6 +316,7 @@ function harness(id: string, name: string, modelId: string): Harness {
   return {
     id,
     name,
+    followUps: { queue: false, steer: false },
     enabled: true,
     availability: { status: "available" },
     checkedAt: "2026-08-18T08:00:00.000Z",

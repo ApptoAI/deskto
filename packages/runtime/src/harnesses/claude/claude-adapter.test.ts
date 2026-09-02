@@ -7,7 +7,7 @@ import type {
   SDKMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk"
-import type { HarnessEvent } from "@deskto/harness-sdk"
+import { AsyncQueue, type HarnessEvent } from "@deskto/harness-sdk"
 import type { JsonValue } from "@deskto/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -574,7 +574,16 @@ describe("ClaudeAdapter", () => {
         new AbortController().signal
       )
     ).resolves.toBe("Renewal pipeline review")
-    expect(queryMock.mock.calls[0]?.[0].prompt).toBe(prompt)
+    const input = queryMock.mock.calls[0]?.[0].prompt
+    expect(input).not.toBeTypeOf("string")
+    // SAFETY: the assertion above proves sessions use the SDK's async
+    // user-message prompt form.
+    const iterator = (input as AsyncIterable<SDKUserMessage>)[
+      Symbol.asyncIterator
+    ]()
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { message: { content: [{ type: "text", text: prompt }] } },
+    })
   })
 
   it("sends text and images as Claude user content", async () => {
@@ -619,6 +628,115 @@ describe("ClaudeAdapter", () => {
       },
     ])
     await session.cancel()
+  })
+
+  it("queues and steers through Claude's live input stream", async () => {
+    const output = new AsyncQueue<SDKMessage>()
+    const query = fakeQuery([])
+    query[Symbol.asyncIterator] = () => output[Symbol.asyncIterator]()
+    queryMock.mockReturnValue(query)
+    const adapter = new ClaudeAdapter({ queryFactory: queryMock })
+
+    expect(adapter.descriptor.followUps).toEqual({ queue: true, steer: true })
+    const session = await adapter.start(
+      {
+        threadId: "thread-1",
+        turnId: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+        projectPath: "/tmp/project",
+        prompt: "First request",
+        references: [],
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+        customization: { skillRoots: [] },
+      },
+      new AbortController().signal
+    )
+    const prompt = queryMock.mock.calls[0]?.[0].prompt
+    expect(prompt).not.toBeTypeOf("string")
+    // SAFETY: the assertion above proves live sessions use the SDK's async
+    // user-message prompt form.
+    const input = (prompt as AsyncIterable<SDKUserMessage>)[
+      Symbol.asyncIterator
+    ]()
+
+    await expect(input.next()).resolves.toMatchObject({
+      value: {
+        uuid: "3bca8cf5-1d29-4ce2-bd31-dfa05c4c5038",
+        message: { content: [{ type: "text", text: "First request" }] },
+      },
+    })
+    await session.queue({
+      id: "420c410d-503f-4b6a-92ff-68db71c33d62",
+      prompt: "After this",
+      references: [],
+      attachments: [],
+    })
+    await expect(input.next()).resolves.toMatchObject({
+      value: {
+        uuid: "420c410d-503f-4b6a-92ff-68db71c33d62",
+        priority: "later",
+        message: { content: [{ type: "text", text: "After this" }] },
+      },
+    })
+    await session.steer({
+      id: "adc030b1-63e0-4bf8-a8b0-3a6f433971a4",
+      prompt: "Change course",
+      references: [],
+      attachments: [
+        {
+          type: "image",
+          name: "direction.png",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,cG5n",
+        },
+      ],
+    })
+    await expect(input.next()).resolves.toMatchObject({
+      value: {
+        uuid: "adc030b1-63e0-4bf8-a8b0-3a6f433971a4",
+        priority: "now",
+        message: {
+          content: [
+            { type: "text", text: "Change course" },
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: "cG5n",
+              },
+            },
+          ],
+        },
+      },
+    })
+    expect(query.interrupt).toHaveBeenCalledOnce()
+
+    const result = sdkMessage({
+      type: "result",
+      subtype: "success",
+      modelUsage: {},
+    })
+    output.push(result)
+    output.push(result)
+    output.push(result)
+    const events = session.events[Symbol.asyncIterator]()
+    await expect(events.next()).resolves.toMatchObject({
+      value: { type: "turn.completed" },
+    })
+    await expect(
+      session.steer({
+        id: "80f6c52f-2ad0-481d-912f-f842a9aba34c",
+        prompt: "Too late",
+        references: [],
+        attachments: [],
+      })
+    ).rejects.toThrow("no longer running")
+    output.close()
+    await expect(events.next()).resolves.toMatchObject({ done: true })
   })
 
   it("emits only the usage-limit failure when Claude later reports success", async () => {
