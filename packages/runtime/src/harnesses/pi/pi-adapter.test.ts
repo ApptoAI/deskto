@@ -1,6 +1,14 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 
 import type { HarnessEvent, HarnessRunInput } from "@deskto/harness-sdk"
 import type { JsonObject, JsonValue } from "@deskto/protocol"
@@ -12,6 +20,7 @@ import {
   piActivity,
   piLaunchArgs,
   piModels,
+  piNormalizedPath,
   piPromptCommand,
   piTooOldReason,
   type PiClient,
@@ -488,6 +497,158 @@ describe("Pi session", () => {
     ])
   })
 
+  it("keeps a task folder untrusted until the person approves its work", async () => {
+    const client = new FakePiClient()
+    const projectPath = await tempDirectory()
+    await mkdir(join(projectPath, ".pi", "skills"), { recursive: true })
+    const launches: string[][] = []
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launches.push(options?.args ?? [])
+        return client
+      },
+      { extensionsPath: await tempDirectory() }
+    )
+    const profile = {
+      modelId: null,
+      effort: null,
+      permissionMode: "approval-required" as const,
+    }
+
+    // A checked-in .pi/settings.json can name packages Pi would install,
+    // scripts included, before the first prompt; the skills folder is only
+    // text and still reaches Pi.
+    const guarded = await adapter.start(
+      runInput({ projectPath, executionProfile: profile }),
+      new AbortController().signal
+    )
+    expect(launches[0]).toContain("--no-approve")
+    expect(launches[0]).not.toContain("--approve")
+    expect(launches[0]).toContain("--skill")
+    expect(launches[0]![launches[0]!.indexOf("--skill") + 1]).toBe(
+      join(projectPath, ".pi", "skills")
+    )
+    await guarded.cancel()
+
+    const bare = await adapter.start(
+      runInput({
+        projectPath: await tempDirectory(),
+        executionProfile: profile,
+      }),
+      new AbortController().signal
+    )
+    expect(launches[1]).not.toContain("--skill")
+    await bare.cancel()
+
+    const trusted = await adapter.start(
+      runInput({ projectPath }),
+      new AbortController().signal
+    )
+    expect(launches[2]).toContain("--approve")
+    expect(launches[2]).not.toContain("--skill")
+    await trusted.cancel()
+  })
+
+  it("turns away an approval that arrives while Pi is still aborting", async () => {
+    let releaseAbort = () => {}
+    class SlowAbortClient extends FakePiClient {
+      override request<T extends JsonValue>(
+        command: JsonObject,
+        schema: ZodType<T>
+      ): Promise<T> {
+        if (command.type !== "abort") return super.request(command, schema)
+        this.commands.push(command)
+        this.timeline.push("request:abort")
+        return new Promise((resolve) => {
+          releaseAbort = () => resolve(schema.parse({}))
+        })
+      }
+    }
+    const client = new SlowAbortClient()
+    const adapter = new PiAdapter(() => client, {
+      extensionsPath: await tempDirectory(),
+    })
+    const session = await adapter.start(
+      runInput({
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+      }),
+      new AbortController().signal
+    )
+
+    const cancelled = session.cancel()
+    // Pi's abort waits for the agent to go idle; a dialog Deskto queued now
+    // would hold it open, and cancel() with it, forever.
+    client.emit({
+      type: "extension_ui_request",
+      id: "ui-late",
+      method: "confirm",
+      title: "deskto-approval:bash",
+      message: "rm -rf build",
+    })
+    expect(client.sent).toEqual([
+      { type: "extension_ui_response", id: "ui-late", cancelled: true },
+    ])
+    releaseAbort()
+    await cancelled
+    expect(await collect(session.events)).toEqual([])
+  })
+
+  it("refuses an image for a model that reads only text", async () => {
+    const attachments = [
+      {
+        type: "image" as const,
+        name: "shot.png",
+        mimeType: "image/png" as const,
+        dataUrl: "data:image/png;base64,AAAA",
+      },
+    ]
+    const textOnly = new FakePiClient({
+      sessionId: "session-1",
+      sessionFile: "/tmp/session-1.jsonl",
+      model: {
+        id: "gpt-5.3-codex-spark",
+        provider: "openai-codex",
+        contextWindow: 128000,
+        input: ["text"],
+      },
+    })
+    const adapter = new PiAdapter(() => textOnly, {
+      extensionsPath: await tempDirectory(),
+    })
+    await expect(
+      adapter.start(runInput({ attachments }), new AbortController().signal)
+    ).rejects.toThrow(
+      "openai-codex/gpt-5.3-codex-spark can't read images. Remove the attachment or choose a model that accepts images."
+    )
+    expect(textOnly.commands.map((command) => command.type)).toEqual([
+      "get_state",
+    ])
+    expect(textOnly.closed).toBe(true)
+
+    const vision = new FakePiClient({
+      sessionId: "session-1",
+      sessionFile: "/tmp/session-1.jsonl",
+      model: {
+        id: "gpt-5.6-sol",
+        provider: "openai-codex",
+        contextWindow: 272000,
+        input: ["text", "image"],
+      },
+    })
+    const session = await new PiAdapter(() => vision, {
+      extensionsPath: await tempDirectory(),
+    }).start(runInput({ attachments }), new AbortController().signal)
+    expect(vision.commands[1]).toMatchObject({
+      type: "prompt",
+      images: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
+    })
+    await session.cancel()
+  })
+
   it("hands Pi the project instructions as a file it removes afterwards", async () => {
     const client = new FakePiClient()
     const extensionsPath = await tempDirectory()
@@ -801,7 +962,8 @@ describe("Pi models", () => {
       "high",
       "max",
     ])
-    expect(sol?.defaultEffort).toBe("off")
+    // Pi clamps medium upward to high rather than down to off.
+    expect(sol?.defaultEffort).toBe("high")
   })
 
   it("asks a running Pi for its models", async () => {
@@ -858,6 +1020,100 @@ describe("Pi models", () => {
     expect(ids(["gpt-5.6-sol:banana", "xai/*:banana"])).toEqual([
       "openai-codex/gpt-5.6-sol",
     ])
+  })
+
+  it("defaults each model to the level Pi would pick", () => {
+    const hidesMedium: PiModel = {
+      ...availableModels[2]!,
+      thinkingLevelMap: { medium: null },
+    }
+    // Pi clamps upward first: with medium hidden and off still there, a
+    // first-supported pick would silently weaken the model to off.
+    expect(piModels([hidesMedium])[0]?.defaultEffort).toBe("high")
+    expect(
+      piModels(availableModels, { defaultThinkingLevel: "low" }).map(
+        (model) => model.defaultEffort
+      )
+    ).toEqual(["low", undefined, "low"])
+    expect(
+      piModels(availableModels, {
+        defaultThinkingLevel: "low",
+        modelThinkingLevels: { "xai/grok-4.6": "high" },
+      }).map((model) => model.defaultEffort)
+    ).toEqual(["low", undefined, "high"])
+    // A level the model does not reach clamps down to its highest.
+    expect(
+      piModels(availableModels, { defaultThinkingLevel: "max" }).map(
+        (model) => model.defaultEffort
+      )
+    ).toEqual(["xhigh", undefined, "high"])
+    expect(
+      piModels(availableModels, { defaultThinkingLevel: "banana" })[0]
+        ?.defaultEffort
+    ).toBe("off")
+  })
+
+  it("takes a bare model id exactly before searching substrings", () => {
+    const withBatch: PiModel[] = [
+      ...availableModels,
+      {
+        provider: "openrouter",
+        id: "openai/gpt-5.6-sol:batch",
+        name: "GPT-5.6 Sol (batch)",
+        reasoning: true,
+      },
+    ]
+    const ids = (patterns: string[]) =>
+      piModels(withBatch, { enabledModels: patterns }).map((model) => model.id)
+    // Substring matching would sort the batch route first and move the
+    // task to another provider than Pi itself would use.
+    expect(ids(["gpt-5.6-sol"])).toEqual(["openai-codex/gpt-5.6-sol"])
+    expect(ids(["GPT-5.6-SOL:high"])).toEqual(["openai-codex/gpt-5.6-sol"])
+    // Pi falls through to the bare id when no provider owns the prefix.
+    expect(ids(["amazon/nova-lite-v1"])).toEqual([
+      "openrouter/amazon/nova-lite-v1",
+    ])
+    expect(ids(["sol"])).toEqual(["openrouter/openai/gpt-5.6-sol:batch"])
+  })
+
+  it("reads Pi's settings the way Pi does", async () => {
+    const client = new FakePiClient()
+    client.models = availableModels
+    const configPath = await tempDirectory()
+    await writeFile(
+      join(configPath, "settings.json"),
+      `\uFEFF${JSON.stringify({ enabledModels: ["xai/*"] })}`,
+      "utf8"
+    )
+    // A byte order mark Pi strips must not read as an empty settings file.
+    expect(
+      (await new PiAdapter(() => client, { configPath }).listModels()).map(
+        (model) => model.id
+      )
+    ).toEqual(["xai/grok-4.6"])
+
+    // PI_CODING_AGENT_DIR goes through Pi's own path reading.
+    vi.stubEnv("PI_CODING_AGENT_DIR", pathToFileURL(configPath).href)
+    try {
+      expect(
+        (await new PiAdapter(() => client).listModels()).map(
+          (model) => model.id
+        )
+      ).toEqual(["xai/grok-4.6"])
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    expect(piNormalizedPath("~", "linux", "/home/me")).toBe("/home/me")
+    expect(piNormalizedPath("~/pi", "linux", "/home/me")).toBe("/home/me/pi")
+    expect(piNormalizedPath("~/pi")).toBe(join(homedir(), "pi"))
+    expect(piNormalizedPath("/c/Users/me/.pi/agent", "win32", "C:\\me")).toBe(
+      "C:\\Users\\me\\.pi\\agent"
+    )
+    expect(piNormalizedPath("/mnt/d/pi", "win32", "C:\\me")).toBe("D:\\pi")
+    expect(piNormalizedPath("/c/Users/me", "linux", "/home/me")).toBe(
+      "/c/Users/me"
+    )
+    expect(piNormalizedPath("/opt/pi", "win32", "C:\\me")).toBe("/opt/pi")
   })
 
   it("offers every model when the enabled list matches none", () => {

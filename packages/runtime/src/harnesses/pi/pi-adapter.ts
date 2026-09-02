@@ -1,8 +1,16 @@
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
+import {
+  access,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import {
   AsyncQueue,
@@ -111,6 +119,8 @@ const piDefaultThinkingLevel = "medium"
 const piSettingsSchema = z.object({
   defaultProvider: z.string().optional(),
   defaultModel: z.string().optional(),
+  defaultThinkingLevel: z.string().optional(),
+  modelThinkingLevels: z.record(z.string(), z.string()).optional(),
   enabledModels: z.array(z.string()).optional(),
 })
 
@@ -128,9 +138,12 @@ export default function (pi) {
         : typeof input.path === "string"
           ? input.path
           : ""
+    // Pi's abort waits for the agent to go idle; a dialog that ignores the
+    // signal would keep it waiting forever.
     const allowed = await ctx.ui.confirm(
       "${approvalTitlePrefix}" + event.toolName,
-      detail
+      detail,
+      { signal: ctx.signal }
     )
     if (!allowed) return { block: true, reason: "The person did not allow this step." }
     return undefined
@@ -285,11 +298,11 @@ export class PiAdapter implements HarnessAdapterFactory {
   }
 
   #configPath(): string {
-    return (
-      this.options.configPath ??
-      process.env.PI_CODING_AGENT_DIR ??
-      join(homedir(), ".pi", "agent")
-    )
+    if (this.options.configPath) return this.options.configPath
+    const override = process.env.PI_CODING_AGENT_DIR
+    return override
+      ? piNormalizedPath(override)
+      : join(homedir(), ".pi", "agent")
   }
 
   async #readSettings(): Promise<PiSettings> {
@@ -298,7 +311,10 @@ export class PiAdapter implements HarnessAdapterFactory {
         join(this.#configPath(), "settings.json"),
         "utf8"
       )
-      const parsed = piSettingsSchema.safeParse(JSON.parse(raw))
+      // Pi strips a byte order mark before parsing; JSON.parse would not.
+      const parsed = piSettingsSchema.safeParse(
+        JSON.parse(raw.replace(/^\uFEFF/, ""))
+      )
       return parsed.success ? parsed.data : {}
     } catch {
       return {}
@@ -360,8 +376,18 @@ class PiSession implements HarnessSession {
           input.customization.instructions
         )
       : undefined
+    const projectSkills =
+      input.executionProfile.permissionMode === "approval-required"
+        ? await existingDirectory(join(input.projectPath, ".pi", "skills"))
+        : undefined
     const client = clientFactory("pi", input.projectPath, {
-      args: piLaunchArgs(input, approvalExtension, launch, instructionsFile),
+      args: piLaunchArgs(
+        input,
+        approvalExtension,
+        launch,
+        instructionsFile,
+        projectSkills
+      ),
     })
     const session = new PiSession(client, input, launch, instructionsFile)
     session.skillProvisioning.push(
@@ -419,6 +445,19 @@ class PiSession implements HarnessSession {
       piStateSchema
     )
     if (!state.sessionId) throw new Error("Pi did not report a session id")
+    const modelInputs = state.model?.input
+    if (
+      (this.input.attachments?.length ?? 0) > 0 &&
+      modelInputs &&
+      !modelInputs.includes("image")
+    ) {
+      const model = [state.model?.provider, state.model?.id]
+        .filter(Boolean)
+        .join("/")
+      throw new Error(
+        `${model || "This model"} can't read images. Remove the attachment or choose a model that accepts images.`
+      )
+    }
     this.#providerSessionId = state.sessionId
     this.#contextWindow = positiveTokens(state.model?.contextWindow)
     // A resumed session already has a file. Fresh and forked ids stay
@@ -584,7 +623,11 @@ class PiSession implements HarnessSession {
     const method = getString(event, "method")
     if (!requestId || !method) return
     const title = getString(event, "title") ?? ""
-    if (method === "confirm" && title.startsWith(approvalTitlePrefix)) {
+    if (
+      method === "confirm" &&
+      title.startsWith(approvalTitlePrefix) &&
+      !this.#cancelled
+    ) {
       const toolName = title.slice(approvalTitlePrefix.length)
       const kind = approvalKind(toolName)
       const request: PendingApproval["request"] = {
@@ -603,7 +646,8 @@ class PiSession implements HarnessSession {
       this.#showNextApproval()
       return
     }
-    // Dialogs from other extensions have no one to answer them here.
+    // Dialogs from other extensions have no one to answer them here, and a
+    // dialog raised after cancellation began would hold Pi's abort open.
     if (
       method === "confirm" ||
       method === "select" ||
@@ -667,12 +711,22 @@ export function piLaunchArgs(
   input: HarnessRunInput,
   approvalExtension?: string,
   launch: PiLaunchOptions = { ephemeral: false },
-  instructionsFile?: string
+  instructionsFile?: string,
+  projectSkills?: string
 ): string[] {
   // Discovered extensions would ask questions nobody can answer over RPC.
-  // RPC mode cannot show Pi's trust prompt either, and untrusted it would
-  // skip the project's own .pi settings and skills that Deskto advertises.
-  const args = ["--no-extensions", "--approve"]
+  // RPC mode cannot show Pi's trust prompt either, so trust follows the
+  // permission mode: full access lets the folder's own .pi settings load,
+  // while approval-required keeps repository-controlled package installs
+  // from running before the person's first approval. Skills are text, so
+  // the project's own skill folder still reaches Pi through --skill.
+  const args = [
+    "--no-extensions",
+    input.executionProfile.permissionMode === "approval-required"
+      ? "--no-approve"
+      : "--approve",
+  ]
+  if (projectSkills) args.push("--skill", projectSkills)
   if (launch.ephemeral) args.push("--no-session")
   if (input.providerSessionId) {
     args.push(
@@ -737,9 +791,12 @@ export function piModels(
       supportedPermissionModes: ["approval-required", "full-access"],
     }
     if (efforts.length > 0) {
-      option.defaultEffort = efforts.includes(piDefaultThinkingLevel)
-        ? piDefaultThinkingLevel
-        : efforts[0]!
+      option.defaultEffort = clampThinkingLevel(
+        settings.modelThinkingLevels?.[id] ??
+          settings.defaultThinkingLevel ??
+          piDefaultThinkingLevel,
+        efforts
+      )
     }
     options.set(model, option)
   }
@@ -766,6 +823,26 @@ function piSupportedEfforts(model: PiModel): string[] {
     if (piExtendedThinkingLevels.has(level)) return mapped !== undefined
     return true
   })
+}
+
+// Pi's clamp: an unsupported level takes the nearest supported level above
+// it, then the nearest below, and a level outside the vocabulary takes the
+// lowest one.
+function clampThinkingLevel(level: string, supported: string[]): string {
+  if (supported.includes(level)) return level
+  const index = piThinkingLevels.indexOf(level)
+  const first = supported[0] ?? "off"
+  if (index === -1) return first
+  return (
+    piThinkingLevels
+      .slice(index)
+      .find((candidate) => supported.includes(candidate)) ??
+    piThinkingLevels
+      .slice(0, index)
+      .reverse()
+      .find((candidate) => supported.includes(candidate)) ??
+    first
+  )
 }
 
 // Mirrors Pi's own scope resolution for `enabledModels`. A glob (`*`, `?`,
@@ -831,15 +908,22 @@ function exactModel(reference: string, models: PiModel[]): PiModel | undefined {
   if (canonical.length === 1) return canonical[0]
   if (canonical.length > 1) return undefined
   const slash = wanted.indexOf("/")
-  if (slash === -1) return undefined
-  const provider = wanted.slice(0, slash).trim()
-  const id = wanted.slice(slash + 1).trim()
-  if (!provider || !id) return undefined
-  const byProvider = models.filter(
-    (model) =>
-      model.provider.toLowerCase() === provider && model.id.toLowerCase() === id
-  )
-  return byProvider.length === 1 ? byProvider[0] : undefined
+  if (slash !== -1) {
+    const provider = wanted.slice(0, slash).trim()
+    const id = wanted.slice(slash + 1).trim()
+    if (provider && id) {
+      const byProvider = models.filter(
+        (model) =>
+          model.provider.toLowerCase() === provider &&
+          model.id.toLowerCase() === id
+      )
+      if (byProvider.length === 1) return byProvider[0]
+      if (byProvider.length > 1) return undefined
+    }
+  }
+  // A bare id counts when exactly one provider offers it.
+  const byId = models.filter((model) => model.id.toLowerCase() === wanted)
+  return byId.length === 1 ? byId[0] : undefined
 }
 
 function partialModel(
@@ -968,6 +1052,43 @@ function piProvisioning(root: SkillRoot): SkillProvisioningResult {
   }
   if (root.contentDigest) result.contentDigest = root.contentDigest
   return result
+}
+
+async function existingDirectory(path: string): Promise<string | undefined> {
+  try {
+    await access(path)
+    return path
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Pi's own reading of a path in `PI_CODING_AGENT_DIR`: a Git Bash or MSYS
+ * drive path becomes a Windows one, `~` expands to the home folder, and a
+ * `file://` URL becomes a path.
+ */
+export function piNormalizedPath(
+  input: string,
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir()
+): string {
+  let path = input
+  if (platform === "win32") path = windowsShellPath(path)
+  if (path === "~") return home
+  if (path.startsWith("~/") || (platform === "win32" && path.startsWith("~\\")))
+    return join(home, path.slice(2))
+  if (path.startsWith("file://")) return fileURLToPath(path)
+  return path
+}
+
+function windowsShellPath(path: string): string {
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\"))
+    return path
+  const match = /^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i.exec(path)
+  if (!match) return path
+  const suffix = match[2]?.replaceAll("/", "\\")
+  return `${match[1]!.toUpperCase()}:\\${suffix ?? ""}`
 }
 
 async function writeInstructions(

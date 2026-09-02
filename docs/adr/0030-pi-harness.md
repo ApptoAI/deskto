@@ -52,8 +52,18 @@ mode is not offered: Pi has no reviewer of its own to stand in for the person.
 
 **Project trust.** RPC mode cannot show Pi's trust prompt, and Pi's default
 `defaultProjectTrust: "ask"` then silently skips the project's own `.pi`
-settings and skills. Every launch passes `--approve` so the Pi project skills
-the inventory advertises are the ones Pi loads; extensions stay off.
+settings and skills. Trusting a folder also lets Pi install the packages a
+checked-in `.pi/settings.json` names, lifecycle scripts included, before the
+first prompt runs; `--no-extensions` does not stop that. Trust therefore
+follows the permission mode the person chose for the task, which is the only
+trust decision Deskto has from them. Full-access mode passes `--approve`: the
+person let the agent run anything in that folder, and the folder's own Pi
+configuration is part of that. Approval-required mode passes `--no-approve`
+so nothing the repository controls runs before the person's first approval,
+and hands the project's `.pi/skills` folder to Pi with `--skill` when it
+exists, because a skill is text the model reads rather than code Pi runs,
+and the inventory advertises it. Deskto never writes Pi's own `trust.json`;
+a decision made in Deskto stays in Deskto.
 
 **Discovery.** Availability is `pi --version` on the augmented PATH. Models
 come from the `get_available_models` RPC command of a short-lived
@@ -66,6 +76,11 @@ list is ignored so the menu never goes blank. Pi's `defaultProvider` and
 `defaultModel` are marked default. Thinking levels are Pi's `--thinking`
 vocabulary minus what a model's `thinkingLevelMap` hides; `xhigh` and `max`
 appear only when the map names them, because Pi clamps rather than rejects.
+The default level is Pi's own choice for that model: its `modelThinkingLevels`
+entry, then `defaultThinkingLevel`, then `medium`, clamped the way Pi clamps
+(nearest supported level above, then below). An `enabledModels` entry that is
+a bare model id matches the way Pi matches it, exactly when one provider
+offers it, before any substring fallback.
 
 **Customization.** Pack and host skill roots pass as `--skill <path>`;
 shared Project instructions are written to a file under the app's user data
@@ -100,5 +115,9 @@ questions nobody can answer over RPC.
   menu, onboarding, and settings, with a monochrome mark.
 - The Codex `jsonl-client` lends Pi its process-tree termination; both
   adapters close a wrapper's descendants on Windows the same way.
-- `PI_CODING_AGENT_DIR` is honoured when reading Pi's settings, matching Pi's
-  own override.
+- `PI_CODING_AGENT_DIR` is honoured when reading Pi's settings, read the way
+  Pi reads it: `~` expands, a Git Bash or MSYS drive path becomes a Windows
+  one, and a leading byte order mark in `settings.json` is ignored.
+- A model whose Pi snapshot lists only `text` input fails a Turn that carries
+  an image attachment before the prompt is sent, with the model named and the
+  two ways out.

@@ -34,6 +34,8 @@ export const piStateSchema = z.object({
       id: z.string().optional(),
       provider: z.string().optional(),
       contextWindow: z.number().optional(),
+      /** What the model accepts, `text` and maybe `image`. */
+      input: z.array(z.string()).optional(),
     })
     .optional(),
 })
