@@ -24,6 +24,11 @@ export type SettingInput =
   | { kind: "harness-model" }
   | { kind: "choice" }
   | { kind: "range"; min: number; max: number; step: number; unit?: string }
+  | { kind: "text"; placeholder?: string; monospace?: boolean }
+  | { kind: "toggle" }
+  | { kind: "viewport" }
+  /** One host rule per line; the schema says what a rule looks like. */
+  | { kind: "host-list" }
   /** Stored and validated like any setting, but no settings screen edits it. */
   | { kind: "hidden" }
 
