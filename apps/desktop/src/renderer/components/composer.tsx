@@ -699,7 +699,10 @@ export function Composer({
             aria-controls={menuOpen ? suggestionsId : undefined}
             aria-activedescendant={menuOpen ? activeOptionId : undefined}
             aria-autocomplete="list"
-            disabled={blocked}
+            // Read-only rather than disabled: a disabled field drops focus
+            // the moment an approval arrives, and hides the draft under it.
+            readOnly={blocked}
+            aria-disabled={blocked}
             autoFocus={autoFocus}
             rows={textareaRows}
           />

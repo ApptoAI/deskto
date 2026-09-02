@@ -66,7 +66,8 @@ export function MessageStream({
   outputs: TurnOutput[]
   label?: string
 }) {
-  const sinceTail = lastUserMessageAt(messages)
+  const lastPrompt = lastUserMessage(messages)
+  const sinceTail = lastPrompt?.createdAt
   const rows = useMemo(
     () => buildTimeline({ messages, activities, running, outputs }),
     [messages, activities, running, outputs]
@@ -74,6 +75,15 @@ export function MessageStream({
   const listRef = useRef<MessageListHandle>(null)
   const [viewport, setViewport] = useState<HTMLElement | null>(null)
   const minimapItems = useMemo(() => toMinimapItems(messages), [messages])
+  // A new prompt is the person's own doing, so the list goes to it even if
+  // they had scrolled up; the first render is already at the end.
+  const lastPromptId = lastPrompt?.id
+  const followedPromptId = useRef(lastPromptId)
+  useEffect(() => {
+    if (followedPromptId.current === lastPromptId) return
+    followedPromptId.current = lastPromptId
+    listRef.current?.follow()
+  }, [lastPromptId])
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -216,10 +226,10 @@ function replyToPromptAt(messages: Message[], promptIndex: number): string {
   return segments.join(" ")
 }
 
-function lastUserMessageAt(messages: Message[]): string | undefined {
+function lastUserMessage(messages: Message[]): Message | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
-    if (message?.role === "user") return message.createdAt
+    if (message?.role === "user") return message
   }
   return undefined
 }
