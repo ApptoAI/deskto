@@ -72,8 +72,12 @@ prints no thinking levels. They are filtered to the `enabledModels` in Pi's
 own `settings.json` when the person set any, matched the way Pi matches them
 (exact reference, minimatch glob on the full or bare id, substring with
 alias preference, optional `:thinking` suffix); a filter that would empty the
-list is ignored so the menu never goes blank. Pi's `defaultProvider` and
-`defaultModel` are marked default. Thinking levels are Pi's `--thinking`
+list is ignored so the menu never goes blank. The default is the model that
+same process reports from `get_state`: launched without `--model`, Pi has
+already applied its saved default, its `enabledModels` scope, and the
+per-provider fallback table of the installed release, and those defaults
+change between releases, so Deskto reads Pi's choice rather than keeping a
+copy of one release's table. Thinking levels are Pi's `--thinking`
 vocabulary minus what a model's `thinkingLevelMap` hides; `xhigh` and `max`
 appear only when the map names them, because Pi clamps rather than rejects.
 The default level is Pi's own choice for that model: its `modelThinkingLevels`

@@ -653,7 +653,12 @@ describe("Pi session", () => {
     // Pi 0.84.4 with no credentials reports pi-agent-core's stand-in model.
     const noAccount = new FakePiClient({
       sessionId: "session-1",
-      model: { id: "unknown", provider: "unknown", contextWindow: 0, input: [] },
+      model: {
+        id: "unknown",
+        provider: "unknown",
+        contextWindow: 0,
+        input: [],
+      },
     })
     const session = await new PiAdapter(() => noAccount, {
       extensionsPath: await tempDirectory(),
@@ -994,8 +999,11 @@ describe("Pi models", () => {
     expect(sol?.defaultEffort).toBe("high")
   })
 
-  it("asks a running Pi for its models", async () => {
-    const client = new FakePiClient()
+  it("asks a running Pi for its models and the one it would start with", async () => {
+    const client = new FakePiClient({
+      sessionId: "discovery",
+      model: { id: "grok-4.6", provider: "xai" },
+    })
     client.models = availableModels
     const launches: string[][] = []
     const adapter = new PiAdapter(
@@ -1012,8 +1020,12 @@ describe("Pi models", () => {
       "openrouter/amazon/nova-lite-v1",
       "xai/grok-4.6",
     ])
+    expect(models.map((model) => model.isDefault)).toEqual([false, false, true])
     expect(launches).toEqual([["--no-session", "--no-extensions"]])
-    expect(client.commands).toEqual([{ type: "get_available_models" }])
+    expect(client.commands).toEqual([
+      { type: "get_available_models" },
+      { type: "get_state" },
+    ])
     expect(client.closed).toBe(true)
   })
 
@@ -1204,39 +1216,52 @@ describe("Pi models", () => {
   })
 
   it("offers every model when the enabled list matches none", () => {
-    const models = piModels(availableModels, {
-      enabledModels: ["anthropic/*"],
-    })
+    const models = piModels(
+      availableModels,
+      { enabledModels: ["anthropic/*"] },
+      { provider: "xai", id: "grok-4.6" }
+    )
     expect(models).toHaveLength(3)
-    expect(models.map((model) => model.isDefault)).toEqual([
-      false,
-      false,
-      true,
-    ])
+    expect(models.map((model) => model.isDefault)).toEqual([false, false, true])
   })
 
-  it("falls back to the provider default pi would start with", () => {
-    // Pi walks its provider default table, not the snapshot order: the
-    // codex entry is not that provider's default, grok is xai's.
+  it("marks the model pi itself selected as the default", () => {
+    // Pi's discovery process has already walked its own release's
+    // provider-default table; its get_state names the winner.
+    const initial = { provider: "xai", id: "grok-4.6" }
     expect(
-      piModels(availableModels).map((model) => model.isDefault)
+      piModels(availableModels, {}, initial).map((model) => model.isDefault)
     ).toEqual([false, false, true])
-    // A settings default without credentials is skipped the same way.
+    // Pi's choice wins over a saved default it skipped for lacking auth.
+    expect(
+      piModels(
+        availableModels,
+        { defaultProvider: "anthropic", defaultModel: "claude-opus-4-8" },
+        initial
+      ).map((model) => model.isDefault)
+    ).toEqual([false, false, true])
+    // Pi's choice wins over a saved default it did not start with.
+    expect(
+      piModels(
+        availableModels,
+        { defaultProvider: "openai-codex", defaultModel: "gpt-5.6-sol" },
+        initial
+      ).map((model) => model.isDefault)
+    ).toEqual([false, false, true])
+    // Pi with no credentials reports unknown/unknown: the first model.
+    expect(
+      piModels(availableModels, {}, { provider: "unknown", id: "unknown" }).map(
+        (model) => model.isDefault
+      )
+    ).toEqual([true, false, false])
+    // No state at all: the saved default, else the first model, as in Pi.
     expect(
       piModels(availableModels, {
-        defaultProvider: "anthropic",
-        defaultModel: "claude-opus-4-8",
+        defaultProvider: "xai",
+        defaultModel: "grok-4.6",
       }).map((model) => model.isDefault)
     ).toEqual([false, false, true])
-    // Table order wins over snapshot order between two provider defaults.
-    expect(
-      piModels([
-        availableModels[2]!,
-        { ...availableModels[0]!, id: "gpt-5.5" },
-      ]).map((model) => model.id + (model.isDefault ? "*" : ""))
-    ).toEqual(["xai/grok-4.6", "openai-codex/gpt-5.5*"])
-    // Nothing in the table: the first model, as in Pi.
-    expect(piModels([availableModels[0]!])[0]?.isDefault).toBe(true)
+    expect(piModels(availableModels)[0]?.isDefault).toBe(true)
   })
 })
 

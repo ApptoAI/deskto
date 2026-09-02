@@ -208,11 +208,11 @@ export class PiAdapter implements HarnessAdapterFactory {
   }
 
   async listModels(): Promise<HarnessModelOption[]> {
-    const [models, settings] = await Promise.all([
+    const [{ models, initial }, settings] = await Promise.all([
       this.#availableModels(),
       this.#readSettings(),
     ])
-    return piModels(models, settings)
+    return piModels(models, settings, initial)
   }
 
   discoverSkillRoots(input: SkillDiscoveryInput): Promise<NativeSkillRoot[]> {
@@ -281,7 +281,13 @@ export class PiAdapter implements HarnessAdapterFactory {
 
   // `pi --list-models` prints a table without each model's thinking levels;
   // the RPC snapshot carries the same models with their thinkingLevelMap.
-  async #availableModels(): Promise<PiModel[]> {
+  // The same process, launched without --model, has already run Pi's own
+  // initial-model selection, so its state names the default for this
+  // release without Deskto copying Pi's per-provider table.
+  async #availableModels(): Promise<{
+    models: PiModel[]
+    initial: PiState["model"]
+  }> {
     const env = this.#childEnv()
     const client = this.clientFactory(
       "pi",
@@ -289,11 +295,14 @@ export class PiAdapter implements HarnessAdapterFactory {
       env ? { args: discoveryLaunchArgs, env } : { args: discoveryLaunchArgs }
     )
     try {
-      const { models } = await client.request(
-        { type: "get_available_models" },
-        piAvailableModelsSchema
-      )
-      return models
+      const [{ models }, state] = await Promise.all([
+        client.request(
+          { type: "get_available_models" },
+          piAvailableModelsSchema
+        ),
+        client.request({ type: "get_state" }, piStateSchema),
+      ])
+      return { models, initial: state.model }
     } finally {
       client.close()
     }
@@ -805,12 +814,20 @@ export function piPromptCommand(
 
 export function piModels(
   available: PiModel[],
-  settings: PiSettings = {}
+  settings: PiSettings = {},
+  initial?: PiState["model"]
 ): HarnessModelOption[] {
-  const defaultId =
+  // Pi's discovery process already chose the model it would start with:
+  // the saved default when it is in scope and has credentials, else the
+  // first scoped model, else its release's provider defaults. Reading that
+  // choice keeps Deskto's default equal to Pi's on every release it accepts.
+  const settingsDefaultId =
     settings.defaultProvider && settings.defaultModel
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : undefined
+  const defaultId = piHasSelectedModel(initial)
+    ? `${initial.provider}/${initial.id}`
+    : settingsDefaultId
   const enabled = piModelScope(settings.enabledModels ?? [], available)
   const options = new Map<PiModel, HarnessModelOption>()
   for (const model of available) {
@@ -843,68 +860,12 @@ export function piModels(
       ? enabled.map((scoped) => options.get(scoped.model)!)
       : [...options.values()]
   if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
-    // Pi's own fallback: the first entry of its scope, else the first
-    // provider default it knows for a model in the snapshot, else the first
-    // model in the snapshot.
-    const fallback =
-      enabled.length > 0
-        ? offered[0]!
-        : (piDefaultModelPerProvider
-            .map(([provider, id]) =>
-              offered.find((model) => model.id === `${provider}/${id}`)
-            )
-            .find((model) => model !== undefined) ?? offered[0]!)
-    fallback.isDefault = true
+    // Pi reported nothing usable (or a model outside the offered list):
+    // the first entry, which is Pi's own last resort.
+    offered[0]!.isDefault = true
   }
   return offered
 }
-
-// Pi's `defaultModelPerProvider` table (0.84.4) in Pi's own order, which its
-// `findInitialModel` walks when settings name no usable default. The
-// snapshot Pi hands over RPC already holds only providers with credentials,
-// so the first table entry present in it is the model Pi would start with.
-const piDefaultModelPerProvider: readonly (readonly [string, string])[] = [
-  ["amazon-bedrock", "us.anthropic.claude-opus-4-6-v1"],
-  ["ant-ling", "Ring-2.6-1T"],
-  ["anthropic", "claude-opus-4-8"],
-  ["openai", "gpt-5.5"],
-  ["azure-openai-responses", "gpt-5.4"],
-  ["openai-codex", "gpt-5.5"],
-  ["radius", "auto"],
-  ["nvidia", "nvidia/nemotron-3-super-120b-a12b"],
-  ["deepseek", "deepseek-v4-pro"],
-  ["google", "gemini-3.1-pro-preview"],
-  ["google-vertex", "gemini-3.1-pro-preview"],
-  ["github-copilot", "gpt-5.4"],
-  ["openrouter", "moonshotai/kimi-k2.6"],
-  ["vercel-ai-gateway", "zai/glm-5.1"],
-  ["xai", "grok-4.6"],
-  ["groq", "openai/gpt-oss-120b"],
-  ["cerebras", "gpt-oss-120b"],
-  ["zai", "glm-5.3"],
-  ["zai-coding-cn", "glm-5.3"],
-  ["mistral", "devstral-medium-latest"],
-  ["minimax", "MiniMax-M2.7"],
-  ["minimax-cn", "MiniMax-M2.7"],
-  ["moonshotai", "kimi-k2.6"],
-  ["moonshotai-cn", "kimi-k2.6"],
-  ["huggingface", "moonshotai/Kimi-K2.6"],
-  ["fireworks", "accounts/fireworks/models/kimi-k2p6"],
-  ["together", "moonshotai/Kimi-K2.6"],
-  ["baseten", "zai-org/GLM-5.2"],
-  ["opencode", "kimi-k2.6"],
-  ["opencode-go", "kimi-k2.6"],
-  ["kimi-coding", "kimi-for-coding"],
-  ["cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6"],
-  ["cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6"],
-  ["qwen-token-plan", "qwen3.7-max"],
-  ["qwen-token-plan-cn", "qwen3.7-max"],
-  ["qwen-token-plan-individual", "qwen3.8-max"],
-  ["xiaomi", "mimo-v2.5-pro"],
-  ["xiaomi-token-plan-cn", "mimo-v2.5-pro"],
-  ["xiaomi-token-plan-ams", "mimo-v2.5-pro"],
-  ["xiaomi-token-plan-sgp", "mimo-v2.5-pro"],
-]
 
 // A reasoning model gets Pi's levels minus the ones its map hides; the
 // extended ones need an explicit mapping. A model without reasoning offers
