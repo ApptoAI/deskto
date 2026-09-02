@@ -1,4 +1,4 @@
-# ADR 0030: Computer use settings
+# ADR 0031: Computer use settings
 
 - Status: accepted
 - Date: 2026-09-02

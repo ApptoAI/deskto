@@ -6,7 +6,7 @@ import { defineSetting } from "./definition.js"
  * Settings for the built-in task browser and the computer-use features that
  * grow around it. Every key sits under `computerUse.` so a later section
  * (cookie import, per-workspace profiles, a computer-use MCP server) adds
- * keys beside these without a new namespace. See ADR 0030.
+ * keys beside these without a new namespace. See ADR 0031.
  */
 
 export const maxBrowserUserAgentLength = 512

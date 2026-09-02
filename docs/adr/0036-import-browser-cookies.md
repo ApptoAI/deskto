@@ -1,4 +1,4 @@
-# ADR 0033: Import cookies from local browsers into the Task Browser
+# ADR 0036: Import cookies from local browsers into the Task Browser
 
 - Status: accepted
 - Date: 2026-09-02
@@ -6,7 +6,7 @@
 ## Context
 
 ADR 0016 gives every Task one Browser tab backed by a persistent profile, and
-ADR 0031 makes that profile belong to the Task's Workspace, so logins persist
+ADR 0033 makes that profile belong to the Task's Workspace, so logins persist
 across Tasks in one Workspace and never cross into another. But a profile
 starts empty, so an agent opening a site the person already uses lands on a
 sign-in wall. The person
@@ -25,7 +25,7 @@ The Computer use settings tab gains an "Import sign-ins" section. It lists the
 browser profiles found on this machine, lets the person choose one, the
 websites to bring over, and the Workspace that receives them, and copies the
 matching cookies into that Workspace's profile session (the same
-`persist:workspace-<id>` partition its Task tabs open, per ADR 0031) through
+`persist:workspace-<id>` partition its Task tabs open, per ADR 0033) through
 `session.cookies.set`. The import request names the Workspace, and Main
 accepts only a Workspace the Runtime still has.
 
@@ -56,4 +56,4 @@ session.
 - Cookies land in exactly one Workspace's profile. Seeding a second Workspace
   is a second import; nothing is written to a shared session.
 - This does not grant Computer Use to any Harness. It only seeds an existing
-  Workspace browser profile, so the boundaries of ADR 0016 and ADR 0031 stand.
+  Workspace browser profile, so the boundaries of ADR 0016 and ADR 0033 stand.
