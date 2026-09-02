@@ -14,6 +14,8 @@ import {
   CodexAdapter,
   codexNotInstalledReason,
   createRuntime,
+  PiAdapter,
+  piNotInstalledReason,
   type SessionToolProvider,
 } from "@deskto/runtime"
 
@@ -215,17 +217,23 @@ async function openApplication(): Promise<void> {
     discoveryCwd: harnessDiscoveryPath,
     hostSkillRoots: artifactRuntime?.skillRoots,
   })
+  const piAdapter = new PiAdapter(undefined, {
+    discoveryCwd: harnessDiscoveryPath,
+    hostSkillRoots: artifactRuntime?.skillRoots,
+    extensionsPath: path.join(app.getPath("userData"), "pi-extensions"),
+  })
   // Separate from DESKTO_FORCE_ONBOARDING on purpose: forcing the wizard
   // keeps real detection, so a machine with agents can walk the happy path;
-  // this flag adds the fresh-machine look where both cards stay red.
+  // this flag adds the fresh-machine look where every card stays red.
   const simulateNoAgents =
     !app.isPackaged && process.env.DESKTO_SIMULATE_NO_AGENTS === "1"
   const harnesses = simulateNoAgents
     ? [
         withForcedUnavailability(claudeAdapter, claudeNotSignedInReason),
         withForcedUnavailability(codexAdapter, codexNotInstalledReason),
+        withForcedUnavailability(piAdapter, piNotInstalledReason),
       ]
-    : [claudeAdapter, codexAdapter]
+    : [claudeAdapter, codexAdapter, piAdapter]
   const mcpServerRef: McpServerReference = { current: undefined }
   let runtime: ReturnType<typeof createRuntime>
   try {

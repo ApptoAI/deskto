@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This application gives non-technical users a desktop place to hand work to local AI agents. A user opens a folder as a project, starts a task, chooses Claude or Codex, and follows the result in a chat.
+This application gives non-technical users a desktop place to hand work to local AI agents. A user opens a folder as a project, starts a task, chooses Claude, Codex, or Pi, and follows the result in a chat.
 
 The first release is local and small. It has an Electron client, a Node runtime, SQLite storage, Markdown messages, approvals, cancellation, and resumable agent sessions. It does not contain team administration, automation, a hosted service, or a marketplace.
 
@@ -26,7 +26,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - **Turn Output**: The attribution between a Turn and an Artifact it created or changed. One Artifact can be an output of several Turns.
 - **Browser**: One in-app web tab owned by a Task. A Surface shows it, while a Runtime-provided MCP lease lets the selected Harness inspect and operate the same tab.
 - **Browser Element Context**: A bounded semantic description of a page element the person selected in a Task's Browser for the next Turn. Page metadata is untrusted context, never an instruction.
-- **Harness**: An agent product that performs work, such as Claude Code or Codex.
+- **Harness**: An agent product that performs work, such as Claude Code, Codex, or Pi.
 - **Harness SDK**: The provider-neutral package that defines Harness descriptors, sessions, events, approvals, and test helpers.
 - **Harness Adapter**: Runtime code that maps one Harness protocol into the Harness SDK contract.
 - **MCP Server**: The local `@deskto/mcp-server` in-process HTTP server that lets a Harness create, inspect, search, wait for, and continue Runtime Threads. Desktop starts and configures it without user setup.
