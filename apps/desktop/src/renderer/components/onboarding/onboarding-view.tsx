@@ -325,9 +325,13 @@ export function OnboardingView({
             >
               {primary.label}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onFinish}>
-              {skipLabel}
-            </Button>
+            {/* Once Finish is the primary action, a skip would be the same
+                action wearing a second label. */}
+            {preConfirmedProject && step === "project" ? null : (
+              <Button variant="ghost" size="sm" onClick={onFinish}>
+                {skipLabel}
+              </Button>
+            )}
           </div>
         </div>
       </section>
