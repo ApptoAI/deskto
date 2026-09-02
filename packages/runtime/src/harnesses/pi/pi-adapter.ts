@@ -280,10 +280,16 @@ class PiSession implements HarnessSession {
   #contextWindow?: number
   #cancelled = false
   #closed = false
+  #settling = false
+  #providerSessionId?: string
+  #sessionStarted = false
+  #sessionConfirmation?: Promise<void>
+  #lastAssistantOutcome?: z.infer<typeof piAssistantMessageSchema>
 
   private constructor(
     private readonly client: PiClient,
-    private readonly input: HarnessRunInput
+    private readonly input: HarnessRunInput,
+    private readonly launch: PiLaunchOptions
   ) {
     client.onEvent((event) => this.#onEvent(event))
     client.onFailure((error) => {
@@ -313,7 +319,7 @@ class PiSession implements HarnessSession {
     const client = clientFactory("pi", input.projectPath, {
       args: piLaunchArgs(input, approvalExtension, launch),
     })
-    const session = new PiSession(client, input)
+    const session = new PiSession(client, input, launch)
     session.skillProvisioning.push(
       ...input.customization.skillRoots.map((root) => piProvisioning(root))
     )
@@ -366,11 +372,13 @@ class PiSession implements HarnessSession {
       piStateSchema
     )
     if (!state.sessionId) throw new Error("Pi did not report a session id")
+    this.#providerSessionId = state.sessionId
     this.#contextWindow = positiveTokens(state.model?.contextWindow)
-    this.#queue.push({
-      type: "session.started",
-      providerSessionId: state.sessionId,
-    })
+    // A resumed session already has a file. Fresh and forked ids stay
+    // provisional until Pi persists their first assistant message.
+    if (this.input.providerSessionId && !this.input.forkProviderSession) {
+      this.#emitSessionStarted()
+    }
     await this.client.request(piPromptCommand(this.input), jsonObjectSchema)
   }
 
@@ -429,6 +437,7 @@ class PiSession implements HarnessSession {
     if (event.type === "message_end") {
       const message = piAssistantMessageSchema.safeParse(event.message)
       if (!message.success) return
+      this.#confirmSessionStarted()
       const usedTokens = positiveTokens(message.data.usage?.totalTokens)
       if (!usedTokens) return
       this.#queue.push({
@@ -445,15 +454,67 @@ class PiSession implements HarnessSession {
       return
     }
 
-    if (event.type !== "agent_end" || event.willRetry === true) return
-    const messages = z.array(jsonObjectSchema).safeParse(event.messages)
-    const last = messages.success
-      ? messages.data
-          .map((message) => piAssistantMessageSchema.safeParse(message))
-          .filter((message) => message.success)
-          .map((message) => message.data)
-          .at(-1)
-      : undefined
+    if (event.type === "agent_end") {
+      const messages = z.array(jsonObjectSchema).safeParse(event.messages)
+      const last = messages.success
+        ? messages.data
+            .map((message) => piAssistantMessageSchema.safeParse(message))
+            .filter((message) => message.success)
+            .map((message) => message.data)
+            .at(-1)
+        : undefined
+      if (last) this.#lastAssistantOutcome = last
+      return
+    }
+
+    if (event.type === "agent_settled") void this.#settle()
+  }
+
+  #confirmSessionStarted(): void {
+    if (
+      this.launch.ephemeral ||
+      this.#sessionStarted ||
+      this.#sessionConfirmation
+    )
+      return
+
+    // Pi emits message_end before persisting that assistant entry. This RPC
+    // round trip cannot be answered until the synchronous write has finished.
+    this.#sessionConfirmation = this.client
+      .request({ type: "get_state" }, piStateSchema)
+      .then((state) => {
+        if (
+          state.sessionId === this.#providerSessionId &&
+          state.sessionFile !== undefined
+        ) {
+          this.#emitSessionStarted()
+        }
+      })
+      .catch(() => undefined)
+  }
+
+  #emitSessionStarted(): void {
+    if (
+      this.launch.ephemeral ||
+      this.#closed ||
+      this.#sessionStarted ||
+      !this.#providerSessionId
+    )
+      return
+    this.#sessionStarted = true
+    this.#queue.push({
+      type: "session.started",
+      providerSessionId: this.#providerSessionId,
+    })
+  }
+
+  async #settle(): Promise<void> {
+    if (this.#closed || this.#settling) return
+    this.#settling = true
+    await this.#sessionConfirmation
+    if (this.#closed) return
+
+    const last = this.#lastAssistantOutcome
     if (last?.stopReason === "aborted" || this.#cancelled) {
       this.#finish()
       return

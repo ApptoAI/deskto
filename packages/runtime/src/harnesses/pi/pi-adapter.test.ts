@@ -116,6 +116,7 @@ class FakePiClient implements PiClient {
   constructor(
     private readonly state: JsonObject = {
       sessionId: "session-1",
+      sessionFile: "/tmp/session-1.jsonl",
       model: {
         id: "gpt-5.6-sol",
         provider: "openai-codex",
@@ -207,7 +208,6 @@ describe("Pi session", () => {
     expect(client.commands[0]).toEqual({ type: "get_state" })
     expect(client.commands[1]).toEqual({ type: "prompt", message: "Say hello" })
     expect(events).toEqual([
-      { type: "session.started", providerSessionId: "session-1" },
       {
         type: "progress.updated",
         progress: { stage: "thinking", label: "Thinking" },
@@ -236,6 +236,7 @@ describe("Pi session", () => {
         type: "usage.updated",
         usage: { usedTokens: 1208, maxTokens: 272000 },
       },
+      { type: "session.started", providerSessionId: "session-1" },
       { type: "turn.completed" },
     ])
     expect(client.closed).toBe(true)
@@ -262,6 +263,7 @@ describe("Pi session", () => {
       ],
       willRetry: false,
     })
+    client.emit({ type: "agent_settled" })
     const events = await collect(session.events)
 
     expect(events.at(-1)).toEqual({
@@ -309,10 +311,78 @@ describe("Pi session", () => {
     const events = await collect(session.events)
 
     expect(client.commands.at(-1)).toEqual({ type: "abort" })
-    expect(events).toEqual([
-      { type: "session.started", providerSessionId: "session-1" },
-    ])
+    expect(events).toEqual([])
     expect(client.closed).toBe(true)
+  })
+
+  it("waits for Pi to settle after multiple agent runs", async () => {
+    const client = new FakePiClient()
+    const adapter = new PiAdapter(() => client, {
+      extensionsPath: await tempDirectory(),
+    })
+
+    const session = await adapter.start(
+      runInput(),
+      new AbortController().signal
+    )
+    client.emit({
+      type: "agent_end",
+      messages: [{ role: "assistant", stopReason: "error" }],
+      willRetry: true,
+    })
+    client.emit({
+      type: "agent_end",
+      messages: [{ role: "assistant", stopReason: "stop" }],
+      willRetry: false,
+    })
+    expect(client.closed).toBe(false)
+
+    client.emit({ type: "agent_settled" })
+    const events = await collect(session.events)
+
+    expect(events).toEqual([{ type: "turn.completed" }])
+    expect(client.closed).toBe(true)
+  })
+
+  it("starts fresh after a process dies before its session is resumable", async () => {
+    const firstClient = new FakePiClient()
+    const secondClient = new FakePiClient({
+      sessionId: "session-2",
+      sessionFile: "/tmp/session-2.jsonl",
+    })
+    const clients = [firstClient, secondClient]
+    const launches: string[][] = []
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launches.push(options?.args ?? [])
+        const client = clients.shift()
+        if (!client) throw new Error("Unexpected Pi launch")
+        return client
+      },
+      { extensionsPath: await tempDirectory() }
+    )
+
+    const firstSession = await adapter.start(
+      runInput(),
+      new AbortController().signal
+    )
+    firstClient.fail(new Error("Pi exited before its first assistant message"))
+    const firstEvents = await collect(firstSession.events)
+    const storedSessionId = firstEvents.find(
+      (event) => event.type === "session.started"
+    )?.providerSessionId
+
+    const nextInput = storedSessionId
+      ? runInput({ providerSessionId: storedSessionId })
+      : runInput()
+    const secondSession = await adapter.start(
+      nextInput,
+      new AbortController().signal
+    )
+
+    expect(storedSessionId).toBeUndefined()
+    expect(launches[1]).not.toContain("--session")
+    await secondSession.cancel()
   })
 
   it("asks the person before a command in approval-required mode", async () => {
@@ -341,7 +411,6 @@ describe("Pi session", () => {
       message: "rm -rf build",
     })
     const iterator = session.events[Symbol.asyncIterator]()
-    await iterator.next()
     const approval = await iterator.next()
     expect(approval.value).toMatchObject({
       type: "approval.requested",
@@ -421,6 +490,7 @@ describe("Pi text generation", () => {
       messages: [{ role: "assistant", stopReason: "stop" }],
       willRetry: false,
     })
+    client.emit({ type: "agent_settled" })
 
     await expect(generated).resolves.toBe("Renewal review")
     expect(launches[0]).toContain("--no-session")

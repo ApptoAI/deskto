@@ -21,16 +21,20 @@ Pi joins the Harness registry with id `pi`. The adapter lives in
 `pi --mode rpc` process per Turn, launched in the Project folder, closed when
 the Turn settles.
 
-**Sessions.** The adapter reads `get_state` after launch and stores Pi's
-`sessionId` as the provider session. Later Turns pass `--session <id>`; a
-Side chat passes `--fork <id>`.
+**Sessions.** The adapter reads `get_state` after launch. A fresh or forked
+`sessionId` remains provisional until the first assistant message has been
+persisted and a following `get_state` confirms its session file; only then is
+it stored as the provider session. An existing resumed session can be stored
+immediately. Later Turns pass `--session <id>`; a Side chat passes `--fork <id>`.
 
 **Events.** `text_delta` becomes `message.delta`; `thinking_*` and
 `toolcall_start` become progress; `tool_execution_start` and
 `tool_execution_end` become one Activity each, with `bash` (or Pi's
 `powershell`) as a command, `write` and `edit` as a file change, `grep`,
 `find`, and `ls` as a search. The assistant message's `usage.totalTokens` and
-the model's `contextWindow` from `get_state` feed `usage.updated`. `agent_end` settles the Turn: an assistant
+the model's `contextWindow` from `get_state` feed `usage.updated`. `agent_end`
+records the latest assistant outcome; only `agent_settled` settles the Turn,
+after Pi's retries, compaction, and queued continuations finish. An assistant
 `stopReason` of `error` fails it with Pi's `errorMessage`, which the shared
 failure classifier maps to a usage limit when it reads like one.
 
