@@ -288,6 +288,7 @@ async function openApplication(): Promise<void> {
   await applyBrowserSettings()
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+    if (event.type === "workspace.changed") browser.workspaceChanged()
     if (event.type === "settings.changed") void applyBrowserSettings()
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)

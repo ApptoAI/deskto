@@ -67,6 +67,7 @@ import {
   isBrowserWebUrl,
   normalizeBrowserUrl,
 } from "./browser-url.js"
+import { BrowserTabCreations } from "./browser-tab-creations.js"
 
 /**
  * Tabs whose Workspace cannot be resolved share this partition rather than
@@ -149,7 +150,7 @@ export class BrowserManager implements BrowserAutomationHost {
   readonly #sessions = new Set<Session>()
   /** Persistent Workspace profiles by partition; they outlive their tabs. */
   readonly #workspaceSessions = new Map<string, Session>()
-  readonly #pendingTabs = new Map<string, Promise<BrowserTab>>()
+  readonly #tabCreations = new BrowserTabCreations<BrowserTab>()
   readonly #defaultUserAgent = this.#browserSession.getUserAgent()
   #settings: BrowserSettings = defaultBrowserSettings
   #backgroundBounds: Rectangle = this.#offscreenBounds()
@@ -554,6 +555,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   closeThread(threadId: string): void {
     this.#artifactOpens.clear(threadId)
+    this.#tabCreations.cancel(threadId)
     const tab = this.#tabs.get(threadId)
     if (!tab) return
     if (this.#visibleThreadId === threadId) this.#visibleThreadId = undefined
@@ -566,6 +568,17 @@ export class BrowserManager implements BrowserAutomationHost {
     this.#tabs.delete(threadId)
     if (tab.session !== this.#browserSession && !tab.workspaceId) {
       this.#releaseSession(tab.session)
+    }
+  }
+
+  workspaceChanged(): void {
+    const threadIds = new Set([
+      ...this.#tabs.keys(),
+      ...this.#tabCreations.cancelAll(),
+    ])
+    for (const threadId of threadIds) {
+      this.closeThread(threadId)
+      this.publish({ type: "state", state: this.state(threadId) })
     }
   }
 
@@ -609,6 +622,7 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   close(): void {
+    this.#tabCreations.cancelAll()
     for (const threadId of this.#tabs.keys()) this.closeThread(threadId)
     for (const browserSession of this.#sessions) {
       this.#releaseSession(browserSession)
@@ -687,19 +701,16 @@ export class BrowserManager implements BrowserAutomationHost {
     return browserSession
   }
 
-  /** "Clear between tasks" wins over the Workspace profile: a throwaway
-      session is the stricter choice and the person asked for it. */
+  /** "Clear between tasks" and unresolved Workspaces use isolated memory. */
   #sessionFor(threadId: string, workspaceId: string | undefined): Session {
-    if (this.#settings.clearSessionBetweenTasks) {
+    if (this.#settings.clearSessionBetweenTasks || !workspaceId) {
       const browserSession = session.fromPartition(
         `${taskBrowserPartitionPrefix}${threadId}`
       )
       this.#configureSession(browserSession)
       return browserSession
     }
-    if (workspaceId) return this.#workspaceSession(workspaceId)
-    this.#configureSession(this.#browserSession)
-    return this.#browserSession
+    return this.#workspaceSession(workspaceId)
   }
 
   /** Loads the start page into a tab that has not shown anything yet. */
@@ -743,15 +754,15 @@ export class BrowserManager implements BrowserAutomationHost {
     if (current && !current.view.webContents.isDestroyed()) {
       return Promise.resolve(current)
     }
-    const pending = this.#pendingTabs.get(threadId)
-    if (pending) return pending
     const lookup = this.host.workspaceForThread
-    const creating = (lookup ? lookup(threadId) : Promise.resolve(undefined))
-      .catch(() => undefined)
-      .then((workspaceId) => this.#createTab(threadId, workspaceId))
-      .finally(() => this.#pendingTabs.delete(threadId))
-    this.#pendingTabs.set(threadId, creating)
-    return creating
+    return this.#tabCreations.run(
+      threadId,
+      () =>
+        (lookup ? lookup(threadId) : Promise.resolve(undefined)).catch(
+          () => undefined
+        ),
+      (workspaceId) => this.#createTab(threadId, workspaceId)
+    )
   }
 
   #createTab(threadId: string, workspaceId: string | undefined): BrowserTab {
