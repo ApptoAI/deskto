@@ -1,20 +1,20 @@
-# ADR 0034: Host rules govern every request, and downloads commit through staging
+# ADR 0038: Host rules govern every request, and downloads commit through staging
 
 - Status: accepted
 - Date: 2026-09-02
-- Amends: ADR 0030
+- Amends: ADR 0031
 
 ## Context
 
-ADR 0030 applied the person's allowed and blocked sites to main-frame
+ADR 0031 applied the person's allowed and blocked sites to main-frame
 navigation only and recorded that "a page that fetches from another host is
-not blocked by them". ADR 0033 then imported the person's real cookies into
-the task browser and ADR 0032 let an agent screenshot and click whatever the
+not blocked by them". ADR 0036 then imported the person's real cookies into
+the task browser and ADR 0035 let an agent screenshot and click whatever the
 tab shows. Together those made the gap material: an allowed page could embed
 a blocked origin in a frame, that frame could send the imported cookies, and
 the agent could read and act on the result.
 
-ADR 0030 also let a page-triggered download land in the project folder. Main
+ADR 0031 also let a page-triggered download land in the project folder. Main
 checked every component of the download folder for links, then handed
 Chromium a path it wrote to later. A folder swapped for a symlink between the
 check and the write let a website overwrite a file outside the project.
@@ -51,7 +51,7 @@ nothing.
 
 ## Consequences
 
-- ADR 0030's consequence that host rules are not a security boundary no
+- ADR 0031's consequence that host rules are not a security boundary no
   longer holds for the task browser's network traffic. They are still the
   person's policy, and an empty allow list still allows every host not
   blocked.
