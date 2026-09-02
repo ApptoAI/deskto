@@ -96,6 +96,10 @@ export function Workbench() {
   const onboardingCompleted = settingsSnapshot
     ? settingValue(settingsSnapshot, appSettings.onboardingCompleted)
     : rememberedOnboarding
+  const modelVisibility = settingValue(
+    settingsSnapshot,
+    appSettings.modelVisibility
+  )
   const [onboardingDismissed, setOnboardingDismissed] = useState(false)
   const showOnboarding = shouldShowOnboarding({
     completed: onboardingCompleted,
@@ -745,6 +749,7 @@ export function Workbench() {
           key={openThreadId}
           threadId={openThreadId}
           harnesses={harnesses.state}
+          modelVisibility={modelVisibility}
           projects={projects}
         />
       )
@@ -764,6 +769,7 @@ export function Workbench() {
         key={newTaskProject.id}
         project={newTaskProject}
         harnesses={harnesses.state}
+        modelVisibility={modelVisibility}
         onTaskCreated={revalidateThreads}
         onTaskStarted={surface.navigation.openTask}
         panelPreference={panelPreference}

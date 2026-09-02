@@ -9,6 +9,32 @@ import { ExecutionProfileToolbar } from "./execution-profile-toolbar.js"
 afterEach(cleanup)
 
 describe("ExecutionProfileToolbar", () => {
+  it("names the selected model even when it is the provider default", () => {
+    renderToolbar(model("opus", ["low"]))
+
+    expect(screen.getByRole("button", { name: "Model: opus" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Model: Default" })).toBeNull()
+  })
+
+  it("keeps a hidden selected model in the trigger but out of the menu", () => {
+    render(
+      <ExecutionProfileToolbar
+        models={[model("opus", ["low"]), model("haiku", [])]}
+        selectableModels={[model("haiku", [])]}
+        profile={{
+          modelId: "opus",
+          effort: null,
+          permissionMode: "approval-required",
+        }}
+        onChange={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Model: opus" }))
+    expect(screen.queryByRole("menuitemradio", { name: "opus" })).toBeNull()
+    expect(screen.getByRole("menuitemradio", { name: "haiku" })).toBeTruthy()
+  })
+
   it("uses a compact automatic-effort treatment without endpoint descriptions", () => {
     const { container } = renderToolbar(
       model("opus", ["low", "medium", "high", "max"])

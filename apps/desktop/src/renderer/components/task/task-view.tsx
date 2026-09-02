@@ -18,6 +18,10 @@ import {
   type Project,
   type TurnOutput,
 } from "@deskto/protocol"
+import {
+  isHarnessModelVisible,
+  type HarnessModelVisibility,
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
@@ -54,10 +58,12 @@ const sideChatBlockedMessage =
 export function TaskView({
   threadId,
   harnesses,
+  modelVisibility = {},
   projects,
 }: {
   threadId: string
   harnesses: QueryState<Harness[]>
+  modelVisibility?: HarnessModelVisibility
   projects: Project[]
 }) {
   const client = useRuntimeClient()
@@ -239,6 +245,9 @@ export function TaskView({
   }
   const projectPath = project.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
+  const selectableModels = models.filter((model) =>
+    isHarnessModelVisible(modelVisibility, thread.harnessId, model.id)
+  )
   const visibleTaskActionError =
     !active && taskActionError === sideChatBlockedMessage
       ? null
@@ -474,6 +483,7 @@ export function TaskView({
                       >
                         <ExecutionProfileToolbar
                           models={models}
+                          selectableModels={selectableModels}
                           profile={thread.executionProfile}
                           onChange={handleProfileChange}
                           harnessId={thread.harnessId}

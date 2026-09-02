@@ -1029,37 +1029,16 @@ describe("Pi models", () => {
     expect(client.closed).toBe(true)
   })
 
-  it("keeps only the models the person enabled in pi", () => {
+  it("offers every discovered model regardless of Pi's enabled scope", () => {
     const models = piModels(availableModels, {
       enabledModels: ["xai/*"],
     })
-    expect(models.map((model) => model.id)).toEqual(["xai/grok-4.6"])
-    expect(models[0]?.isDefault).toBe(true)
-  })
-
-  it("matches enabled models the way pi does", () => {
-    const ids = (patterns: string[]) =>
-      piModels(availableModels, { enabledModels: patterns }).map(
-        (model) => model.id
-      )
-    expect(ids(["GROK-4.6", "openai-codex/gpt-5.6-sol:high"])).toEqual([
+    expect(models.map((model) => model.id)).toEqual([
+      "openai-codex/gpt-5.6-sol",
+      "openrouter/amazon/nova-lite-v1",
       "xai/grok-4.6",
-      "openai-codex/gpt-5.6-sol",
     ])
-    expect(ids(["openai-codex/gpt-5.?-sol"])).toEqual([
-      "openai-codex/gpt-5.6-sol",
-    ])
-    expect(ids(["grok-4.[0-9]"])).toEqual(["xai/grok-4.6"])
-    expect(ids(["*grok*"])).toEqual(["xai/grok-4.6"])
-    // A glob star stops at a slash in Pi too, so a nested id needs its
-    // provider spelled out or a plain substring.
-    expect(ids(["openrouter/*", "xai/*"])).toEqual(["xai/grok-4.6"])
-    expect(ids(["openrouter/*/*"])).toEqual(["openrouter/amazon/nova-lite-v1"])
-    expect(ids(["Nova Lite"])).toEqual(["openrouter/amazon/nova-lite-v1"])
-    // Pi drops an unknown suffix with a warning and keeps the model.
-    expect(ids(["gpt-5.6-sol:banana", "xai/*:banana"])).toEqual([
-      "openai-codex/gpt-5.6-sol",
-    ])
+    expect(models[0]?.isDefault).toBe(true)
   })
 
   it("defaults each model to the level Pi would pick", () => {
@@ -1094,35 +1073,50 @@ describe("Pi models", () => {
   })
 
   it("keeps the thinking level an enabled entry names", () => {
-    const efforts = (patterns: string[], settings = {}) =>
-      piModels(availableModels, { enabledModels: patterns, ...settings }).map(
-        (model) => [model.id, model.defaultEffort]
-      )
+    const effort = (patterns: string[], id: string, settings = {}) =>
+      piModels(availableModels, {
+        enabledModels: patterns,
+        ...settings,
+      }).find((model) => model.id === id)?.defaultEffort
     // The entry's own level outranks the per-model and global settings,
     // which is what Pi's get_state reports for a scoped model.
     expect(
-      efforts(["xai/grok-4.6:high"], {
+      effort(["xai/grok-4.6:high"], "xai/grok-4.6", {
         defaultThinkingLevel: "low",
         modelThinkingLevels: { "xai/grok-4.6": "minimal" },
       })
-    ).toEqual([["xai/grok-4.6", "high"]])
-    expect(efforts(["openai-codex/*:low", "GROK-4.6:xhigh"])).toEqual([
-      ["openai-codex/gpt-5.6-sol", "low"],
-      // A level the model does not reach clamps the way Pi clamps.
-      ["xai/grok-4.6", "high"],
-    ])
+    ).toBe("high")
+    expect(
+      effort(
+        ["openai-codex/*:low", "GROK-4.6:xhigh"],
+        "openai-codex/gpt-5.6-sol"
+      )
+    ).toBe("low")
+    // A level the model does not reach clamps the way Pi clamps.
+    expect(
+      effort(["openai-codex/*:low", "GROK-4.6:xhigh"], "xai/grok-4.6")
+    ).toBe("high")
     // An unknown suffix voids the level in front of it, as in Pi, and the
     // first entry naming a model keeps its level.
     expect(
-      efforts(["gpt-5.6-sol:high:banana", "xai/grok-4.6", "xai/grok-4.6:high"])
-    ).toEqual([
-      ["openai-codex/gpt-5.6-sol", "medium"],
-      ["xai/grok-4.6", "medium"],
-    ])
+      effort(
+        ["gpt-5.6-sol:high:banana", "xai/grok-4.6", "xai/grok-4.6:high"],
+        "openai-codex/gpt-5.6-sol"
+      )
+    ).toBe("medium")
+    expect(
+      effort(
+        ["gpt-5.6-sol:high:banana", "xai/grok-4.6", "xai/grok-4.6:high"],
+        "xai/grok-4.6"
+      )
+    ).toBe("medium")
     // A glob sheds only its last suffix, so the rest stays part of the glob.
-    expect(efforts(["*grok*:banana:low", "openai-codex/*"])).toEqual([
-      ["openai-codex/gpt-5.6-sol", "medium"],
-    ])
+    expect(
+      effort(
+        ["*grok*:banana:low", "openai-codex/*"],
+        "openai-codex/gpt-5.6-sol"
+      )
+    ).toBe("medium")
   })
 
   it("takes a bare model id exactly before searching substrings", () => {
@@ -1135,17 +1129,28 @@ describe("Pi models", () => {
         reasoning: true,
       },
     ]
-    const ids = (patterns: string[]) =>
-      piModels(withBatch, { enabledModels: patterns }).map((model) => model.id)
+    const efforts = (patterns: string[]) =>
+      Object.fromEntries(
+        piModels(withBatch, {
+          enabledModels: patterns,
+          defaultThinkingLevel: "low",
+        }).map((model) => [model.id, model.defaultEffort])
+      )
     // Substring matching would sort the batch route first and move the
     // task to another provider than Pi itself would use.
-    expect(ids(["gpt-5.6-sol"])).toEqual(["openai-codex/gpt-5.6-sol"])
-    expect(ids(["GPT-5.6-SOL:high"])).toEqual(["openai-codex/gpt-5.6-sol"])
-    // Pi falls through to the bare id when no provider owns the prefix.
-    expect(ids(["amazon/nova-lite-v1"])).toEqual([
-      "openrouter/amazon/nova-lite-v1",
-    ])
-    expect(ids(["sol"])).toEqual(["openrouter/openai/gpt-5.6-sol:batch"])
+    expect(efforts(["gpt-5.6-sol:high"])).toMatchObject({
+      "openai-codex/gpt-5.6-sol": "high",
+      "openrouter/openai/gpt-5.6-sol:batch": "low",
+    })
+    expect(efforts(["GPT-5.6-SOL:high"])).toMatchObject({
+      "openai-codex/gpt-5.6-sol": "high",
+      "openrouter/openai/gpt-5.6-sol:batch": "low",
+    })
+    // A substring falls through to Pi's preferred alias.
+    expect(efforts(["sol:high"])).toMatchObject({
+      "openai-codex/gpt-5.6-sol": "low",
+      "openrouter/openai/gpt-5.6-sol:batch": "high",
+    })
   })
 
   it("reads Pi's settings the way Pi does", async () => {
@@ -1162,7 +1167,7 @@ describe("Pi models", () => {
       (await new PiAdapter(() => client, { configPath }).listModels()).map(
         (model) => model.id
       )
-    ).toEqual(["xai/grok-4.6"])
+    ).toEqual(availableModels.map((model) => `${model.provider}/${model.id}`))
 
     // PI_CODING_AGENT_DIR goes through Pi's own path reading.
     vi.stubEnv("PI_CODING_AGENT_DIR", pathToFileURL(configPath).href)
@@ -1171,7 +1176,7 @@ describe("Pi models", () => {
         (await new PiAdapter(() => client).listModels()).map(
           (model) => model.id
         )
-      ).toEqual(["xai/grok-4.6"])
+      ).toEqual(availableModels.map((model) => `${model.provider}/${model.id}`))
     } finally {
       vi.unstubAllEnvs()
     }
@@ -1186,9 +1191,9 @@ describe("Pi models", () => {
     })
     vi.stubEnv("PI_CODING_AGENT_DIR", relativeOverride)
     try {
-      expect((await adapter.listModels()).map((model) => model.id)).toEqual([
-        "xai/grok-4.6",
-      ])
+      expect((await adapter.listModels()).map((model) => model.id)).toEqual(
+        availableModels.map((model) => `${model.provider}/${model.id}`)
+      )
       const session = await adapter.start(
         runInput(),
         new AbortController().signal

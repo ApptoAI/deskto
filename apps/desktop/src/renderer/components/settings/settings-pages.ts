@@ -34,8 +34,8 @@ export const settingsPages = {
     icon: BotIcon,
   },
   models: {
-    label: "Generated text",
-    description: "Choose models for short text Deskto creates automatically.",
+    label: "Models",
+    description: "Choose which models Deskto offers and uses automatically.",
     icon: SparklesIcon,
   },
   "computer-use": {

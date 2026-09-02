@@ -18,6 +18,7 @@ import {
 
 export function ExecutionProfileToolbar({
   models,
+  selectableModels = models,
   profile,
   onChange,
   harnessId,
@@ -26,6 +27,8 @@ export function ExecutionProfileToolbar({
   onModelMenuOpenChange,
 }: {
   models: HarnessModel[]
+  /** Models offered by the menu; the selected model may remain hidden here. */
+  selectableModels?: HarnessModel[]
   profile: ExecutionProfile
   onChange: (profile: ExecutionProfile) => void
   /** Draws the provider logo beside the model; omitted, the row stays plain. */
@@ -74,11 +77,11 @@ export function ExecutionProfileToolbar({
         label="Model"
         value={model.id}
         triggerClassName="max-w-[10.5rem] shrink-[3]"
-        triggerLabel={model.isDefault ? "Default" : undefined}
+        triggerLabel={model.name}
         disabled={disabled}
         open={modelMenuOpen}
         onOpenChange={onModelMenuOpenChange}
-        options={models.map((candidate) => ({
+        options={selectableModels.map((candidate) => ({
           value: candidate.id,
           label: candidate.name,
           description: candidate.description,

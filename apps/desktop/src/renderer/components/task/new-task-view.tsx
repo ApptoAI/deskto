@@ -8,6 +8,10 @@ import type {
   Project,
   TurnInput,
 } from "@deskto/protocol"
+import {
+  isHarnessModelVisible,
+  type HarnessModelVisibility,
+} from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -33,6 +37,7 @@ export type ProjectPanelPreference = "open" | "collapsed" | "auto"
 export function NewTaskView({
   project,
   harnesses,
+  modelVisibility = {},
   onTaskCreated,
   onTaskStarted,
   panelPreference,
@@ -40,6 +45,7 @@ export function NewTaskView({
 }: {
   project: Project
   harnesses: QueryState<Harness[]>
+  modelVisibility?: HarnessModelVisibility
   onTaskCreated: (threadId: string) => void
   onTaskStarted: (threadId: string) => void
   panelPreference: ProjectPanelPreference
@@ -95,7 +101,9 @@ export function NewTaskView({
   const blockedReason = describeHarnessBlock(harnesses, harnessId)
 
   const models = harnessId
-    ? (findHarness(options, harnessId)?.models ?? [])
+    ? (findHarness(options, harnessId)?.models ?? []).filter((model) =>
+        isHarnessModelVisible(modelVisibility, harnessId, model.id)
+      )
     : []
   const profile =
     chosenProfile ??

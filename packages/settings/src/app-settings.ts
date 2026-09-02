@@ -20,6 +20,24 @@ export const harnessModelSelectionSchema = z
 
 export type HarnessModelSelection = z.infer<typeof harnessModelSelectionSchema>
 
+export const harnessModelVisibilitySchema = z.record(
+  z.string().min(1),
+  z.array(z.string().min(1))
+)
+
+/** Model ids hidden from Deskto's pickers, grouped by Harness id. */
+export type HarnessModelVisibility = z.infer<
+  typeof harnessModelVisibilitySchema
+>
+
+export function isHarnessModelVisible(
+  visibility: HarnessModelVisibility,
+  harnessId: string,
+  modelId: string
+): boolean {
+  return !visibility[harnessId]?.includes(modelId)
+}
+
 /**
  * Which palette the window wears. "system" is not a third palette: it defers
  * to the operating system and follows it while the app is open.
@@ -150,6 +168,14 @@ export const appSettings = {
     input: { kind: "harness-model" },
     schema: harnessModelSelectionSchema,
     defaultValue: { harnessId: null, modelId: null },
+  }),
+  modelVisibility: defineSetting({
+    key: "models.visibility",
+    label: "Visible models",
+    description: "Choose which models Deskto offers for each provider.",
+    input: { kind: "model-visibility" },
+    schema: harnessModelVisibilitySchema,
+    defaultValue: {},
   }),
   newTaskKeybinding: defineSetting({
     key: "keybindings.new-task",

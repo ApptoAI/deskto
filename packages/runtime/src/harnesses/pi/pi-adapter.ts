@@ -828,6 +828,8 @@ export function piModels(
   const defaultId = piHasSelectedModel(initial)
     ? `${initial.provider}/${initial.id}`
     : settingsDefaultId
+  // enabledModels still supplies Pi's per-entry thinking level, but it does
+  // not decide what Deskto offers. Model visibility belongs to Deskto.
   const enabled = piModelScope(settings.enabledModels ?? [], available)
   const options = new Map<PiModel, HarnessModelOption>()
   for (const model of available) {
@@ -854,13 +856,9 @@ export function piModels(
     }
     options.set(model, option)
   }
-  // A filter that matches nothing must not leave the person without a model.
-  const offered =
-    enabled.length > 0
-      ? enabled.map((scoped) => options.get(scoped.model)!)
-      : [...options.values()]
+  const offered = [...options.values()]
   if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
-    // Pi reported nothing usable (or a model outside the offered list):
+    // Pi reported nothing usable (or a model outside the current catalog):
     // the first entry, which is Pi's own last resort.
     offered[0]!.isDefault = true
   }
