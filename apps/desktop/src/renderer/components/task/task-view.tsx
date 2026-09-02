@@ -460,15 +460,26 @@ export function TaskView({
                     : {})}
                   toolbar={
                     models.length > 0 ? (
-                      <ExecutionProfileToolbar
-                        models={models}
-                        profile={thread.executionProfile}
-                        onChange={handleProfileChange}
-                        harnessId={thread.harnessId}
-                        disabled={active}
-                        modelMenuOpen={modelMenuOpen}
-                        onModelMenuOpenChange={setModelMenuOpen}
-                      />
+                      // The wrapper carries the reason: a disabled menu
+                      // button never shows its own tooltip.
+                      <span
+                        className="flex min-w-0 items-center"
+                        title={
+                          active
+                            ? "Model, thinking and permissions can change once the agent finishes."
+                            : undefined
+                        }
+                      >
+                        <ExecutionProfileToolbar
+                          models={models}
+                          profile={thread.executionProfile}
+                          onChange={handleProfileChange}
+                          harnessId={thread.harnessId}
+                          disabled={active}
+                          modelMenuOpen={modelMenuOpen}
+                          onModelMenuOpenChange={setModelMenuOpen}
+                        />
+                      </span>
                     ) : null
                   }
                   trailing={
