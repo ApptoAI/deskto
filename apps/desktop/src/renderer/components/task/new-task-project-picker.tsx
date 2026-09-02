@@ -19,14 +19,12 @@ export function NewTaskProjectPicker({
 }) {
   return (
     <>
-      <header className="drag-region h-10 shrink-0" />
-
       {/* Mirrors the new-task start screen: one centered column with the
           wordmark and the question, so choosing a project reads as the first
           step of the same flow rather than a detour. */}
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
         <div className="flex min-h-full items-center justify-center">
-          <div className="enter-rise -mt-10 flex w-full max-w-md flex-col items-center gap-4">
+          <div className="enter-rise flex w-full max-w-md flex-col items-center gap-4">
             <DesktoWordmark />
 
             <p className="text-center display-sm text-body">

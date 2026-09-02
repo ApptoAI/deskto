@@ -13,10 +13,13 @@ export function interfaceViewportScale(width: number, height: number): number {
   return Math.min(maximumScale, Math.max(1, steppedScale))
 }
 
+/**
+ * Scales the body rather than the app root: menus, dialogs, and tooltips are
+ * portalled to the body, and scaling only the root would leave them at native
+ * size beside an interface drawn twice as large.
+ */
 export function applyInterfaceViewportScale(): void {
-  const root = document.getElementById("root")
-  if (!root) return
-  root.style.setProperty(
+  document.body.style.setProperty(
     "zoom",
     String(interfaceViewportScale(window.innerWidth, window.innerHeight))
   )

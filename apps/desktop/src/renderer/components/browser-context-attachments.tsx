@@ -33,7 +33,7 @@ export function BrowserContextAttachments({
             className="group/context flex max-w-64 min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/60 py-1.5 pr-1.5 pl-2 text-xs"
             title={`${page}\n${context.selector}`}
           >
-            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 font-mono text-[10px] font-semibold text-primary">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 font-mono text-tiny font-semibold tracking-normal text-primary">
               {index + 1}
             </span>
             <MousePointer2Icon className="size-3.5 shrink-0 text-muted-foreground" />
