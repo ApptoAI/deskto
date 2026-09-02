@@ -92,14 +92,16 @@ function cookieVersion(encrypted: Buffer): StoredCookieVersion | undefined {
   return tag === "v10" || tag === "v11" || tag === "v20" ? tag : undefined
 }
 
-// A cookie path is a URL path and nothing else. Chromium writes it that way,
-// but the row is untrusted, so a path carrying "@", "?", "#" or whitespace is
-// refused rather than let it reshape the URL the cookie is set against.
-const cookiePathPattern = /^\/[^@?#\s]*$/u
-
+// A cookie path is a URL path and nothing else, but the row is untrusted.
+// Assigning it through url.pathname keeps "@", "?", "#", whitespace and
+// escaped slashes inside the path, where they cannot reach the authority; the
+// leading slash is required because a bare "host/" would otherwise become a
+// path segment that looks like another site. The hostname check after the
+// assignment is the guard that matters if a future URL setter behaves
+// differently.
 function cookieUrl(cookie: RawCookie): URL | undefined {
   if (!isCookieImportHost(cookie.hostKey)) return undefined
-  if (!cookiePathPattern.test(cookie.path)) return undefined
+  if (!cookie.path.startsWith("/")) return undefined
   const host = normalizeCookieImportHost(cookie.hostKey)
   const url = new URL(`${cookie.isSecure ? "https" : "http"}://${host}`)
   url.pathname = cookie.path

@@ -203,13 +203,20 @@ describe("importCookies", () => {
     expect(written.map((cookie) => cookie.name)).toEqual(["own"])
   })
 
-  it("refuses a path that would move the cookie URL to another host", async () => {
+  it("never lets a cookie path move the cookie URL to another host", async () => {
+    // Paths without a leading slash are refused outright; the rest exercise
+    // the URL pathname setter's quirks and must stay on example.com.
     const env = seedProfile([
       { hostKey: "example.com", name: "at", plaintext: "v", path: "@evil.com/" },
       { hostKey: "example.com", name: "bare", plaintext: "v", path: "evil.com/" },
+      { hostKey: "example.com", name: "empty", plaintext: "v", path: "" },
+      { hostKey: "example.com", name: "backslash", plaintext: "v", path: "/\\evil.test/" },
+      { hostKey: "example.com", name: "encoded-slashes", plaintext: "v", path: "/%2f%2fevil.test/" },
+      { hostKey: "example.com", name: "encoded-backslash", plaintext: "v", path: "/%5cevil.test/" },
       { hostKey: "example.com", name: "query", plaintext: "v", path: "/?x=1" },
       { hostKey: "example.com", name: "hash", plaintext: "v", path: "/#f" },
       { hostKey: "example.com", name: "space", plaintext: "v", path: "/a b" },
+      { hostKey: "example.com", name: "at-in-path", plaintext: "v", path: "/@evil.test/" },
       { hostKey: "example.com", name: "ok", plaintext: "v", path: "/app" },
     ])
     const { sink, written } = collectingSink()
@@ -220,16 +227,24 @@ describe("importCookies", () => {
       env
     )
 
-    expect(result).toEqual({ imported: 1, skipped: 0 })
-    expect(written).toHaveLength(1)
-    expect(written[0]).toMatchObject({
-      name: "ok",
-      url: "https://example.com/app",
-      path: "/app",
-    })
     for (const cookie of written) {
-      expect(new URL(cookie.url).hostname).toBe("example.com")
+      const url = new URL(cookie.url)
+      expect(url.hostname).toBe("example.com")
+      expect(url.username).toBe("")
+      expect(url.password).toBe("")
+      expect(url.port).toBe("")
     }
+    expect(result).toEqual({ imported: written.length, skipped: 0 })
+    expect(written.map((cookie) => [cookie.name, cookie.url])).toEqual([
+      ["backslash", "https://example.com//evil.test/"],
+      ["encoded-slashes", "https://example.com/%2f%2fevil.test/"],
+      ["encoded-backslash", "https://example.com/%5cevil.test/"],
+      ["query", "https://example.com/%3Fx=1"],
+      ["hash", "https://example.com/%23f"],
+      ["space", "https://example.com/a%20b"],
+      ["at-in-path", "https://example.com/@evil.test/"],
+      ["ok", "https://example.com/app"],
+    ])
   })
 
   it("carries every cookie attribute through to the sink", async () => {
@@ -306,16 +321,26 @@ describe("importCookies", () => {
       expirationDate: undefined,
       sameSite: "lax",
     })
-    expect(byName.get("strict")).toMatchObject({
+    expect(byName.get("strict")).toEqual({
       url: "https://example.com/strict",
+      name: "strict",
+      value: "c",
+      domain: undefined,
       path: "/strict",
       secure: true,
       httpOnly: false,
+      expirationDate: undefined,
       sameSite: "strict",
     })
-    expect(byName.get("unspecified")).toMatchObject({
+    expect(byName.get("unspecified")).toEqual({
+      url: "https://example.com/",
+      name: "unspecified",
+      value: "d",
+      domain: undefined,
+      path: "/",
       secure: true,
       httpOnly: true,
+      expirationDate: undefined,
       sameSite: "unspecified",
     })
   })
