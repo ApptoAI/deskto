@@ -34,7 +34,7 @@ export const proseClassName = cn(
   // elements here left prose stopping short of the rules, tables and code
   // beside it, which reads as text cut off rather than text set to a width.
   "[&_ol]:my-[0.85em] [&_ol]:list-decimal [&_ol]:pl-[1.5em] [&_ul]:my-[0.85em] [&_ul]:list-disc [&_ul]:pl-[1.35em]",
-  "[&_li]:my-[0.3em] [&_li]:pl-[0.2em] [&_li::marker]:text-muted-foreground/70",
+  "[&_li]:my-[0.3em] [&_li]:pl-[0.2em] [&_li::marker]:text-muted-foreground",
   "[&_li>ol]:my-[0.3em] [&_li>ul]:my-[0.3em]",
   "[&_blockquote]:my-[1.1em] [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-[1em] [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-[2em] [&_hr]:border-border",
