@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { existsSync } from "node:fs"
+import { mkdirSync } from "node:fs"
+import { rm } from "node:fs/promises"
 import path from "node:path"
 
 import {
@@ -58,7 +59,15 @@ import {
   browserSnapshotScript,
 } from "./browser-page-script.js"
 import type { CookieSink } from "../cookie-import/cookie-import.js"
+import {
+  commitBrowserDownload,
+  stageBrowserDownload,
+} from "./browser-download.js"
 import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
+import {
+  enforceBrowserHostRulesOnFrames,
+  enforceBrowserHostRulesOnRequests,
+} from "./browser-request-policy.js"
 import {
   browserDownloadFileName,
   defaultBrowserSettings,
@@ -157,6 +166,11 @@ export class BrowserManager
   readonly #workspaceSessions = new Map<string, Session>()
   readonly #tabCreations = new BrowserTabCreations<BrowserTab>()
   readonly #defaultUserAgent = this.#browserSession.getUserAgent()
+  /** Downloads land here first; only a verified commit moves them on. */
+  readonly #downloadStaging = path.join(
+    app.getPath("userData"),
+    "browser-downloads"
+  )
   #settings: BrowserSettings = defaultBrowserSettings
   #backgroundBounds: Rectangle = this.#offscreenBounds()
   #visibleThreadId?: string
@@ -677,26 +691,36 @@ export class BrowserManager
       (_webContents, _permission, callback) => callback(false)
     )
     browserSession.setPermissionCheckHandler(() => false)
+    enforceBrowserHostRulesOnRequests(
+      browserSession,
+      () => this.#settings.hostRules
+    )
     browserSession.on("will-download", (event, item, webContents) => {
       const tab = [...this.#tabs.values()].find(
         (candidate) => candidate.view.webContents === webContents
       )
-      const directory = prepareBrowserDownloadDirectory(
-        tab?.projectPath,
-        this.#settings.downloadFolder
-      )
-      if (!directory) {
+      const projectPath = tab?.projectPath
+      const downloadFolder = this.#settings.downloadFolder
+      if (!prepareBrowserDownloadDirectory(projectPath, downloadFolder)) {
         event.preventDefault()
         return
       }
+      mkdirSync(this.#downloadStaging, { recursive: true })
+      const stagedPath = stageBrowserDownload(this.#downloadStaging)
       const fileName = browserDownloadFileName(item.getFilename())
-      const extension = path.extname(fileName)
-      const stem = fileName.slice(0, fileName.length - extension.length)
-      let target = path.join(directory, fileName)
-      for (let attempt = 2; existsSync(target); attempt += 1) {
-        target = path.join(directory, `${stem} (${attempt})${extension}`)
-      }
-      item.setSavePath(target)
+      item.setSavePath(stagedPath)
+      item.once("done", (_event, state) => {
+        if (state !== "completed") {
+          void rm(stagedPath, { force: true }).catch(() => undefined)
+          return
+        }
+        void commitBrowserDownload({
+          stagedPath,
+          projectPath,
+          downloadFolder,
+          fileName,
+        })
+      })
     })
   }
 
@@ -850,6 +874,10 @@ export class BrowserManager
         event.preventDefault()
       }
     })
+    enforceBrowserHostRulesOnFrames(
+      view.webContents,
+      () => this.#settings.hostRules
+    )
     view.webContents.on("will-redirect", (event, url) => {
       const navigation = tab.artifactBoundaryNavigation
       if (navigation?.started) navigation.expectedUrl = url

@@ -57,19 +57,25 @@ export function browserDownloadDirectory(
   if (!projectPath || !downloadFolder) return undefined
   const root = path.resolve(projectPath)
   const directory = path.resolve(root, ...downloadFolder.split(/[/\\]/))
-  const fromRoot = path.relative(root, directory)
-  if (
-    fromRoot === "" ||
-    fromRoot === ".." ||
-    fromRoot.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(fromRoot)
-  ) {
-    return undefined
-  }
-  return directory
+  return pathStaysInside(root, directory) ? directory : undefined
 }
 
-/** Creates the configured folder without following links out of the project. */
+/** Strict lexical containment: the root itself does not count. */
+export function pathStaysInside(root: string, candidate: string): boolean {
+  const fromRoot = path.relative(root, candidate)
+  return (
+    fromRoot !== "" &&
+    fromRoot !== ".." &&
+    !fromRoot.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(fromRoot)
+  )
+}
+
+/**
+ * Creates the configured folder without following links out of the project.
+ * This decides whether a download may start; `commitBrowserDownload` checks
+ * the folder again when the bytes are written, since it can change between.
+ */
 export function prepareBrowserDownloadDirectory(
   projectPath: string | undefined,
   downloadFolder: string
@@ -90,15 +96,7 @@ export function prepareBrowserDownloadDirectory(
       }
     }
     const physicalDirectory = realpathSync(directory)
-    const fromPhysicalRoot = path.relative(physicalRoot, physicalDirectory)
-    if (
-      fromPhysicalRoot === "" ||
-      fromPhysicalRoot === ".." ||
-      fromPhysicalRoot.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(fromPhysicalRoot)
-    ) {
-      return undefined
-    }
+    if (!pathStaysInside(physicalRoot, physicalDirectory)) return undefined
     return directory
   } catch {
     return undefined
