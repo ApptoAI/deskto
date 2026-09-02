@@ -9,6 +9,8 @@ import {
 import { keyboardPlatform } from "../lib/platform.js"
 import { useSettingValue } from "./settings-context.js"
 
+const modalRoot = '[role="dialog"], [role="alertdialog"]'
+
 /**
  * Fires `onTrigger` when the keybinding this setting holds is pressed
  * anywhere in the window. Pass a stable callback; a new identity rebinds.
@@ -29,6 +31,10 @@ export function useKeybinding(
       // A held chord auto-repeats; every binding here is a toggle or a
       // navigation, and neither wants to fire once per repeat.
       if (event.repeat) return
+      // A dialog holds focus, so a keydown from inside one would change the
+      // screen behind it while the person is still answering it.
+      if (event.target instanceof Element && event.target.closest(modalRoot))
+        return
       if (!matchesKeybinding(parsed, event, platform)) return
       event.preventDefault()
       onTrigger()
