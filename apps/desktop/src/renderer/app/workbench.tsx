@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { appSettings, settingValue } from "@deskto/settings"
 
 import { personalWorkspaceId, type Thread } from "@deskto/protocol"
@@ -158,12 +158,30 @@ export function Workbench() {
   // The task list is summoned rather than always present, so whether it is out
   // is a preference the window has to remember between launches.
   const [sidebarOpen, setSidebarOpen] = useState(readRememberedSidebarOpen)
+  // Hiding the column makes it inert, which drops any focus inside it on the
+  // body. The toggle is the one control that survives the move, so focus that
+  // was in the column, or on the toggle itself, follows it to where it lands.
+  const sidebarColumn = useRef<HTMLDivElement>(null)
+  const refocusSidebarToggle = useRef(false)
   const toggleSidebar = useCallback(() => {
+    const active = document.activeElement
+    refocusSidebarToggle.current =
+      active instanceof HTMLElement &&
+      (active.hasAttribute("data-sidebar-toggle") ||
+        sidebarColumn.current?.contains(active) === true)
     setSidebarOpen((open) => {
       rememberSidebarOpen(!open)
       return !open
     })
   }, [])
+  useLayoutEffect(() => {
+    if (!refocusSidebarToggle.current) return
+    refocusSidebarToggle.current = false
+    const toggle = [
+      ...document.querySelectorAll<HTMLElement>("[data-sidebar-toggle]"),
+    ].find((element) => element.closest("[inert]") === null)
+    toggle?.focus()
+  }, [sidebarOpen])
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState>(null)
 
@@ -626,6 +644,7 @@ export function Workbench() {
   const windowNav = (
     <WindowNav
       sidebarOpen={sidebarOpen}
+      canToggleSidebar={!commandsBlocked}
       onToggleSidebar={() => {
         void surface.commands.execute(surfaceCommandIds.toggleSidebar)
       }}
@@ -633,6 +652,7 @@ export function Workbench() {
       canGoForward={canGoForward}
       onBack={goBack}
       onForward={goForward}
+      canNewTask={!commandsBlocked}
       onNewTask={() => {
         void surface.commands.execute(surfaceCommandIds.newTask)
       }}
@@ -647,25 +667,19 @@ export function Workbench() {
     }
     if (listsError) {
       return (
-        <Screen>
-          <StatusPanel
-            title="Deskto cannot reach the runtime"
-            description={listsError}
-            tone="danger"
-          >
-            <Button variant="outline" onClick={retryLists}>
-              Try again
-            </Button>
-          </StatusPanel>
-        </Screen>
+        <StatusPanel
+          title="Deskto cannot reach the runtime"
+          description={listsError}
+          tone="danger"
+        >
+          <Button variant="outline" onClick={retryLists}>
+            Try again
+          </Button>
+        </StatusPanel>
       )
     }
     if (listsLoading) {
-      return (
-        <Screen>
-          <StatusPanel title="Loading your projects…" />
-        </Screen>
-      )
+      return <StatusPanel title="Loading your projects…" />
     }
     if (view.kind === "projects") {
       return (
@@ -693,16 +707,14 @@ export function Workbench() {
     }
     if (!activeProject) {
       return (
-        <Screen>
-          <StatusPanel
-            title="Create your first project"
-            description="Deskto can manage its folder now. You can move it somewhere else later."
-          >
-            <Button onClick={addProject} disabled={projectDialog.open}>
-              Create project
-            </Button>
-          </StatusPanel>
-        </Screen>
+        <StatusPanel
+          title="Create your first project"
+          description="Deskto can manage its folder now. You can move it somewhere else later."
+        >
+          <Button onClick={addProject} disabled={projectDialog.open}>
+            Create project
+          </Button>
+        </StatusPanel>
       )
     }
     if (openThreadId) {
@@ -779,6 +791,7 @@ export function Workbench() {
             line with the traffic lights, so there is no strip across the
             window: the pane starts at the top beside it. */}
         <div
+          ref={sidebarColumn}
           className={cn(
             "flex shrink-0 flex-col overflow-hidden",
             view.kind !== "settings" &&
@@ -877,7 +890,7 @@ export function Workbench() {
           {openingThreadId ? (
             <div
               role="status"
-              className="pointer-events-none absolute top-2 left-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-popover px-3 py-1 text-xs text-muted-foreground shadow-floating"
+              className="pointer-events-none absolute top-12 left-1/2 z-40 -translate-x-1/2 rounded-row px-3 py-1 text-xs text-muted-foreground glass-popover"
             >
               Opening task…
             </div>
@@ -928,9 +941,4 @@ export function Workbench() {
       {projectDialogElement}
     </div>
   )
-}
-
-/** A full-height screen. The window's drag strip is the titlebar above it. */
-function Screen({ children }: { children: ReactNode }) {
-  return <>{children}</>
 }

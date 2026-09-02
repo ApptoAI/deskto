@@ -9,15 +9,15 @@ import type { Thread, Project, Workspace } from "@deskto/protocol"
 import { appSettings, type WorkspaceLayout } from "@deskto/settings"
 
 import { Button } from "@workspace/ui/components/button"
-
 import { Kbd } from "@workspace/ui/components/kbd"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { useKeybindingLabel } from "../../settings/use-keybinding.js"
 import { useUpdates } from "../../updates/updates-context.js"
 import type { QueryState } from "../../runtime/use-runtime-query.js"
 import { ProjectSwitcher } from "./project-switcher.js"
-import { SidebarFrame } from "./sidebar-frame.js"
+import { SidebarFrame, sidebarRowSelected } from "./sidebar-frame.js"
 import { TaskList, type InboxActions } from "./task-list.js"
 import {
   WorkspaceHeaderLabel,
@@ -224,10 +224,16 @@ export function ProjectSidebar({
             {updateActionError}
           </p>
         ) : null}
+        {/* The open screen's row takes the same quiet fill as an open task
+            above it, not a bordered button: one selected shape per sidebar. */}
         <Button
-          variant={projectsActive ? "secondary" : "ghost"}
+          variant="ghost"
           size="lg"
-          className={`${sidebarRowClass} text-muted-foreground`}
+          className={cn(
+            sidebarRowClass,
+            "text-muted-foreground",
+            projectsActive && sidebarRowSelected
+          )}
           onClick={onOpenProjects}
           aria-current={projectsActive ? "page" : undefined}
         >
@@ -237,9 +243,13 @@ export function ProjectSidebar({
           Projects
         </Button>
         <Button
-          variant={skillsActive ? "secondary" : "ghost"}
+          variant="ghost"
           size="lg"
-          className={`${sidebarRowClass} text-muted-foreground`}
+          className={cn(
+            sidebarRowClass,
+            "text-muted-foreground",
+            skillsActive && sidebarRowSelected
+          )}
           onClick={onOpenSkills}
           aria-current={skillsActive ? "page" : undefined}
         >
