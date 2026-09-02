@@ -620,10 +620,15 @@ export function Workbench() {
   // Settings replaces the task sidebar with its own, so the column is always
   // there; everywhere else it is the person's choice.
   const sidebarVisible = view.kind === "settings" || sidebarOpen
+  // Through the command, not the setter, so the button and the shortcut share
+  // one policy: in Settings the column is always there and the remembered
+  // choice must not change underneath it.
   const windowNav = (
     <WindowNav
       sidebarOpen={sidebarOpen}
-      onToggleSidebar={toggleSidebar}
+      onToggleSidebar={() => {
+        void surface.commands.execute(surfaceCommandIds.toggleSidebar)
+      }}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       onBack={goBack}
