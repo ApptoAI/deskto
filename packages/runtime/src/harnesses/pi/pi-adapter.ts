@@ -201,6 +201,27 @@ export class PiAdapter implements HarnessAdapterFactory {
   }
 
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
+    return this.#open(input, signal, { ephemeral: false })
+  }
+
+  generateText(
+    input: TextGenerationInput,
+    signal: AbortSignal
+  ): Promise<string> {
+    return generateTextWithSession(
+      // A title call must not leave a session in Pi's store, where the person
+      // would see it beside real tasks in `pi --resume`.
+      (run, runSignal) => this.#open(run, runSignal, { ephemeral: true }),
+      input,
+      signal
+    )
+  }
+
+  #open(
+    input: HarnessRunInput,
+    signal: AbortSignal,
+    launch: PiLaunchOptions
+  ): Promise<HarnessSession> {
     return PiSession.open(
       {
         ...input,
@@ -214,18 +235,8 @@ export class PiAdapter implements HarnessAdapterFactory {
       },
       signal,
       this.clientFactory,
-      this.options.extensionsPath ?? join(tmpdir(), "deskto-pi")
-    )
-  }
-
-  generateText(
-    input: TextGenerationInput,
-    signal: AbortSignal
-  ): Promise<string> {
-    return generateTextWithSession(
-      (run, runSignal) => this.start(run, runSignal),
-      input,
-      signal
+      this.options.extensionsPath ?? join(tmpdir(), "deskto-pi"),
+      launch
     )
   }
 
@@ -292,14 +303,15 @@ class PiSession implements HarnessSession {
     input: HarnessRunInput,
     signal: AbortSignal,
     clientFactory: PiClientFactory,
-    extensionsPath: string
+    extensionsPath: string,
+    launch: PiLaunchOptions
   ): Promise<PiSession> {
     const approvalExtension =
       input.executionProfile.permissionMode === "approval-required"
         ? await writeApprovalExtension(extensionsPath)
         : undefined
     const client = clientFactory("pi", input.projectPath, {
-      args: piLaunchArgs(input, approvalExtension),
+      args: piLaunchArgs(input, approvalExtension, launch),
     })
     const session = new PiSession(client, input)
     session.skillProvisioning.push(
@@ -531,12 +543,19 @@ class PiSession implements HarnessSession {
   }
 }
 
+export type PiLaunchOptions = {
+  /** Skip Pi's session store; the provider session id is then single-use. */
+  ephemeral: boolean
+}
+
 export function piLaunchArgs(
   input: HarnessRunInput,
-  approvalExtension?: string
+  approvalExtension?: string,
+  launch: PiLaunchOptions = { ephemeral: false }
 ): string[] {
   // Discovered extensions would ask questions nobody can answer over RPC.
   const args = ["--no-extensions"]
+  if (launch.ephemeral) args.push("--no-session")
   if (input.providerSessionId) {
     args.push(
       input.forkProviderSession ? "--fork" : "--session",

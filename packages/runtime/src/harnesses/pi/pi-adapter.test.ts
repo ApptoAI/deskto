@@ -387,6 +387,46 @@ describe("Pi session", () => {
   })
 })
 
+describe("Pi text generation", () => {
+  it("generates a title in a session Pi does not keep", async () => {
+    const client = new FakePiClient()
+    const launches: string[][] = []
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launches.push(options?.args ?? [])
+        return client
+      },
+      { extensionsPath: await tempDirectory() }
+    )
+
+    const generated = adapter.generateText(
+      {
+        projectPath: "/tmp/project",
+        prompt: "Name this task",
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+      },
+      new AbortController().signal
+    )
+    await vi.waitFor(() => expect(client.commands).toHaveLength(2))
+    client.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "Renewal review" },
+    })
+    client.emit({
+      type: "agent_end",
+      messages: [{ role: "assistant", stopReason: "stop" }],
+      willRetry: false,
+    })
+
+    await expect(generated).resolves.toBe("Renewal review")
+    expect(launches[0]).toContain("--no-session")
+  })
+})
+
 describe("Pi launch arguments", () => {
   it("resumes or forks the stored session and passes the profile", () => {
     expect(
