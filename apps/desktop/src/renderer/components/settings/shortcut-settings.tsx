@@ -98,7 +98,7 @@ function ShortcutRow({
   onReject: (message: string) => void
 }) {
   const [recording, setRecording] = useState(false)
-  const commandKey = platform === "mac" ? "⌘" : "Ctrl"
+  const commandKeys = platform === "mac" ? "⌘, ⌃, or ⌥" : "Ctrl or Alt"
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
@@ -148,11 +148,12 @@ function ShortcutRow({
           }
           const binding = keybindingFromEvent(event, platform)
           if (!binding) {
-            if (!isModifierKey(event.key)) {
-              onReject(
-                `Shortcuts need ${commandKey} or Alt, or a function key, so they cannot fire while you type. Hold one and press again.`
-              )
-            }
+            if (isModifierKey(event.key)) return
+            onReject(
+              event.metaKey || event.ctrlKey || event.altKey
+                ? "That key changes with the keyboard layout, so it cannot be a shortcut. Try a letter, a number, or a function key."
+                : `Shortcuts need ${commandKeys}, or a function key, so they cannot fire while you type. Hold one and press again.`
+            )
             return
           }
           setRecording(false)

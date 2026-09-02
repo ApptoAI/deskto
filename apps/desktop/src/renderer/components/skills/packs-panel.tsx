@@ -62,6 +62,13 @@ export function PacksPanel({
     }
   }
 
+  // A failure the dialog reported belongs to that attempt; it must not
+  // resurface at the top of the panel once the dialog is dismissed.
+  function closeRemoveDialog() {
+    setRemoving(null)
+    setActionError(null)
+  }
+
   function createPack() {
     const name = newPackName.trim()
     if (!name || busy) return
@@ -241,7 +248,7 @@ export function PacksPanel({
       <Dialog
         open={removing !== null}
         onOpenChange={(open) => {
-          if (!open && busy === null) setRemoving(null)
+          if (!open && busy === null) closeRemoveDialog()
         }}
       >
         <DialogContent showCloseButton={busy === null}>
@@ -265,7 +272,7 @@ export function PacksPanel({
               type="button"
               variant="ghost"
               disabled={busy !== null}
-              onClick={() => setRemoving(null)}
+              onClick={closeRemoveDialog}
             >
               Cancel
             </Button>

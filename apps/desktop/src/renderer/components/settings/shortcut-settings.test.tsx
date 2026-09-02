@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import { RuntimeClient } from "@deskto/client"
 import type { RuntimeTransport } from "@deskto/protocol"
 import { appSettings, resolveSettings } from "@deskto/settings"
@@ -56,6 +62,18 @@ describe("ShortcutSettings", () => {
 
     const alert = await screen.findByRole("alert")
     expect(alert.textContent).toContain("Hold one and press again")
+    expect(recorder.textContent).toBe("Press keys…")
+  })
+
+  it("explains a layout-dependent key even with a modifier held", async () => {
+    renderShortcuts()
+    const recorder = await findRecorder(newTask.label)
+
+    fireEvent.click(recorder)
+    fireEvent.keyDown(recorder, { key: "Dead", ctrlKey: true })
+
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain("changes with the keyboard layout")
     expect(recorder.textContent).toBe("Press keys…")
   })
 
