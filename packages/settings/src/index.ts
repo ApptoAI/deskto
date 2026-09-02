@@ -42,6 +42,7 @@ export {
   type Platform,
 } from "./keybinding.js"
 export {
+  findKeybindingConflict,
   isOverridden,
   resolveSettings,
   settingValue,

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import ArrowRightIcon from "lucide-react/dist/esm/icons/arrow-right"
 import MinusIcon from "lucide-react/dist/esm/icons/minus"
@@ -21,19 +21,26 @@ import { cn } from "@workspace/ui/lib/utils"
  */
 export function WindowNav({
   sidebarOpen,
+  canToggleSidebar,
   onToggleSidebar,
   canGoBack,
   canGoForward,
   onBack,
   onForward,
+  canNewTask,
   onNewTask,
 }: {
   sidebarOpen: boolean
+  /** False while a screen holds the task list in place (Settings), so the
+      button says so instead of silently doing nothing. */
+  canToggleSidebar: boolean
   onToggleSidebar: () => void
   canGoBack: boolean
   canGoForward: boolean
   onBack: () => void
   onForward: () => void
+  /** False while the New task command stands down; the button follows it. */
+  canNewTask: boolean
   onNewTask: () => void
 }) {
   const reserveTrafficLights = window.deskto.platform === "darwin"
@@ -44,10 +51,15 @@ export function WindowNav({
       ) : null}
       <nav aria-label="Window" className="no-drag flex items-center gap-2.5">
         <span className="flex items-center">
+          {/* The toggle moves between the sidebar column and the pane header
+              as the sidebar comes and goes; the attribute lets the workbench
+              hand focus to wherever it landed. */}
           <TitleBarButton
             label={sidebarOpen ? "Hide the task list" : "Show the task list"}
             pressed={sidebarOpen}
+            disabled={!canToggleSidebar}
             onClick={onToggleSidebar}
+            data-sidebar-toggle
           >
             <PanelLeftIcon />
           </TitleBarButton>
@@ -69,7 +81,11 @@ export function WindowNav({
           </TitleBarButton>
         </span>
         <span className="flex items-center">
-          <TitleBarButton label="New task" onClick={onNewTask}>
+          <TitleBarButton
+            label="New task"
+            disabled={!canNewTask}
+            onClick={onNewTask}
+          >
             <PlusIcon />
           </TitleBarButton>
         </span>
@@ -114,7 +130,8 @@ function TitleBarButton({
   onClick,
   className,
   children,
-}: {
+  ...props
+}: Omit<ComponentProps<"button">, "onClick" | "children"> & {
   label: string
   pressed?: boolean
   disabled?: boolean
@@ -124,6 +141,7 @@ function TitleBarButton({
 }) {
   return (
     <button
+      {...props}
       type="button"
       title={label}
       aria-label={label}
@@ -131,7 +149,7 @@ function TitleBarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex size-8 items-center justify-center rounded-md transition-[background-color,color,transform,opacity] duration-120 outline-none",
+        "flex size-8 items-center justify-center rounded-button transition-[background-color,color,transform,opacity] duration-120 outline-none",
         "hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-40",
         "motion-safe:active:scale-[0.96]",
@@ -165,7 +183,7 @@ export function TitleBarTask({
         {title}
       </span>
       {subtitle ? (
-        <span className="hidden truncate text-control text-muted-foreground sm:inline">
+        <span className="truncate text-control text-muted-foreground">
           {subtitle}
         </span>
       ) : null}

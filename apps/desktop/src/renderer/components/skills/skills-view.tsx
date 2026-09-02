@@ -203,10 +203,9 @@ export function SkillsView({
 
   return (
     <>
-      <header className="drag-region h-10 shrink-0" />
       {/* One page, one scroll: the list owns the only scroller on this screen
           and contains its overscroll, so nothing behind it can move. */}
-      <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
+      <div className="min-h-0 flex-1 overflow-hidden p-5">
         <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
           <div className="flex shrink-0 items-start justify-between gap-4 pb-5">
             <div>
