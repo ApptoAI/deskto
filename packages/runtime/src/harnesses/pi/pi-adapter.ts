@@ -53,6 +53,7 @@ import {
   type PiState,
 } from "./pi-protocol.js"
 import { PiRpcClient, type PiRpcClientOptions } from "./pi-rpc-client.js"
+import { piMcpEnvironment, writeMcpExtension } from "./pi-mcp-extension.js"
 
 export interface PiClient {
   request<T extends JsonValue>(
@@ -387,6 +388,11 @@ class PiSession implements HarnessSession {
     extensionsPath: string,
     launch: PiLaunchOptions
   ): Promise<PiSession> {
+    const mcpServers = input.customization.mcpServers ?? []
+    const mcpExtension =
+      mcpServers.length > 0
+        ? await writeMcpExtension(extensionsPath)
+        : undefined
     const approvalExtension =
       input.executionProfile.permissionMode === "approval-required"
         ? await writeApprovalExtension(extensionsPath)
@@ -406,12 +412,17 @@ class PiSession implements HarnessSession {
       approvalExtension,
       launch,
       instructionsFile,
-      projectSkills
+      projectSkills,
+      mcpExtension
     )
+    const childEnv =
+      mcpServers.length > 0
+        ? piMcpEnvironment(mcpServers, launch.env ?? process.env)
+        : launch.env
     const client = clientFactory(
       "pi",
       input.projectPath,
-      launch.env ? { args, env: launch.env } : { args }
+      childEnv ? { args, env: childEnv } : { args }
     )
     const session = new PiSession(client, input, launch, instructionsFile)
     session.skillProvisioning.push(
@@ -754,7 +765,8 @@ export function piLaunchArgs(
   approvalExtension?: string,
   launch: PiLaunchOptions = { ephemeral: false },
   instructionsFile?: string,
-  projectSkills?: string
+  projectSkills?: string,
+  mcpExtension?: string
 ): string[] {
   // Discovered extensions would ask questions nobody can answer over RPC.
   // RPC mode cannot show Pi's trust prompt either, so trust follows the
@@ -780,6 +792,7 @@ export function piLaunchArgs(
   if (modelId) args.push("--model", modelId)
   if (effort) args.push("--thinking", effort)
   if (approvalExtension) args.push("--extension", approvalExtension)
+  if (mcpExtension) args.push("--extension", mcpExtension)
   for (const root of input.customization.skillRoots) {
     args.push("--skill", root.path)
   }

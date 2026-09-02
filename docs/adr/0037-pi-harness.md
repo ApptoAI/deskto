@@ -97,9 +97,6 @@ questions nobody can answer over RPC.
 
 ## Deliberately deferred
 
-- **MCP servers.** Pi has no native MCP client; the Runtime's Browser and
-  Task orchestration servers are not offered to Pi sessions. A Pi extension
-  bridging Streamable HTTP MCP to Pi tools would close this gap.
 - **Account readiness.** ADR 0024 asks for a provider account check before
   reporting Ready. Pi supports many providers and `pi auth check` needs one
   named, so the adapter reports Ready on a working `pi --version` and a

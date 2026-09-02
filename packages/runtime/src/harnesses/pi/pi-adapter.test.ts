@@ -450,6 +450,48 @@ describe("Pi session", () => {
     await session.cancel()
   })
 
+  it("loads only Deskto's MCP extension and passes its servers in the child environment", async () => {
+    const client = new FakePiClient()
+    const extensionsPath = await tempDirectory()
+    let launchOptions: { args?: string[]; env?: NodeJS.ProcessEnv } | undefined
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launchOptions = options
+        return client
+      },
+      { extensionsPath }
+    )
+    const mcpServers = [
+      {
+        id: "deskto",
+        url: "http://127.0.0.1:4567/mcp",
+        authorization: {
+          type: "bearer" as const,
+          token: "turn-token",
+        },
+      },
+    ]
+
+    const session = await adapter.start(
+      runInput({ customization: { skillRoots: [], mcpServers } }),
+      new AbortController().signal
+    )
+    const extension = join(extensionsPath, "deskto-mcp.mjs")
+
+    await expect(readFile(extension, "utf8")).resolves.toContain(
+      "pi.registerTool({"
+    )
+    expect(launchOptions?.args).toContain("--no-extensions")
+    expect(launchOptions?.args).toContain("--extension")
+    expect(launchOptions?.args).toContain(extension)
+    expect(launchOptions?.env?.DESKTO_PI_MCP_SERVERS).toBe(
+      JSON.stringify(mcpServers)
+    )
+    expect(launchOptions?.args).not.toContain("turn-token")
+
+    await session.cancel()
+  })
+
   it("dismisses a pending approval before asking Pi to abort", async () => {
     const client = new FakePiClient()
     const adapter = new PiAdapter(() => client, {
