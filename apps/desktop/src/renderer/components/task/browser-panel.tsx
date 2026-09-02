@@ -178,7 +178,7 @@ export function BrowserPanel({
           onClick={() => void action("reload")}
         >
           <RotateCwIcon
-            className={state?.loading ? "animate-spin" : undefined}
+            className={state?.loading ? "motion-safe:animate-spin" : undefined}
           />
         </Button>
         <Button
@@ -194,7 +194,11 @@ export function BrowserPanel({
           title={
             selecting
               ? "Cancel element selection"
-              : "Add a page element to the next message"
+              : selectedElementCount >= 16
+                ? "The next message already carries 16 page elements. Remove one to pick another."
+                : !state?.url
+                  ? "Open a page first"
+                  : "Add a page element to the next message"
           }
           onClick={() => void toggleElementSelection()}
         >
