@@ -40,7 +40,9 @@ border carries the 3:1 and the ring carries the hue.
 
 `packages/ui/src/styles/globals.test.ts` holds the palettes to parity: every
 colour light states, dark restates, and nothing is declared that nothing
-reads.
+reads. `packages/ui/src/styles/contrast-floors.test.ts` measures the floors
+above against both palettes, compositing translucent tokens over the pane and
+the shell the way the browser paints them.
 
 ## Consequences
 
