@@ -13,6 +13,7 @@ import {
   CodexAdapter,
   codexNotInstalledReason,
   createRuntime,
+  type Runtime,
   type SessionToolProvider,
 } from "@deskto/runtime"
 
@@ -55,6 +56,7 @@ const fatalStartupDetailSchema = z
 let closeRuntime: (() => Promise<void>) | undefined
 
 type McpServerReference = { current: DesktoMcpServer | undefined }
+type RuntimeReference = { current: Runtime | undefined }
 
 function taskOrchestrationProvider(
   reference: McpServerReference
@@ -137,8 +139,7 @@ async function openApplication(): Promise<void> {
   const unregisterWindowControls = registerWindowControlsIpc(window)
   // The Runtime exists only after the browser does, so the profile lookup
   // reads it through a reference that startup fills in below.
-  const runtimeRef: { current: ReturnType<typeof createRuntime> | undefined } =
-    { current: undefined }
+  const runtimeRef: RuntimeReference = { current: undefined }
   const browser = new BrowserManager(
     window,
     (event) => {

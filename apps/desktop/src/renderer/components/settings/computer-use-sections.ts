@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 
 import { BrowserSettingsSection } from "./computer-use-browser-section.js"
+import { BrowserProfilesSection } from "./computer-use-profiles-section.js"
 
 /**
  * One block on the Computer use page. A new capability (cookie import,
@@ -24,5 +25,12 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     description:
       "The browser agents use inside a task. Changes apply to pages opened from now on.",
     Component: BrowserSettingsSection,
+  },
+  {
+    id: "profiles",
+    label: "Browser profiles",
+    description:
+      "Each workspace keeps its own cookies, storage and logins. Deleting a workspace leaves its profile in place; clear it here.",
+    Component: BrowserProfilesSection,
   },
 ]
