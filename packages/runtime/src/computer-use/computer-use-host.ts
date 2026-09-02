@@ -7,6 +7,12 @@ export type ComputerUseModifier = "shift" | "control" | "alt" | "meta"
 export type ComputerUseMouseButton = "left" | "middle" | "right"
 
 /**
+ * Pointer events also carry which buttons are held, so a page sees
+ * `event.buttons` set while a drag is in motion.
+ */
+export type ComputerUseMouseModifier = ComputerUseModifier | "leftbuttondown"
+
+/**
  * The subset of Electron's `sendInputEvent` payloads that screen control
  * emits. Every member must stay assignable to Electron's input event union so
  * the desktop host can forward them unchanged; the Runtime never imports
@@ -19,7 +25,7 @@ export type ComputerUseInputEvent =
       y: number
       button?: ComputerUseMouseButton
       clickCount?: number
-      modifiers?: ComputerUseModifier[]
+      modifiers?: ComputerUseMouseModifier[]
     }
   | {
       type: "mouseWheel"

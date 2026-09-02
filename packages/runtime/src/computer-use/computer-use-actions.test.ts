@@ -88,7 +88,21 @@ describe("input-event mapping", () => {
       "mouseMove",
       "mouseUp",
     ])
-    expect(events[2]).toEqual({ type: "mouseMove", x: 50, y: 25, button: "left" })
+    expect(events[2]).toEqual({
+      type: "mouseMove",
+      x: 50,
+      y: 25,
+      button: "left",
+      modifiers: ["leftbuttondown"],
+    })
+    expect(events[4]).toEqual({
+      type: "mouseUp",
+      x: 100,
+      y: 50,
+      button: "left",
+      clickCount: 1,
+      modifiers: ["leftbuttondown"],
+    })
   })
 
   it("scrolls down with a negative wheel delta", () => {
@@ -103,7 +117,10 @@ describe("input-event mapping", () => {
   })
 
   it("parses xdotool chords into Electron key codes", () => {
-    expect(parseKeyChord("Return")).toEqual({ keyCode: "Return", modifiers: [] })
+    expect(parseKeyChord("Return")).toEqual({
+      keyCode: "Return",
+      modifiers: [],
+    })
     expect(parseKeyChord("ctrl+shift+t")).toEqual({
       keyCode: "t",
       modifiers: ["control", "shift"],

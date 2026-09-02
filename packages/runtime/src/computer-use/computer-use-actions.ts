@@ -4,6 +4,7 @@ import type {
   ComputerUseInputEvent,
   ComputerUseModifier,
   ComputerUseMouseButton,
+  ComputerUseMouseModifier,
   ComputerUsePoint,
   ComputerUseSize,
 } from "./computer-use-host.js"
@@ -240,7 +241,13 @@ export function mouseMoveEvents(
   return [{ type: "mouseMove", ...point }]
 }
 
-/** Press at the start, move through a midpoint so drop targets see motion, release at the end. */
+/**
+ * Press at the start, move through a midpoint so drop targets see motion,
+ * release at the end. The moves carry the held button the way a real drag
+ * does, so pages that read `event.buttons` follow it.
+ */
+const dragging: ComputerUseMouseModifier[] = ["leftbuttondown"]
+
 export function dragEvents(
   start: ComputerUsePoint,
   end: ComputerUsePoint,
@@ -255,9 +262,15 @@ export function dragEvents(
   return [
     { type: "mouseMove", ...start },
     { type: "mouseDown", ...start, button: "left", clickCount: 1 },
-    { type: "mouseMove", ...midpoint, button: "left" },
-    { type: "mouseMove", ...end, button: "left" },
-    { type: "mouseUp", ...end, button: "left", clickCount: 1 },
+    { type: "mouseMove", ...midpoint, button: "left", modifiers: dragging },
+    { type: "mouseMove", ...end, button: "left", modifiers: dragging },
+    {
+      type: "mouseUp",
+      ...end,
+      button: "left",
+      clickCount: 1,
+      modifiers: dragging,
+    },
   ]
 }
 

@@ -24,6 +24,7 @@ export type {
   ComputerUseCapture,
   ComputerUseHost,
   ComputerUseInputEvent,
+  ComputerUseMouseModifier,
   ComputerUsePage,
   ComputerUsePoint,
   ComputerUseSize,
