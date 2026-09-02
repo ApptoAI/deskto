@@ -1,4 +1,4 @@
-# ADR 0030: Import cookies from local browsers into the Task Browser
+# ADR 0033: Import cookies from local browsers into the Task Browser
 
 - Status: accepted
 - Date: 2026-09-02
