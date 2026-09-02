@@ -10,12 +10,13 @@ import {
   snoozeWakeLabel,
   threadCameBack,
 } from "@deskto/client"
-import type {
-  BrowserElementContext,
-  ExecutionProfile,
-  Harness,
-  Project,
-  TurnOutput,
+import {
+  browserContextLimit,
+  type BrowserElementContext,
+  type ExecutionProfile,
+  type Harness,
+  type Project,
+  type TurnOutput,
 } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -559,7 +560,7 @@ export function TaskView({
           browserContexts={browserContexts}
           onSelectBrowserElement={(context) =>
             setBrowserContexts((current) =>
-              current.length >= 16 ||
+              current.length >= browserContextLimit ||
               current.some((candidate) => candidate.id === context.id)
                 ? current
                 : [...current, context]
