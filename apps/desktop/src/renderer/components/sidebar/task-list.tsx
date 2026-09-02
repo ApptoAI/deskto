@@ -212,9 +212,13 @@ export function TaskList({
   // the minute tick keeps them fresh enough for menus opened later.
   const snoozePresets = resolveSnoozePresets(new Date())
 
+  // `hidden` marks the copy a collapsed shelf keeps mounted behind its ghost
+  // row. Only one copy may carry the row's id, or focus handed back by a
+  // dialog lands on the inert copy and is lost.
   const renderRow = (
     thread: Thread,
     section: InboxSection,
+    hidden = false,
     depth = 0
   ): ReactNode => {
     const displaySection = sectionByThreadId.get(thread.id) ?? section
@@ -226,6 +230,7 @@ export function TaskList({
           now={now}
           isOpen={thread.id === openThreadId}
           nested={depth > 0}
+          hidden={hidden}
           onOpenThread={onOpenThread}
           actions={actions}
           snoozePresets={snoozePresets}
@@ -233,7 +238,7 @@ export function TaskList({
           onRequestDelete={setDeleteTarget}
         />
         {(threadTree.children.get(thread.id) ?? []).map((child) =>
-          renderRow(child, displaySection, depth + 1)
+          renderRow(child, displaySection, hidden, depth + 1)
         )}
       </Fragment>
     )
@@ -248,10 +253,12 @@ export function TaskList({
     <div id={taskListFocusTargetId} tabIndex={-1} className="px-2">
       {partition.pinned.length > 0 ? (
         <section>
-          <div className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-2 pt-5 pb-2 eyebrow text-muted-foreground">
-            <span aria-hidden />
-            <span>Pinned</span>
-            <span className="ml-auto tabular-nums opacity-60">
+          <div className="flex items-baseline gap-2 px-2 pt-5 pb-2 text-muted-foreground">
+            <h2 className="eyebrow">Pinned</h2>
+            <span
+              className="text-tiny tabular-nums"
+              aria-label={taskCountLabel(partition.pinned.length)}
+            >
               {partition.pinned.length}
             </span>
           </div>
@@ -267,7 +274,7 @@ export function TaskList({
             <h2 className="eyebrow">Inbox</h2>
             <span
               className="text-tiny tabular-nums"
-              aria-label={`${partition.active.length} tasks`}
+              aria-label={taskCountLabel(partition.active.length)}
             >
               {partition.active.length}
             </span>
@@ -309,7 +316,10 @@ export function TaskList({
                   onClick={() =>
                     setDoneVisibleCount((count) => count + DONE_PAGE_COUNT)
                   }
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted/50 hover:text-foreground"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-row px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    sidebarRowIdle
+                  )}
                 >
                   <PlusIcon aria-hidden className="size-3.5 shrink-0" />
                   Show {Math.min(hiddenDoneCount, DONE_PAGE_COUNT)} more
@@ -355,7 +365,11 @@ function Shelf({
   onToggle: () => void
   section: InboxSection
   rows: Thread[]
-  renderRow: (thread: Thread, section: InboxSection) => ReactNode
+  renderRow: (
+    thread: Thread,
+    section: InboxSection,
+    hidden: boolean
+  ) => ReactNode
   openRow?: Thread | undefined
   footer?: ReactNode
 }) {
@@ -365,7 +379,7 @@ function Shelf({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-5 pb-2 text-left eyebrow text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-row px-2 pt-5 pb-2 text-left eyebrow text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span>{label}</span>
         <ChevronDownIcon
@@ -390,13 +404,13 @@ function Shelf({
           )}
         >
           <ul className="space-y-0.5 pb-px" inert={!expanded}>
-            {rows.map((thread) => renderRow(thread, section))}
+            {rows.map((thread) => renderRow(thread, section, !expanded))}
             {footer}
           </ul>
         </div>
       </div>
       {openRow ? (
-        <ul className="space-y-0.5">{renderRow(openRow, section)}</ul>
+        <ul className="space-y-0.5">{renderRow(openRow, section, false)}</ul>
       ) : null}
     </section>
   )
@@ -408,6 +422,7 @@ function TaskRow({
   now,
   isOpen,
   nested,
+  hidden,
   onOpenThread,
   actions,
   snoozePresets,
@@ -419,6 +434,7 @@ function TaskRow({
   now: string
   isOpen: boolean
   nested: boolean
+  hidden: boolean
   onOpenThread: (threadId: string) => void
   actions: InboxActions
   snoozePresets: readonly SnoozePreset[]
@@ -459,7 +475,7 @@ function TaskRow({
       <ContextMenuTrigger render={<li className="group enter-rise relative" />}>
         <button
           type="button"
-          id={taskRowButtonId(thread.id)}
+          id={hidden ? undefined : taskRowButtonId(thread.id)}
           onClick={() => onOpenThread(thread.id)}
           aria-current={isOpen ? "true" : undefined}
           // The row is the context menu trigger, and Base UI's trigger only
@@ -617,6 +633,11 @@ function TaskRow({
 }
 
 /** Lets the list hand focus back to the row a dialog was opened from. */
+/** Read aloud beside a shelf heading, so it has to agree in number. */
+function taskCountLabel(count: number): string {
+  return count === 1 ? "1 task" : `${count} tasks`
+}
+
 function taskRowButtonId(threadId: string): string {
   return `task-row-${threadId}`
 }
@@ -729,8 +750,7 @@ function DeleteTaskDialog({
 
 /**
  * One of the controls a row carries: a round target that fades in on hover,
- * over the timestamp it replaces. Marking done greets the pointer in green —
- * it is the affirmative action and the only place the inbox spends that color.
+ * over the timestamp it replaces.
  *
  * The accessible name starts with the visible tooltip so voice control can act
  * on what it reads, and the task follows to tell one row's buttons from the
@@ -878,9 +898,9 @@ function DotGlyph({ className }: { className?: string }) {
 }
 
 /** Filled circle with a check or an X cut out of it. The cut is painted in
-    --knockout rather than the sidebar fill: every surface here is translucent
-    glass, so the mark has to be the opaque colour that glass resolves to, or
-    it tints whatever happens to be scrolling underneath. */
+    --knockout rather than the sidebar fill: under a native blur the shell is
+    translucent, so the mark has to be the opaque colour the shell resolves
+    to, or it tints whatever happens to be behind the window. */
 function MarkGlyph({
   variant,
   className,

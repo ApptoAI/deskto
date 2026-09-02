@@ -28,6 +28,9 @@ export function useKeybinding(
     const platform = keyboardPlatform()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return
+      // A held chord auto-repeats; every binding here is a toggle or a
+      // navigation, and neither wants to fire once per repeat.
+      if (event.repeat) return
       // A dialog holds focus, so a keydown from inside one would change the
       // screen behind it while the person is still answering it.
       if (event.target instanceof Element && event.target.closest(modalRoot))
