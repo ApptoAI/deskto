@@ -27,10 +27,10 @@ Side chat passes `--fork <id>`.
 
 **Events.** `text_delta` becomes `message.delta`; `thinking_*` and
 `toolcall_start` become progress; `tool_execution_start` and
-`tool_execution_end` become one Activity each, with `bash` as a command,
-`write` and `edit` as a file change, `grep`, `find`, and `ls` as a search. The
-assistant message's `usage.totalTokens` and the model's `contextWindow` from
-`get_state` feed `usage.updated`. `agent_end` settles the Turn: an assistant
+`tool_execution_end` become one Activity each, with `bash` (or Pi's
+`powershell`) as a command, `write` and `edit` as a file change, `grep`,
+`find`, and `ls` as a search. The assistant message's `usage.totalTokens` and
+the model's `contextWindow` from `get_state` feed `usage.updated`. `agent_end` settles the Turn: an assistant
 `stopReason` of `error` fails it with Pi's `errorMessage`, which the shared
 failure classifier maps to a usage limit when it reads like one.
 
@@ -44,9 +44,11 @@ is not offered: Pi has no reviewer of its own to stand in for the person.
 
 **Discovery.** Availability is `pi --version` on the augmented PATH. Models
 come from `pi --list-models`, filtered to the `enabledModels` in Pi's own
-`settings.json` when the person set any, with Pi's `defaultProvider` and
-`defaultModel` marked default. Thinking levels are Pi's `--thinking`
-vocabulary for models that report reasoning support.
+`settings.json` when the person set any, matched the way Pi matches them
+(full id or bare model id, glob, optional `:thinking` suffix); a filter that
+would empty the list is ignored so the menu never goes blank. Pi's
+`defaultProvider` and `defaultModel` are marked default. Thinking levels are
+Pi's `--thinking` vocabulary for models that report reasoning support.
 
 **Customization.** Pack and host skill roots pass as `--skill <path>`;
 shared Project instructions pass as `--append-system-prompt`. Prompt

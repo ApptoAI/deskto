@@ -175,7 +175,7 @@ async function openApplication(): Promise<void> {
   })
   // Separate from DESKTO_FORCE_ONBOARDING on purpose: forcing the wizard
   // keeps real detection, so a machine with agents can walk the happy path;
-  // this flag adds the fresh-machine look where both cards stay red.
+  // this flag adds the fresh-machine look where every card stays red.
   const simulateNoAgents =
     !app.isPackaged && process.env.DESKTO_SIMULATE_NO_AGENTS === "1"
   const harnesses = simulateNoAgents

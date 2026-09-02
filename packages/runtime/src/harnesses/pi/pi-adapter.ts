@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -606,15 +606,14 @@ export function piModels(
     settings.defaultProvider && settings.defaultModel
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : undefined
-  const enabled = settings.enabledModels?.map(globMatcher)
+  const enabled = settings.enabledModels?.map(modelMatcher) ?? []
   const models: HarnessModelOption[] = []
+  const enabledModels: HarnessModelOption[] = []
   for (const line of listOutput.split(/\r?\n/)) {
     const columns = line.trim().split(/\s{2,}/)
     const [provider, model, , , thinking] = columns
     if (!provider || !model || provider === "provider") continue
     const id = `${provider}/${model}`
-    if (enabled && enabled.length > 0 && !enabled.some((match) => match(id)))
-      continue
     const reasoning = thinking === "yes"
     const option: HarnessModelOption = {
       id,
@@ -626,20 +625,35 @@ export function piModels(
     }
     if (reasoning) option.defaultEffort = piDefaultThinkingLevel
     models.push(option)
+    if (enabled.some((match) => match(provider, model))) {
+      enabledModels.push(option)
+    }
   }
-  if (models.length > 0 && !models.some((model) => model.isDefault)) {
-    models[0]!.isDefault = true
+  // A filter that matches nothing must not leave the person without a model.
+  const offered = enabledModels.length > 0 ? enabledModels : models
+  if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
+    offered[0]!.isDefault = true
   }
-  return models
+  return offered
 }
 
-function globMatcher(pattern: string): (id: string) => boolean {
-  const source = pattern
+// Pi matches an enabled-model pattern against `provider/model` or the bare
+// model id, case-insensitively, after dropping a `:thinking` suffix.
+function modelMatcher(
+  pattern: string
+): (provider: string, model: string) => boolean {
+  const colon = pattern.lastIndexOf(":")
+  const bare =
+    colon !== -1 && piThinkingLevels.includes(pattern.slice(colon + 1))
+      ? pattern.slice(0, colon)
+      : pattern
+  const source = bare
     .split("*")
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join(".*")
   const expression = new RegExp(`^${source}$`, "i")
-  return (id) => expression.test(id)
+  return (provider, model) =>
+    expression.test(`${provider}/${model}`) || expression.test(model)
 }
 
 export function piActivity(event: JsonObject): ActivityStart | undefined {
@@ -648,7 +662,7 @@ export function piActivity(event: JsonObject): ActivityStart | undefined {
   if (!id || !toolName) return undefined
   const args = parseJsonObject(event.args)
   const path = getString(args, "path")
-  if (toolName === "bash") {
+  if (isShellTool(toolName)) {
     return {
       id,
       name: "Run command",
@@ -701,7 +715,7 @@ export function piActivity(event: JsonObject): ActivityStart | undefined {
 
 function piToolLabel(toolName: string | undefined): string {
   if (!toolName) return "Using tool"
-  if (toolName === "bash") return "Run command"
+  if (isShellTool(toolName)) return "Run command"
   if (toolName === "write" || toolName === "edit") return "Change files"
   if (toolName === "read") return "Read file"
   if (toolName === "grep" || toolName === "find" || toolName === "ls")
@@ -711,9 +725,14 @@ function piToolLabel(toolName: string | undefined): string {
 }
 
 function approvalKind(toolName: string): ApprovalKind {
-  if (toolName === "bash") return "command"
+  if (isShellTool(toolName)) return "command"
   if (toolName === "write" || toolName === "edit") return "file-change"
   return "tool"
+}
+
+// Pi's Windows shell tool takes the same `command` input as bash.
+function isShellTool(toolName: string): boolean {
+  return toolName === "bash" || toolName === "powershell"
 }
 
 function detailOf(detail: string | undefined): { detail?: string } {
@@ -734,6 +753,9 @@ function piProvisioning(root: SkillRoot): SkillProvisioningResult {
 async function writeApprovalExtension(directory: string): Promise<string> {
   await mkdir(directory, { recursive: true })
   const file = join(directory, approvalExtensionFileName)
-  await writeFile(file, approvalExtensionSource, "utf8")
+  // Sessions opening at once must never hand Pi a half-written file.
+  const staging = `${file}.${randomUUID()}`
+  await writeFile(staging, approvalExtensionSource, "utf8")
+  await rename(staging, file)
   return file
 }

@@ -532,6 +532,19 @@ describe("Pi activities", () => {
     expect(
       piActivity({
         type: "tool_execution_start",
+        toolCallId: "c4",
+        toolName: "powershell",
+        args: { command: "Get-ChildItem" },
+      })
+    ).toEqual({
+      id: "c4",
+      name: "Run command",
+      detail: "Get-ChildItem",
+      payload: { kind: "tool", tool: "command" },
+    })
+    expect(
+      piActivity({
+        type: "tool_execution_start",
         toolCallId: "c3",
         toolName: "my_tool",
       })
@@ -575,6 +588,22 @@ describe("Pi models", () => {
     expect(models.map((model) => model.id)).toEqual([
       "openrouter/amazon/nova-lite-v1",
     ])
+    expect(models[0]?.isDefault).toBe(true)
+  })
+
+  it("matches enabled models the way pi does", () => {
+    const models = piModels(listOutput, {
+      enabledModels: ["GROK-4.6", "openai-codex/gpt-5.6-sol:high"],
+    })
+    expect(models.map((model) => model.id)).toEqual([
+      "openai-codex/gpt-5.6-sol",
+      "xai/grok-4.6",
+    ])
+  })
+
+  it("offers every model when the enabled list matches none", () => {
+    const models = piModels(listOutput, { enabledModels: ["anthropic/*"] })
+    expect(models).toHaveLength(3)
     expect(models[0]?.isDefault).toBe(true)
   })
 })
