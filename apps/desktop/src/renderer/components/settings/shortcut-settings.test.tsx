@@ -6,10 +6,15 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react"
 import { RuntimeClient } from "@deskto/client"
-import type { RuntimeTransport } from "@deskto/protocol"
-import { appSettings, resolveSettings } from "@deskto/settings"
+import type { RuntimeRequest, RuntimeTransport } from "@deskto/protocol"
+import {
+  appSettings,
+  resolveSettings,
+  type SettingValues,
+} from "@deskto/settings"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { RuntimeClientProvider } from "../../runtime/runtime-client-context.js"
@@ -51,6 +56,31 @@ describe("ShortcutSettings", () => {
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: "settings.update" })
     )
+  })
+
+  it("refuses to reset a default that another shortcut now holds", async () => {
+    const { request } = renderShortcuts()
+    const newTaskRecorder = await findRecorder(newTask.label)
+
+    fireEvent.click(newTaskRecorder)
+    fireEvent.keyDown(newTaskRecorder, { key: "k", ctrlKey: true })
+    await waitFor(() => expect(newTaskRecorder.textContent).toBe("Ctrl+K"))
+
+    const sidebarRecorder = await findRecorder(toggleSidebar.label)
+    fireEvent.click(sidebarRecorder)
+    fireEvent.keyDown(sidebarRecorder, { key: "n", ctrlKey: true })
+    await waitFor(() => expect(sidebarRecorder.textContent).toBe("Ctrl+N"))
+
+    const newTaskRow = screen.getByText(newTask.label).closest("li")
+    if (!newTaskRow) throw new Error("New task shortcut row is missing")
+    fireEvent.click(within(newTaskRow).getByRole("button", { name: "Reset" }))
+
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain(toggleSidebar.label)
+    expect(request).not.toHaveBeenCalledWith({
+      method: "settings.update",
+      params: { entries: { [newTask.key]: null } },
+    })
   })
 
   it("explains a key it cannot record and keeps listening", async () => {
@@ -100,9 +130,23 @@ async function findRecorder(label: string): Promise<HTMLElement> {
 }
 
 function renderShortcuts() {
-  const request = vi.fn((body: { method: string }) => {
-    if (body.method === "settings.get" || body.method === "settings.update") {
-      return Promise.resolve({ ok: true as const, data: resolveSettings({}) })
+  const overrides: SettingValues = {}
+  const request = vi.fn((body: RuntimeRequest) => {
+    if (body.method === "settings.get") {
+      return Promise.resolve({
+        ok: true as const,
+        data: resolveSettings(overrides),
+      })
+    }
+    if (body.method === "settings.update") {
+      for (const [key, value] of Object.entries(body.params.entries)) {
+        if (value === null) delete overrides[key]
+        else overrides[key] = value
+      }
+      return Promise.resolve({
+        ok: true as const,
+        data: resolveSettings(overrides),
+      })
     }
     return Promise.reject(new Error(`Unexpected request: ${body.method}`))
   })

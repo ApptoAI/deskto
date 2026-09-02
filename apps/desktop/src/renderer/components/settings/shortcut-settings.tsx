@@ -45,6 +45,21 @@ export function ShortcutSettings() {
     void apply({ [definition.key]: binding })
   }
 
+  function reset(definition: SettingDefinition<string>) {
+    const taken = findKeybindingConflict(
+      snapshot,
+      definition,
+      definition.defaultValue
+    )
+    if (taken) {
+      setActionError(
+        `${formatKeybinding(definition.defaultValue, platform)} already opens “${taken.label}”. Press a different combination, or reset that shortcut first.`
+      )
+      return
+    }
+    void apply({ [definition.key]: null })
+  }
+
   return (
     <section aria-label="Keyboard shortcuts" className="space-y-3">
       {actionError ? <InlineError message={actionError} /> : null}
@@ -69,7 +84,7 @@ export function ShortcutSettings() {
               overridden={isOverridden(snapshot, definition)}
               platform={platform}
               onRecord={(binding) => record(definition, binding)}
-              onReset={() => void apply({ [definition.key]: null })}
+              onReset={() => reset(definition)}
               onReject={setActionError}
             />
           ))}
