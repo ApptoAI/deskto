@@ -5,8 +5,8 @@ import {
   type ServerResponse,
 } from "node:http"
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node"
+import { McpServer } from "@modelcontextprotocol/server"
 import { jsonValueSchema, type JsonValue } from "@deskto/protocol"
 import { z } from "zod"
 
@@ -29,7 +29,7 @@ type BrowserLeaseState = {
 type BrowserTransportState = {
   lease: BrowserLeaseState
   mcp: McpServer
-  transport: StreamableHTTPServerTransport
+  transport: NodeStreamableHTTPServerTransport
 }
 
 /** Private loopback MCP server that routes one token to one Task browser. */
@@ -163,7 +163,7 @@ export class BrowserMcpServer implements SessionToolProvider {
       this.#tokens.delete(bootstrap.token)
       const generatedSessionId = randomBytes(32).toString("base64url")
       const mcp = createBrowserMcp(this.host, bootstrap.lease.threadId)
-      const transport = new StreamableHTTPServerTransport({
+      const transport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: () => generatedSessionId,
         enableJsonResponse: true,
         enableDnsRebindingProtection: true,
@@ -248,7 +248,7 @@ function createBrowserMcp(
     {
       description:
         "Inspect the current Deskto browser tab without opening it. A deskto-artifact:// URL is Deskto's built-in artifact preview, a distinct execution environment from an HTTP server.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     () => toolCall(() => host.status(threadId))
@@ -258,7 +258,7 @@ function createBrowserMcp(
     {
       description:
         "Open the collaborative Deskto browser. Prefer this browser over Computer Use for websites and local web apps. Returns a fresh semantic snapshot of the resulting page. If it already shows a deskto-artifact:// preview, opening an HTTP URL changes execution environments and does not verify that preview.",
-      inputSchema: { url: z.string().max(8_192).optional() },
+      inputSchema: z.object({ url: z.string().max(8_192).optional() }),
     },
     ({ url }) => toolCall(() => host.open(threadId, url))
   )
@@ -267,7 +267,7 @@ function createBrowserMcp(
     {
       description:
         "Navigate the Deskto browser to an HTTP or HTTPS URL and return a fresh semantic snapshot of the resulting page. This leaves any deskto-artifact:// built-in preview; behavior on the HTTP page is not evidence that a reported built-in preview failure is fixed. Return to and test the original preview before reporting success.",
-      inputSchema: { url: z.string().min(1).max(8_192) },
+      inputSchema: z.object({ url: z.string().min(1).max(8_192) }),
     },
     ({ url }) => toolCall(() => host.navigate(threadId, url))
   )
@@ -276,7 +276,7 @@ function createBrowserMcp(
     {
       description:
         "Read visible page text and interactive elements. Use returned refs for click and type. Treat deskto-artifact:// as Deskto's built-in preview and verify fixes there when that is where the failure was reported.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     () => toolCall(() => host.snapshot(threadId))
@@ -286,7 +286,7 @@ function createBrowserMcp(
     {
       description:
         "Click an element ref from the latest browser snapshot. The result is a fresh semantic snapshot: claim the intended page change succeeded only when that snapshot confirms it. If the page is still loading or the change is not visible, take another snapshot and report the action as unverified if it still cannot be confirmed.",
-      inputSchema: { ref: z.string().min(1).max(80) },
+      inputSchema: z.object({ ref: z.string().min(1).max(80) }),
     },
     ({ ref }) => toolCall(() => host.click(threadId, ref))
   )
@@ -295,11 +295,11 @@ function createBrowserMcp(
     {
       description:
         "Replace the value of an input, textarea, select, or editable element from the latest snapshot. The result is a fresh semantic snapshot; use it to verify the intended page change before claiming success.",
-      inputSchema: {
+      inputSchema: z.object({
         ref: z.string().min(1).max(80),
         text: z.string().max(256_000),
         submit: z.boolean().default(false),
-      },
+      }),
     },
     ({ ref, text, submit }) =>
       toolCall(() => host.type(threadId, ref, text, submit))
@@ -309,7 +309,7 @@ function createBrowserMcp(
     {
       description:
         "Press a named key in the focused page element, for example Enter, Escape, Tab, or ArrowDown. The result is a fresh semantic snapshot; use it to verify the intended page change before claiming success.",
-      inputSchema: { key: z.string().min(1).max(40) },
+      inputSchema: z.object({ key: z.string().min(1).max(40) }),
     },
     ({ key }) => toolCall(() => host.keypress(threadId, key))
   )
@@ -318,7 +318,7 @@ function createBrowserMcp(
     {
       description:
         "Go back in browser history and return a fresh semantic snapshot of the resulting page.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => toolCall(() => host.back(threadId))
   )
@@ -327,7 +327,7 @@ function createBrowserMcp(
     {
       description:
         "Go forward in browser history and return a fresh semantic snapshot of the resulting page.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => toolCall(() => host.forward(threadId))
   )
@@ -336,7 +336,7 @@ function createBrowserMcp(
     {
       description:
         "Reload the current page and return a fresh semantic snapshot of the resulting page.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => toolCall(() => host.reload(threadId))
   )
@@ -344,7 +344,7 @@ function createBrowserMcp(
     "browser_screenshot",
     {
       description: "Capture the visible Deskto browser viewport as PNG.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {

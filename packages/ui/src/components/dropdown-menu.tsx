@@ -68,7 +68,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "px-2 pt-1.5 pb-1 eyebrow text-muted-foreground/70 data-inset:pl-7",
+        "px-2 pt-1.5 pb-1 eyebrow text-muted-foreground data-inset:pl-7",
         className
       )}
       {...props}
@@ -138,10 +138,7 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenuContent
       data-slot="dropdown-menu-sub-content"
-      className={cn(
-        "w-auto min-w-[96px] rounded-menu p-1 text-popover-foreground glass-popover duration-140 ease-(--ease-out-quart) outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-1 data-open:zoom-in-98 data-closed:animate-out data-closed:duration-100 data-closed:fade-out-0 data-closed:zoom-out-98",
-        className
-      )}
+      className={cn("w-auto min-w-[96px]", className)}
       align={align}
       alignOffset={alignOffset}
       side={side}

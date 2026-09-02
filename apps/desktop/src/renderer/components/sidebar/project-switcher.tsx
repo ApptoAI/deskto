@@ -70,6 +70,7 @@ export function ProjectSwitcher({
               variant="ghost"
               className="min-w-0 flex-1 justify-start gap-2 bg-fill-card px-2 hover:bg-fill-chip"
               title={allProjects ? undefined : activeProject?.path}
+              aria-label={`Switch project, current: ${label}`}
             />
           }
         >

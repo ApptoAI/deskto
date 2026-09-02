@@ -13,6 +13,8 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { describedErrorSchema } from "../../runtime/describe-error.js"
+import { InlineError } from "../inline-error.js"
 import {
   WorkspaceIcon,
   workspaceColors,
@@ -38,14 +40,23 @@ export function WorkspaceDialog({
   onSubmit: (draft: WorkspaceDraft) => Promise<void>
   onDelete: () => Promise<void>
 }) {
+  const [busy, setBusy] = useState(false)
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!busy) onOpenChange(nextOpen)
+      }}
+    >
+      <DialogContent showCloseButton={!busy}>
         {open ? (
           <WorkspaceForm
             key={workspace?.id ?? "create"}
             workspace={workspace}
             canDelete={canDelete}
+            busy={busy}
+            setBusy={setBusy}
             onSubmit={onSubmit}
             onDelete={onDelete}
             onClose={() => onOpenChange(false)}
@@ -59,12 +70,16 @@ export function WorkspaceDialog({
 function WorkspaceForm({
   workspace,
   canDelete,
+  busy,
+  setBusy,
   onSubmit,
   onDelete,
   onClose,
 }: {
   workspace: Workspace | null
   canDelete: boolean
+  busy: boolean
+  setBusy: (busy: boolean) => void
   onSubmit: (draft: WorkspaceDraft) => Promise<void>
   onDelete: () => Promise<void>
   onClose: () => void
@@ -72,33 +87,27 @@ function WorkspaceForm({
   const [name, setName] = useState(workspace?.name ?? "")
   const [color, setColor] = useState(workspace?.color ?? workspaceColors[0]!)
   const [icon, setIcon] = useState(workspace?.icon ?? workspaceIcons[0]!)
-  const [busy, setBusy] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  // The host surfaces failures; the form only stays open so nothing is lost.
-  async function submit() {
+  // The host's error strip sits under the scrim, so the failure has to be
+  // repeated here; the form stays open so nothing typed is lost.
+  async function run(action: () => Promise<void>) {
     setBusy(true)
+    setActionError(null)
     try {
-      await onSubmit({ name: name.trim(), color, icon })
+      await action()
       onClose()
-    } catch {
+    } catch (error) {
       setConfirmingDelete(false)
+      setActionError(describedErrorSchema.parse(error))
     } finally {
       setBusy(false)
     }
   }
 
-  async function remove() {
-    setBusy(true)
-    try {
-      await onDelete()
-      onClose()
-    } catch {
-      setConfirmingDelete(false)
-    } finally {
-      setBusy(false)
-    }
-  }
+  const submit = () => run(() => onSubmit({ name: name.trim(), color, icon }))
+  const remove = () => run(onDelete)
 
   return (
     <>
@@ -107,6 +116,8 @@ function WorkspaceForm({
           {workspace ? "Edit workspace" : "New workspace"}
         </DialogTitle>
       </DialogHeader>
+
+      {actionError ? <InlineError message={actionError} /> : null}
 
       <form
         className="space-y-4"

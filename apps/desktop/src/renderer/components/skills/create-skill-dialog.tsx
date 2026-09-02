@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 
+import { describedErrorSchema } from "../../runtime/describe-error.js"
+import { InlineError } from "../inline-error.js"
 import {
   emptySkillDraft,
   isCompleteSkillDraft,
@@ -28,28 +30,36 @@ export function CreateSkillDialog({
 }) {
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState(emptySkillDraft)
+  const [actionError, setActionError] = useState<string | null>(null)
 
+  // Workbench's error strip sits under the scrim, so the failure is repeated
+  // here and the draft stays put.
   async function create() {
     setSaving(true)
+    setActionError(null)
     try {
       await onCreate(draft)
       setDraft(emptySkillDraft())
       onOpenChange(false)
-    } catch {
-      // Workbench shows mutation failures in its error strip.
+    } catch (error) {
+      setActionError(describedErrorSchema.parse(error))
     } finally {
       setSaving(false)
     }
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) setDraft(emptySkillDraft())
+    if (saving) return
+    if (!nextOpen) {
+      setDraft(emptySkillDraft())
+      setActionError(null)
+    }
     onOpenChange(nextOpen)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent showCloseButton={!saving}>
         <DialogHeader>
           <DialogTitle>Create a skill</DialogTitle>
           <DialogDescription>
@@ -63,6 +73,7 @@ export function CreateSkillDialog({
           autoFocus
           onChange={setDraft}
         />
+        {actionError ? <InlineError message={actionError} /> : null}
         <DialogFooter>
           <Button
             type="button"

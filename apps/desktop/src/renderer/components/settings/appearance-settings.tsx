@@ -33,6 +33,14 @@ import { useSettings } from "../../settings/settings-context.js"
 import { InlineError } from "../inline-error.js"
 import { StatusPanel } from "../status-panel.js"
 import { ThemePreview } from "../theme-preview.js"
+import {
+  workspaceAccent,
+  workspaceSwatch,
+} from "../workspace/workspace-theme.js"
+
+// The previews borrow one real Workspace hue so what they show is what a
+// Workspace of that colour lands as, in both palettes.
+const previewWorkspaceColor = "blue"
 
 export function AppearanceSettings() {
   const { snapshot, loadError, retry, update } = useSettings()
@@ -342,7 +350,7 @@ function ChoiceCardGroup<T extends string>({
 function AccentPreview({ value }: { value: AccentSource }) {
   const filled =
     value === "workspace"
-      ? { background: "oklch(0.7 0.15 254)", color: "oklch(0.16 0.01 286)" }
+      ? { background: workspaceAccent(previewWorkspaceColor) ?? undefined }
       : undefined
   return (
     <span aria-hidden className="flex h-20 flex-col justify-center gap-2 p-3">
@@ -367,9 +375,18 @@ function LayoutPreview({ value }: { value: WorkspaceLayout }) {
     <span aria-hidden className="flex h-20 bg-background">
       {value === "slack" ? (
         <span className="flex w-7 shrink-0 flex-col items-center gap-1.5 border-r border-border bg-sidebar p-1.5">
-          <span className="size-3 rounded bg-violet-500" />
-          <span className="size-3 rounded bg-blue-500 opacity-60" />
-          <span className="size-3 rounded bg-emerald-500 opacity-60" />
+          <span
+            className={cn("size-3 rounded", workspaceSwatch("violet"))}
+          />
+          <span
+            className={cn("size-3 rounded opacity-60", workspaceSwatch("blue"))}
+          />
+          <span
+            className={cn(
+              "size-3 rounded opacity-60",
+              workspaceSwatch("emerald")
+            )}
+          />
         </span>
       ) : null}
       <span
@@ -379,7 +396,9 @@ function LayoutPreview({ value }: { value: WorkspaceLayout }) {
         )}
       >
         <span className="mb-1 flex items-center gap-1">
-          <span className="size-2.5 rounded bg-violet-500" />
+          <span
+            className={cn("size-2.5 rounded", workspaceSwatch("violet"))}
+          />
           <span className="h-1 w-1/2 rounded-full bg-foreground/70" />
         </span>
         <span className="h-1 w-full rounded-full bg-muted-foreground/45" />

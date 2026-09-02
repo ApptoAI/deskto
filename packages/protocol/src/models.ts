@@ -78,6 +78,8 @@ export const projectTemplateSourceSchema = z.object({
 export type ProjectTemplateSource = z.infer<typeof projectTemplateSourceSchema>
 
 export const projectNameMaxLength = 160
+/** How many page elements one message can carry from the shared Browser. */
+export const browserContextLimit = 16
 export const projectDescriptionMaxLength = 1_000
 export const projectInstructionsMaxLength = 64_000
 export const projectTemplateDescriptionMaxLength = 500
@@ -285,7 +287,7 @@ export const turnInputSchema = z
     /** Page elements selected by the person in this Task's shared Browser. */
     browserContexts: z
       .array(browserElementContextSchema)
-      .max(16)
+      .max(browserContextLimit)
       .refine(
         (contexts) =>
           new Set(contexts.map((context) => context.id)).size ===
