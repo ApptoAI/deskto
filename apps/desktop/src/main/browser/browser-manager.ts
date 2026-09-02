@@ -5,6 +5,7 @@ import {
   session,
   WebContentsView,
   type Rectangle,
+  type Session,
   type WebContents,
 } from "electron"
 import type {
@@ -15,7 +16,9 @@ import type {
 import {
   browserElementContextSchema,
   browserElementSelectionSchema,
+  browserProfilePartition,
   type BrowserElementContext,
+  type BrowserProfileClearResult,
 } from "@deskto/protocol"
 import { z } from "zod"
 
@@ -41,6 +44,7 @@ import {
   sanitizeBrowserContextTitle,
   sanitizeBrowserContextUrl,
 } from "./browser-context.js"
+import { browserProfilePath, measureBrowserProfile } from "./browser-profile.js"
 import {
   browserCancelElementPickerScript,
   browserDeleteRegistryScript,
@@ -51,7 +55,12 @@ import {
 } from "./browser-page-script.js"
 import { isBrowserWebUrl, normalizeBrowserUrl } from "./browser-url.js"
 
-const browserPartition = "persist:deskto-browser"
+/**
+ * Tabs whose Workspace cannot be resolved share this partition rather than
+ * borrowing another Workspace's logins. It also holds data from before
+ * profiles were per Workspace.
+ */
+const fallbackBrowserPartition = "persist:deskto-browser"
 const browserAutomationWorldId = 1_001
 const browserElementPickerControlKey = "__deskto_element_picker_control"
 const maximumBrowserArtifactResources = 8
@@ -80,6 +89,8 @@ const rawBrowserElementContextSchema = browserElementSelectionSchema.nullable()
 
 type BrowserTab = {
   view: WebContentsView
+  /** Undefined only when the tab fell back to the shared partition. */
+  workspaceId?: string
   refs: Set<string>
   registryKey?: string
   artifact?: {
@@ -104,30 +115,81 @@ export class BrowserManager implements BrowserAutomationHost {
   readonly #artifactLoads = new Map<string, number>()
   readonly #artifactOpens = new BrowserArtifactOpenRequests()
   readonly #openRequests = new Set<string>()
-  readonly #browserSession = session.fromPartition(browserPartition)
+  readonly #sessions = new Map<string, Session>()
+  readonly #pendingTabs = new Map<string, Promise<BrowserTab>>()
   #visibleThreadId?: string
   #visibleBounds = backgroundBounds
 
   constructor(
     private readonly window: BrowserWindow,
-    private readonly publish: (event: BrowserEvent) => void
-  ) {
-    this.#browserSession.protocol.handle(browserArtifactScheme, (request) => {
+    private readonly publish: (event: BrowserEvent) => void,
+    private readonly profiles: {
+      userDataPath: string
+      /** Which Workspace a task belongs to; undefined when it is gone. */
+      workspaceForThread: (threadId: string) => Promise<string | undefined>
+    }
+  ) {}
+
+  /**
+   * Every partition gets the same hardening the moment it is first used, so
+   * a Workspace's profile can never be reached by a less restricted session.
+   */
+  #sessionFor(partition: string): Session {
+    const existing = this.#sessions.get(partition)
+    if (existing) return existing
+    const browserSession = session.fromPartition(partition)
+    browserSession.protocol.handle(browserArtifactScheme, (request) => {
       const key = browserArtifactKeyFromUrl(request.url)
       return browserArtifactResponse(
         request,
         key ? this.#artifactResources.get(key) : undefined
       )
     })
-    this.#browserSession.setPermissionRequestHandler(
+    browserSession.setPermissionRequestHandler(
       (_webContents, _permission, callback) => callback(false)
     )
-    this.#browserSession.setPermissionCheckHandler(() => false)
-    this.#browserSession.on("will-download", (event) => event.preventDefault())
+    browserSession.setPermissionCheckHandler(() => false)
+    browserSession.on("will-download", (event) => event.preventDefault())
+    this.#sessions.set(partition, browserSession)
+    return browserSession
+  }
+
+  profilePath(workspaceId: string): string {
+    return (
+      this.#sessions.get(browserProfilePartition(workspaceId))?.storagePath ??
+      browserProfilePath(this.profiles.userDataPath, workspaceId)
+    )
+  }
+
+  async profileUsage(workspaceId: string) {
+    return measureBrowserProfile(this.profilePath(workspaceId))
+  }
+
+  /**
+   * Clears what the Workspace's profile holds: cookies, storage, cache and
+   * cached logins. Open tabs in that Workspace close first so nothing
+   * writes back afterwards. The folder itself stays; Chromium owns it.
+   */
+  async clearProfile(workspaceId: string): Promise<BrowserProfileClearResult> {
+    const before = await this.profileUsage(workspaceId)
+    for (const [threadId, tab] of this.#tabs) {
+      if (tab.workspaceId === workspaceId) this.closeThread(threadId)
+    }
+    const browserSession = this.#sessionFor(browserProfilePartition(workspaceId))
+    await browserSession.clearStorageData()
+    await browserSession.clearCache()
+    await browserSession.clearAuthCache()
+    await browserSession.clearHostResolverCache()
+    await browserSession.clearData()
+    const after = await this.profileUsage(workspaceId)
+    return {
+      workspaceId,
+      clearedBytes: Math.max(0, before.sizeBytes - after.sizeBytes),
+    }
   }
 
   async show(threadId: string, bounds: Rectangle): Promise<BrowserViewState> {
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     this.#openRequests.delete(threadId)
     if (this.#visibleThreadId && this.#visibleThreadId !== threadId) {
       this.#tabs.get(this.#visibleThreadId)?.view.setBounds(backgroundBounds)
@@ -192,7 +254,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const resource = await loadResource()
       if (!this.#artifactOpens.isCurrent(request)) return this.state(threadId)
       this.#requestPanel(threadId)
-      const tab = this.#ensureTab(threadId)
+      const tab = await this.#ensureTab(threadId)
       await this.#cancelElementPicker(tab)
       if (!this.#artifactOpens.isCurrent(request)) return this.state(threadId)
       const artifact = { ...resource, threadId }
@@ -240,7 +302,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async selectElement(
     threadId: string
   ): Promise<BrowserElementContext | undefined> {
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     this.#artifactOpens.invalidate(threadId)
     const status = this.#status(tab)
     if (!status.url) throw new Error("Open a page before selecting an element.")
@@ -299,7 +361,7 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   async status(threadId: string): Promise<BrowserStatus> {
-    return this.#status(this.#ensureTab(threadId))
+    return this.#status(await this.#ensureTab(threadId))
   }
 
   async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
@@ -311,7 +373,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async navigate(threadId: string, value: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     tab.refs.clear()
     tab.registryKey = undefined
@@ -327,7 +389,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   async snapshot(threadId: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     const snapshotId = randomUUID()
     const registryKey = `__deskto_browser_${snapshotId.replaceAll("-", "")}`
     const raw = rawBrowserSnapshotSchema.parse(
@@ -356,7 +418,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async click(threadId: string, ref: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       const point = await this.#elementPoint(tab, ref)
       tab.view.webContents.sendInputEvent({
@@ -386,7 +448,7 @@ export class BrowserManager implements BrowserAutomationHost {
   ): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       const registryKey = this.#registry(tab, ref)
       const changed = z
@@ -412,7 +474,7 @@ export class BrowserManager implements BrowserAutomationHost {
     if (!/^[A-Za-z0-9+_-]{1,40}$/.test(key)) {
       throw new Error(`Unsupported browser key: ${key}`)
     }
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     return this.#withAgentInput(tab, async () => {
       await this.#sendKey(tab, key)
       await settleInput()
@@ -423,7 +485,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async back(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const history = tab.view.webContents.navigationHistory
     if (history.canGoBack()) {
@@ -440,7 +502,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async forward(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const history = tab.view.webContents.navigationHistory
     if (history.canGoForward()) {
@@ -457,7 +519,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async reload(threadId: string): Promise<BrowserSnapshot> {
     this.#artifactOpens.invalidate(threadId)
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     await this.#cancelElementPicker(tab)
     const currentUrl = this.#status(tab).url
     if (!currentUrl) return this.snapshot(threadId)
@@ -472,7 +534,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   async screenshot(threadId: string) {
     this.#requestPanel(threadId)
-    const tab = this.#ensureTab(threadId)
+    const tab = await this.#ensureTab(threadId)
     const image = await tab.view.webContents.capturePage()
     const png = image.toPNG()
     if (png.byteLength > maximumScreenshotBytes) {
@@ -501,23 +563,50 @@ export class BrowserManager implements BrowserAutomationHost {
 
   close(): void {
     for (const threadId of this.#tabs.keys()) this.closeThread(threadId)
-    this.#browserSession.protocol.unhandle(browserArtifactScheme)
+    for (const browserSession of this.#sessions.values()) {
+      browserSession.protocol.unhandle(browserArtifactScheme)
+    }
+    this.#sessions.clear()
   }
 
-  #ensureTab(threadId: string): BrowserTab {
+  /**
+   * Resolving the Workspace is asynchronous, so two callers racing for the
+   * same task share one pending tab rather than each opening a view.
+   */
+  #ensureTab(threadId: string): Promise<BrowserTab> {
+    const current = this.#tabs.get(threadId)
+    if (current && !current.view.webContents.isDestroyed()) {
+      return Promise.resolve(current)
+    }
+    const pending = this.#pendingTabs.get(threadId)
+    if (pending) return pending
+    const creating = this.profiles
+      .workspaceForThread(threadId)
+      .catch(() => undefined)
+      .then((workspaceId) => this.#createTab(threadId, workspaceId))
+      .finally(() => this.#pendingTabs.delete(threadId))
+    this.#pendingTabs.set(threadId, creating)
+    return creating
+  }
+
+  #createTab(threadId: string, workspaceId: string | undefined): BrowserTab {
     const current = this.#tabs.get(threadId)
     if (current && !current.view.webContents.isDestroyed()) return current
     if (current) this.closeThread(threadId)
+    const partition = workspaceId
+      ? browserProfilePartition(workspaceId)
+      : fallbackBrowserPartition
+    this.#sessionFor(partition)
     const view = new WebContentsView({
       webPreferences: {
-        partition: browserPartition,
+        partition,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
       },
     })
-    const tab: BrowserTab = { view, refs: new Set() }
+    const tab: BrowserTab = { view, workspaceId, refs: new Set() }
     this.#tabs.set(threadId, tab)
     this.window.contentView.addChildView(view)
     view.setBounds(backgroundBounds)

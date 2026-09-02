@@ -135,11 +135,35 @@ async function openApplication(): Promise<void> {
 
   const window = createMainWindow()
   const unregisterWindowControls = registerWindowControlsIpc(window)
-  const browser = new BrowserManager(window, (event) => {
-    if (!window.webContents.isDestroyed()) {
-      window.webContents.send(browserEventChannel, event)
+  // The Runtime exists only after the browser does, so the profile lookup
+  // reads it through a reference that startup fills in below.
+  const runtimeRef: { current: ReturnType<typeof createRuntime> | undefined } =
+    { current: undefined }
+  const browser = new BrowserManager(
+    window,
+    (event) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send(browserEventChannel, event)
+      }
+    },
+    {
+      userDataPath: app.getPath("userData"),
+      workspaceForThread: async (threadId) => {
+        const runtime = runtimeRef.current
+        if (!runtime) return undefined
+        const thread = await runtime.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await runtime.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.workspaceId : undefined
+      },
     }
-  })
+  )
   let browserMcp: BrowserMcpServer
   try {
     browserMcp = await BrowserMcpServer.create(browser)
@@ -196,6 +220,7 @@ async function openApplication(): Promise<void> {
     browser.close()
     throw error
   }
+  runtimeRef.current = runtime
   // Install cleanup before the orchestration server starts so a startup
   // failure still closes the Runtime and Browser resources.
   closeRuntime = async () => {
