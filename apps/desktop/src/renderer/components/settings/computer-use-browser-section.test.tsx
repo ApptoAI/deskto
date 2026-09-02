@@ -7,14 +7,21 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { RuntimeClient } from "@deskto/client"
 import type { RuntimeTransport } from "@deskto/protocol"
 import { resolveSettings, type SettingValues } from "@deskto/settings"
 
+import { createBrowserDesktopBridge } from "../../runtime/browser-desktop-bridge.js"
 import { RuntimeClientProvider } from "../../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../../settings/settings-context.js"
 import { ComputerUseSettings } from "./computer-use-settings.js"
+
+beforeEach(() => {
+  // The page's cookie-import section discovers browsers on mount; the bridge
+  // stub reports none, so the browser-section assertions stand alone.
+  window.deskto = createBrowserDesktopBridge()
+})
 
 afterEach(() => cleanup())
 
