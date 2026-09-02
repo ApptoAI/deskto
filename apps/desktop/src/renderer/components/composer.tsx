@@ -481,6 +481,7 @@ export function Composer({
         attachments,
         browserContexts: submittedBrowserContexts,
       })
+      if (draftKey) writeComposerDraft(draftKey, { text: "", references: [] })
       setPrompt("")
       setReferences([])
       discardAttachments(submittedAttachmentIds)

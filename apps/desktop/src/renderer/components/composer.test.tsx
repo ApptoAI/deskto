@@ -167,6 +167,37 @@ describe("Composer", () => {
     ).toBe("")
   })
 
+  it("clears a sent draft when sending navigates away", async () => {
+    const draftKey = "new:project-1"
+    const composer = (onSend: () => Promise<void>) => (
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          draftKey={draftKey}
+          label="Message"
+          placeholder="Describe the task"
+          onSend={onSend}
+        />
+      </RuntimeClientProvider>
+    )
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    const first = render(composer(onSend))
+    onSend.mockImplementation(async () => first.unmount())
+    const textarea = screen.getByRole("textbox", { name: "Message" })
+    fireEvent.change(textarea, {
+      target: { value: "already sent", selectionStart: 12 },
+    })
+
+    fireEvent.submit(textarea.closest("form")!)
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce())
+
+    render(composer(vi.fn().mockResolvedValue(undefined)))
+    expect(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Message" })
+        .value
+    ).toBe("")
+  })
+
   it("sends /model as text when draft images are attached", async () => {
     vi.stubGlobal("CSS", { escape: (value: string) => value })
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {

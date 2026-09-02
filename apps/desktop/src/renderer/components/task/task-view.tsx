@@ -23,6 +23,7 @@ import { Button } from "@workspace/ui/components/button"
 import { cn } from "@workspace/ui/lib/utils"
 
 import { describeHarnessBlock, findHarness } from "../../lib/harness.js"
+import { useNowMinute } from "../../lib/use-now-minute.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import { useRuntimeClient } from "../../runtime/runtime-client-context.js"
 import { useRuntimeEvent } from "../../runtime/use-runtime-event.js"
@@ -117,7 +118,7 @@ export function TaskView({
   // This also covers a turn finishing while the user is already looking —
   // the refetched view arrives unread, the stamp clears it, and the next
   // refetch reads as seen, so it cannot loop.
-  const now = new Date().toISOString()
+  const now = useNowMinute()
   const needsVisitStamp =
     state.status === "ready" &&
     (hasUnreadCompletion(state.data.thread) ||
