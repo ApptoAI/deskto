@@ -105,6 +105,7 @@ function contrast(foreground: string, surface: string): number {
 
 const light = declarations(":root")
 const dark = new Map([...light, ...declarations(".dark")])
+const darkPaper = new Map([...dark, ...declarations("@utility paper")])
 
 describe.each([
   ["light", light],
@@ -134,5 +135,19 @@ describe.each([
 
   it("draws a control's boundary at 3:1 on the pane", () => {
     expect(on("--input", "--pane")).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe("dark paper", () => {
+  const onPaper = (token: string) =>
+    contrast(
+      resolve(`var(${token})`, darkPaper),
+      resolve("var(--paper-bg)", darkPaper)
+    )
+
+  it("keeps a secondary copy button's ink and boundary visible", () => {
+    expect(onPaper("--secondary-foreground")).toBeGreaterThanOrEqual(4.5)
+    expect(onPaper("--edge-button")).toBeGreaterThanOrEqual(3)
+    expect(onPaper("--input")).toBeGreaterThanOrEqual(3)
   })
 })
