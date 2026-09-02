@@ -373,6 +373,11 @@ const migrations = [
     CREATE INDEX follow_ups_thread_created_idx
       ON follow_ups(thread_id, created_at);
   `,
+  `
+    ALTER TABLE follow_ups ADD COLUMN state TEXT NOT NULL DEFAULT 'queued'
+      CHECK (state IN ('queued', 'promoted'));
+    ALTER TABLE follow_ups ADD COLUMN turn_id TEXT REFERENCES turns(id) ON DELETE SET NULL;
+  `,
 ]
 
 export function migrate(database: DatabaseSync): void {

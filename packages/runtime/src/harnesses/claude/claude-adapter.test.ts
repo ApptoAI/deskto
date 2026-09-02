@@ -630,14 +630,14 @@ describe("ClaudeAdapter", () => {
     await session.cancel()
   })
 
-  it("queues and steers through Claude's live input stream", async () => {
+  it("queues through Claude's input stream but leaves steering to the Runtime", async () => {
     const output = new AsyncQueue<SDKMessage>()
     const query = fakeQuery([])
     query[Symbol.asyncIterator] = () => output[Symbol.asyncIterator]()
     queryMock.mockReturnValue(query)
     const adapter = new ClaudeAdapter({ queryFactory: queryMock })
 
-    expect(adapter.descriptor.followUps).toEqual({ queue: true, steer: true })
+    expect(adapter.descriptor.followUps).toEqual({ queue: true, steer: false })
     const session = await adapter.start(
       {
         threadId: "thread-1",
@@ -672,19 +672,6 @@ describe("ClaudeAdapter", () => {
       id: "420c410d-503f-4b6a-92ff-68db71c33d62",
       prompt: "After this",
       references: [],
-      attachments: [],
-    })
-    await expect(input.next()).resolves.toMatchObject({
-      value: {
-        uuid: "420c410d-503f-4b6a-92ff-68db71c33d62",
-        priority: "later",
-        message: { content: [{ type: "text", text: "After this" }] },
-      },
-    })
-    await session.steer({
-      id: "adc030b1-63e0-4bf8-a8b0-3a6f433971a4",
-      prompt: "Change course",
-      references: [],
       attachments: [
         {
           type: "image",
@@ -696,11 +683,11 @@ describe("ClaudeAdapter", () => {
     })
     await expect(input.next()).resolves.toMatchObject({
       value: {
-        uuid: "adc030b1-63e0-4bf8-a8b0-3a6f433971a4",
-        priority: "now",
+        uuid: "420c410d-503f-4b6a-92ff-68db71c33d62",
+        priority: "later",
         message: {
           content: [
-            { type: "text", text: "Change course" },
+            { type: "text", text: "After this" },
             {
               type: "image",
               source: {
@@ -713,7 +700,15 @@ describe("ClaudeAdapter", () => {
         },
       },
     })
-    expect(query.interrupt).toHaveBeenCalledOnce()
+    await expect(
+      session.steer({
+        id: "adc030b1-63e0-4bf8-a8b0-3a6f433971a4",
+        prompt: "Change course",
+        references: [],
+        attachments: [],
+      })
+    ).rejects.toThrow("temporarily unavailable")
+    expect(query.interrupt).not.toHaveBeenCalled()
 
     const result = sdkMessage({
       type: "result",
@@ -721,20 +716,10 @@ describe("ClaudeAdapter", () => {
       modelUsage: {},
     })
     output.push(result)
-    output.push(result)
-    output.push(result)
     const events = session.events[Symbol.asyncIterator]()
     await expect(events.next()).resolves.toMatchObject({
       value: { type: "turn.completed" },
     })
-    await expect(
-      session.steer({
-        id: "80f6c52f-2ad0-481d-912f-f842a9aba34c",
-        prompt: "Too late",
-        references: [],
-        attachments: [],
-      })
-    ).rejects.toThrow("no longer running")
     output.close()
     await expect(events.next()).resolves.toMatchObject({ done: true })
   })

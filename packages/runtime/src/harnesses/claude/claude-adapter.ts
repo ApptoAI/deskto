@@ -138,7 +138,7 @@ export class ClaudeAdapter implements HarnessAdapterFactory {
   readonly descriptor = {
     id: "claude",
     name: "Claude Code",
-    followUps: { queue: true, steer: true },
+    followUps: { queue: true, steer: false },
   }
 
   constructor(private readonly options: ClaudeAdapterOptions = {}) {}
@@ -294,8 +294,6 @@ class ClaudeSession implements HarnessSession {
   #backgroundTaskLevelSeen = false
   #backgroundActivityStartedAfterLevel = false
   #planStarted = false
-  /** Result boundaries superseded by accepted queued or steering input. */
-  #supersededResults = 0
 
   constructor(
     input: HarnessRunInput,
@@ -454,7 +452,6 @@ class ClaudeSession implements HarnessSession {
   queue(input: HarnessFollowUpInput): Promise<void> {
     if (this.#closed || this.#terminalEventEmitted)
       return Promise.reject(new Error("Claude is no longer running"))
-    this.#supersededResults += 1
     this.#input.push(
       claudeUserMessage(
         claudePromptForFollowUp(input, this.#skillRoots),
@@ -466,20 +463,10 @@ class ClaudeSession implements HarnessSession {
     return Promise.resolve()
   }
 
-  async steer(input: HarnessFollowUpInput): Promise<void> {
-    if (this.#closed || this.#terminalEventEmitted) {
-      throw new Error("Claude is no longer running")
-    }
-    this.#supersededResults += 1
-    this.#input.push(
-      claudeUserMessage(
-        claudePromptForFollowUp(input, this.#skillRoots),
-        input.attachments,
-        input.id,
-        "now"
-      )
+  steer(): Promise<void> {
+    return Promise.reject(
+      new Error("Claude live steering is temporarily unavailable")
     )
-    await this.#query.interrupt()
   }
 
   async cancel(): Promise<void> {
@@ -802,12 +789,6 @@ class ClaudeSession implements HarnessSession {
     }
 
     if (message.type !== "result") return
-
-    if (this.#supersededResults > 0) {
-      this.#supersededResults -= 1
-      this.#successfulResultPending = false
-      return
-    }
 
     // Fallback for CLIs without the context-usage control request: learn the
     // window from modelUsage once, then re-emit the last reading with it. When

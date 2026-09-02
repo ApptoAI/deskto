@@ -33,6 +33,7 @@ import { newThreadTitle } from "./threads.js"
 export type ActiveTurnRecord = {
   turnId: string
   assistantMessageId: string
+  followUpMessageId?: string
   prompt: string
   providerSessionId?: string
   forkProviderSession?: boolean
@@ -149,7 +150,7 @@ export class Turns {
       if (queuedMessageId) {
         const promoted = this.database
           .prepare(
-            "UPDATE messages SET turn_id = ?, delivery_state = NULL, ordinal = 0 WHERE id = ? AND thread_id = ? AND turn_id IS NULL AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id)"
+            "UPDATE messages SET turn_id = ?, ordinal = 0 WHERE id = ? AND thread_id = ? AND turn_id IS NULL AND delivery_state = 'queued' AND EXISTS (SELECT 1 FROM follow_ups WHERE message_id = messages.id AND state = 'queued')"
           )
           .run(turnId, queuedMessageId, threadId)
         if (promoted.changes === 0) {
@@ -158,9 +159,17 @@ export class Turns {
             "Queued message not found"
           )
         }
-        this.database
-          .prepare("DELETE FROM follow_ups WHERE message_id = ?")
-          .run(queuedMessageId)
+        const queue = this.database
+          .prepare(
+            "UPDATE follow_ups SET state = 'promoted', turn_id = ? WHERE message_id = ? AND thread_id = ? AND state = 'queued'"
+          )
+          .run(turnId, queuedMessageId, threadId)
+        if (queue.changes === 0) {
+          throw new RuntimeError(
+            "follow-up-not-found",
+            "Queued message not found"
+          )
+        }
       } else {
         this.database
           .prepare(
@@ -212,6 +221,7 @@ export class Turns {
       },
       generateTitle,
     }
+    if (queuedMessageId) activeTurn.followUpMessageId = queuedMessageId
     if (context.provider_session_id) {
       activeTurn.providerSessionId = context.provider_session_id
     }
@@ -312,6 +322,66 @@ export class Turns {
     return this.#followUpMessage(messageId)
   }
 
+  markFollowUpStarted(messageId: string, turnId: string): Message {
+    transaction(this.database, () => {
+      const queue = this.database
+        .prepare(
+          "DELETE FROM follow_ups WHERE message_id = ? AND turn_id = ? AND state = 'promoted'"
+        )
+        .run(messageId, turnId)
+      if (queue.changes === 0) {
+        throw new RuntimeError(
+          "follow-up-not-found",
+          "Queued message not found"
+        )
+      }
+      this.database
+        .prepare(
+          "UPDATE messages SET delivery_state = NULL WHERE id = ? AND turn_id = ?"
+        )
+        .run(messageId, turnId)
+    })
+    return this.#followUpMessage(messageId)
+  }
+
+  requeuePromotedFollowUp(messageId: string, turnId: string): Message {
+    transaction(this.database, () => {
+      // SAFETY: the query selects its one non-null thread_id column and the
+      // message_id primary key limits the result to one row or undefined.
+      const row = this.database
+        .prepare(
+          "SELECT thread_id FROM follow_ups WHERE message_id = ? AND turn_id = ? AND state = 'promoted'"
+        )
+        .get(messageId, turnId) as { thread_id: string } | undefined
+      if (!row) {
+        throw new RuntimeError(
+          "follow-up-not-found",
+          "Queued message not found"
+        )
+      }
+      this.#requeuePromoted(messageId, row.thread_id, turnId)
+    })
+    return this.#followUpMessage(messageId)
+  }
+
+  recoverPromotedFollowUps(): void {
+    transaction(this.database, () => {
+      // SAFETY: the query selects the three non-null columns declared here.
+      const rows = this.database
+        .prepare(
+          "SELECT message_id, thread_id, turn_id FROM follow_ups WHERE state = 'promoted' AND turn_id IS NOT NULL"
+        )
+        .all() as Array<{
+        message_id: string
+        thread_id: string
+        turn_id: string
+      }>
+      for (const row of rows) {
+        this.#requeuePromoted(row.message_id, row.thread_id, row.turn_id)
+      }
+    })
+  }
+
   hasFollowUps(threadId: string): boolean {
     return Boolean(
       this.database
@@ -325,18 +395,21 @@ export class Turns {
     // follow-up columns; LIMIT 1 returns one complete row or undefined.
     const row = this.database
       .prepare(
-        "SELECT message.*, follow_up.harness_prompt, follow_up.harness_references FROM follow_ups follow_up JOIN messages message ON message.id = follow_up.message_id WHERE follow_up.thread_id = ? ORDER BY follow_up.created_at, follow_up.rowid LIMIT 1"
+        "SELECT message.*, follow_up.harness_prompt, follow_up.harness_references, follow_up.state AS follow_up_state FROM follow_ups follow_up JOIN messages message ON message.id = follow_up.message_id WHERE follow_up.thread_id = ? ORDER BY follow_up.created_at, follow_up.rowid LIMIT 1"
       )
       .get(threadId) as
       | (MessageRow & {
           harness_prompt: string
           harness_references: string
+          follow_up_state: "queued" | "promoted"
         })
       | undefined
     if (!row) return undefined
-    // An adapter call is still deciding the head item's disposition. Nothing
-    // behind it may overtake it; recovery changes stranded steering to queued.
-    if (row.delivery_state !== "queued") return undefined
+    // A provider call is still deciding the head item's disposition or start.
+    // Nothing behind it may overtake it; recovery returns either state to queued.
+    if (row.delivery_state !== "queued" || row.follow_up_state !== "queued") {
+      return undefined
+    }
     const references = parsePromptReferences(row.prompt_references)
     const attachments = this.#followUpAttachments(row.id).map((attachment) => ({
       type: attachment.type,
@@ -380,6 +453,42 @@ export class Turns {
         "SELECT * FROM message_attachments WHERE message_id = ? ORDER BY sort_order"
       )
       .all(messageId) as MessageAttachmentRow[]
+  }
+
+  #requeuePromoted(messageId: string, threadId: string, turnId: string): void {
+    const message = this.database
+      .prepare(
+        "UPDATE messages SET turn_id = NULL, ordinal = NULL, delivery_state = 'queued' WHERE id = ? AND thread_id = ? AND turn_id = ?"
+      )
+      .run(messageId, threadId, turnId)
+    const queue = this.database
+      .prepare(
+        "UPDATE follow_ups SET state = 'queued', turn_id = NULL WHERE message_id = ? AND thread_id = ? AND turn_id = ? AND state = 'promoted'"
+      )
+      .run(messageId, threadId, turnId)
+    if (message.changes === 0 || queue.changes === 0) {
+      throw new RuntimeError("follow-up-not-found", "Queued message not found")
+    }
+    this.database.prepare("DELETE FROM turns WHERE id = ?").run(turnId)
+    // SAFETY: LIMIT 1 returns one complete status/finished_at pair or undefined.
+    const previous = this.database
+      .prepare(
+        "SELECT status, finished_at FROM turns WHERE thread_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1"
+      )
+      .get(threadId) as
+      | { status: string; finished_at: string | null }
+      | undefined
+    const failed = previous?.status === "failed"
+    this.database
+      .prepare(
+        "UPDATE threads SET status = ?, failed_at = ?, updated_at = ? WHERE id = ?"
+      )
+      .run(
+        failed ? "failed" : "idle",
+        failed ? previous.finished_at : null,
+        new Date().toISOString(),
+        threadId
+      )
   }
 
   setProviderSession(

@@ -83,5 +83,6 @@ export class Store {
         )
         .run(now)
     })
+    this.turns.recoverPromotedFollowUps()
   }
 }

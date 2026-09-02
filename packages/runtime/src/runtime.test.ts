@@ -384,6 +384,7 @@ describe("Runtime", () => {
   it("falls back to its durable FIFO queue when steering is rejected", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
     const scripted = new ScriptedHarness({
       id: "codex",
       name: "Codex",
@@ -405,7 +406,7 @@ describe("Runtime", () => {
       },
     }
     const runtime = createRuntime({
-      databasePath: join(directory, "runtime.sqlite"),
+      databasePath,
       harnesses: [harness],
     })
     const project = unwrap(
@@ -498,6 +499,17 @@ describe("Runtime", () => {
       turnId: scripted.runs[1]!.input.turnId,
       ordinal: 0,
     })
+    const startedDatabase = new DatabaseSync(databasePath)
+    expect(
+      startedDatabase
+        .prepare("SELECT message_id FROM follow_ups WHERE message_id = ?")
+        .get(
+          promoted.messages.find(
+            (message) => message.content === "First follow-up"
+          )!.id
+        )
+    ).toBeUndefined()
+    startedDatabase.close()
 
     scripted.runs[1]!.emit({ type: "turn.completed" })
     scripted.runs[1]!.finish()
@@ -514,6 +526,277 @@ describe("Runtime", () => {
       )
       return view.thread.status === "idle"
     })
+    await runtime.close()
+  })
+
+  it("requeues the same follow-up when a promoted Harness start rejects", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness()
+    let followUpStartAttempts = 0
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: (input, signal) => {
+        if (input.prompt === "Retry this follow-up") {
+          followUpStartAttempts += 1
+          if (followUpStartAttempts === 1) {
+            return Promise.reject(new Error("Harness start failed"))
+          }
+        }
+        return scripted.start(input, signal)
+      },
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+      harnessRefreshMs: 0,
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Start" },
+      })
+    )
+    const queued = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Retry this follow-up",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+    const queuedMessage = queued.view.messages.find(
+      (message) => message.content === "Retry this follow-up"
+    )!
+
+    scripted.runs[0]!.emit({ type: "turn.completed" })
+    scripted.runs[0]!.finish()
+    await vi.waitFor(() => expect(followUpStartAttempts).toBe(2))
+    await vi.waitFor(() => expect(scripted.runs).toHaveLength(2))
+
+    const retried = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      retried.messages.filter((message) => message.id === queuedMessage.id)
+    ).toEqual([
+      expect.objectContaining({
+        turnId: scripted.runs[1]!.input.turnId,
+        content: "Retry this follow-up",
+      }),
+    ])
+    scripted.runs[1]!.emit({ type: "turn.completed" })
+    scripted.runs[1]!.finish()
+    await runtime.close()
+  })
+
+  it("recovers a promoted follow-up when the process stops during Harness start", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const databasePath = join(directory, "runtime.sqlite")
+    const scripted = new ScriptedHarness()
+    let markPromotionStarted: (() => void) | undefined
+    const promotionStarted = new Promise<void>((resolve) => {
+      markPromotionStarted = resolve
+    })
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () => scripted.checkAvailability(),
+      listModels: () => scripted.listModels(),
+      start: (input, signal) => {
+        if (input.prompt !== "Survive the restart") {
+          return scripted.start(input, signal)
+        }
+        markPromotionStarted?.()
+        return new Promise((_resolve, reject) => {
+          const abort = () => reject(new Error("Process stopped"))
+          if (signal.aborted) abort()
+          else signal.addEventListener("abort", abort, { once: true })
+        })
+      },
+    }
+    const runtime = createRuntime({
+      databasePath,
+      harnesses: [harness],
+      harnessRefreshMs: 0,
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Start" },
+      })
+    )
+    const queued = unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Survive the restart",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+    const queuedMessage = queued.view.messages.find(
+      (message) => message.content === "Survive the restart"
+    )!
+    scripted.runs[0]!.emit({ type: "turn.completed" })
+    scripted.runs[0]!.finish()
+    await promotionStarted
+    const promoted = unwrap(
+      await runtime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    ).messages.find((message) => message.id === queuedMessage.id)!
+    const promotedTurnId = promoted.turnId
+    expect(promotedTurnId).toBeTruthy()
+    if (!promotedTurnId) throw new Error("Follow-up was not promoted")
+    await runtime.close()
+
+    const interruptedDatabase = new DatabaseSync(databasePath)
+    expect(
+      interruptedDatabase
+        .prepare("SELECT state, turn_id FROM follow_ups WHERE message_id = ?")
+        .get(queuedMessage.id)
+    ).toMatchObject({ state: "promoted", turn_id: promotedTurnId })
+    interruptedDatabase.close()
+
+    const resumedHarness = new ScriptedHarness()
+    const resumedRuntime = createRuntime({
+      databasePath,
+      harnesses: [resumedHarness],
+      harnessRefreshMs: 0,
+    })
+    await vi.waitFor(() => expect(resumedHarness.runs).toHaveLength(1))
+    expect(resumedHarness.runs[0]!.input.prompt).toBe("Survive the restart")
+    const resumed = unwrap(
+      await resumedRuntime.request({
+        method: "thread.get",
+        params: { threadId: thread.id },
+      })
+    )
+    expect(
+      resumed.messages.filter((message) => message.id === queuedMessage.id)
+    ).toEqual([
+      expect.objectContaining({
+        turnId: resumedHarness.runs[0]!.input.turnId,
+        content: "Survive the restart",
+      }),
+    ])
+    const recoveredDatabase = new DatabaseSync(databasePath)
+    expect(
+      recoveredDatabase
+        .prepare("SELECT id FROM turns WHERE id = ?")
+        .get(promotedTurnId)
+    ).toBeUndefined()
+    recoveredDatabase.close()
+    resumedHarness.runs[0]!.emit({ type: "turn.completed" })
+    resumedHarness.runs[0]!.finish()
+    await resumedRuntime.close()
+  })
+
+  it("retries queued follow-ups when Harness availability changes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+    directories.push(directory)
+    const scripted = new ScriptedHarness()
+    let available = true
+    const harness: HarnessAdapterFactory = {
+      descriptor: scripted.descriptor,
+      checkAvailability: () =>
+        Promise.resolve(
+          available
+            ? { status: "available" as const, version: "1" }
+            : { status: "unavailable" as const, reason: "Harness is offline" }
+        ),
+      listModels: () => scripted.listModels(),
+      start: (input, signal) => scripted.start(input, signal),
+    }
+    const runtime = createRuntime({
+      databasePath: join(directory, "runtime.sqlite"),
+      harnesses: [harness],
+      harnessRefreshMs: 0,
+    })
+    const project = unwrap(
+      await runtime.request({
+        method: "project.add",
+        params: { path: directory, name: "Example", workspaceId: "personal" },
+      })
+    )
+    const thread = unwrap(
+      await runtime.request({
+        method: "thread.create",
+        params: { projectId: project.id, harnessId: "scripted" },
+      })
+    )
+    unwrap(
+      await runtime.request({
+        method: "turn.start",
+        params: { threadId: thread.id, prompt: "Start" },
+      })
+    )
+    available = false
+    unwrap(await runtime.request({ method: "harness.refresh", params: {} }))
+    unwrap(
+      await runtime.request({
+        method: "turn.followUp",
+        params: {
+          threadId: thread.id,
+          input: {
+            text: "Wait for the Harness",
+            references: [],
+            attachments: [],
+          },
+        },
+      })
+    )
+    scripted.runs[0]!.emit({ type: "turn.completed" })
+    scripted.runs[0]!.finish()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(scripted.runs).toHaveLength(1)
+
+    available = true
+    unwrap(await runtime.request({ method: "harness.refresh", params: {} }))
+    await vi.waitFor(() => expect(scripted.runs).toHaveLength(2))
+    expect(scripted.runs[1]!.input.prompt).toBe("Wait for the Harness")
+    scripted.runs[1]!.emit({ type: "turn.completed" })
+    scripted.runs[1]!.finish()
     await runtime.close()
   })
 

@@ -91,7 +91,10 @@ export class Runtime implements RuntimeTransport {
       options.harnesses,
       this.#store.settings,
       {
-        onChanged: () => this.#emit({ type: "harness.changed" }),
+        onChanged: () => {
+          this.#emit({ type: "harness.changed" })
+          this.#turns.retryFollowUps()
+        },
         probeGate: options.probeGate,
       }
     )
