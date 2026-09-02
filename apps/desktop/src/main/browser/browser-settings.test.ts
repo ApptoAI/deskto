@@ -1,0 +1,73 @@
+import path from "node:path"
+
+import { resolveSettings } from "@deskto/settings"
+import { describe, expect, it } from "vitest"
+
+import {
+  browserDownloadDirectory,
+  browserDownloadFileName,
+  browserSettingsFrom,
+  defaultBrowserSettings,
+} from "./browser-settings.js"
+
+describe("browser settings", () => {
+  it("reads defaults when nothing is overridden", () => {
+    expect(browserSettingsFrom(resolveSettings({}))).toEqual(
+      defaultBrowserSettings
+    )
+    expect(defaultBrowserSettings.viewport).toEqual({
+      width: 1280,
+      height: 800,
+    })
+    expect(defaultBrowserSettings.downloadFolder).toBe("downloads")
+    expect(defaultBrowserSettings.homeUrl).toBe("")
+  })
+
+  it("reads overrides from the computerUse namespace", () => {
+    const settings = browserSettingsFrom(
+      resolveSettings({
+        "computerUse.browser.user-agent": "Deskto/1.0",
+        "computerUse.browser.viewport": { width: 1024, height: 768 },
+        "computerUse.browser.allowed-hosts": ["*.example.com"],
+        "computerUse.browser.blocked-hosts": ["ads.example.com"],
+        "computerUse.browser.clear-session-between-tasks": true,
+        "computerUse.browser.download-folder": "",
+        "computerUse.browser.home-url": "https://example.com/start",
+      })
+    )
+    expect(settings).toEqual({
+      userAgent: "Deskto/1.0",
+      viewport: { width: 1024, height: 768 },
+      hostRules: { allow: ["*.example.com"], deny: ["ads.example.com"] },
+      clearSessionBetweenTasks: true,
+      downloadFolder: "",
+      homeUrl: "https://example.com/start",
+    })
+  })
+})
+
+describe("browser downloads", () => {
+  const project = path.resolve("/projects/demo")
+
+  it("resolve inside the project only", () => {
+    expect(browserDownloadDirectory(project, "downloads")).toBe(
+      path.join(project, "downloads")
+    )
+    expect(browserDownloadDirectory(project, "files/web")).toBe(
+      path.join(project, "files", "web")
+    )
+    expect(browserDownloadDirectory(project, "")).toBeUndefined()
+    expect(browserDownloadDirectory(undefined, "downloads")).toBeUndefined()
+    expect(browserDownloadDirectory(project, "..")).toBeUndefined()
+    expect(browserDownloadDirectory(project, "../other")).toBeUndefined()
+  })
+
+  it("keep a page-suggested file name to one safe segment", () => {
+    expect(browserDownloadFileName("report.pdf")).toBe("report.pdf")
+    expect(browserDownloadFileName("../../etc/passwd")).toBe("passwd")
+    expect(browserDownloadFileName("..\\..\\win.ini")).toBe("win.ini")
+    expect(browserDownloadFileName(".hidden")).toBe("hidden")
+    expect(browserDownloadFileName("")).toBe("download")
+    expect(browserDownloadFileName("a<b>:c.txt")).toBe("a_b__c.txt")
+  })
+})

@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto"
+import { existsSync } from "node:fs"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 
 import {
   BrowserWindow,
   session,
   WebContentsView,
   type Rectangle,
+  type Session,
   type WebContents,
 } from "electron"
 import type {
@@ -49,20 +53,27 @@ import {
   browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
-import { isBrowserWebUrl, normalizeBrowserUrl } from "./browser-url.js"
+import {
+  browserDownloadDirectory,
+  browserDownloadFileName,
+  defaultBrowserSettings,
+  type BrowserSettings,
+} from "./browser-settings.js"
+import {
+  isBrowserHostPermitted,
+  isBrowserWebUrl,
+  normalizeBrowserUrl,
+} from "./browser-url.js"
 
 const browserPartition = "persist:deskto-browser"
+/** Prefix of the in-memory partition a task gets when logins must not carry over. */
+const taskBrowserPartitionPrefix = "deskto-browser-task-"
 const browserAutomationWorldId = 1_001
 const browserElementPickerControlKey = "__deskto_element_picker_control"
 const maximumBrowserArtifactResources = 8
 const maximumScreenshotBytes = 8 * 1024 * 1024
 const navigationTimeoutMs = 30_000
-const backgroundBounds: Rectangle = {
-  x: -10_000,
-  y: 0,
-  width: 1280,
-  height: 800,
-}
+const offscreenX = -10_000
 const rawBrowserSnapshotSchema = z.object({
   text: z.string(),
   elements: z.array(
@@ -76,11 +87,27 @@ const rawBrowserSnapshotSchema = z.object({
   ),
 })
 const browserPointSchema = z.object({ x: z.number(), y: z.number() }).nullable()
+const navigationErrorSchema = z
+  .instanceof(Error)
+  .transform((error) => error.message)
+  .catch("The start page could not be opened")
 const rawBrowserElementContextSchema = browserElementSelectionSchema.nullable()
+
+/** What the browser needs from the rest of main, bound lazily since the
+    Runtime starts after the browser. */
+export type BrowserManagerHost = {
+  /** The task's project folder, for downloads; undefined blocks them. */
+  projectPathForThread?: (threadId: string) => Promise<string | undefined>
+}
 
 type BrowserTab = {
   view: WebContentsView
+  session: Session
   refs: Set<string>
+  /** Resolved once per tab; downloads before it lands are blocked. */
+  projectPath?: string
+  /** The start page opens once per tab, never over a page the tab reached. */
+  homeOpened?: boolean
   registryKey?: string
   artifact?: {
     key: string
@@ -105,50 +132,65 @@ export class BrowserManager implements BrowserAutomationHost {
   readonly #artifactOpens = new BrowserArtifactOpenRequests()
   readonly #openRequests = new Set<string>()
   readonly #browserSession = session.fromPartition(browserPartition)
+  /** Every session this manager configured, so close() can release them all. */
+  readonly #sessions = new Set<Session>()
+  readonly #defaultUserAgent = this.#browserSession.getUserAgent()
+  #settings: BrowserSettings = defaultBrowserSettings
+  #backgroundBounds: Rectangle = this.#offscreenBounds()
   #visibleThreadId?: string
-  #visibleBounds = backgroundBounds
+  #visibleBounds = this.#backgroundBounds
 
   constructor(
     private readonly window: BrowserWindow,
-    private readonly publish: (event: BrowserEvent) => void
+    private readonly publish: (event: BrowserEvent) => void,
+    private readonly host: BrowserManagerHost = {}
   ) {
-    this.#browserSession.protocol.handle(browserArtifactScheme, (request) => {
-      const key = browserArtifactKeyFromUrl(request.url)
-      return browserArtifactResponse(
-        request,
-        key ? this.#artifactResources.get(key) : undefined
+    this.#configureSession(this.#browserSession)
+  }
+
+  /**
+   * Applies the person's browser settings. Existing tabs pick up the user
+   * agent and the off-screen page size; the session choice and home page
+   * apply to tabs opened from now on.
+   */
+  configure(settings: BrowserSettings): void {
+    this.#settings = settings
+    this.#backgroundBounds = this.#offscreenBounds()
+    for (const [threadId, tab] of this.#tabs) {
+      if (tab.view.webContents.isDestroyed()) continue
+      tab.view.webContents.setUserAgent(
+        settings.userAgent || this.#defaultUserAgent
       )
-    })
-    this.#browserSession.setPermissionRequestHandler(
-      (_webContents, _permission, callback) => callback(false)
-    )
-    this.#browserSession.setPermissionCheckHandler(() => false)
-    this.#browserSession.on("will-download", (event) => event.preventDefault())
+      if (threadId !== this.#visibleThreadId) {
+        tab.view.setBounds(this.#backgroundBounds)
+      }
+    }
   }
 
   async show(threadId: string, bounds: Rectangle): Promise<BrowserViewState> {
     const tab = this.#ensureTab(threadId)
     this.#openRequests.delete(threadId)
     if (this.#visibleThreadId && this.#visibleThreadId !== threadId) {
-      this.#tabs.get(this.#visibleThreadId)?.view.setBounds(backgroundBounds)
+      this.#tabs.get(this.#visibleThreadId)?.view.setBounds(this.#backgroundBounds)
     }
     this.#visibleThreadId = threadId
     this.#visibleBounds = bounds
     await this.#restoreArtifact(threadId, tab)
+    await this.#openHome(tab)
     if (
       this.#visibleThreadId !== threadId ||
       this.#tabs.get(threadId) !== tab
     ) {
       return this.state(threadId)
     }
-    tab.view.setBounds(this.#status(tab).url ? bounds : backgroundBounds)
+    tab.view.setBounds(this.#status(tab).url ? bounds : this.#backgroundBounds)
     return this.#viewState(threadId, tab)
   }
 
   hide(threadId: string): void {
     this.#artifactOpens.invalidate(threadId)
     if (this.#visibleThreadId !== threadId) return
-    this.#tabs.get(threadId)?.view.setBounds(backgroundBounds)
+    this.#tabs.get(threadId)?.view.setBounds(this.#backgroundBounds)
     this.#visibleThreadId = undefined
     this.#pruneArtifactResources()
   }
@@ -305,6 +347,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
     if (url) return this.navigate(threadId, url)
+    await this.#openHome(this.#ensureTab(threadId))
     return this.snapshot(threadId)
   }
 
@@ -317,6 +360,11 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.registryKey = undefined
     tab.error = undefined
     const url = normalizeBrowserUrl(value)
+    if (!isBrowserHostPermitted(url, this.#settings.hostRules)) {
+      throw new Error(
+        `${new URL(url).hostname} is blocked by the browser settings in Deskto`
+      )
+    }
     await this.#runMainNavigation(tab, url, () =>
       withNavigationTimeout(tab.view.webContents, () =>
         tab.view.webContents.loadURL(url)
@@ -497,30 +545,136 @@ export class BrowserManager implements BrowserAutomationHost {
     this.window.contentView.removeChildView(tab.view)
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
     this.#tabs.delete(threadId)
+    if (tab.session !== this.#browserSession) this.#releaseSession(tab.session)
   }
 
   close(): void {
     for (const threadId of this.#tabs.keys()) this.closeThread(threadId)
-    this.#browserSession.protocol.unhandle(browserArtifactScheme)
+    for (const browserSession of this.#sessions) {
+      this.#releaseSession(browserSession)
+    }
+  }
+
+  #offscreenBounds(): Rectangle {
+    return {
+      x: offscreenX,
+      y: 0,
+      width: this.#settings.viewport.width,
+      height: this.#settings.viewport.height,
+    }
+  }
+
+  #configureSession(browserSession: Session): void {
+    if (this.#sessions.has(browserSession)) return
+    this.#sessions.add(browserSession)
+    browserSession.protocol.handle(browserArtifactScheme, (request) => {
+      const key = browserArtifactKeyFromUrl(request.url)
+      return browserArtifactResponse(
+        request,
+        key ? this.#artifactResources.get(key) : undefined
+      )
+    })
+    browserSession.setPermissionRequestHandler(
+      (_webContents, _permission, callback) => callback(false)
+    )
+    browserSession.setPermissionCheckHandler(() => false)
+    browserSession.on("will-download", (event, item, webContents) => {
+      const tab = [...this.#tabs.values()].find(
+        (candidate) => candidate.view.webContents === webContents
+      )
+      const directory = browserDownloadDirectory(
+        tab?.projectPath,
+        this.#settings.downloadFolder
+      )
+      if (!directory) {
+        event.preventDefault()
+        return
+      }
+      const fileName = browserDownloadFileName(item.getFilename())
+      const extension = path.extname(fileName)
+      const stem = fileName.slice(0, fileName.length - extension.length)
+      let target = path.join(directory, fileName)
+      for (let attempt = 2; existsSync(target); attempt += 1) {
+        target = path.join(directory, `${stem} (${attempt})${extension}`)
+      }
+      // Chromium asks for the path synchronously; the folder is created
+      // beside it and a failure surfaces as an interrupted download.
+      item.setSavePath(target)
+      void mkdir(directory, { recursive: true }).catch(() => item.cancel())
+    })
+  }
+
+  #releaseSession(browserSession: Session): void {
+    if (!this.#sessions.delete(browserSession)) return
+    browserSession.protocol.unhandle(browserArtifactScheme)
+    if (browserSession !== this.#browserSession) {
+      void browserSession.clearStorageData().catch(() => undefined)
+    }
+  }
+
+  #sessionFor(threadId: string): Session {
+    const browserSession = this.#settings.clearSessionBetweenTasks
+      ? session.fromPartition(`${taskBrowserPartitionPrefix}${threadId}`)
+      : this.#browserSession
+    this.#configureSession(browserSession)
+    return browserSession
+  }
+
+  /** Loads the start page into a tab that has not shown anything yet. */
+  async #openHome(tab: BrowserTab): Promise<void> {
+    const homeUrl = this.#settings.homeUrl
+    if (
+      tab.homeOpened ||
+      !homeUrl ||
+      tab.artifact ||
+      this.#status(tab).url ||
+      tab.view.webContents.isLoading()
+    ) {
+      return
+    }
+    tab.homeOpened = true
+    if (!isBrowserHostPermitted(homeUrl, this.#settings.hostRules)) {
+      tab.error = "The start page is blocked by the browser settings in Deskto"
+      return
+    }
+    try {
+      await this.#runMainNavigation(tab, homeUrl, () =>
+        withNavigationTimeout(tab.view.webContents, () =>
+          tab.view.webContents.loadURL(homeUrl)
+        )
+      )
+    } catch (error) {
+      tab.error = navigationErrorSchema.parse(error)
+    }
   }
 
   #ensureTab(threadId: string): BrowserTab {
     const current = this.#tabs.get(threadId)
     if (current && !current.view.webContents.isDestroyed()) return current
     if (current) this.closeThread(threadId)
+    const browserSession = this.#sessionFor(threadId)
     const view = new WebContentsView({
       webPreferences: {
-        partition: browserPartition,
+        session: browserSession,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
       },
     })
-    const tab: BrowserTab = { view, refs: new Set() }
+    const tab: BrowserTab = { view, session: browserSession, refs: new Set() }
     this.#tabs.set(threadId, tab)
+    if (this.#settings.userAgent) {
+      view.webContents.setUserAgent(this.#settings.userAgent)
+    }
+    void this.host.projectPathForThread?.(threadId).then(
+      (projectPath) => {
+        if (this.#tabs.get(threadId) === tab) tab.projectPath = projectPath
+      },
+      () => undefined
+    )
     this.window.contentView.addChildView(view)
-    view.setBounds(backgroundBounds)
+    view.setBounds(this.#backgroundBounds)
     view.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
     view.webContents.on("will-navigate", (event, url) => {
       if (!this.#navigationAllowed(tab, url)) {
@@ -671,6 +825,7 @@ export class BrowserManager implements BrowserAutomationHost {
 
   #navigationAllowed(tab: BrowserTab, url: string): boolean {
     if (!isBrowserWebUrl(url) && !isBrowserArtifactUrl(url)) return false
+    if (!isBrowserHostPermitted(url, this.#settings.hostRules)) return false
     return browserArtifactBoundaryAllowed(
       tab.view.webContents.getURL(),
       url,
@@ -817,7 +972,7 @@ export class BrowserManager implements BrowserAutomationHost {
       return
     if (this.#visibleThreadId === threadId) {
       tab.view.setBounds(
-        this.#status(tab).url ? this.#visibleBounds : backgroundBounds
+        this.#status(tab).url ? this.#visibleBounds : this.#backgroundBounds
       )
     }
     this.publish({ type: "state", state: this.#viewState(threadId, tab) })

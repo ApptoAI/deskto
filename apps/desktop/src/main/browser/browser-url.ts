@@ -1,3 +1,5 @@
+import { browserHostAllowed } from "@deskto/settings"
+
 export const maximumBrowserUrlLength = 8_192
 
 export function normalizeBrowserUrl(value: string): string {
@@ -20,6 +22,24 @@ export function normalizeBrowserUrl(value: string): string {
     throw new Error("Only HTTP and HTTPS pages can open in Browser")
   }
   return url.toString()
+}
+
+/**
+ * Whether the person's host rules let this URL open. Only web pages carry a
+ * host; the blank page and Artifact previews are never subject to the list.
+ */
+export function isBrowserHostPermitted(
+  value: string,
+  rules: { allow: readonly string[]; deny: readonly string[] }
+): boolean {
+  if (value === "about:blank") return true
+  try {
+    const url = new URL(value)
+    if (url.protocol !== "http:" && url.protocol !== "https:") return true
+    return browserHostAllowed(url.hostname, rules)
+  } catch {
+    return false
+  }
 }
 
 export function isBrowserWebUrl(value: string): boolean {
