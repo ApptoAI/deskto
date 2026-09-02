@@ -23,7 +23,11 @@ export const minBrowserViewportSide = 320
 export const maxBrowserViewportSide = 4_096
 
 export const browserViewportSchema = z.object({
-  width: z.number().int().min(minBrowserViewportSide).max(maxBrowserViewportSide),
+  width: z
+    .number()
+    .int()
+    .min(minBrowserViewportSide)
+    .max(maxBrowserViewportSide),
   height: z
     .number()
     .int()
@@ -180,7 +184,8 @@ export const computerUseSettings = {
   browserBlockedHosts: defineSetting({
     key: "computerUse.browser.blocked-hosts",
     label: "Never open these sites",
-    description: "One site per line. A blocked site stays blocked even when it is also allowed above.",
+    description:
+      "One site per line. A blocked site stays blocked even when it is also allowed above.",
     input: { kind: "host-list" },
     schema: browserHostRulesSchema,
     defaultValue: [],
