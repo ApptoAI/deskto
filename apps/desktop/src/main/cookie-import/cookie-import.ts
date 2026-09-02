@@ -74,6 +74,9 @@ export function listImportableProfiles(
 // host-only cookies from its subdomains, and choosing "app.example.com"
 // brings the ".example.com" cookies that apply to it.
 function hostMatches(cookieHostKey: string, chosen: ReadonlySet<string>): boolean {
+  // The browser database is untrusted input: a row whose host is a public
+  // suffix such as ".com" would otherwise match every chosen host under it.
+  if (!isCookieImportHost(cookieHostKey)) return false
   const host = normalizeCookieImportHost(cookieHostKey)
   if (!cookieHostKey.startsWith(".")) return chosen.has(host)
   for (const target of chosen) {
@@ -89,12 +92,32 @@ function cookieVersion(encrypted: Buffer): StoredCookieVersion | undefined {
   return tag === "v10" || tag === "v11" || tag === "v20" ? tag : undefined
 }
 
-function importableCookie(cookie: RawCookie, value: string): ImportableCookie {
+// A cookie path is a URL path and nothing else. Chromium writes it that way,
+// but the row is untrusted, so a path carrying "@", "?", "#" or whitespace is
+// refused rather than let it reshape the URL the cookie is set against.
+const cookiePathPattern = /^\/[^@?#\s]*$/u
+
+function cookieUrl(cookie: RawCookie): URL | undefined {
+  if (!isCookieImportHost(cookie.hostKey)) return undefined
+  if (!cookiePathPattern.test(cookie.path)) return undefined
   const host = normalizeCookieImportHost(cookie.hostKey)
+  const url = new URL(`${cookie.isSecure ? "https" : "http"}://${host}`)
+  url.pathname = cookie.path
+  if (url.hostname !== host || url.username || url.password || url.port) {
+    return undefined
+  }
+  return url
+}
+
+function importableCookie(
+  cookie: RawCookie,
+  value: string
+): ImportableCookie | undefined {
+  const url = cookieUrl(cookie)
+  if (!url) return undefined
   const isDomainCookie = cookie.hostKey.startsWith(".")
-  const scheme = cookie.isSecure ? "https" : "http"
   return {
-    url: `${scheme}://${host}${cookie.path}`,
+    url: url.href,
     name: cookie.name,
     value,
     domain: isDomainCookie ? cookie.hostKey : undefined,
@@ -174,8 +197,10 @@ export async function importCookies(
       skipped += 1
       continue
     }
+    const importable = importableCookie(cookie, value)
+    if (!importable) continue
     try {
-      await sink.set(importableCookie(cookie, value))
+      await sink.set(importable)
       imported += 1
     } catch {
       skipped += 1

@@ -66,6 +66,21 @@ describe("cookie import hosts", () => {
     }
   })
 
+  it("rejects a trailing dot: browsers store the host without one", () => {
+    expect(isCookieImportHost("example.com.")).toBe(false)
+    expect(isCookieImportHost(".example.com.")).toBe(false)
+  })
+
+  it("rejects Unicode labels: Surfaces hand over the punycode form", () => {
+    // The rule is the shape browsers store, which is ASCII. A Surface that
+    // accepts typed input reduces it through the URL parser first, and that
+    // is what turns "bücher.example" into "xn--bcher-kva.example".
+    expect(isCookieImportHost("bücher.example")).toBe(false)
+    expect(isCookieImportHost(new URL("https://bücher.example").hostname)).toBe(
+      true
+    )
+  })
+
   it("normalizes the way browsers store host keys", () => {
     expect(normalizeCookieImportHost(" .App.Example.com ")).toBe(
       "app.example.com"
