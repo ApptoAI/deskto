@@ -126,6 +126,9 @@ describe("OnboardingView", () => {
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
     expect(screen.queryByRole("button", { name: "Copied" })).toBeNull()
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Select the command above and copy it yourself."
+    )
   })
 
   it("re-probes on Check again and applies the answer", async () => {

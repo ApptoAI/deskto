@@ -232,8 +232,23 @@ function ProjectForm({
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Describe the project, its goals, and relevant context…"
             maxLength={projectDescriptionMaxLength}
+            aria-describedby="project-description-limit"
             disabled={busy}
           />
+          {/* maxLength drops pasted text past the limit without a word; the
+              count appears once the limit is near so the cut is not a
+              surprise. */}
+          <p
+            id="project-description-limit"
+            aria-live="polite"
+            className={cn(
+              "text-right font-mono text-tiny tabular-nums text-muted-foreground",
+              description.length < projectDescriptionMaxLength * 0.8 &&
+                "sr-only"
+            )}
+          >
+            {description.length}/{projectDescriptionMaxLength}
+          </p>
         </div>
 
         {/* Deskto manages the folder unless someone asks otherwise, so the
