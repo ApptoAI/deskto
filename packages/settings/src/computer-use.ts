@@ -212,4 +212,13 @@ export const computerUseSettings = {
     schema: browserHomeUrlSchema,
     defaultValue: "",
   }),
+  screenControlEnabled: defineSetting({
+    key: "computerUse.screen-control.enabled",
+    label: "Let agents use the screen",
+    description:
+      "Agents can look at the built-in browser and click, type, and scroll on it like a person would, instead of only reading the page. Turning this off applies to tasks started from now on.",
+    input: { kind: "toggle" },
+    schema: z.boolean(),
+    defaultValue: true,
+  }),
 }

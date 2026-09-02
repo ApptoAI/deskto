@@ -161,7 +161,7 @@ export class TurnCoordinator {
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry,
-    settings: UserSettings,
+    private readonly settings: UserSettings,
     private readonly sessionTools: readonly SessionToolProvider[],
     private readonly projectActivity: ProjectActivityGate,
     private readonly events: TurnEvents
@@ -281,6 +281,7 @@ export class TurnCoordinator {
           projectId: thread.project_id,
           workspaceId: turn.workspaceId,
           projectPath: turn.projectPath,
+          settings: this.settings.snapshot(),
         },
         starting.controller.signal
       )
