@@ -1,4 +1,7 @@
-import type { ManagedSkillDraft } from "@deskto/protocol"
+import {
+  managedSkillDraftSchema,
+  type ManagedSkillDraft,
+} from "@deskto/protocol"
 
 import { Input } from "@workspace/ui/components/input"
 import { Textarea } from "@workspace/ui/components/textarea"
@@ -7,10 +10,9 @@ export function emptySkillDraft(): ManagedSkillDraft {
   return { name: "", description: "", instructions: "" }
 }
 
+/** The Runtime's own rule, so the button and the request cannot disagree. */
 export function isCompleteSkillDraft(draft: ManagedSkillDraft): boolean {
-  return Boolean(
-    draft.name.trim() && draft.description.trim() && draft.instructions.trim()
-  )
+  return managedSkillDraftSchema.safeParse(draft).success
 }
 
 export function SkillDraftFields({

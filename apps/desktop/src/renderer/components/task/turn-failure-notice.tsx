@@ -1,3 +1,4 @@
+import CircleAlertIcon from "lucide-react/dist/esm/icons/circle-alert"
 import GaugeIcon from "lucide-react/dist/esm/icons/gauge"
 import type { HarnessFailure } from "@deskto/protocol"
 
@@ -26,8 +27,10 @@ function formatReset(resetAt: string): string | undefined {
 export function TurnFailureNotice({ failure }: { failure: HarnessFailure }) {
   if (failure.kind !== "usage-limit") {
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {failure.message}
+      <p role="alert" className="flex gap-2 text-sm text-destructive">
+        {/* The mark says "stopped" on its own; the colour only agrees with it. */}
+        <CircleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
+        <span className="min-w-0 break-words">{failure.message}</span>
       </p>
     )
   }
@@ -45,8 +48,9 @@ export function TurnFailureNotice({ failure }: { failure: HarnessFailure }) {
         <p className="text-sm font-medium">Usage limit reached</p>
         <p className="text-sm text-current/75">{failure.message}</p>
         {reset && !messageMentionsReset ? (
-          <p className="text-xs text-current/65 tabular-nums">
-            Available again at {reset}
+          <p className="text-xs text-current/65">
+            Available again at{" "}
+            <span className="font-mono tracking-normal tabular-nums">{reset}</span>
           </p>
         ) : null}
       </div>

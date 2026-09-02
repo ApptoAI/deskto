@@ -30,7 +30,7 @@ export function ComposerAttachments({
             type="button"
             variant="secondary"
             size="icon"
-            className="absolute top-1 right-1 size-6 opacity-0 shadow-sm group-hover/image:opacity-100 focus-visible:opacity-100"
+            className="absolute top-1 right-1 size-6 opacity-0 shadow-sm group-hover/image:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
             onClick={() => onRemove(attachment.id)}
             aria-label={`Remove ${attachment.name}`}
           >
@@ -39,7 +39,10 @@ export function ComposerAttachments({
         </div>
       ))}
       {preparingCount > 0 ? (
-        <div className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-2 text-center text-xs text-muted-foreground">
+        <div
+          role="status"
+          className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-2 text-center text-xs text-muted-foreground"
+        >
           Preparing…
         </div>
       ) : null}

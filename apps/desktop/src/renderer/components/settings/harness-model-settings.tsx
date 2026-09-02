@@ -10,6 +10,7 @@ import {
 
 import { Button } from "@workspace/ui/components/button"
 
+import { knownHarnessLabel } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { useSettings } from "../../settings/settings-context.js"
@@ -163,8 +164,9 @@ function modelOptions(
   if (!options.some((option) => option.value === selectedValue)) {
     options.push({
       value: selectedValue,
-      label: `${selected.harnessId} · ${selected.modelId ?? "Default model"}`,
-      description: "This saved model is not currently available.",
+      label: `${knownHarnessLabel(selected.harnessId ?? "")} · ${selected.modelId ?? "Default model"}`,
+      description:
+        "This saved model is not available right now. Turn its agent on under Agents, or pick another model.",
       selection: selected,
     })
   }

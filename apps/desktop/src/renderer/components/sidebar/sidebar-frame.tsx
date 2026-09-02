@@ -4,14 +4,13 @@ import { cn } from "@workspace/ui/lib/utils"
 
 const sidebarWidthClass = {
   default: "w-[256px]",
-  compact: "w-[256px]",
   "rail-stack": "w-[328px]",
 } as const
 
 /**
- * The chrome both sidebars share: width, the window drag strip, and the lockup.
- * Settings replaces the workspace chrome, so rail-stack reserves the combined
- * width of the rail and compact project sidebar.
+ * The chrome both sidebars share: the width. Settings replaces the workspace
+ * chrome, so rail-stack reserves the combined width of the rail and the
+ * project sidebar beside it.
  *
  * No border: the sidebar sits on the window shell and the pane beside it
  * carries the only edge in the window.
