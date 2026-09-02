@@ -651,6 +651,10 @@ export function Workbench() {
         }
         title={newTaskProject.name}
       />
+    ) : view.kind === "new-task" && activeProject ? (
+      // All-projects scope before a project is picked: the pane still has to
+      // name the screen it is showing.
+      <TitleBarTask mark={null} title="New task" />
     ) : null
 
   // Settings replaces the task sidebar with its own, so the column is always
