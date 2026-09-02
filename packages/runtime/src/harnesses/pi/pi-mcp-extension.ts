@@ -139,7 +139,11 @@ export default async function (pi) {
 
   const configs = JSON.parse(serialized)
   const connections = configs.map((config) => new McpConnection(config))
-  const names = new Set()
+  // registerTool silently overrides same-named tools, including built-ins
+  // that are configured but currently inactive, so seed the reserved set with
+  // Pi's full built-in namespace plus everything already registered.
+  const names = new Set(["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"])
+  for (const tool of pi.getAllTools()) names.add(tool.name)
 
   try {
     for (const connection of connections) {

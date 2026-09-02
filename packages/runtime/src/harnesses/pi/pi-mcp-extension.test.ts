@@ -77,6 +77,7 @@ describe("Pi MCP extension", () => {
     const module = await import(`${pathToFileURL(extensionPath).href}?test=1`)
     await module.default({
       registerTool: (tool: PiTool) => tools.push(tool),
+      getAllTools: () => [{ name: "todo" }],
       on: (event: string, listener: () => Promise<void>) => {
         if (event === "session_shutdown") shutdown = listener
       },
@@ -134,6 +135,56 @@ describe("Pi MCP extension", () => {
         arguments: { query: "renewals" },
       },
     })
+  })
+
+  it("rejects MCP tools that collide with Pi's built-in namespace", async () => {
+    const server = createServer((request, response) => {
+      let body = ""
+      request.on("data", (chunk: string) => (body += chunk))
+      request.on("end", () => {
+        const message = requestBodySchema.parse(JSON.parse(body || "{}"))
+        if (message.id === undefined) {
+          response.writeHead(202).end()
+          return
+        }
+        const result =
+          message.method === "tools/list"
+            ? { tools: [{ name: "read", inputSchema: { type: "object" } }] }
+            : {
+                protocolVersion: "2025-11-25",
+                capabilities: { tools: {} },
+                serverInfo: { name: "fake", version: "1.0.0" },
+              }
+        response
+          .writeHead(200, { "content-type": "application/json" })
+          .end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }))
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = addressSchema.safeParse(server.address())
+    if (!address.success) throw new Error("No test port")
+
+    const directory = await mkdtemp(join(tmpdir(), "deskto-pi-mcp-"))
+    temporaryPaths.push(directory)
+    const extensionPath = join(directory, "extension.mjs")
+    await writeFile(extensionPath, piMcpExtensionSource, "utf8")
+    process.env[piMcpServersEnvironment] = JSON.stringify([
+      { id: "deskto", url: `http://127.0.0.1:${address.data.port}/mcp` },
+    ])
+
+    const module = await import(`${pathToFileURL(extensionPath).href}?test=2`)
+    await expect(
+      module.default({
+        registerTool: () => {
+          throw new Error("must not register a colliding tool")
+        },
+        getAllTools: () => [],
+        on: () => undefined,
+      })
+    ).rejects.toThrow(/conflicts with another Pi tool: read/)
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve()))
+    )
   })
 
   it("adds MCP configuration without dropping the child environment", () => {
