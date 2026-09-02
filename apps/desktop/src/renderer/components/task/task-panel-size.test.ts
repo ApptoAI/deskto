@@ -12,7 +12,7 @@ import {
 describe("clampTaskPanelWidth", () => {
   it("reserves the widest sidebar at the native window minimum", () => {
     expect(minimumWindowWidth).toBe(
-      308 + minimumConversationWidth + minimumTaskPanelWidth
+      328 + minimumConversationWidth + minimumTaskPanelWidth
     )
   })
 

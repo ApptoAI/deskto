@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { loadMainWindow, type LoadableMainWindow } from "./window.js"
+import {
+  loadMainWindow,
+  shellFrost,
+  type LoadableMainWindow,
+} from "./window.js"
 
 class FakeMainWindow implements LoadableMainWindow {
   readonly loadedFiles: string[] = []
@@ -46,5 +50,22 @@ describe("main window startup", () => {
 
     expect(window.loadedUrls).toEqual(["http://localhost:5173"])
     expect(window.loadedFiles).toEqual([])
+  })
+})
+
+describe("frosted shell", () => {
+  it("uses vibrancy on macOS", () => {
+    expect(shellFrost("darwin", "24.5.0")).toBe("vibrancy")
+  })
+
+  it("uses acrylic only from Windows 11 22H2", () => {
+    expect(shellFrost("win32", "10.0.22621")).toBe("acrylic")
+    expect(shellFrost("win32", "10.0.26100")).toBe("acrylic")
+    expect(shellFrost("win32", "10.0.22000")).toBeNull()
+    expect(shellFrost("win32", "10.0.19045")).toBeNull()
+  })
+
+  it("stays opaque on Linux", () => {
+    expect(shellFrost("linux", "6.12.0")).toBeNull()
   })
 })

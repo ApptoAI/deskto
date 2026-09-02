@@ -10,16 +10,16 @@ import XIcon from "lucide-react/dist/esm/icons/x"
 import { cn } from "@workspace/ui/lib/utils"
 
 /**
- * The window's one navigation surface. Deskto used to carry this in a sidebar
- * that was always on screen; the sidebar is now something you summon, so the
- * titlebar holds what has to be reachable from every screen — the sidebar
- * toggle, where you have been, and a new task — and then says what you are
- * looking at.
+ * The window's navigation: the sidebar toggle, where you have been, and a new
+ * task. It sits at the top of the sidebar column when the sidebar is open and
+ * moves into the pane header when it is not, so it is reachable from every
+ * screen without a strip of its own across the window.
  *
- * The strip is a drag region, so anything interactive inside it opts back out
- * with `no-drag` or it cannot be clicked at all.
+ * The strip it sits in is a drag region, so the nav opts back out with
+ * `no-drag` or it cannot be clicked at all. On macOS the traffic lights
+ * occupy the first 68px of the row, wherever the nav happens to be.
  */
-export function TitleBar({
+export function WindowNav({
   sidebarOpen,
   onToggleSidebar,
   canGoBack,
@@ -27,8 +27,6 @@ export function TitleBar({
   onBack,
   onForward,
   onNewTask,
-  children,
-  trailing,
 }: {
   sidebarOpen: boolean
   onToggleSidebar: () => void
@@ -37,20 +35,13 @@ export function TitleBar({
   onBack: () => void
   onForward: () => void
   onNewTask: () => void
-  children?: ReactNode
-  trailing?: ReactNode
 }) {
-  const windowControls = window.deskto.windowControls
   const reserveTrafficLights = window.deskto.platform === "darwin"
-  const drawWindowControls =
-    window.deskto.platform !== "darwin" && windowControls !== undefined
   return (
-    <header className="drag-region flex h-12 shrink-0 items-center px-4">
+    <>
       {reserveTrafficLights ? (
-        /* hiddenInset traffic lights occupy x=16–68. */
-        <span aria-hidden className="w-[80px] shrink-0" />
+        <span aria-hidden className="w-[68px] shrink-0" />
       ) : null}
-
       <nav aria-label="Window" className="no-drag flex items-center gap-2.5">
         <span className="flex items-center">
           <TitleBarButton
@@ -83,33 +74,17 @@ export function TitleBar({
           </TitleBarButton>
         </span>
       </nav>
-
-      {children ? (
-        <div className="ml-3 flex min-w-0 items-center gap-1.5">{children}</div>
-      ) : null}
-
-      <div
-        className={cn(
-          "no-drag ml-auto flex shrink-0 items-center gap-1",
-          trailing && "pl-1"
-        )}
-      >
-        {trailing}
-        {drawWindowControls && windowControls ? (
-          <WindowControls controls={windowControls} />
-        ) : null}
-      </div>
-    </header>
+    </>
   )
 }
 
-function WindowControls({
-  controls,
-}: {
-  controls: NonNullable<typeof window.deskto.windowControls>
-}) {
+/** The renderer-drawn window controls, on platforms that hide the native
+    ones. Rendered inside a drag region, so it opts out. */
+export function WindowControls() {
+  const controls = window.deskto.windowControls
+  if (window.deskto.platform === "darwin" || controls === undefined) return null
   return (
-    <span className="ml-1 flex items-center">
+    <span className="no-drag ml-1 flex items-center">
       <TitleBarButton label="Minimize" onClick={controls.minimize}>
         <MinusIcon />
       </TitleBarButton>
@@ -170,7 +145,7 @@ function TitleBarButton({
   )
 }
 
-/** What the window is showing: a task, with the project it belongs to. */
+/** What the pane is showing: a task, with the project it belongs to. */
 export function TitleBarTask({
   mark,
   title,
@@ -184,13 +159,13 @@ export function TitleBarTask({
     <>
       {mark}
       <span
-        className="max-w-[min(32rem,45vw)] min-w-0 truncate text-title font-semibold text-foreground"
+        className="max-w-[min(32rem,45vw)] min-w-0 truncate text-control font-semibold tracking-tight text-foreground"
         title={title}
       >
         {title}
       </span>
       {subtitle ? (
-        <span className="hidden truncate text-title text-muted-foreground sm:inline">
+        <span className="hidden truncate text-control text-muted-foreground sm:inline">
           {subtitle}
         </span>
       ) : null}

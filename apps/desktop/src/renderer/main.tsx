@@ -13,6 +13,12 @@ if (!container)
 applyInterfaceViewportScale()
 window.addEventListener("resize", applyInterfaceViewportScale)
 
+// Before the first render, so the shell never paints opaque and then thins.
+document.documentElement.classList.toggle(
+  "vibrant",
+  window.deskto?.frostedShell === true
+)
+
 createRoot(container).render(
   <StrictMode>
     <App />

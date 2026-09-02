@@ -3,6 +3,7 @@ import { appSettings, settingValue } from "@deskto/settings"
 
 import { personalWorkspaceId, type Thread } from "@deskto/protocol"
 import { Button } from "@workspace/ui/components/button"
+import { cn } from "@workspace/ui/lib/utils"
 
 import { surfaceCommandIds } from "../commands/surface-commands.js"
 import { InlineError } from "../components/inline-error.js"
@@ -56,13 +57,18 @@ import { useProjectActions } from "./use-project-actions.js"
 import { useThreadQueries } from "./use-thread-queries.js"
 import { useWorkspaceSelection } from "./use-workspace-selection.js"
 import { toNewTask, type MainView } from "./work-view.js"
+import FolderIcon from "lucide-react/dist/esm/icons/folder"
 import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PanelRightIcon from "lucide-react/dist/esm/icons/panel-right"
 
 import { DesktoMark } from "../components/deskto-logo.js"
 import { useAccentSync } from "../settings/accent-sync.js"
 import { openFolder } from "../lib/desktop.js"
-import { TitleBar, TitleBarTask } from "../components/title-bar.js"
+import {
+  TitleBarTask,
+  WindowControls,
+  WindowNav,
+} from "../components/title-bar.js"
 import {
   readRememberedSidebarOpen,
   rememberSidebarOpen,
@@ -374,6 +380,43 @@ export function Workbench() {
     }, [surface.commands])
   )
 
+  // The two panels beside the pane. The task list toggles on every screen;
+  // the task panel only means something while a task is open.
+  const toggleSidebarCommand = useMemo(
+    () => ({
+      id: surfaceCommandIds.toggleSidebar,
+      title: "Show or hide the task list",
+      enabled: () => !commandsBlocked,
+      run: () => toggleSidebar(),
+    }),
+    [commandsBlocked, toggleSidebar]
+  )
+  const toggleTaskPanelCommand = useMemo(
+    () => ({
+      id: surfaceCommandIds.toggleTaskPanel,
+      title: "Show or hide the task panel",
+      enabled: () => !commandsBlocked && openThreadId !== null,
+      run: () => {
+        if (openThreadId) surface.panel.toggle({ threadId: openThreadId })
+      },
+    }),
+    [commandsBlocked, openThreadId, surface.panel]
+  )
+  useSurfaceCommand(toggleSidebarCommand)
+  useSurfaceCommand(toggleTaskPanelCommand)
+  useKeybinding(
+    appSettings.toggleSidebarKeybinding,
+    useCallback(() => {
+      void surface.commands.execute(surfaceCommandIds.toggleSidebar)
+    }, [surface.commands])
+  )
+  useKeybinding(
+    appSettings.toggleTaskPanelKeybinding,
+    useCallback(() => {
+      void surface.commands.execute(surfaceCommandIds.toggleTaskPanel)
+    }, [surface.commands])
+  )
+
   // Opening Settings unmounts the button that was clicked; closing it puts
   // focus back there rather than on the body.
   const [focusSettingsButton, setFocusSettingsButton] = useState(false)
@@ -525,7 +568,7 @@ export function Workbench() {
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"
-          title={`Open folder — ${activeThreadProject.path}`}
+          title={`Open ${activeThreadProject.path}`}
           aria-label="Open folder"
           onClick={() => runAction(() => openFolder(activeThreadProject.path))}
         >
@@ -565,14 +608,36 @@ export function Workbench() {
     ) : newTaskProject ? (
       <TitleBarTask
         mark={
-          <span
+          <FolderIcon
             aria-hidden
-            className="size-2 shrink-0 rounded-full bg-foreground/75"
+            className="size-4 shrink-0 text-muted-foreground"
           />
         }
         title={newTaskProject.name}
       />
     ) : null
+
+  // Settings replaces the task sidebar with its own, so the column is always
+  // there; everywhere else it is the person's choice.
+  const sidebarVisible = view.kind === "settings" || sidebarOpen
+  // Through the command, not the setter, so the button and the shortcut share
+  // one policy: in Settings the column is always there and the remembered
+  // choice must not change underneath it.
+  const windowNav = (
+    <WindowNav
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={() => {
+        void surface.commands.execute(surfaceCommandIds.toggleSidebar)
+      }}
+      canGoBack={canGoBack}
+      canGoForward={canGoForward}
+      onBack={goBack}
+      onForward={goForward}
+      onNewTask={() => {
+        void surface.commands.execute(surfaceCommandIds.newTask)
+      }}
+    />
+  )
 
   // One branch per screen the main pane can show, from the most modal state
   // (Settings) down to the default new-task composer.
@@ -709,88 +774,106 @@ export function Workbench() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden text-foreground glass-window">
-      <TitleBar
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={toggleSidebar}
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        onBack={goBack}
-        onForward={goForward}
-        onNewTask={() => {
-          void surface.commands.execute(surfaceCommandIds.newTask)
-        }}
-        trailing={titleActions}
-      >
-        {titleContext}
-      </TitleBar>
-
       <div className="flex min-h-0 flex-1">
-        {view.kind === "settings" ? (
-          <SettingsSidebar
-            page={view.page}
-            workspaceLayout={workspaceLayout}
-            onSelectPage={selectSettingsPage}
-            onGoBack={leaveSettings}
-          />
-        ) : (
-          <div
-            className={`flex shrink-0 overflow-hidden transition-[width,opacity] duration-260 ease-(--ease-drawer) motion-reduce:transition-none ${
-              sidebarOpen
+        {/* The sidebar column carries the window nav in its first row, in
+            line with the traffic lights, so there is no strip across the
+            window: the pane starts at the top beside it. */}
+        <div
+          className={cn(
+            "flex shrink-0 flex-col overflow-hidden",
+            view.kind !== "settings" &&
+              "transition-[width,opacity] duration-260 ease-(--ease-drawer) motion-reduce:transition-none",
+            view.kind !== "settings" &&
+              (sidebarVisible
                 ? workspaceLayout === "slack"
-                  ? "w-[308px] opacity-100"
-                  : "w-[236px] opacity-100"
-                : "pointer-events-none w-0 opacity-0"
-            }`}
-            inert={!sidebarOpen}
-          >
-            {workspaceLayout === "slack" ? (
-              <WorkspaceRail
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                onSelect={selectWorkspace}
-                onCreate={() => setWorkspaceDialog({ mode: "create" })}
-              />
-            ) : null}
-            <ProjectSidebar
-              workspace={activeWorkspace}
-              workspaces={workspaces}
-              projects={workspaceProjects}
-              activeProject={activeProject}
-              allProjects={allProjects}
-              onSelectProject={selectProject}
-              onSelectAllProjects={selectAllProjects}
-              onAddProject={addProject}
-              onMoveProject={moveProject}
-              onEditProject={openProjectPanel}
-              onSetProjectPinned={setProjectPinned}
-              addingProject={projectDialog.open}
-              onSelectWorkspace={selectWorkspace}
-              onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
-              onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
-              threads={threads.state}
-              workspaceThreads={workspaceThreads.state}
-              openThreadId={openThreadId}
-              onOpenThread={surface.navigation.openTask}
-              onNewTask={() => {
-                void surface.commands.execute(surfaceCommandIds.newTask)
-              }}
-              onRetryThreads={revalidateThreads}
-              onOpenProjects={surface.navigation.openProjects}
-              projectsActive={view.kind === "projects"}
-              onOpenSkills={surface.navigation.openSkills}
-              skillsActive={view.kind === "skills"}
-              onOpenSettings={surface.navigation.openSettings}
-              focusSettings={focusSettingsButton}
-              inboxActions={inboxActions}
-              workspaceLayout={workspaceLayout}
-            />
+                  ? "w-[328px] opacity-100"
+                  : "w-[256px] opacity-100"
+                : "pointer-events-none w-0 opacity-0")
+          )}
+          inert={!sidebarVisible}
+        >
+          <div className="drag-region flex h-14 shrink-0 items-center px-3">
+            {windowNav}
           </div>
-        )}
+          {view.kind === "settings" ? (
+            <SettingsSidebar
+              page={view.page}
+              workspaceLayout={workspaceLayout}
+              onSelectPage={selectSettingsPage}
+              onGoBack={leaveSettings}
+            />
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              {workspaceLayout === "slack" ? (
+                <WorkspaceRail
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onSelect={selectWorkspace}
+                  onCreate={() => setWorkspaceDialog({ mode: "create" })}
+                />
+              ) : null}
+              <ProjectSidebar
+                workspace={activeWorkspace}
+                workspaces={workspaces}
+                projects={workspaceProjects}
+                activeProject={activeProject}
+                allProjects={allProjects}
+                onSelectProject={selectProject}
+                onSelectAllProjects={selectAllProjects}
+                onAddProject={addProject}
+                onMoveProject={moveProject}
+                onEditProject={openProjectPanel}
+                onSetProjectPinned={setProjectPinned}
+                addingProject={projectDialog.open}
+                onSelectWorkspace={selectWorkspace}
+                onCreateWorkspace={() => setWorkspaceDialog({ mode: "create" })}
+                onEditWorkspace={() => setWorkspaceDialog({ mode: "edit" })}
+                threads={threads.state}
+                workspaceThreads={workspaceThreads.state}
+                openThreadId={openThreadId}
+                onOpenThread={surface.navigation.openTask}
+                onNewTask={() => {
+                  void surface.commands.execute(surfaceCommandIds.newTask)
+                }}
+                onRetryThreads={revalidateThreads}
+                onOpenProjects={surface.navigation.openProjects}
+                projectsActive={view.kind === "projects"}
+                onOpenSkills={surface.navigation.openSkills}
+                skillsActive={view.kind === "skills"}
+                onOpenSettings={surface.navigation.openSettings}
+                focusSettings={focusSettingsButton}
+                inboxActions={inboxActions}
+                workspaceLayout={workspaceLayout}
+              />
+            </div>
+          )}
+        </div>
 
         {/* min-h-0 and the clip: without them a tall screen can be scrolled as a
           whole — by focus, not by the wheel — which drags the window chrome
           off the top of the app. Every screen scrolls inside itself. */}
-        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main
+          className={cn(
+            "relative mt-2 mr-2 mb-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pane",
+            // The sidebar's own padding is the gap; without a sidebar the pane
+            // keeps the same breathing room on its left.
+            !sidebarVisible && "ml-2"
+          )}
+        >
+          {/* The pane names what it shows and carries that screen's own
+              actions. With the sidebar away it also carries the window nav,
+              and on Windows and Linux the window controls. The row is a drag
+              region, which is why it always renders. */}
+          <header className="drag-region flex h-10 shrink-0 items-center gap-1.5 border-b border-border px-4">
+            {sidebarVisible ? null : (
+              <span className="mr-2 flex items-center">{windowNav}</span>
+            )}
+            {titleContext}
+            <div className="no-drag ml-auto flex shrink-0 items-center gap-1">
+              {titleActions}
+              <WindowControls />
+            </div>
+          </header>
           {openingThreadId ? (
             <div
               role="status"
@@ -821,7 +904,14 @@ export function Workbench() {
             </div>
           ) : null}
 
-          {renderMain()}
+          {/* Keyed by screen so a new screen rises in; a screen that only
+              updates (a settings page, a streaming answer) stays put. */}
+          <div
+            key={`${view.kind}:${openThreadId ?? ""}:${newTaskProject?.id ?? ""}`}
+            className="content-enter flex min-h-0 flex-1 flex-col"
+          >
+            {renderMain()}
+          </div>
         </main>
       </div>
 

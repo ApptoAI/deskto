@@ -750,7 +750,7 @@ export function DevElementPicker() {
             type="button"
             data-dev-picker-action="toggle"
             data-active={active || undefined}
-            aria-label={`${modeLabels[mode]} — ${active ? "stop" : "start"}`}
+            aria-label={`${active ? "Stop" : "Start"} ${modeLabels[mode]}`}
             data-tip={`${modeLabels[mode]} · ${modeShortcuts[mode]}`}
           >
             <ModeIcon size={16} />

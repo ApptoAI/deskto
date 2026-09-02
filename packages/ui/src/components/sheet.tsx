@@ -32,7 +32,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
     <SheetPrimitive.Backdrop
       data-slot="sheet-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/20 duration-200 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:duration-150 data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/30 duration-200 supports-backdrop-filter:backdrop-blur-xs motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:duration-150 data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -54,7 +54,7 @@ function SheetContent({
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[calc(100%-3rem)] flex-col glass-panel border-l border-border text-sm text-foreground shadow-floating duration-200 ease-out outline-none sm:max-w-3xl data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:duration-150 data-closed:slide-out-to-right",
+          "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[calc(100%-3rem)] flex-col border-l border-border text-sm text-foreground shadow-floating duration-260 ease-(--ease-drawer) outline-none glass-panel motion-reduce:animate-none sm:max-w-3xl data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:duration-180 data-closed:slide-out-to-right",
           className
         )}
         {...props}

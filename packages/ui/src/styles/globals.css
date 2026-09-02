@@ -35,6 +35,9 @@
   /* Conversation prose stays compact enough to keep a useful amount of the
        task in view while the 1.62 leading preserves its reading rhythm. */
   --text-conversation: calc(0.875rem * var(--app-font-scale));
+  /* Chrome — sidebar rows, menu rows, buttons, headers — sits one step under
+       reading text, so the frame is quieter than what it frames. */
+  --text-control: calc(0.8125rem * var(--app-font-scale));
   --text-lg: calc(1.125rem * var(--app-font-scale));
   --text-display-sm: calc(1.8125rem * var(--app-font-scale));
 }
@@ -43,6 +46,7 @@
   --font-heading: var(--font-sans);
   --color-body: var(--body);
   --color-chrome: var(--chrome);
+  --color-shell: var(--shell);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -74,7 +78,7 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  /* The glass vocabulary, exposed so a component can name a surface rather
+  /* The surface vocabulary, exposed so a component can name a surface rather
        than restate its rgba. */
   --color-edge: var(--edge);
   --color-edge-strong: var(--edge-strong);
@@ -92,6 +96,7 @@
   --color-knockout: var(--knockout);
   --shadow-send: var(--elevation-send);
   --shadow-floating: var(--elevation-floating);
+  --shadow-pane: var(--elevation-pane);
   /* The provider's own mark. Never an app accent — see the palette note. */
   --color-brand-claude: #d97757;
   --radius-sm: calc(var(--radius) * 0.6);
@@ -102,60 +107,94 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   /* The named shapes. The generic scale above is proportional and drifts as
-       --radius moves; these are the four corners the design actually specifies,
-       so they are stated rather than derived. Bigger surface, bigger corner. */
+       --radius moves; these are the corners the design actually specifies,
+       so they are stated rather than derived. Bigger surface, bigger corner:
+       row 8, pane 10, card 10, menu 12, panel 12, dialog 16. */
   --radius-row: 8px;
+  --radius-button: 8px;
+  --radius-key: 5px;
   --radius-window: 12px;
   --radius-card: 10px;
+  --radius-pane: 10px;
+  --radius-menu: 12px;
   --radius-panel: 12px;
+  --radius-dialog: 16px;
+  --radius-bubble: 16px;
   --ease-out-quart: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+  /* The signature entrance: fast out of the gate, long settle. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*
- * The app is monochrome and flat. Type and spacing establish hierarchy;
- * surfaces separate only when their relationship requires a hairline. Hue is
- * reserved for identity and destructive action. Dark is the reference palette
- * and light mirrors its ranks with warm opaque neutrals.
+ * The app is monochrome, one shell and one pane. The shell is the window
+ * itself: the titlebar and the sidebar sit directly on it with no rule between
+ * them. The pane is the one opaque card inset on that shell, where the work is
+ * read, and its own hairline border is the only separation in the window.
+ * Chrome fills and hairlines are ink — the foreground at a few per cent — so
+ * they read the same over any surface. Hue is reserved for identity and the
+ * destructive action. Dark is the reference palette; light is designed rather
+ * than inverted: the pane is white, the shell recedes by going grey, and
+ * anything that floats earns its lift from a border and a shadow rather than
+ * from being lighter than the page.
  */
 :root {
   --app-font-scale: 1;
 
   /* Native-window fallback behind the renderer. */
-  --wp-base: #f8f7f5;
+  --wp-base: #f2f1ee;
 
-  /* Opaque canvas, input, and panel layers. */
-  --glass-window: #f3f2ef;
-  --glass-composer: #e9e8e4;
-  --glass-panel-light: #f3f2ef;
-  --glass-panel-dark: #eeede9;
+  /* The window shell: what the titlebar and sidebar sit on. Opaque here;
+       `.vibrant` thins it over the system's blur. */
+  --shell: #f2f1ee;
+  /* The pane: the one opaque card where the work is read. */
+  --pane: #ffffff;
+  /* The composer's plate. Light lifts it with white, a hairline and a
+       shadow: a dark wash on a white pane read as a dent, not a plate. */
+  --glass-composer: #ffffff;
+  --glass-window: var(--shell);
+  --glass-panel-light: var(--pane);
+  --glass-panel-dark: var(--pane);
 
-  /* Quiet local fills for bubbles, rows, and chips. */
-  --fill-bubble: #e4e3df;
-  --fill-card: oklch(0 0 0 / 2.5%);
-  --fill-chip: oklch(0 0 0 / 3.5%);
-  --fill-chip-hover: oklch(0 0 0 / 6%);
-  --fill-row-selected: oklch(0 0 0 / 5%);
+  /* Quiet local fills for bubbles, rows, and chips. Ink, not opaque grey. */
+  --fill-bubble: #ededeb;
+  --fill-card: oklch(0 0 0 / 3%);
+  --fill-chip: oklch(0 0 0 / 4%);
+  --fill-chip-hover: oklch(0 0 0 / 6.5%);
+  --fill-row-selected: oklch(0 0 0 / 6%);
   --fill-menu-selected: oklch(0 0 0 / 8%);
-  --fill-menu-active: oklch(0 0 0 / 12%);
+  --fill-menu-active: oklch(0 0 0 / 7%);
   --secondary-hover: color-mix(
     in oklch,
     var(--secondary),
     var(--foreground) 5%
   );
 
-  /* Hairlines identify boundaries; they do not add elevation. */
-  --edge: oklch(0 0 0 / 7%);
-  --edge-strong: oklch(0 0 0 / 10%);
+  /* Hairlines identify boundaries; they do not add elevation. Light runs
+       them 1.35x heavier than dark: black on white needs more alpha to read
+       at the same weight as white on near-black. */
+  --edge: oklch(0 0 0 / 10%);
+  --edge-strong: oklch(0 0 0 / 14%);
   --edge-button: oklch(0 0 0 / 43%);
 
   /* What a knocked-out mark inside a solid status glyph is painted in. */
   --knockout: oklch(0.955 0.001 286);
 
-  /* Only floating menus and paper previews cast a shadow. */
+  /* Floating surfaces lift on a shadow; the pane lifts on nothing in dark
+       and on the faintest edge shadow in light, so it reads as a sheet on a
+       desk rather than a box drawn on a page. */
   --elevation-send: none;
-  --elevation-floating: 0 20px 50px oklch(0 0 0 / 14%);
+  --elevation-floating:
+    0 8px 24px oklch(0 0 0 / 8%), 0 1px 3px oklch(0 0 0 / 4%);
+  --elevation-pane: 0 1px 2px oklch(0 0 0 / 3%);
+  --elevation-composer:
+    inset 0 0 0 1px var(--edge), 0 1px 2px oklch(0 0 0 / 4%),
+    0 8px 20px oklch(0 0 0 / 4%);
+
+  /* Popovers are frosted: the surface at most of its opacity over a wide blur,
+       so what sits beneath a menu is felt rather than seen. */
+  --blur-popover: blur(44px) saturate(1.4);
 
   /* Text, by hierarchy. Opacity is the ramp; there is no second hue. */
   --text-1: #202022;
@@ -166,25 +205,25 @@
   --text-4: oklch(0 0 0 / 47%);
   --text-5: oklch(0 0 0 / 31%);
 
-  /* Paper — the one surface that is not glass. When Deskto shows the file it
+  /* Paper — the one surface that is not chrome. When Deskto shows the file it
        actually produced rather than chat about the file, that surface steps
-       away from the chrome it sits in. In dark it lightens; in light it is the
-       only true white, lifted on a real shadow. The shift is the signal. */
+       away from the chrome it sits in. In dark it lightens; in light it is a
+       true white lifted on a real shadow. The shift is the signal. */
   --paper-bg: oklch(1 0 0);
   --paper-fg: oklch(0.145 0 0);
   --paper-fg-muted: oklch(0 0 0 / 60%);
 
-  /* Semantic slots, mapped onto the glass vocabulary above so a component
-       that asks for `bg-card` gets the right glass without knowing it. */
-  --background: var(--glass-window);
+  /* Semantic slots, mapped onto the vocabulary above so a component that
+       asks for `bg-card` gets the right surface without knowing it. */
+  --background: var(--pane);
   --foreground: var(--text-1);
   --body: var(--text-2);
-  --chrome: var(--glass-panel-light);
+  --chrome: var(--shell);
   --card: var(--fill-card);
   --card-foreground: var(--text-2);
-  /* Menus float over every surface here and stay independent of the content
-       behind them, so the popover is fully opaque. */
-  --popover: oklch(0.985 0.001 286);
+  /* Menus float over every surface here. Light keeps them white and earns
+       the separation from a border and a shadow rather than a tint. */
+  --popover: oklch(1 0 0 / 88%);
   --popover-foreground: var(--text-1);
 
   /*
@@ -199,7 +238,7 @@
  */
   --primary: var(--accent-base, oklch(0.19 0.003 286));
   --primary-foreground: var(--accent-contrast, oklch(0.985 0.001 286));
-  --secondary: oklch(0 0 0 / 12%);
+  --secondary: oklch(0 0 0 / 10%);
   --secondary-foreground: var(--text-1);
   --muted: var(--fill-chip);
   --muted-foreground: var(--text-3);
@@ -221,8 +260,8 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.5625rem;
-  --sidebar: var(--glass-panel-dark);
+  --radius: 0.5rem;
+  --sidebar: var(--shell);
   --sidebar-foreground: var(--text-2);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
@@ -232,31 +271,35 @@
   --sidebar-ring: var(--ring);
 }
 
-/* Dark is the design's native palette rather than an inverted light theme. */
+/* Dark is the design's native palette rather than an inverted light theme.
+   The pane is the darkest plane and everything raised above it gets lighter:
+   shell, then plate, then popover. */
 .dark {
-  --wp-base: #09090a;
+  --wp-base: #151516;
 
-  --glass-window: #131314;
-  --glass-composer: #1a1a1b;
-  --glass-panel-light: #131314;
-  --glass-panel-dark: #131314;
+  --shell: #151516;
+  --pane: #0b0b0c;
+  --glass-composer: #171719;
 
-  --fill-bubble: #1d1d1f;
-  --fill-card: oklch(1 0 0 / 2.5%);
-  --fill-chip: oklch(1 0 0 / 3.5%);
-  --fill-chip-hover: oklch(1 0 0 / 6%);
-  --fill-row-selected: oklch(1 0 0 / 6%);
+  --fill-bubble: #222225;
+  --fill-card: oklch(1 0 0 / 3%);
+  --fill-chip: oklch(1 0 0 / 4%);
+  --fill-chip-hover: oklch(1 0 0 / 7%);
+  --fill-row-selected: oklch(1 0 0 / 7%);
   --fill-menu-selected: oklch(1 0 0 / 10%);
-  --fill-menu-active: oklch(1 0 0 / 15%);
+  --fill-menu-active: oklch(1 0 0 / 9%);
 
-  --edge: oklch(1 0 0 / 7%);
-  --edge-strong: oklch(1 0 0 / 11%);
+  --edge: oklch(1 0 0 / 8%);
+  --edge-strong: oklch(1 0 0 / 13%);
   --edge-button: oklch(1 0 0 / 34%);
 
   --knockout: oklch(0.185 0.002 286);
 
   --elevation-send: none;
-  --elevation-floating: 0 20px 50px oklch(0 0 0 / 40%);
+  --elevation-floating:
+    0 12px 32px oklch(0 0 0 / 40%), 0 1px 4px oklch(0 0 0 / 25%);
+  --elevation-pane: none;
+  --elevation-composer: inset 0 0 0 1px var(--edge);
 
   --text-1: #ececee;
   --text-2: #d7d7da;
@@ -268,12 +311,24 @@
   --paper-fg: oklch(0.205 0 0);
   --paper-fg-muted: oklch(0 0 0 / 60%);
 
-  --popover: oklch(0.19 0.003 286);
+  --popover: oklch(0.21 0.003 286 / 84%);
   --primary: var(--accent-base, oklch(0.955 0.001 286));
   --primary-foreground: var(--accent-contrast, oklch(0.13 0 0));
-  --secondary: oklch(1 0 0 / 14%);
+  --secondary: oklch(1 0 0 / 12%);
   --destructive: oklch(0.7 0.19 22.2);
   --ring: var(--accent-ring, oklch(0.75 0.006 286 / 45%));
+}
+
+/* The window has a native blur behind it (macOS vibrancy, Windows acrylic).
+   The shell thins to let it through; the pane stays opaque, so the work is
+   never read through frost. Set on the document by the Surface when the main
+   process reports that the effect is on. */
+.vibrant {
+  --shell: oklch(0.955 0.003 90 / 74%);
+}
+
+.vibrant.dark {
+  --shell: oklch(0.2 0.003 286 / 72%);
 }
 
 @layer base {
@@ -293,6 +348,11 @@
       "liga" 1,
       "calt" 1;
     letter-spacing: -0.011em;
+  }
+  /* Under a native blur the body must paint nothing, or the effect has
+     nothing to show through. */
+  .vibrant body {
+    background: transparent;
   }
   /* The body's negative tracking is tuned for Inter and would otherwise
      inherit into the mono face, which this system tracks the other way. */
@@ -315,7 +375,8 @@
     .glass-window,
     .glass-panel,
     .glass-composer,
-    .glass-popover {
+    .glass-popover,
+    .pane {
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
       background: Canvas;
@@ -323,27 +384,41 @@
   }
 }
 
-/* The opaque window canvas. */
+/* The window shell. */
 @utility glass-window {
-  background: var(--glass-window);
+  background: var(--shell);
 }
 
-/* Side surfaces share the canvas; their callers own the separating hairline. */
+/* Side surfaces inside the pane share its fill; their callers own the
+   separating hairline. */
 @utility glass-panel {
-  background: var(--glass-panel-dark);
+  background: var(--pane);
 }
 
-/* The composer's one nearby solid fill. */
+/* The one opaque card inset on the shell. Its border is the only separation
+   in the window: the sidebar has none, the titlebar has none. */
+@utility pane {
+  background: var(--pane);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pane);
+  box-shadow: var(--elevation-pane);
+}
+
+/* The composer's plate: one nearby raised fill with an inset hairline, and in
+   light the lift of a sheet rather than the dent of a wash. */
 @utility glass-composer {
   background: var(--glass-composer);
+  box-shadow: var(--elevation-composer);
 }
 
-/* Menus and dialogs float above every other surface on an opaque fill and a
-   real drop shadow. */
+/* Menus and dialogs float above every other surface on a frosted fill, a
+   hairline and a real drop shadow. */
 @utility glass-popover {
   background: var(--popover);
   border: 1px solid var(--edge-strong);
   box-shadow: var(--elevation-floating);
+  -webkit-backdrop-filter: var(--blur-popover);
+  backdrop-filter: var(--blur-popover);
 }
 
 /* Real document content, the one surface that steps out of the chrome system.

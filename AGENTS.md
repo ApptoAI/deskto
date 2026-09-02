@@ -37,7 +37,7 @@ The boundary rules for these packages are in CONTEXT.md. Treat a boundary break 
 
 The interface stays calm while agents work. Activity never reorders lists or steals focus; status travels on indicators, and a row moves only at a lifecycle transition. Inter carries everything a person reads, Geist Mono everything machine-shaped. Light and dark are mirrored palettes, both first-class. The design tokens and the reasoning behind them live in `packages/ui/src/styles/globals.css`, in the comments.
 
-The Surface is flat, monochrome, and typography-first. Opaque neutral surfaces separate only where a relationship requires a hairline; hierarchy otherwise comes from type and spacing. Status is carried by the shape of a glyph rather than its colour, and hue is reserved for what identifies rather than styles: the provider mark, a Workspace swatch, the one destructive action. Reaching for a colour anywhere else is a decision that argues with `docs/adr/0028-flat-typography-first-surface.md`.
+The Surface is one shell with one opaque pane inset on it, monochrome and typography-first. The sidebar sits on the shell with no rule; the pane's hairline border is the only persistent edge, and inside it surfaces separate only where a relationship requires a hairline. Blur is native under the shell or on popovers, never over content. Status is carried by the shape of a glyph rather than its colour, and hue is reserved for what identifies rather than styles: the provider mark, a Workspace swatch, the one destructive action. Reaching for a colour anywhere else is a decision that argues with `docs/adr/0028-flat-typography-first-surface.md`; a new edge, fill, or blur argues with `docs/adr/0029-shell-and-pane.md`.
 
 ## Real user data
 

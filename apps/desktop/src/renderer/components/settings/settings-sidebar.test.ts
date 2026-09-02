@@ -6,8 +6,8 @@ import { SettingsSidebar } from "./settings-sidebar.js"
 
 describe("SettingsSidebar", () => {
   it.each([
-    ["workspace", "w-[236px]"],
-    ["slack", "w-[308px]"],
+    ["workspace", "w-[256px]"],
+    ["slack", "w-[328px]"],
   ] as const)("uses the %s layout width", (workspaceLayout, widthClass) => {
     const html = renderToStaticMarkup(
       createElement(SettingsSidebar, {

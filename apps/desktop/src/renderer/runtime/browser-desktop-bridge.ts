@@ -47,6 +47,8 @@ export function createBrowserDesktopBridge(): DesktopApi {
   return {
     devFlags: { forceOnboarding: false, elementPicker: false },
     platform: "linux",
+    frostedShell: false,
+    setNativeTheme: () => undefined,
     runtime: {
       request<M extends RuntimeMethod>(
         request: RequestFor<M>

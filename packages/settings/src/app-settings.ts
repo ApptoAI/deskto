@@ -174,10 +174,28 @@ export const appSettings = {
     schema: keybindingSchema,
     defaultValue: "mod+alt+arrowleft",
   }),
+  toggleSidebarKeybinding: defineSetting({
+    key: "keybindings.toggle-sidebar",
+    label: "Show or hide the task list",
+    description: "Toggle the sidebar on the left.",
+    input: { kind: "keybinding" },
+    schema: keybindingSchema,
+    defaultValue: "mod+b",
+  }),
+  toggleTaskPanelKeybinding: defineSetting({
+    key: "keybindings.toggle-task-panel",
+    label: "Show or hide the task panel",
+    description:
+      "Toggle the files, activities, browser, and side chat panel of the open task.",
+    input: { kind: "keybinding" },
+    schema: keybindingSchema,
+    defaultValue: "mod+shift+b",
+  }),
   onboardingCompleted: defineSetting({
     key: "onboarding.completed",
     label: "Onboarding completed",
-    description: "Whether the first-run welcome wizard was finished or skipped.",
+    description:
+      "Whether the first-run welcome wizard was finished or skipped.",
     input: { kind: "hidden" },
     schema: z.boolean(),
     defaultValue: false,

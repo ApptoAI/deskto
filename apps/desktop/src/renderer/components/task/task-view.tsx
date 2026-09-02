@@ -55,6 +55,7 @@ export function TaskView({
   const [taskActionError, setTaskActionError] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
   const panel = useTaskPanelState(threadId)
+  const panelPresence = usePanelPresence(panel.open)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   // Each /side command press bumps the request; the side panel acknowledges
   // once its view is ready and the count returns to zero, so no later mount
@@ -454,8 +455,10 @@ export function TaskView({
           ) : null}
         </div>
       </div>
-      {panel.open ? (
+      {panelPresence.rendered ? (
         <TaskPanel
+          open={panel.open}
+          onClosed={panelPresence.handleClosed}
           threadId={threadId}
           activities={activities}
           childThreads={childThreads}
@@ -480,4 +483,22 @@ export function TaskView({
       ) : null}
     </div>
   )
+}
+
+/**
+ * Keeps the panel mounted through its exit so it can slide out, and lets it
+ * go once the slide lands. Under reduced motion there is no slide to wait
+ * for, so it goes at once.
+ */
+function usePanelPresence(open: boolean) {
+  const [rendered, setRendered] = useState(open)
+  const [lastOpen, setLastOpen] = useState(open)
+  if (open !== lastOpen) {
+    setLastOpen(open)
+    if (open) setRendered(true)
+    else if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      setRendered(false)
+  }
+  const handleClosed = useCallback(() => setRendered(false), [])
+  return { rendered, handleClosed }
 }

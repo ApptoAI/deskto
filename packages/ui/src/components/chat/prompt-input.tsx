@@ -8,9 +8,9 @@ function PromptInput({ className, ...props }: React.ComponentProps<"form">) {
     <form
       data-slot="prompt-input"
       className={cn(
-        // The composer uses one nearby opaque fill. Its inset hairline keeps
-        // the long control from dissolving into the canvas without lifting it.
-        "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-[13px] p-1.5 shadow-[inset_0_0_0_1px_var(--edge)] transition-[box-shadow] duration-180 ease-out glass-composer focus-within:ring-1 focus-within:ring-ring",
+        // The composer is one nearby raised plate; `glass-composer` owns its
+        // hairline and, in light, its lift.
+        "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-bubble p-1.5 glass-composer transition-[box-shadow] duration-180 ease-out focus-within:ring-1 focus-within:ring-ring",
         // The toolbar inside answers to this box, not to the window: the
         // conversation column narrows when the panel opens while the window
         // stays as wide as it was.
@@ -38,7 +38,7 @@ function PromptInputTextarea({
         // being in charge.
         // Set at the conversation step, not the UI step: what a person types
         // here is read back to them in the transcript at the same size.
-        "col-span-2 field-sizing-fixed max-h-[min(16rem,30svh)] min-h-10 min-w-0 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-2.5 py-2.5 text-conversation leading-5 focus-visible:ring-0",
+        "col-span-2 field-sizing-fixed max-h-[min(16rem,30svh)] min-h-10 min-w-0 resize-none overflow-y-auto rounded-panel border-0 bg-transparent px-3 py-3 text-conversation leading-5 focus-visible:ring-0",
         className
       )}
       onKeyDown={(event) => {

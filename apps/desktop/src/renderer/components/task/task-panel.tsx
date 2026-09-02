@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -77,6 +78,8 @@ const taskPanelWidthSchema = z
 
 /** One task's files and activity beside its conversation. */
 export function TaskPanel({
+  open,
+  onClosed,
   threadId,
   activities,
   childThreads,
@@ -91,6 +94,9 @@ export function TaskPanel({
   onOpenSide,
   onDiscardSide,
 }: {
+  /** False while the panel is sliding out; it unmounts once `onClosed` fires. */
+  open: boolean
+  onClosed: () => void
   threadId: string
   activities: Activity[]
   childThreads: Thread[]
@@ -241,15 +247,32 @@ export function TaskPanel({
   )
 
   // The panel shares the canvas and needs only the relationship hairline.
+  // Closed, it sits entirely past the pane's clipped edge on a negative
+  // margin the stylesheet owns (an inline margin would also override the
+  // entrance's starting style); the pane keeps it mounted until the slide
+  // lands.
+  // SAFETY: React's style type has no slot for a custom property, but the
+  // browser accepts one; the drawer's margin rules read it.
+  const drawerStyle = {
+    width: effectivePanelWidth,
+    minWidth: minimumTaskPanelWidth,
+    maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
+    "--panel-width": `${effectivePanelWidth}px`,
+  } as CSSProperties
   return (
     <aside
       ref={asideRef}
-      style={{
-        width: effectivePanelWidth,
-        minWidth: minimumTaskPanelWidth,
-        maxWidth: `calc(100% - ${minimumConversationWidth}px)`,
+      style={drawerStyle}
+      data-state={open ? "open" : "closed"}
+      onTransitionEnd={(event) => {
+        if (
+          !open &&
+          event.target === event.currentTarget &&
+          event.propertyName === "margin-right"
+        )
+          onClosed()
       }}
-      className="panel-enter relative flex h-full shrink-0 flex-col border-l border-border glass-panel"
+      className="panel-drawer relative flex h-full shrink-0 flex-col border-l border-border glass-panel"
     >
       <div
         ref={separatorRef}
@@ -271,7 +294,7 @@ export function TaskPanel({
       >
         <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring group-focus-visible/resize:bg-ring" />
       </div>
-      <div className="flex h-11 shrink-0 items-stretch gap-1 px-2 pt-1.5">
+      <div className="flex h-10 shrink-0 items-stretch gap-1 overflow-x-auto px-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <FilesTab
             active={panel.surface === "files"}
@@ -580,9 +603,9 @@ function FileTreeRowButton({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{name}</span>
-        {/* Same mono line the preview header carries, so a file reads the
-            same in the list and once it is open. */}
-        <span className="mt-0.5 block truncate eyebrow text-muted-foreground">
+        {/* A sentence fragment in the caption size, not a small-caps strip:
+            the size and age are facts about the file, not a label for it. */}
+        <span className="mt-0.5 block truncate text-micro text-muted-foreground">
           {meta}
         </span>
       </span>
@@ -870,7 +893,7 @@ function describeFileWithFolder(
   const folder = parentFolder(artifact.relativePath)
   return [describeFile(artifact, producedAt), folder]
     .filter(Boolean)
-    .join(" · ")
+    .join(", in ")
 }
 
 /**
@@ -878,7 +901,7 @@ function describeFileWithFolder(
  * that folder.
  */
 function describeFile(artifact: Artifact, producedAt: string): string {
-  return `${formatBytes(artifact.sizeBytes)} · changed ${describeAge(producedAt)}`
+  return `${formatBytes(artifact.sizeBytes)}, changed ${describeAge(producedAt)}`
 }
 
 function describeAge(timestamp: string): string {
