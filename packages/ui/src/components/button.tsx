@@ -13,6 +13,10 @@ import { cn } from "@workspace/ui/lib/utils"
  * behind `motion-safe`. Colour still shifts under the pointer and the focus
  * ring still lands, which is all the press feedback a reader who asked for
  * less motion needs.
+ *
+ * The destructive focus keeps its hue: the border goes to full strength,
+ * which is what clears 3:1 against the pane, and the halo sits at 60%, the
+ * alpha where the tint stops reading as a smudge in either palette.
  */
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-button border border-transparent bg-clip-padding text-control font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-(--ease-out-quart) outline-none select-none focus-visible:border-input focus-visible:ring-3 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 motion-safe:active:not-aria-[haspopup]:scale-[0.96] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -29,7 +33,7 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive focus-visible:ring-destructive/60 dark:bg-destructive/20 dark:hover:bg-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

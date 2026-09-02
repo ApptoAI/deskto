@@ -468,12 +468,21 @@
   --body: oklch(0 0 0 / 82%);
   --muted-foreground: var(--paper-fg-muted);
   --border: oklch(0 0 0 / 12%);
+  --edge: oklch(0 0 0 / 10%);
+  --edge-strong: oklch(0 0 0 / 14%);
   --card: oklch(0 0 0 / 5%);
   --muted: oklch(0 0 0 / 5%);
   --accent: oklch(0 0 0 / 6%);
   --accent-foreground: var(--paper-fg);
   --fill-card: oklch(0 0 0 / 4%);
   --fill-chip: oklch(0 0 0 / 5%);
+  /* A control on the sheet: its boundary, its focus halo and its scrollbar
+       are dark ink here even when the app is dark, because the tokens they
+       inherit from the root were resolved there, against a dark pane. */
+  --input: oklch(0 0 0 / 43%);
+  --ring: var(--accent-ring, oklch(0.4 0.006 286 / 62%));
+  --scrollbar-thumb: oklch(0 0 0 / 14%);
+  --scrollbar-thumb-hover: oklch(0 0 0 / 22%);
 }
 
 @utility display-sm {
