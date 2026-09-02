@@ -77,8 +77,7 @@ export function ProjectsView({
 
   return (
     <>
-      <header className="drag-region h-10 shrink-0" />
-      <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
+      <div className="min-h-0 flex-1 overflow-hidden p-5">
         <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
           <div className="flex shrink-0 items-start justify-between gap-4 pb-5">
             <div>
@@ -217,7 +216,7 @@ function ProjectCard({
               "relative z-10 -mt-1 -mr-1 text-muted-foreground",
               pinned
                 ? ""
-                : "opacity-0 focus-visible:opacity-100 group-hover/card:opacity-100"
+                : "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100"
             )}
           >
             {pinned ? <PinOffIcon /> : <PinIcon />}
@@ -238,7 +237,9 @@ function ProjectCard({
           {age === "now" ? "Just now" : `${age} ago`}
         </span>
         {project.locationKind === "linked" ? (
-          <span className="min-w-0 truncate font-mono text-micro">{project.path}</span>
+          <span className="min-w-0 truncate font-mono text-micro">
+            {project.path}
+          </span>
         ) : null}
       </div>
     </Card>
