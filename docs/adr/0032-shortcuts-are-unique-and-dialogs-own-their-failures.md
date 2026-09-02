@@ -1,4 +1,4 @@
-# ADR 0031: Shortcuts are unique, and a dialog owns its own failure
+# ADR 0032: Shortcuts are unique, and a dialog owns its own failure
 
 - Status: accepted
 - Date: 2026-09-02

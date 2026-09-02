@@ -1,4 +1,4 @@
-# ADR 0030: Palette tokens carry a contrast floor
+# ADR 0034: Palette tokens carry a contrast floor
 
 - Status: accepted
 - Date: 2026-09-02

@@ -270,6 +270,9 @@ importers:
 
   packages/protocol:
     dependencies:
+      tldts:
+        specifier: ^7.4.10
+        version: 7.4.10
       zod:
         specifier: ^4.4.3
         version: 4.4.3
