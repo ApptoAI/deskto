@@ -17,6 +17,8 @@ import {
   type HarnessModelOption,
   type HarnessRunInput,
   type HarnessSession,
+  type NativeSkillRoot,
+  type SkillDiscoveryInput,
   type SkillProvisioningResult,
   type SkillRoot,
   type TextGenerationInput,
@@ -181,6 +183,23 @@ export class PiAdapter implements HarnessAdapterFactory {
     return piModels(output, settings)
   }
 
+  discoverSkillRoots(input: SkillDiscoveryInput): Promise<NativeSkillRoot[]> {
+    const roots: NativeSkillRoot[] = []
+    if (input.projectPath) {
+      roots.push({
+        path: join(input.projectPath, ".pi", "skills"),
+        scope: "project",
+        label: "Pi project skills",
+      })
+    }
+    roots.push({
+      path: join(this.#configPath(), "skills"),
+      scope: "user",
+      label: "Pi personal skills",
+    })
+    return Promise.resolve(roots)
+  }
+
   start(input: HarnessRunInput, signal: AbortSignal): Promise<HarnessSession> {
     return PiSession.open(
       {
@@ -217,13 +236,20 @@ export class PiAdapter implements HarnessAdapterFactory {
     )
   }
 
-  async #readSettings(): Promise<PiSettings> {
-    const configPath =
+  #configPath(): string {
+    return (
       this.options.configPath ??
       process.env.PI_CODING_AGENT_DIR ??
       join(homedir(), ".pi", "agent")
+    )
+  }
+
+  async #readSettings(): Promise<PiSettings> {
     try {
-      const raw = await readFile(join(configPath, "settings.json"), "utf8")
+      const raw = await readFile(
+        join(this.#configPath(), "settings.json"),
+        "utf8"
+      )
       const parsed = piSettingsSchema.safeParse(JSON.parse(raw))
       return parsed.success ? parsed.data : {}
     } catch {

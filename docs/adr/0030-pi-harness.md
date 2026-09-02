@@ -63,8 +63,9 @@ questions nobody can answer over RPC.
   reporting Ready. Pi supports many providers and `pi auth check` needs one
   named, so the adapter reports Ready on a working `pi --version` and a
   missing key surfaces as the first Turn's failure with Pi's own message.
-- **Native skill roots.** Pi discovers skills from `~/.pi/agent/skills` and
-  `.pi/skills`; the inventory does not list them yet.
+- **Shared native skill roots.** The inventory lists Pi's own
+  `~/.pi/agent/skills` and `.pi/skills`. Pi also reads `~/.agents/skills` and
+  project `.agents/skills`, which the inventory already attributes to Codex.
 - **Plans and subagents.** Pi's plan-mode and subagent packages are
   extensions, disabled by `--no-extensions`; no plan or subagent Activities
   are emitted.
