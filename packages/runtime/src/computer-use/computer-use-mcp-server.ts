@@ -17,6 +17,7 @@ import {
   type AuthInfo,
 } from "@modelcontextprotocol/server"
 import { computerUseSettings, settingValue } from "@deskto/settings"
+import type { JsonObject } from "@deskto/protocol"
 import { z } from "zod"
 
 import type {
@@ -185,15 +186,8 @@ type ToolContent =
 
 type ToolResult = { content: ToolContent[]; isError?: boolean }
 
-function textResult(value: object | string): ToolResult {
-  return {
-    content: [
-      {
-        type: "text",
-        text: typeof value === "string" ? value : JSON.stringify(value),
-      },
-    ],
-  }
+function textResult(value: JsonObject): ToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(value) }] }
 }
 
 function errorResult(error: Error): ToolResult {

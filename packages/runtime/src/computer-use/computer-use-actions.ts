@@ -74,62 +74,67 @@ export const waitInputSchema = z.object({
 
 export const emptyInputSchema = z.object({})
 
-const modifierNames: Record<string, ComputerUseModifier> = {
-  shift: "shift",
-  ctrl: "control",
-  control: "control",
-  alt: "alt",
-  option: "alt",
-  meta: "meta",
-  super: "meta",
-  cmd: "meta",
-  command: "meta",
-  win: "meta",
-}
+const modifierNames = new Map<string, ComputerUseModifier>([
+  ["shift", "shift"],
+  ["ctrl", "control"],
+  ["control", "control"],
+  ["alt", "alt"],
+  ["option", "alt"],
+  ["meta", "meta"],
+  ["super", "meta"],
+  ["cmd", "meta"],
+  ["command", "meta"],
+  ["win", "meta"],
+])
 
 /** xdotool key names to Electron accelerator key codes where they differ. */
-const keyCodes: Record<string, string> = {
-  return: "Return",
-  enter: "Return",
-  kp_enter: "Return",
-  tab: "Tab",
-  escape: "Escape",
-  esc: "Escape",
-  backspace: "Backspace",
-  delete: "Delete",
-  space: "Space",
-  up: "Up",
-  down: "Down",
-  left: "Left",
-  right: "Right",
-  home: "Home",
-  end: "End",
-  page_up: "PageUp",
-  pageup: "PageUp",
-  page_down: "PageDown",
-  pagedown: "PageDown",
-  insert: "Insert",
-  minus: "-",
-  plus: "+",
-  equal: "=",
-  comma: ",",
-  period: ".",
-  slash: "/",
-  backslash: "\\",
-  semicolon: ";",
-  apostrophe: "'",
-  grave: "`",
-  bracketleft: "[",
-  bracketright: "]",
-}
+const keyCodes = new Map<string, string>([
+  ["return", "Return"],
+  ["enter", "Return"],
+  ["kp_enter", "Return"],
+  ["tab", "Tab"],
+  ["escape", "Escape"],
+  ["esc", "Escape"],
+  ["backspace", "Backspace"],
+  ["delete", "Delete"],
+  ["space", "Space"],
+  ["up", "Up"],
+  ["down", "Down"],
+  ["left", "Left"],
+  ["right", "Right"],
+  ["home", "Home"],
+  ["end", "End"],
+  ["page_up", "PageUp"],
+  ["pageup", "PageUp"],
+  ["page_down", "PageDown"],
+  ["pagedown", "PageDown"],
+  ["insert", "Insert"],
+  ["minus", "-"],
+  ["plus", "+"],
+  ["equal", "="],
+  ["comma", ","],
+  ["period", "."],
+  ["slash", "/"],
+  ["backslash", "\\"],
+  ["semicolon", ";"],
+  ["apostrophe", "'"],
+  ["grave", "`"],
+  ["bracketleft", "["],
+  ["bracketright", "]"],
+])
 
-const modifierKeyCodes: Record<ComputerUseModifier, string> = {
-  shift: "Shift",
-  control: "Control",
-  alt: "Alt",
-  meta: "Meta",
+function modifierKeyCode(modifier: ComputerUseModifier): string {
+  switch (modifier) {
+    case "shift":
+      return "Shift"
+    case "control":
+      return "Control"
+    case "alt":
+      return "Alt"
+    case "meta":
+      return "Meta"
+  }
 }
-
 export type KeyChord = { keyCode: string; modifiers: ComputerUseModifier[] }
 
 /** Splits `ctrl+shift+t` into the key Electron presses and the modifiers held. */
@@ -139,11 +144,11 @@ export function parseKeyChord(chord: string): KeyChord {
   const modifiers: ComputerUseModifier[] = []
   const keys: string[] = []
   for (const part of parts) {
-    const modifier = modifierNames[part.toLowerCase()]
+    const modifier = modifierNames.get(part.toLowerCase())
     if (modifier) {
       if (!modifiers.includes(modifier)) modifiers.push(modifier)
     } else {
-      keys.push(keyCodes[part.toLowerCase()] ?? part)
+      keys.push(keyCodes.get(part.toLowerCase()) ?? part)
     }
   }
   if (keys.length > 1) {
@@ -154,7 +159,7 @@ export function parseKeyChord(chord: string): KeyChord {
     // Every part was a modifier: press the last one as a key on its own.
     const last = modifiers.pop()
     if (!last) throw new Error(`Unsupported key: ${chord}`)
-    keyCode = modifierKeyCodes[last]
+    keyCode = modifierKeyCode(last)
   }
   if (/^f\d{1,2}$/i.test(keyCode)) keyCode = keyCode.toUpperCase()
   return { keyCode, modifiers }
@@ -167,7 +172,7 @@ export function parseModifiers(
   if (!text) return []
   const modifiers: ComputerUseModifier[] = []
   for (const part of text.split("+")) {
-    const modifier = modifierNames[part.toLowerCase()]
+    const modifier = modifierNames.get(part.toLowerCase())
     if (!modifier) throw new Error(`Not a modifier key: ${part}`)
     if (!modifiers.includes(modifier)) modifiers.push(modifier)
   }
