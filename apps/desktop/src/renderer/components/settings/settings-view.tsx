@@ -4,6 +4,7 @@ import type { Harness } from "@deskto/protocol"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { AboutSettings } from "./about-settings.js"
 import { AppearanceSettings } from "./appearance-settings.js"
+import { ComputerUseSettings } from "./computer-use-settings.js"
 import { HarnessModelSettings } from "./harness-model-settings.js"
 import { HarnessSettings } from "./harness-settings.js"
 import { settingsPages, type SettingsPageId } from "./settings-pages.js"
@@ -52,6 +53,8 @@ function SettingsPane({
       return <HarnessSettings harnesses={harnesses} />
     case "models":
       return <HarnessModelSettings harnesses={harnesses} />
+    case "computer-use":
+      return <ComputerUseSettings />
     case "appearance":
       return <AppearanceSettings />
     case "shortcuts":
