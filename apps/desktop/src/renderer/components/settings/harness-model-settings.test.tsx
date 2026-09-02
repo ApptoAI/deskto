@@ -136,6 +136,7 @@ function harness(
   return {
     id,
     name,
+    followUps: { queue: false, steer: false },
     enabled: true,
     availability: { status: "available" },
     checkedAt: "2026-09-02T12:00:00.000Z",
