@@ -174,7 +174,11 @@ function SettingRow({
         </div>
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="pt-1.5 text-xs text-destructive">
+        <p
+          id={errorId}
+          role="alert"
+          className="pt-1.5 text-xs text-destructive"
+        >
           {error}
         </p>
       ) : null}
