@@ -149,7 +149,7 @@ function TitleBarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex size-8 items-center justify-center rounded-md transition-[background-color,color,transform,opacity] duration-120 outline-none",
+        "flex size-8 items-center justify-center rounded-button transition-[background-color,color,transform,opacity] duration-120 outline-none",
         "hover:bg-fill-chip focus-visible:ring-2 focus-visible:ring-ring",
         "disabled:pointer-events-none disabled:opacity-40",
         "motion-safe:active:scale-[0.96]",

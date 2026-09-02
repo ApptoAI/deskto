@@ -379,7 +379,7 @@ function Shelf({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 pt-5 pb-2 text-left eyebrow text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-row px-2 pt-5 pb-2 text-left eyebrow text-muted-foreground transition-colors duration-150 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span>{label}</span>
         <ChevronDownIcon
