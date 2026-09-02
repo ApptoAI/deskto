@@ -591,7 +591,11 @@ export class BrowserManager implements BrowserAutomationHost {
   async clearProfile(workspaceId: string): Promise<BrowserProfileClearResult> {
     const before = await this.profileUsage(workspaceId)
     for (const [threadId, tab] of this.#tabs) {
-      if (tab.workspaceId === workspaceId) this.closeThread(threadId)
+      if (tab.workspaceId !== workspaceId) continue
+      this.closeThread(threadId)
+      // The task view may still be showing this page; it learns here that
+      // the page is gone rather than at its next request.
+      this.publish({ type: "state", state: this.state(threadId) })
     }
     const browserSession = this.#workspaceSession(workspaceId)
     await browserSession.clearStorageData()

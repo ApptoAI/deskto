@@ -30,7 +30,7 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     id: "profiles",
     label: "Browser profiles",
     description:
-      "Each workspace keeps its own cookies, storage and logins. Deleting a workspace leaves its profile in place; clear it here.",
+      "Each workspace keeps its own cookies, storage and logins. Deleting a workspace does not clear them, so clear them here first.",
     Component: BrowserProfilesSection,
   },
 ]
