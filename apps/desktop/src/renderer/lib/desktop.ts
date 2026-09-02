@@ -20,6 +20,18 @@ export function pickPackArchive() {
   return window.deskto.pickPackArchive()
 }
 
+export function loadBrowserProfiles() {
+  return window.deskto.browser.profiles()
+}
+
+export function clearBrowserProfile(workspaceId: string) {
+  return window.deskto.browser.clearProfile(workspaceId)
+}
+
+export function openBrowserProfileFolder(workspaceId: string): Promise<void> {
+  return window.deskto.browser.openProfileFolder(workspaceId)
+}
+
 export function discoverBrowserProfiles() {
   return window.deskto.cookieImport.discover()
 }

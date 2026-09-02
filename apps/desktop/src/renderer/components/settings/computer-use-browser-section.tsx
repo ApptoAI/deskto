@@ -296,7 +296,7 @@ function HostListSettingRow({
   )
 }
 
-function ToggleSettingRow({
+export function ToggleSettingRow({
   definition,
   value,
   error,

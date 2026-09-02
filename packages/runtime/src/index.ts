@@ -16,6 +16,19 @@ export type {
   BrowserSnapshot,
   BrowserStatus,
 } from "./browser/browser-automation-host.js"
+export {
+  ComputerUseMcpServer,
+  computerUseMcpServerId,
+} from "./computer-use/computer-use-mcp-server.js"
+export type {
+  ComputerUseCapture,
+  ComputerUseHost,
+  ComputerUseInputEvent,
+  ComputerUseMouseModifier,
+  ComputerUsePage,
+  ComputerUsePoint,
+  ComputerUseSize,
+} from "./computer-use/computer-use-host.js"
 export type {
   SessionToolInput,
   SessionToolLease,

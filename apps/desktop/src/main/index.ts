@@ -9,6 +9,7 @@ import { startDesktoMcpServer, type DesktoMcpServer } from "@deskto/mcp-server"
 import {
   BrowserMcpServer,
   ClaudeAdapter,
+  ComputerUseMcpServer,
   claudeNotSignedInReason,
   CodexAdapter,
   codexNotInstalledReason,
@@ -164,12 +165,34 @@ async function openApplication(): Promise<void> {
         })
         return project.ok ? project.data.project.path : undefined
       },
+      async workspaceForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await current.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.workspaceId : undefined
+      },
     }
   )
   let browserMcp: BrowserMcpServer
   try {
     browserMcp = await BrowserMcpServer.create(browser)
   } catch (error) {
+    browser.close()
+    throw error
+  }
+  let computerUseMcp: ComputerUseMcpServer
+  try {
+    computerUseMcp = await ComputerUseMcpServer.create(browser)
+  } catch (error) {
+    await browserMcp.close()
     browser.close()
     throw error
   }
@@ -212,20 +235,28 @@ async function openApplication(): Promise<void> {
       projectsPath: path.join(app.getPath("userData"), "projects"),
       harnesses,
       probeGate: cliPathConfigured,
-      sessionTools: [browserMcp, taskOrchestrationProvider(mcpServerRef)],
+      sessionTools: [
+        browserMcp,
+        computerUseMcp,
+        taskOrchestrationProvider(mcpServerRef),
+      ],
       fileActions: {
         trashItem: (targetPath) => shell.trashItem(targetPath),
       },
     })
   } catch (error) {
-    await browserMcp.close()
+    await Promise.allSettled([browserMcp.close(), computerUseMcp.close()])
     browser.close()
     throw error
   }
   // Install cleanup before the orchestration server starts so a startup
   // failure still closes the Runtime and Browser resources.
   closeRuntime = async () => {
-    await Promise.allSettled([runtime.close(), browserMcp.close()])
+    await Promise.allSettled([
+      runtime.close(),
+      browserMcp.close(),
+      computerUseMcp.close(),
+    ])
     browser.close()
   }
   let mcpServer: DesktoMcpServer
@@ -247,6 +278,7 @@ async function openApplication(): Promise<void> {
       runtime.close(),
       mcpServer.close(),
       browserMcp.close(),
+      computerUseMcp.close(),
     ])
     browser.close()
   }
@@ -274,6 +306,7 @@ async function openApplication(): Promise<void> {
   await applyBrowserSettings()
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+    if (event.type === "workspace.changed") browser.workspaceChanged()
     if (event.type === "settings.changed") void applyBrowserSettings()
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)

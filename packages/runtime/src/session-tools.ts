@@ -1,4 +1,5 @@
 import type { SessionMcpServer } from "@deskto/harness-sdk"
+import type { SettingsSnapshot } from "@deskto/settings"
 
 export type SessionToolInput = {
   harnessId: string
@@ -7,6 +8,8 @@ export type SessionToolInput = {
   projectId: string
   workspaceId: string
   projectPath: string
+  /** The settings in effect when the Turn started; a provider may opt out on them. */
+  settings: SettingsSnapshot
 }
 
 export interface SessionToolLease {

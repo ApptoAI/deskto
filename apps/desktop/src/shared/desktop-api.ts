@@ -1,5 +1,7 @@
 import type {
   BrowserElementContext,
+  BrowserProfile,
+  BrowserProfileClearResult,
   RequestFor,
   RuntimeEvent,
   RuntimeMethod,
@@ -149,6 +151,12 @@ export interface DesktopApi {
     selectElement(threadId: string): Promise<BrowserElementContext | undefined>
     cancelElementSelection(threadId: string): Promise<void>
     subscribe(listener: (event: BrowserEvent) => void): () => void
+    /** One profile per Workspace, sized from disk on each call. */
+    profiles(): Promise<BrowserProfile[]>
+    /** Empties a Workspace's cookies, storage and logins; the folder stays. */
+    clearProfile(workspaceId: string): Promise<BrowserProfileClearResult>
+    /** Reveals the profile folder in the system file manager. */
+    openProfileFolder(workspaceId: string): Promise<void>
   }
   cookieImport: {
     /** Lists browser profiles on this machine with a readable cookie store. */

@@ -7,7 +7,11 @@ import { dialog, ipcMain, shell } from "electron"
 import { z } from "zod"
 
 import type { Runtime } from "@deskto/runtime"
-import { isPageLikeArtifactPreviewKind } from "@deskto/protocol"
+import {
+  isPageLikeArtifactPreviewKind,
+  type BrowserProfile,
+  type Workspace,
+} from "@deskto/protocol"
 
 import type { BrowserManager } from "./browser/browser-manager.js"
 import { maximumBrowserUrlLength } from "./browser/browser-url.js"
@@ -19,7 +23,10 @@ import {
 import {
   browserActionChannel,
   browserCancelSelectionChannel,
+  browserClearProfileChannel,
   browserHideChannel,
+  browserOpenProfileFolderChannel,
+  browserProfilesChannel,
   browserNavigateChannel,
   browserOpenArtifactChannel,
   browserSelectElementChannel,
@@ -52,6 +59,7 @@ const resultRefSchema: z.ZodType<ResultRef> = z.object({
 })
 
 const threadIdSchema = z.string().min(1)
+const workspaceIdSchema = z.string().min(1)
 const browserBoundsSchema: z.ZodType<BrowserBounds> = z.object({
   x: z.number().int(),
   y: z.number().int(),
@@ -339,6 +347,57 @@ export function registerDesktopIpc(
   )
   ipcMain.handle(browserCancelSelectionChannel, async (_event, threadId) =>
     browser.cancelElementSelection(await existingBrowserThread(threadId))
+  )
+
+  // A profile is only ever named through a Workspace the Runtime still has,
+  // so the renderer cannot point the clear or open actions at a folder of
+  // its own choosing.
+  async function existingWorkspace(value: string): Promise<Workspace> {
+    const workspaceId = workspaceIdSchema.parse(value)
+    const response = await runtime.request({
+      method: "workspace.list",
+      params: {},
+    })
+    if (!response.ok) throw new Error(response.error.message)
+    const workspace = response.data.find((entry) => entry.id === workspaceId)
+    if (!workspace) throw new Error("That workspace is no longer available.")
+    return workspace
+  }
+
+  ipcMain.handle(browserProfilesChannel, async (): Promise<BrowserProfile[]> => {
+    const response = await runtime.request({
+      method: "workspace.list",
+      params: {},
+    })
+    if (!response.ok) throw new Error(response.error.message)
+    return Promise.all(
+      response.data.map(async (workspace) => ({
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        ...(await browser.profileUsage(workspace.id)),
+      }))
+    )
+  })
+  ipcMain.handle(browserClearProfileChannel, async (_event, workspaceId) =>
+    browser.clearProfile((await existingWorkspace(workspaceId)).id)
+  )
+  ipcMain.handle(
+    browserOpenProfileFolderChannel,
+    async (_event, workspaceId): Promise<void> => {
+      const workspace = await existingWorkspace(workspaceId)
+      const folderPath = browser.profilePath(workspace.id)
+      let entry
+      try {
+        entry = await stat(folderPath)
+      } catch {
+        throw new Error("This workspace has no browser data yet.")
+      }
+      if (!entry.isDirectory()) {
+        throw new Error("This workspace has no browser data yet.")
+      }
+      const error = await shell.openPath(folderPath)
+      if (error) throw new Error(error)
+    }
   )
 
   ipcMain.handle(cookieImportDiscoverChannel, () => listImportableProfiles())

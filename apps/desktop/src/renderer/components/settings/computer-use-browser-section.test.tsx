@@ -18,8 +18,9 @@ import { SettingsProvider } from "../../settings/settings-context.js"
 import { ComputerUseSettings } from "./computer-use-settings.js"
 
 beforeEach(() => {
-  // The page's cookie-import section discovers browsers on mount; the bridge
-  // stub reports none, so the browser-section assertions stand alone.
+  // The cookie-import and profiles sections read the desktop bridge on mount;
+  // the stub reports no browsers and no profiles, so the browser-section
+  // assertions stand alone.
   window.deskto = createBrowserDesktopBridge()
 })
 
