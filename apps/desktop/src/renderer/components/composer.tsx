@@ -771,6 +771,14 @@ export function Composer({
         </PromptInput>
       </div>
 
+      {running && hasContent && !sending ? (
+        // Send is replaced by Stop while the agent works, so Enter goes
+        // nowhere; without this line the person is left guessing whether
+        // what they typed was dropped.
+        <p role="status" className="px-1 text-caption text-muted-foreground">
+          Your message stays here until the agent finishes, or you stop it.
+        </p>
+      ) : null}
       <p id={hintId} className="sr-only">
         Press Enter to send. Shift and Enter start a new line. Paste or attach
         images. Type at, slash, or dollar for suggestions.

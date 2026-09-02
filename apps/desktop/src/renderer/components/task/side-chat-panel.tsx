@@ -156,6 +156,17 @@ export function SideChatPanel({
       {discardError ? (
         <InlineError className="m-3 mb-0" message={discardError} />
       ) : null}
+      {turnOutputs.state.status === "error" ? (
+        <div className="m-3 mb-0 flex items-center gap-2">
+          <InlineError
+            className="min-w-0 flex-1"
+            message={`Files attached to earlier answers could not be loaded. ${turnOutputs.state.message}`}
+          />
+          <Button variant="outline" size="sm" onClick={revalidateTurnOutputs}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
 
       {openOutput ? (
         <ResultPreviewBoundary key={openOutput.artifact.id}>
