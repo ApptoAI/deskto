@@ -30,9 +30,9 @@ type WorkspacesState =
   | { status: "ready"; workspaces: BrowserProfile[] }
 
 // The person types one website per line; commas and spaces separate too. Only
-// the host part of anything URL-shaped is kept, and leading dots and "www."
-// are dropped so a typed "www.example.com" matches the same cookies as
-// "example.com".
+// the host part of anything URL-shaped is kept, exactly as typed: cookies
+// match hosts precisely, so "www.example.com" and "example.com" are different
+// entries and the person lists each one they want.
 export function parseHosts(text: string): string[] {
   const seen = new Set<string>()
   for (const token of text.split(/[\s,]+/u)) {
@@ -56,7 +56,7 @@ function hostOf(token: string): string | undefined {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return undefined
   }
-  const host = parsed.hostname.toLowerCase().replace(/^www\./u, "")
+  const host = parsed.hostname.toLowerCase()
   return isCookieImportHost(host) ? host : undefined
 }
 

@@ -44,6 +44,6 @@ describe("Computer use settings", () => {
       parseHosts(
         "https://example.com:8443/login, user:pass@secure.example.com/path?next=1 invalid_host https://www.example.com?q=1 com co.uk github.io localhost"
       )
-    ).toEqual(["example.com", "secure.example.com"])
+    ).toEqual(["example.com", "secure.example.com", "www.example.com"])
   })
 })
