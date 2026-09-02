@@ -103,6 +103,15 @@ export function createBrowserDesktopBridge(): DesktopApi {
       cancelElementSelection: () => Promise.resolve(),
       subscribe: () => () => {},
     },
+    cookieImport: {
+      discover: () => Promise.resolve([]),
+      run: () =>
+        Promise.resolve({
+          imported: 0,
+          skipped: 0,
+          error: "Cookie import needs the desktop app.",
+        }),
+    },
   }
 }
 

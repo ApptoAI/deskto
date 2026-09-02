@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { SettingsSidebar } from "./settings-sidebar.js"
 import { computerUseSections } from "./computer-use-sections.js"
+import { CookieImportSection } from "./computer-use-cookie-section.js"
 
 describe("Computer use settings", () => {
   it("lists the page in the settings sidebar", () => {
@@ -23,5 +24,14 @@ describe("Computer use settings", () => {
     expect(computerUseSections[0]?.id).toBe("browser")
     const ids = computerUseSections.map((section) => section.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it("offers a cookie import section that renders while it discovers", () => {
+    expect(
+      computerUseSections.some((section) => section.id === "cookie-import")
+    ).toBe(true)
+    const html = renderToStaticMarkup(createElement(CookieImportSection))
+    expect(html).toContain("Import cookies")
+    expect(html).toContain("Websites")
   })
 })

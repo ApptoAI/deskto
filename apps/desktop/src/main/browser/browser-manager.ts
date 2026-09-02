@@ -49,6 +49,7 @@ import {
   browserSetValueScript,
   browserSnapshotScript,
 } from "./browser-page-script.js"
+import type { CookieSink } from "../cookie-import/cookie-import.js"
 import { isBrowserWebUrl, normalizeBrowserUrl } from "./browser-url.js"
 
 const browserPartition = "persist:deskto-browser"
@@ -502,6 +503,17 @@ export class BrowserManager implements BrowserAutomationHost {
   close(): void {
     for (const threadId of this.#tabs.keys()) this.closeThread(threadId)
     this.#browserSession.protocol.unhandle(browserArtifactScheme)
+  }
+
+  /**
+   * Writes imported cookies into the shared browser profile so a signed-in
+   * session carries into tasks. Only Main holds this session, so a renderer
+   * cannot set a cookie directly.
+   */
+  cookieSink(): CookieSink {
+    return {
+      set: (cookie) => this.#browserSession.cookies.set(cookie),
+    }
   }
 
   #ensureTab(threadId: string): BrowserTab {

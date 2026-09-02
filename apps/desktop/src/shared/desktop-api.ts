@@ -44,6 +44,47 @@ export type BrowserEvent =
 
 export type BrowserAction = "back" | "forward" | "reload"
 
+// Chromium-family browsers Deskto can read cookies from. The union is the
+// source of truth for both the discovery code in main and the settings UI.
+export const browserIds = [
+  "chrome",
+  "chromium",
+  "brave",
+  "edge",
+  "vivaldi",
+] as const
+
+export type BrowserId = (typeof browserIds)[number]
+
+/** One detected browser profile the person can import cookies from. */
+export type DetectedBrowserProfile = {
+  /** Stable across a session: `${browserId}:${profileDirectory}`. */
+  id: string
+  browserId: BrowserId
+  browserLabel: string
+  profileDirectory: string
+  /** The browser's own display name for the profile, or its directory. */
+  profileName: string
+}
+
+export type CookieImportRequest = {
+  profileId: string
+  /** Hosts the person chose; only cookies for these are imported. */
+  hosts: string[]
+}
+
+/**
+ * The outcome the settings UI shows. `error` carries a next step ("Close
+ * Chrome and try again") when the run could not complete, never a decrypted
+ * value or a cookie name.
+ */
+export type CookieImportResult = {
+  imported: number
+  /** Cookies this machine could not decrypt, so nothing was written for them. */
+  skipped: number
+  error?: string
+}
+
 type UpdateStateBase = {
   currentVersion: string
 }
@@ -108,6 +149,12 @@ export interface DesktopApi {
     selectElement(threadId: string): Promise<BrowserElementContext | undefined>
     cancelElementSelection(threadId: string): Promise<void>
     subscribe(listener: (event: BrowserEvent) => void): () => void
+  }
+  cookieImport: {
+    /** Lists browser profiles on this machine with a readable cookie store. */
+    discover(): Promise<DetectedBrowserProfile[]>
+    /** Imports the chosen profile's cookies for the chosen hosts. */
+    run(request: CookieImportRequest): Promise<CookieImportResult>
   }
   platform: NodeJS.Platform
   /**

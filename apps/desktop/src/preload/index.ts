@@ -10,6 +10,8 @@ import {
   browserSelectElementChannel,
   browserShowChannel,
   browserStateChannel,
+  cookieImportDiscoverChannel,
+  cookieImportRunChannel,
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
@@ -97,6 +99,10 @@ const api: DesktopApi = {
       ipcRenderer.on(browserEventChannel, handler)
       return () => ipcRenderer.removeListener(browserEventChannel, handler)
     },
+  },
+  cookieImport: {
+    discover: () => ipcRenderer.invoke(cookieImportDiscoverChannel),
+    run: (request) => ipcRenderer.invoke(cookieImportRunChannel, request),
   },
   platform: process.platform,
   // Main decides per platform and version; the answer rides in on argv

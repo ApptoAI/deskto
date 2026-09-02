@@ -11,6 +11,10 @@ import { isPageLikeArtifactPreviewKind } from "@deskto/protocol"
 
 import type { BrowserManager } from "./browser/browser-manager.js"
 import { maximumBrowserUrlLength } from "./browser/browser-url.js"
+import {
+  importCookies,
+  listImportableProfiles,
+} from "./cookie-import/cookie-import.js"
 
 import {
   browserActionChannel,
@@ -21,6 +25,8 @@ import {
   browserSelectElementChannel,
   browserShowChannel,
   browserStateChannel,
+  cookieImportDiscoverChannel,
+  cookieImportRunChannel,
   openExternalChannel,
   openFileChannel,
   openFolderChannel,
@@ -33,6 +39,7 @@ import {
 import type {
   BrowserAction,
   BrowserBounds,
+  CookieImportRequest,
   PickedProject,
   ResultRef,
 } from "../shared/desktop-api.js"
@@ -56,6 +63,10 @@ const browserActionSchema: z.ZodType<BrowserAction> = z.enum([
   "forward",
   "reload",
 ])
+const cookieImportRequestSchema: z.ZodType<CookieImportRequest> = z.object({
+  profileId: z.string().min(1),
+  hosts: z.array(z.string().min(1)).max(200),
+})
 
 function handleFolderPick(channel: string, title: string): void {
   ipcMain.handle(channel, async (): Promise<PickedProject | undefined> => {
@@ -328,5 +339,10 @@ export function registerDesktopIpc(
   )
   ipcMain.handle(browserCancelSelectionChannel, async (_event, threadId) =>
     browser.cancelElementSelection(await existingBrowserThread(threadId))
+  )
+
+  ipcMain.handle(cookieImportDiscoverChannel, () => listImportableProfiles())
+  ipcMain.handle(cookieImportRunChannel, async (_event, value) =>
+    importCookies(cookieImportRequestSchema.parse(value), browser.cookieSink())
   )
 }

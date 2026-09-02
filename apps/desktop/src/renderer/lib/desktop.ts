@@ -19,3 +19,13 @@ export function pickPackFolder() {
 export function pickPackArchive() {
   return window.deskto.pickPackArchive()
 }
+
+export function discoverBrowserProfiles() {
+  return window.deskto.cookieImport.discover()
+}
+
+export function importBrowserCookies(
+  request: Parameters<typeof window.deskto.cookieImport.run>[0]
+) {
+  return window.deskto.cookieImport.run(request)
+}

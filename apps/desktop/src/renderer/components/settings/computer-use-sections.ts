@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 
 import { BrowserSettingsSection } from "./computer-use-browser-section.js"
+import { CookieImportSection } from "./computer-use-cookie-section.js"
 
 /**
  * One block on the Computer use page. A new capability (cookie import,
@@ -24,5 +25,12 @@ export const computerUseSections: readonly ComputerUseSection[] = [
     description:
       "The browser agents use inside a task. Changes apply to pages opened from now on.",
     Component: BrowserSettingsSection,
+  },
+  {
+    id: "cookie-import",
+    label: "Import sign-ins",
+    description:
+      "Copy cookies from a browser on this computer so agents open sites already signed in.",
+    Component: CookieImportSection,
   },
 ]
