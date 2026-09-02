@@ -19,7 +19,9 @@ unless an extension blocks it.
 Pi joins the Harness registry with id `pi`. The adapter lives in
 `packages/runtime/src/harnesses/pi` and mirrors the Codex adapter: one
 `pi --mode rpc` process per Turn, launched in the Project folder, closed when
-the Turn settles.
+the Turn settles. Pi 0.80.4 is the floor: that release added the
+`agent_settled` RPC event the adapter settles on, and an older Pi is reported
+as unavailable with an update instruction rather than left running forever.
 
 **Sessions.** The adapter reads `get_state` after launch. A fresh or forked
 `sessionId` remains provisional until the first assistant message has been
@@ -43,19 +45,33 @@ failure classifier maps to a usage limit when it reads like one.
 `tool_call` and asks through `ctx.ui.confirm`. In RPC mode that surfaces as an
 `extension_ui_request`; the adapter turns it into `approval.requested` and
 answers with `extension_ui_response`. Read-only tools (`read`, `grep`,
-`find`, `ls`) never ask. Full-access mode loads no extension. The `auto` mode
-is not offered: Pi has no reviewer of its own to stand in for the person.
+`find`, `ls`) never ask. Cancelling a Turn dismisses any open dialog before
+asking Pi to abort, because Pi's abort waits for the agent to go idle and a
+blocked confirm never does. Full-access mode loads no extension. The `auto`
+mode is not offered: Pi has no reviewer of its own to stand in for the person.
+
+**Project trust.** RPC mode cannot show Pi's trust prompt, and Pi's default
+`defaultProjectTrust: "ask"` then silently skips the project's own `.pi`
+settings and skills. Every launch passes `--approve` so the Pi project skills
+the inventory advertises are the ones Pi loads; extensions stay off.
 
 **Discovery.** Availability is `pi --version` on the augmented PATH. Models
-come from `pi --list-models`, filtered to the `enabledModels` in Pi's own
-`settings.json` when the person set any, matched the way Pi matches them
-(full id or bare model id, glob, optional `:thinking` suffix); a filter that
-would empty the list is ignored so the menu never goes blank. Pi's
-`defaultProvider` and `defaultModel` are marked default. Thinking levels are
-Pi's `--thinking` vocabulary for models that report reasoning support.
+come from the `get_available_models` RPC command of a short-lived
+`pi --mode rpc --no-session --no-extensions` process, since `--list-models`
+prints no thinking levels. They are filtered to the `enabledModels` in Pi's
+own `settings.json` when the person set any, matched the way Pi matches them
+(exact reference, minimatch glob on the full or bare id, substring with
+alias preference, optional `:thinking` suffix); a filter that would empty the
+list is ignored so the menu never goes blank. Pi's `defaultProvider` and
+`defaultModel` are marked default. Thinking levels are Pi's `--thinking`
+vocabulary minus what a model's `thinkingLevelMap` hides; `xhigh` and `max`
+appear only when the map names them, because Pi clamps rather than rejects.
 
 **Customization.** Pack and host skill roots pass as `--skill <path>`;
-shared Project instructions pass as `--append-system-prompt`. Prompt
+shared Project instructions are written to a file under the app's user data
+and passed as `--append-system-prompt <file>`, because Pi reads that flag as
+a file whenever its value names an existing path and Windows caps a command
+line well below the 64,000 characters instructions may hold. Prompt
 references become plain lines in the prompt. Discovered Pi extensions are
 turned off with `--no-extensions` because an interactive extension would ask
 questions nobody can answer over RPC.

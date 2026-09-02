@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -28,6 +28,7 @@ import {
   type JsonObject,
   type JsonValue,
 } from "@deskto/protocol"
+import { minimatch } from "minimatch"
 import { z } from "zod"
 
 import { generateTextWithSession } from "../generate-text.js"
@@ -37,8 +38,10 @@ import {
   getString,
   parseJsonObject,
   piAssistantMessageSchema,
+  piAvailableModelsSchema,
   piStateSchema,
   type PiEvent,
+  type PiModel,
 } from "./pi-protocol.js"
 import { PiRpcClient, type PiRpcClientOptions } from "./pi-rpc-client.js"
 
@@ -78,11 +81,21 @@ export const piNotInstalledReason =
   "Pi was not found. Open Terminal and run `npm install -g @earendil-works/pi-coding-agent`."
 const piVersionCheckFailedReason =
   "Pi could not be started. Open Terminal, run `pi --version`, and fix what it reports."
+// The adapter settles a Turn on `agent_settled`, which Pi's RPC mode emits
+// only from this version on; an older Pi would leave every task running.
+const piMinimumVersion = "0.80.4"
+export const piTooOldReason = (version: string) =>
+  `Pi ${version} is too old; Deskto needs ${piMinimumVersion} or newer. Open Terminal and run \`npm install -g @earendil-works/pi-coding-agent\`.`
 
 const commandNotFoundSchema = z.object({ code: z.literal("ENOENT") })
 const discoveryTimeoutMs = 20_000
+/** Model discovery runs Pi without a session so nothing lands in its store. */
+const discoveryLaunchArgs = ["--no-session", "--no-extensions"]
 
-// Pi's own vocabulary for --thinking; every reasoning model accepts all of it.
+// Pi's own vocabulary for --thinking, in ascending order. A model exposes
+// the extended `xhigh` and `max` only when its thinkingLevelMap names them,
+// and hides any level the map sets to null; Pi clamps a request outside
+// that set, so the menu must not offer it.
 const piThinkingLevels = [
   "off",
   "minimal",
@@ -92,6 +105,7 @@ const piThinkingLevels = [
   "xhigh",
   "max",
 ]
+const piExtendedThinkingLevels = new Set(["xhigh", "max"])
 const piDefaultThinkingLevel = "medium"
 
 const piSettingsSchema = z.object({
@@ -172,15 +186,19 @@ export class PiAdapter implements HarnessAdapterFactory {
       }
     }
     const version = output.trim().split(/\s+/).at(-1)
-    return version ? { status: "available", version } : { status: "available" }
+    if (!version) return { status: "available" }
+    if (compareVersions(version, piMinimumVersion) < 0) {
+      return { status: "unavailable", reason: piTooOldReason(version) }
+    }
+    return { status: "available", version }
   }
 
   async listModels(): Promise<HarnessModelOption[]> {
-    const [output, settings] = await Promise.all([
-      this.#run(["--list-models"]),
+    const [models, settings] = await Promise.all([
+      this.#availableModels(),
       this.#readSettings(),
     ])
-    return piModels(output, settings)
+    return piModels(models, settings)
   }
 
   discoverSkillRoots(input: SkillDiscoveryInput): Promise<NativeSkillRoot[]> {
@@ -247,6 +265,25 @@ export class PiAdapter implements HarnessAdapterFactory {
     )
   }
 
+  // `pi --list-models` prints a table without each model's thinking levels;
+  // the RPC snapshot carries the same models with their thinkingLevelMap.
+  async #availableModels(): Promise<PiModel[]> {
+    const client = this.clientFactory(
+      "pi",
+      this.options.discoveryCwd ?? process.cwd(),
+      { args: discoveryLaunchArgs }
+    )
+    try {
+      const { models } = await client.request(
+        { type: "get_available_models" },
+        piAvailableModelsSchema
+      )
+      return models
+    } finally {
+      client.close()
+    }
+  }
+
   #configPath(): string {
     return (
       this.options.configPath ??
@@ -289,7 +326,8 @@ class PiSession implements HarnessSession {
   private constructor(
     private readonly client: PiClient,
     private readonly input: HarnessRunInput,
-    private readonly launch: PiLaunchOptions
+    private readonly launch: PiLaunchOptions,
+    private readonly instructionsFile: string | undefined
   ) {
     client.onEvent((event) => this.#onEvent(event))
     client.onFailure((error) => {
@@ -316,10 +354,16 @@ class PiSession implements HarnessSession {
       input.executionProfile.permissionMode === "approval-required"
         ? await writeApprovalExtension(extensionsPath)
         : undefined
+    const instructionsFile = input.customization.instructions
+      ? await writeInstructions(
+          extensionsPath,
+          input.customization.instructions
+        )
+      : undefined
     const client = clientFactory("pi", input.projectPath, {
-      args: piLaunchArgs(input, approvalExtension, launch),
+      args: piLaunchArgs(input, approvalExtension, launch, instructionsFile),
     })
-    const session = new PiSession(client, input, launch)
+    const session = new PiSession(client, input, launch, instructionsFile)
     session.skillProvisioning.push(
       ...input.customization.skillRoots.map((root) => piProvisioning(root))
     )
@@ -330,7 +374,7 @@ class PiSession implements HarnessSession {
       await session.#start()
       return session
     } catch (error) {
-      client.close()
+      session.#finish()
       throw error
     } finally {
       signal.removeEventListener("abort", abort)
@@ -339,6 +383,9 @@ class PiSession implements HarnessSession {
 
   async cancel(): Promise<void> {
     this.#cancelled = true
+    // Pi's abort waits for the agent to go idle, and the agent may be waiting
+    // on an approval dialog; that dialog has to be dismissed first.
+    this.#dismissApprovals()
     try {
       await this.client.request({ type: "abort" }, jsonObjectSchema)
     } catch {
@@ -574,10 +621,21 @@ class PiSession implements HarnessSession {
   #finish(): void {
     if (this.#closed) return
     this.#closed = true
+    this.#dismissApprovals()
+    this.client.close()
+    this.#queue.close()
+    if (this.instructionsFile) {
+      void rm(this.instructionsFile, { force: true }).catch(() => undefined)
+    }
+  }
+
+  #dismissApprovals(): void {
     const approvals = [
       ...(this.#activeApproval ? [this.#activeApproval] : []),
       ...this.#approvalQueue,
     ]
+    this.#activeApproval = undefined
+    this.#approvalQueue.length = 0
     for (const approval of approvals) {
       try {
         this.client.send({
@@ -589,10 +647,6 @@ class PiSession implements HarnessSession {
         break
       }
     }
-    this.#activeApproval = undefined
-    this.#approvalQueue.length = 0
-    this.client.close()
-    this.#queue.close()
   }
 
   #showNextApproval(): void {
@@ -612,10 +666,13 @@ export type PiLaunchOptions = {
 export function piLaunchArgs(
   input: HarnessRunInput,
   approvalExtension?: string,
-  launch: PiLaunchOptions = { ephemeral: false }
+  launch: PiLaunchOptions = { ephemeral: false },
+  instructionsFile?: string
 ): string[] {
   // Discovered extensions would ask questions nobody can answer over RPC.
-  const args = ["--no-extensions"]
+  // RPC mode cannot show Pi's trust prompt either, and untrusted it would
+  // skip the project's own .pi settings and skills that Deskto advertises.
+  const args = ["--no-extensions", "--approve"]
   if (launch.ephemeral) args.push("--no-session")
   if (input.providerSessionId) {
     args.push(
@@ -630,9 +687,9 @@ export function piLaunchArgs(
   for (const root of input.customization.skillRoots) {
     args.push("--skill", root.path)
   }
-  if (input.customization.instructions) {
-    args.push("--append-system-prompt", input.customization.instructions)
-  }
+  // Pi reads the flag's value as a file whenever that path exists, so the
+  // instructions travel in a file Deskto owns rather than as literal text.
+  if (instructionsFile) args.push("--append-system-prompt", instructionsFile)
   return args
 }
 
@@ -660,61 +717,163 @@ export function piPromptCommand(
 }
 
 export function piModels(
-  listOutput: string,
+  available: PiModel[],
   settings: PiSettings = {}
 ): HarnessModelOption[] {
   const defaultId =
     settings.defaultProvider && settings.defaultModel
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : undefined
-  const enabled = settings.enabledModels?.map(modelMatcher) ?? []
-  const models: HarnessModelOption[] = []
-  const enabledModels: HarnessModelOption[] = []
-  for (const line of listOutput.split(/\r?\n/)) {
-    const columns = line.trim().split(/\s{2,}/)
-    const [provider, model, , , thinking] = columns
-    if (!provider || !model || provider === "provider") continue
-    const id = `${provider}/${model}`
-    const reasoning = thinking === "yes"
+  const options = new Map<PiModel, HarnessModelOption>()
+  for (const model of available) {
+    const id = `${model.provider}/${model.id}`
+    const efforts = piSupportedEfforts(model)
     const option: HarnessModelOption = {
       id,
-      name: model,
-      description: provider,
-      supportedEfforts: reasoning ? piThinkingLevels : [],
+      name: model.id,
+      description: model.provider,
+      supportedEfforts: efforts,
       isDefault: id === defaultId,
       supportedPermissionModes: ["approval-required", "full-access"],
     }
-    if (reasoning) option.defaultEffort = piDefaultThinkingLevel
-    models.push(option)
-    if (enabled.some((match) => match(provider, model))) {
-      enabledModels.push(option)
+    if (efforts.length > 0) {
+      option.defaultEffort = efforts.includes(piDefaultThinkingLevel)
+        ? piDefaultThinkingLevel
+        : efforts[0]!
     }
+    options.set(model, option)
   }
+  const enabled = piModelScope(settings.enabledModels ?? [], available)
   // A filter that matches nothing must not leave the person without a model.
-  const offered = enabledModels.length > 0 ? enabledModels : models
+  const offered =
+    enabled.length > 0
+      ? enabled.map((model) => options.get(model)!)
+      : [...options.values()]
   if (offered.length > 0 && !offered.some((model) => model.isDefault)) {
     offered[0]!.isDefault = true
   }
   return offered
 }
 
-// Pi matches an enabled-model pattern against `provider/model` or the bare
-// model id, case-insensitively, after dropping a `:thinking` suffix.
-function modelMatcher(
-  pattern: string
-): (provider: string, model: string) => boolean {
+// A reasoning model gets Pi's levels minus the ones its map hides; the
+// extended ones need an explicit mapping. A model without reasoning offers
+// no choice at all.
+function piSupportedEfforts(model: PiModel): string[] {
+  if (!model.reasoning) return []
+  return piThinkingLevels.filter((level) => {
+    const mapped = model.thinkingLevelMap?.[level]
+    if (mapped === null) return false
+    if (piExtendedThinkingLevels.has(level)) return mapped !== undefined
+    return true
+  })
+}
+
+// Mirrors Pi's own scope resolution for `enabledModels`. A glob (`*`, `?`,
+// `[...]`) drops a `:<thinking>` suffix, then takes an exact `provider/id`
+// reference or a case-insensitive minimatch on `provider/id` or the bare
+// id. Plain text takes an exact reference or a substring of the id or name,
+// preferring an alias over a dated version, and retries without its last
+// `:suffix` until nothing is left.
+function piModelScope(patterns: string[], models: PiModel[]): PiModel[] {
+  const scoped: PiModel[] = []
+  const add = (matches: PiModel[]) => {
+    for (const model of matches) {
+      if (!scoped.includes(model)) scoped.push(model)
+    }
+  }
+  for (const pattern of patterns) {
+    if (/[*?[]/.test(pattern)) {
+      const glob = withoutThinkingSuffix(pattern)
+      const exact = exactModel(glob, models)
+      if (exact) {
+        add([exact])
+        continue
+      }
+      add(
+        models.filter(
+          (model) =>
+            minimatch(`${model.provider}/${model.id}`, glob, {
+              nocase: true,
+            }) || minimatch(model.id, glob, { nocase: true })
+        )
+      )
+      continue
+    }
+    let reference = pattern
+    for (;;) {
+      const match =
+        exactModel(reference, models) ?? partialModel(reference, models)
+      if (match) {
+        add([match])
+        break
+      }
+      const colon = reference.lastIndexOf(":")
+      if (colon === -1) break
+      reference = reference.slice(0, colon)
+    }
+  }
+  return scoped
+}
+
+function withoutThinkingSuffix(pattern: string): string {
   const colon = pattern.lastIndexOf(":")
-  const bare =
-    colon !== -1 && piThinkingLevels.includes(pattern.slice(colon + 1))
-      ? pattern.slice(0, colon)
-      : pattern
-  const source = bare
-    .split("*")
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*")
-  const expression = new RegExp(`^${source}$`, "i")
-  return (provider, model) =>
-    expression.test(`${provider}/${model}`) || expression.test(model)
+  return colon !== -1 && piThinkingLevels.includes(pattern.slice(colon + 1))
+    ? pattern.slice(0, colon)
+    : pattern
+}
+
+function exactModel(reference: string, models: PiModel[]): PiModel | undefined {
+  const wanted = reference.trim().toLowerCase()
+  if (!wanted) return undefined
+  const canonical = models.filter(
+    (model) => `${model.provider}/${model.id}`.toLowerCase() === wanted
+  )
+  if (canonical.length === 1) return canonical[0]
+  if (canonical.length > 1) return undefined
+  const slash = wanted.indexOf("/")
+  if (slash === -1) return undefined
+  const provider = wanted.slice(0, slash).trim()
+  const id = wanted.slice(slash + 1).trim()
+  if (!provider || !id) return undefined
+  const byProvider = models.filter(
+    (model) =>
+      model.provider.toLowerCase() === provider && model.id.toLowerCase() === id
+  )
+  return byProvider.length === 1 ? byProvider[0] : undefined
+}
+
+function partialModel(
+  reference: string,
+  models: PiModel[]
+): PiModel | undefined {
+  const wanted = reference.toLowerCase()
+  const matches = models.filter(
+    (model) =>
+      model.id.toLowerCase().includes(wanted) ||
+      model.name?.toLowerCase().includes(wanted)
+  )
+  if (matches.length === 0) return undefined
+  const aliases = matches.filter((model) => isModelAlias(model.id))
+  const candidates = aliases.length > 0 ? aliases : matches
+  return [...candidates].sort((a, b) => b.id.localeCompare(a.id))[0]
+}
+
+// Pi treats an id without a trailing -YYYYMMDD date as an alias.
+function isModelAlias(id: string): boolean {
+  return id.endsWith("-latest") || !/-\d{8}$/.test(id)
+}
+
+// Dotted numeric versions; a missing component counts as zero.
+function compareVersions(left: string, right: string): number {
+  const parse = (version: string) =>
+    version.split(".").map((part) => Number.parseInt(part, 10) || 0)
+  const a = parse(left)
+  const b = parse(right)
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
 }
 
 export function piActivity(event: JsonObject): ActivityStart | undefined {
@@ -809,6 +968,17 @@ function piProvisioning(root: SkillRoot): SkillProvisioningResult {
   }
   if (root.contentDigest) result.contentDigest = root.contentDigest
   return result
+}
+
+async function writeInstructions(
+  directory: string,
+  instructions: string
+): Promise<string> {
+  const folder = join(directory, "instructions")
+  await mkdir(folder, { recursive: true })
+  const file = join(folder, `${randomUUID()}.md`)
+  await writeFile(file, instructions, "utf8")
+  return file
 }
 
 async function writeApprovalExtension(directory: string): Promise<string> {

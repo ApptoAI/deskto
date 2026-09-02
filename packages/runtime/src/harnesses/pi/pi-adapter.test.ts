@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -13,10 +13,11 @@ import {
   piLaunchArgs,
   piModels,
   piPromptCommand,
+  piTooOldReason,
   type PiClient,
   type PiClientFactory,
 } from "./pi-adapter.js"
-import type { PiEvent } from "./pi-protocol.js"
+import type { PiEvent, PiModel } from "./pi-protocol.js"
 
 const directories: string[] = []
 
@@ -109,6 +110,9 @@ const recordedRun: PiEvent[] = [
 class FakePiClient implements PiClient {
   readonly commands: JsonObject[] = []
   readonly sent: JsonObject[] = []
+  /** Every write in order, so tests can check what reached Pi first. */
+  readonly timeline: string[] = []
+  models: PiModel[] = []
   closed = false
   #listener?: (event: PiEvent) => void
   #failure?: (error: Error) => void
@@ -130,12 +134,19 @@ class FakePiClient implements PiClient {
     schema: ZodType<T>
   ): Promise<T> {
     this.commands.push(command)
-    const data: JsonValue = command.type === "get_state" ? this.state : {}
+    this.timeline.push(`request:${String(command.type)}`)
+    const data: JsonValue =
+      command.type === "get_state"
+        ? this.state
+        : command.type === "get_available_models"
+          ? { models: this.models }
+          : {}
     return Promise.resolve(schema.parse(data))
   }
 
   send(command: JsonObject): void {
     this.sent.push(command)
+    this.timeline.push(`send:${String(command.type)}`)
   }
 
   onEvent(listener: (event: PiEvent) => void) {
@@ -430,6 +441,85 @@ describe("Pi session", () => {
     await session.cancel()
   })
 
+  it("dismisses a pending approval before asking Pi to abort", async () => {
+    const client = new FakePiClient()
+    const adapter = new PiAdapter(() => client, {
+      extensionsPath: await tempDirectory(),
+    })
+
+    const session = await adapter.start(
+      runInput({
+        executionProfile: {
+          modelId: null,
+          effort: null,
+          permissionMode: "approval-required",
+        },
+      }),
+      new AbortController().signal
+    )
+    client.emit({
+      type: "extension_ui_request",
+      id: "ui-1",
+      method: "confirm",
+      title: "deskto-approval:bash",
+      message: "rm -rf build",
+    })
+    client.emit({
+      type: "extension_ui_request",
+      id: "ui-2",
+      method: "confirm",
+      title: "deskto-approval:write",
+      message: "notes.md",
+    })
+    await session.cancel()
+
+    // Pi's abort waits for idle, which a blocked confirm dialog never reaches.
+    expect(client.timeline.slice(-3)).toEqual([
+      "send:extension_ui_response",
+      "send:extension_ui_response",
+      "request:abort",
+    ])
+    expect(client.sent).toEqual([
+      { type: "extension_ui_response", id: "ui-1", cancelled: true },
+      { type: "extension_ui_response", id: "ui-2", cancelled: true },
+    ])
+    expect(await collect(session.events)).toEqual([
+      expect.objectContaining({ type: "approval.requested" }),
+    ])
+  })
+
+  it("hands Pi the project instructions as a file it removes afterwards", async () => {
+    const client = new FakePiClient()
+    const extensionsPath = await tempDirectory()
+    const launches: string[][] = []
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launches.push(options?.args ?? [])
+        return client
+      },
+      { extensionsPath }
+    )
+
+    const session = await adapter.start(
+      runInput({
+        customization: { skillRoots: [], instructions: "README.md" },
+      }),
+      new AbortController().signal
+    )
+    const flag = launches[0]!.indexOf("--append-system-prompt")
+    const file = launches[0]![flag + 1]!
+    expect(file).toMatch(/[\\/]instructions[\\/][^\\/]+\.md$/)
+    // Pi reads the flag as a file whenever the path exists; the literal text
+    // "README.md" would otherwise become the project's README.
+    await expect(readFile(file, "utf8")).resolves.toBe("README.md")
+
+    await session.cancel()
+    await collect(session.events)
+    await vi.waitFor(async () =>
+      expect(await readdir(join(extensionsPath, "instructions"))).toEqual([])
+    )
+  })
+
   it("dismisses dialogs raised by other extensions", async () => {
     const client = new FakePiClient()
     const adapter = new PiAdapter(() => client, {
@@ -508,10 +598,13 @@ describe("Pi launch arguments", () => {
             instructions: "Be brief.",
           },
         }),
-        "/tmp/deskto-approvals.mjs"
+        "/tmp/deskto-approvals.mjs",
+        { ephemeral: false },
+        "/tmp/deskto-pi/instructions/turn.md"
       )
     ).toEqual([
       "--no-extensions",
+      "--approve",
       "--session",
       "session-9",
       "--model",
@@ -523,7 +616,7 @@ describe("Pi launch arguments", () => {
       "--skill",
       "/packs/sales",
       "--append-system-prompt",
-      "Be brief.",
+      "/tmp/deskto-pi/instructions/turn.md",
     ])
     expect(
       piLaunchArgs(
@@ -626,15 +719,36 @@ describe("Pi activities", () => {
   })
 })
 
-const listOutput = `provider      model                context  max-out  thinking  images
-openai-codex  gpt-5.6-sol          272K     128K     yes       yes
-openrouter    amazon/nova-lite-v1  300K     5.1K     no        yes
-xai           grok-4.6             256K     32K      yes       no
-`
+// Trimmed from `get_available_models` on Pi 0.84.4: the codex model maps
+// xhigh but not max, the xai model maps neither, nova has no reasoning.
+const availableModels: PiModel[] = [
+  {
+    provider: "openai-codex",
+    id: "gpt-5.6-sol",
+    name: "GPT-5.6 Sol",
+    reasoning: true,
+    contextWindow: 272_000,
+    thinkingLevelMap: { minimal: "low", xhigh: "xhigh" },
+  },
+  {
+    provider: "openrouter",
+    id: "amazon/nova-lite-v1",
+    name: "Amazon Nova Lite",
+    reasoning: false,
+    contextWindow: 300_000,
+  },
+  {
+    provider: "xai",
+    id: "grok-4.6",
+    name: "Grok 4.6",
+    reasoning: true,
+    contextWindow: 256_000,
+  },
+]
 
 describe("Pi models", () => {
-  it("reads the model table and marks Pi's default", () => {
-    const models = piModels(listOutput, {
+  it("reads Pi's model snapshot and marks Pi's default", () => {
+    const models = piModels(availableModels, {
       defaultProvider: "xai",
       defaultModel: "grok-4.6",
     })
@@ -650,29 +764,106 @@ describe("Pi models", () => {
       defaultEffort: "medium",
       supportedPermissionModes: ["approval-required", "full-access"],
     })
-    expect(models[0]?.supportedEfforts).toContain("xhigh")
+  })
+
+  it("offers only the thinking levels each model maps", () => {
+    const models = piModels(availableModels)
+    expect(models[0]?.supportedEfforts).toEqual([
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+    ])
+    expect(models[2]?.supportedEfforts).toEqual([
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+    ])
+    const [sol] = piModels([
+      {
+        ...availableModels[0]!,
+        thinkingLevelMap: {
+          off: "none",
+          medium: null,
+          high: "high",
+          max: "max",
+        },
+      },
+    ])
+    expect(sol?.supportedEfforts).toEqual([
+      "off",
+      "minimal",
+      "low",
+      "high",
+      "max",
+    ])
+    expect(sol?.defaultEffort).toBe("off")
+  })
+
+  it("asks a running Pi for its models", async () => {
+    const client = new FakePiClient()
+    client.models = availableModels
+    const launches: string[][] = []
+    const adapter = new PiAdapter(
+      (_command, _cwd, options) => {
+        launches.push(options?.args ?? [])
+        return client
+      },
+      { configPath: await tempDirectory() }
+    )
+
+    const models = await adapter.listModels()
+    expect(models.map((model) => model.id)).toEqual([
+      "openai-codex/gpt-5.6-sol",
+      "openrouter/amazon/nova-lite-v1",
+      "xai/grok-4.6",
+    ])
+    expect(launches).toEqual([["--no-session", "--no-extensions"]])
+    expect(client.commands).toEqual([{ type: "get_available_models" }])
+    expect(client.closed).toBe(true)
   })
 
   it("keeps only the models the person enabled in pi", () => {
-    const models = piModels(listOutput, { enabledModels: ["openrouter/*"] })
-    expect(models.map((model) => model.id)).toEqual([
-      "openrouter/amazon/nova-lite-v1",
-    ])
+    const models = piModels(availableModels, {
+      enabledModels: ["xai/*"],
+    })
+    expect(models.map((model) => model.id)).toEqual(["xai/grok-4.6"])
     expect(models[0]?.isDefault).toBe(true)
   })
 
   it("matches enabled models the way pi does", () => {
-    const models = piModels(listOutput, {
-      enabledModels: ["GROK-4.6", "openai-codex/gpt-5.6-sol:high"],
-    })
-    expect(models.map((model) => model.id)).toEqual([
-      "openai-codex/gpt-5.6-sol",
+    const ids = (patterns: string[]) =>
+      piModels(availableModels, { enabledModels: patterns }).map(
+        (model) => model.id
+      )
+    expect(ids(["GROK-4.6", "openai-codex/gpt-5.6-sol:high"])).toEqual([
       "xai/grok-4.6",
+      "openai-codex/gpt-5.6-sol",
+    ])
+    expect(ids(["openai-codex/gpt-5.?-sol"])).toEqual([
+      "openai-codex/gpt-5.6-sol",
+    ])
+    expect(ids(["grok-4.[0-9]"])).toEqual(["xai/grok-4.6"])
+    expect(ids(["*grok*"])).toEqual(["xai/grok-4.6"])
+    // A glob star stops at a slash in Pi too, so a nested id needs its
+    // provider spelled out or a plain substring.
+    expect(ids(["openrouter/*", "xai/*"])).toEqual(["xai/grok-4.6"])
+    expect(ids(["openrouter/*/*"])).toEqual(["openrouter/amazon/nova-lite-v1"])
+    expect(ids(["Nova Lite"])).toEqual(["openrouter/amazon/nova-lite-v1"])
+    // Pi drops an unknown suffix with a warning and keeps the model.
+    expect(ids(["gpt-5.6-sol:banana", "xai/*:banana"])).toEqual([
+      "openai-codex/gpt-5.6-sol",
     ])
   })
 
   it("offers every model when the enabled list matches none", () => {
-    const models = piModels(listOutput, { enabledModels: ["anthropic/*"] })
+    const models = piModels(availableModels, {
+      enabledModels: ["anthropic/*"],
+    })
     expect(models).toHaveLength(3)
     expect(models[0]?.isDefault).toBe(true)
   })
@@ -685,6 +876,22 @@ describe("Pi availability", () => {
       new PiAdapter(undefined, { runCommand }).checkAvailability()
     ).resolves.toEqual({ status: "available", version: "0.84.4" })
     expect(runCommand).toHaveBeenCalledWith(["--version"], expect.any(String))
+  })
+
+  it("turns away a Pi that cannot report when a task settles", async () => {
+    const runCommand = vi.fn(() => Promise.resolve("0.80.3\n"))
+    await expect(
+      new PiAdapter(undefined, { runCommand }).checkAvailability()
+    ).resolves.toEqual({
+      status: "unavailable",
+      reason: piTooOldReason("0.80.3"),
+    })
+    expect(piTooOldReason("0.80.3")).toContain("0.80.4")
+    await expect(
+      new PiAdapter(undefined, {
+        runCommand: () => Promise.resolve("0.80.4\n"),
+      }).checkAvailability()
+    ).resolves.toEqual({ status: "available", version: "0.80.4" })
   })
 
   it("explains how to install Pi when the CLI is missing", async () => {

@@ -40,6 +40,22 @@ export const piStateSchema = z.object({
 
 export type PiState = z.infer<typeof piStateSchema>
 
+/** One entry of `get_available_models`; a `null` level in the map is hidden. */
+export const piModelSchema = z.object({
+  provider: z.string(),
+  id: z.string(),
+  name: z.string().optional(),
+  reasoning: z.boolean().optional(),
+  contextWindow: z.number().optional(),
+  thinkingLevelMap: z.record(z.string(), z.string().nullable()).optional(),
+})
+
+export type PiModel = z.infer<typeof piModelSchema>
+
+export const piAvailableModelsSchema = z.object({
+  models: z.array(piModelSchema),
+})
+
 export const piUsageSchema = z.object({
   totalTokens: z.number().optional(),
   input: z.number().optional(),
