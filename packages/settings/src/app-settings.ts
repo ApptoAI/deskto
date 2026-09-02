@@ -38,6 +38,22 @@ export function isHarnessModelVisible(
   return !visibility[harnessId]?.includes(modelId)
 }
 
+// Hidden ids persist across catalog changes, so a later catalog can leave
+// every model hidden; pickers must still offer something rather than run a
+// hidden provider default invisibly.
+export function visibleHarnessModels<Model extends { id: string; isDefault?: boolean }>(
+  visibility: HarnessModelVisibility,
+  harnessId: string,
+  models: readonly Model[]
+): Model[] {
+  const visible = models.filter((model) =>
+    isHarnessModelVisible(visibility, harnessId, model.id)
+  )
+  if (visible.length > 0) return visible
+  const fallback = models.find((model) => model.isDefault) ?? models[0]
+  return fallback ? [fallback] : []
+}
+
 /**
  * Which palette the window wears. "system" is not a third palette: it defers
  * to the operating system and follows it while the app is open.

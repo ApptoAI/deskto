@@ -6,6 +6,7 @@ import {
   harnessModelVisibilitySchema,
   interfaceFontSizeSchema,
   isHarnessModelVisible,
+  visibleHarnessModels,
 } from "./app-settings.js"
 import {
   findKeybindingConflict,
@@ -60,6 +61,27 @@ describe("resolveSettings", () => {
     expect(isHarnessModelVisible(visibility, "claude", "claude-opus")).toBe(
       true
     )
+  })
+
+  it("falls back to the default model when every model is hidden", () => {
+    const models = [
+      { id: "openai/gpt-5", isDefault: false },
+      { id: "xai/grok-4", isDefault: true },
+    ]
+    expect(
+      visibleHarnessModels({ pi: ["openai/gpt-5"] }, "pi", models)
+    ).toEqual([{ id: "xai/grok-4", isDefault: true }])
+    expect(
+      visibleHarnessModels({ pi: ["openai/gpt-5", "xai/grok-4"] }, "pi", models)
+    ).toEqual([{ id: "xai/grok-4", isDefault: true }])
+    expect(
+      visibleHarnessModels(
+        { pi: ["openai/gpt-5", "xai/grok-4"] },
+        "pi",
+        models.map((model) => ({ ...model, isDefault: false }))
+      )
+    ).toEqual([{ id: "openai/gpt-5", isDefault: false }])
+    expect(visibleHarnessModels({}, "pi", [])).toEqual([])
   })
 
   it("applies a valid override and reports it", () => {

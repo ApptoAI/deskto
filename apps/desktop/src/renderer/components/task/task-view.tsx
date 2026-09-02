@@ -19,7 +19,7 @@ import {
   type TurnOutput,
 } from "@deskto/protocol"
 import {
-  isHarnessModelVisible,
+  visibleHarnessModels,
   type HarnessModelVisibility,
 } from "@deskto/settings"
 
@@ -245,8 +245,10 @@ export function TaskView({
   }
   const projectPath = project.path
   const models = findHarness(options, thread.harnessId)?.models ?? []
-  const selectableModels = models.filter((model) =>
-    isHarnessModelVisible(modelVisibility, thread.harnessId, model.id)
+  const selectableModels = visibleHarnessModels(
+    modelVisibility,
+    thread.harnessId,
+    models
   )
   const visibleTaskActionError =
     !active && taskActionError === sideChatBlockedMessage

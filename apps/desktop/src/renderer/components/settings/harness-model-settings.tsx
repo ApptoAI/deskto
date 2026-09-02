@@ -5,6 +5,7 @@ import {
   harnessModelSettings,
   isOverridden,
   isHarnessModelVisible,
+  visibleHarnessModels,
   settingValue,
   type HarnessModelVisibility,
   type HarnessModelSelection,
@@ -259,8 +260,11 @@ function modelOptions(
     for (const harness of harnesses.state.data) {
       if (!harness.enabled || harness.availability.status !== "available")
         continue
-      for (const model of harness.models) {
-        if (!isHarnessModelVisible(visibility, harness.id, model.id)) continue
+      for (const model of visibleHarnessModels(
+        visibility,
+        harness.id,
+        harness.models
+      )) {
         if (!model.supportedPermissionModes.includes("approval-required"))
           continue
         const selection = {

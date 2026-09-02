@@ -10,6 +10,7 @@ export {
   harnessModelVisibilitySchema,
   interfaceFontSizeSchema,
   isHarnessModelVisible,
+  visibleHarnessModels,
   keybindingSettings,
   maxInterfaceFontSize,
   minInterfaceFontSize,

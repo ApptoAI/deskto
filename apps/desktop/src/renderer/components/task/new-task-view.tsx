@@ -9,7 +9,7 @@ import type {
   TurnInput,
 } from "@deskto/protocol"
 import {
-  isHarnessModelVisible,
+  visibleHarnessModels,
   type HarnessModelVisibility,
 } from "@deskto/settings"
 
@@ -101,8 +101,10 @@ export function NewTaskView({
   const blockedReason = describeHarnessBlock(harnesses, harnessId)
 
   const models = harnessId
-    ? (findHarness(options, harnessId)?.models ?? []).filter((model) =>
-        isHarnessModelVisible(modelVisibility, harnessId, model.id)
+    ? visibleHarnessModels(
+        modelVisibility,
+        harnessId,
+        findHarness(options, harnessId)?.models ?? []
       )
     : []
   const profile =
