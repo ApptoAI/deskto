@@ -1,3 +1,4 @@
+import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs"
 import path from "node:path"
 
 import {
@@ -66,6 +67,42 @@ export function browserDownloadDirectory(
     return undefined
   }
   return directory
+}
+
+/** Creates the configured folder without following links out of the project. */
+export function prepareBrowserDownloadDirectory(
+  projectPath: string | undefined,
+  downloadFolder: string
+): string | undefined {
+  const directory = browserDownloadDirectory(projectPath, downloadFolder)
+  if (!projectPath || !directory) return undefined
+  const root = path.resolve(projectPath)
+  try {
+    const physicalRoot = realpathSync(root)
+    let current = root
+    for (const segment of path.relative(root, directory).split(path.sep)) {
+      current = path.join(current, segment)
+      if (existsSync(current)) {
+        const entry = lstatSync(current)
+        if (entry.isSymbolicLink() || !entry.isDirectory()) return undefined
+      } else {
+        mkdirSync(current)
+      }
+    }
+    const physicalDirectory = realpathSync(directory)
+    const fromPhysicalRoot = path.relative(physicalRoot, physicalDirectory)
+    if (
+      fromPhysicalRoot === "" ||
+      fromPhysicalRoot === ".." ||
+      fromPhysicalRoot.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(fromPhysicalRoot)
+    ) {
+      return undefined
+    }
+    return directory
+  } catch {
+    return undefined
+  }
 }
 
 /** A file name a page suggested, reduced to something safe to write. */
