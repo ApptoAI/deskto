@@ -71,6 +71,8 @@ export type DetectedBrowserProfile = {
 
 export type CookieImportRequest = {
   profileId: string
+  /** The Workspace whose browser profile receives the cookies. */
+  workspaceId: string
   /** Hosts the person chose; only cookies for these are imported. */
   hosts: string[]
 }

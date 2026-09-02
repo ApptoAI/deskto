@@ -31,7 +31,7 @@ export type ImportableCookie = {
   sameSite: "unspecified" | "no_restriction" | "lax" | "strict"
 }
 
-/** Where imported cookies are written; the built-in browser session in the app. */
+/** Where imported cookies are written; one Workspace's browser profile session. */
 export type CookieSink =
   | {
       /** A settings conflict that prevents cookies reaching task tabs. */

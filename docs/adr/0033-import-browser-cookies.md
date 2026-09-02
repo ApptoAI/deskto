@@ -6,8 +6,10 @@
 ## Context
 
 ADR 0016 gives every Task one Browser tab backed by a persistent profile, and
-its logins persist across Tasks. But the profile starts empty, so an agent
-opening a site the person already uses lands on a sign-in wall. The person
+ADR 0031 makes that profile belong to the Task's Workspace, so logins persist
+across Tasks in one Workspace and never cross into another. But a profile
+starts empty, so an agent opening a site the person already uses lands on a
+sign-in wall. The person
 runs their real work in Chrome, Chromium, Brave, Edge, or Vivaldi, where they
 are already signed in.
 
@@ -20,12 +22,15 @@ database is locked while the browser runs.
 ## Decision
 
 The Computer use settings tab gains an "Import sign-ins" section. It lists the
-browser profiles found on this machine, lets the person choose one and the
-websites to bring over, and copies the matching cookies into the shared
-Task Browser session through `session.cookies.set`.
+browser profiles found on this machine, lets the person choose one, the
+websites to bring over, and the Workspace that receives them, and copies the
+matching cookies into that Workspace's profile session (the same
+`persist:workspace-<id>` partition its Task tabs open, per ADR 0031) through
+`session.cookies.set`. The import request names the Workspace, and Main
+accepts only a Workspace the Runtime still has.
 
-The importer lives in Electron main, next to the Browser session it writes to;
-a renderer cannot set a cookie itself. It copies the cookie database before
+The importer lives in Electron main, next to the Browser sessions it writes
+to; a renderer cannot set a cookie itself. It copies the cookie database before
 reading it, so the locked live file is never opened in place. It decrypts only
 what the current platform and user can unlock and skips the rest rather than
 writing a corrupt value. Decrypted values exist only in memory for the length
@@ -48,5 +53,7 @@ session.
   documented format. The cipher and parsing code is covered by round-trip and
   fixture tests; the OS key-retrieval steps degrade to a skip-with-next-step
   when a key is unavailable.
-- This does not grant Computer Use to any Harness. It only seeds the existing
-  Task Browser profile, so ADR 0016's boundary stands.
+- Cookies land in exactly one Workspace's profile. Seeding a second Workspace
+  is a second import; nothing is written to a shared session.
+- This does not grant Computer Use to any Harness. It only seeds an existing
+  Workspace browser profile, so the boundaries of ADR 0016 and ADR 0031 stand.

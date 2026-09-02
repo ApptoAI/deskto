@@ -36,6 +36,7 @@ describe("Computer use settings", () => {
     const html = renderToStaticMarkup(createElement(CookieImportSection))
     expect(html).toContain("Import cookies")
     expect(html).toContain("Websites")
+    expect(html).toContain("Workspace")
   })
 
   it("extracts and validates hostnames from website input", () => {

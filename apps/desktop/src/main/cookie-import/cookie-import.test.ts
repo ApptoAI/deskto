@@ -120,7 +120,7 @@ describe("importCookies", () => {
     const { sink, written } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -148,7 +148,7 @@ describe("importCookies", () => {
     const { sink, written } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -164,7 +164,7 @@ describe("importCookies", () => {
     const { sink, written } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -186,7 +186,7 @@ describe("importCookies", () => {
     const { sink } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -210,7 +210,7 @@ describe("importCookies", () => {
     const { sink, written } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -234,7 +234,7 @@ describe("importCookies", () => {
     const { sink, written } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       sink,
       env
     )
@@ -249,7 +249,7 @@ describe("importCookies", () => {
       { hostKey: "example.com", name: "sid", plaintext: "kept" },
     ])
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: ["example.com"] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
       {
         unavailableReason:
           "Turn off Clear session between tasks to use imported cookies.",
@@ -265,7 +265,7 @@ describe("importCookies", () => {
     const { sink } = collectingSink()
 
     const result = await importCookies(
-      { profileId: "chrome:Default", hosts: [] },
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: [] },
       sink,
       env
     )

@@ -771,19 +771,21 @@ export class BrowserManager
   }
 
   /**
-   * Writes imported cookies into the shared browser profile so a signed-in
-   * session carries into tasks. Only Main holds this session, so a renderer
-   * cannot set a cookie directly.
+   * Writes imported cookies into one Workspace's browser profile, the same
+   * partition its task tabs open, so a signed-in session carries into that
+   * Workspace's tasks. Only Main holds the session, so a renderer cannot set
+   * a cookie directly.
    */
-  cookieSink(): CookieSink {
+  cookieSink(workspaceId: string): CookieSink {
     if (this.#settings.clearSessionBetweenTasks) {
       return {
         unavailableReason:
           "Cookie import is unavailable while Clear session between tasks is on. Turn it off in Browser settings to use imported cookies.",
       }
     }
+    const browserSession = this.#workspaceSession(workspaceId)
     return {
-      set: (cookie) => this.#browserSession.cookies.set(cookie),
+      set: (cookie) => browserSession.cookies.set(cookie),
     }
   }
 

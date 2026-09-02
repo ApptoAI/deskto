@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from "react"
 import CheckIcon from "lucide-react/dist/esm/icons/check"
 import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
+import type { BrowserProfile } from "@deskto/protocol"
 import type {
   CookieImportResult,
   DetectedBrowserProfile,
@@ -14,6 +15,7 @@ import { describedErrorSchema } from "../../runtime/describe-error.js"
 import {
   discoverBrowserProfiles,
   importBrowserCookies,
+  loadBrowserProfiles,
 } from "../../lib/desktop.js"
 import { InlineError } from "../inline-error.js"
 
@@ -21,6 +23,11 @@ type ProfilesState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; profiles: DetectedBrowserProfile[] }
+
+type WorkspacesState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; workspaces: BrowserProfile[] }
 
 // The person types one website per line; commas and spaces separate too. Only
 // the host part of anything URL-shaped is kept, and leading dots and "www."
@@ -66,11 +73,18 @@ function isValidHost(host: string): boolean {
 export function CookieImportSection() {
   const [profiles, setProfiles] = useState<ProfilesState>({ status: "loading" })
   const [selectedId, setSelectedId] = useState<string | undefined>()
+  // Each workspace keeps its own browser profile, so the import has to name
+  // the one that receives the cookies.
+  const [workspaces, setWorkspaces] = useState<WorkspacesState>({
+    status: "loading",
+  })
+  const [workspaceId, setWorkspaceId] = useState<string | undefined>()
   const [hosts, setHosts] = useState("")
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<CookieImportResult | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const hostsId = useId()
+  const workspaceSelectId = useId()
 
   // Kept out of the mount effect's synchronous path: the state starts at
   // "loading", so a first fetch never sets state before its await. Rescan
@@ -95,16 +109,37 @@ export function CookieImportSection() {
     void load()
   }
 
+  const loadWorkspaces = useCallback(async () => {
+    try {
+      const found: BrowserProfile[] = await loadBrowserProfiles()
+      setWorkspaces({ status: "ready", workspaces: found })
+      setWorkspaceId((current) =>
+        found.some((workspace) => workspace.workspaceId === current)
+          ? current
+          : found[0]?.workspaceId
+      )
+    } catch (error) {
+      setWorkspaces({
+        status: "error",
+        message: describedErrorSchema.parse(error),
+      })
+    }
+  }, [])
+
   useEffect(() => {
     void load()
-  }, [load])
+    void loadWorkspaces()
+  }, [load, loadWorkspaces])
 
   const parsedHosts = parseHosts(hosts)
   const canImport =
-    !running && selectedId !== undefined && parsedHosts.length > 0
+    !running &&
+    selectedId !== undefined &&
+    workspaceId !== undefined &&
+    parsedHosts.length > 0
 
   async function runImport() {
-    if (!selectedId) return
+    if (!selectedId || !workspaceId) return
     setRunning(true)
     setResult(null)
     setActionError(null)
@@ -112,6 +147,7 @@ export function CookieImportSection() {
       setResult(
         await importBrowserCookies({
           profileId: selectedId,
+          workspaceId,
           hosts: parsedHosts,
         })
       )
@@ -127,7 +163,8 @@ export function CookieImportSection() {
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs leading-snug text-muted-foreground">
           Bring your signed-in sessions into the built-in browser. Choose a
-          browser profile and the websites whose cookies to copy.
+          browser profile, the websites whose cookies to copy, and the
+          workspace that receives them.
         </p>
         <Button
           variant="outline"
@@ -201,6 +238,38 @@ export function CookieImportSection() {
         <p className="text-xs text-muted-foreground">
           One website per line. Cookies for these sites and their subdomains are
           copied.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor={workspaceSelectId} className="text-sm font-medium">
+          Workspace
+        </label>
+        {workspaces.status === "loading" ? (
+          <p className="text-xs text-muted-foreground">Checking workspaces…</p>
+        ) : workspaces.status === "error" ? (
+          <InlineError message={workspaces.message} />
+        ) : workspaces.workspaces.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Create a workspace first; cookies are imported into its browser
+            profile.
+          </p>
+        ) : (
+          <select
+            id={workspaceSelectId}
+            value={workspaceId ?? ""}
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+            onChange={(event) => setWorkspaceId(event.currentTarget.value)}
+          >
+            {workspaces.workspaces.map((workspace) => (
+              <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                {workspace.workspaceName}
+              </option>
+            ))}
+          </select>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Only tasks in this workspace open sites with the imported cookies.
         </p>
       </div>
 

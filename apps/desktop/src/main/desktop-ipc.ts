@@ -73,6 +73,7 @@ const browserActionSchema: z.ZodType<BrowserAction> = z.enum([
 ])
 const cookieImportRequestSchema: z.ZodType<CookieImportRequest> = z.object({
   profileId: z.string().min(1),
+  workspaceId: workspaceIdSchema,
   hosts: z.array(z.string().min(1)).max(200),
 })
 
@@ -401,7 +402,9 @@ export function registerDesktopIpc(
   )
 
   ipcMain.handle(cookieImportDiscoverChannel, () => listImportableProfiles())
-  ipcMain.handle(cookieImportRunChannel, async (_event, value) =>
-    importCookies(cookieImportRequestSchema.parse(value), browser.cookieSink())
-  )
+  ipcMain.handle(cookieImportRunChannel, async (_event, value) => {
+    const request = cookieImportRequestSchema.parse(value)
+    const workspace = await existingWorkspace(request.workspaceId)
+    return importCookies(request, browser.cookieSink(workspace.id))
+  })
 }
