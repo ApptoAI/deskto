@@ -46,6 +46,10 @@ import {
 } from "@workspace/ui/components/chat/prompt-suggestions"
 
 import { describedErrorSchema } from "../runtime/describe-error.js"
+import {
+  readComposerDraft,
+  writeComposerDraft,
+} from "../lib/composer-drafts.js"
 import { imageFileInputAccept } from "../lib/image-attachments.js"
 import { useImageAttachments } from "../lib/use-image-attachments.js"
 import { useRuntimeClient } from "../runtime/runtime-client-context.js"
@@ -125,6 +129,7 @@ export function Composer({
   onOpenSideChat,
   focusToken,
   draft,
+  draftKey,
   running = false,
   blockedReason,
   toolbar,
@@ -148,6 +153,9 @@ export function Composer({
   focusToken?: number
   /** Text to drop into the box, with a token the caller bumps per request. */
   draft?: { text: string; token: number }
+  /** Where unsent text survives this composer unmounting: one key per task,
+      so coming back to a task finds the message left half-written in it. */
+  draftKey?: string
   running?: boolean
   blockedReason?: string
   toolbar?: ReactNode
@@ -160,8 +168,15 @@ export function Composer({
   onClearBrowserContexts?: (submittedIds: readonly string[]) => void
 }) {
   const client = useRuntimeClient()
-  const [prompt, setPrompt] = useState("")
-  const [references, setReferences] = useState<PromptReference[]>([])
+  const [prompt, setPrompt] = useState(
+    () => (draftKey ? readComposerDraft(draftKey)?.text : undefined) ?? ""
+  )
+  const [references, setReferences] = useState<PromptReference[]>(
+    () => (draftKey ? readComposerDraft(draftKey)?.references : undefined) ?? []
+  )
+  useEffect(() => {
+    if (draftKey) writeComposerDraft(draftKey, { text: prompt, references })
+  }, [draftKey, prompt, references])
   const [trigger, setTrigger] = useState<ComposerTrigger | null>(null)
   const [suggestionResult, setSuggestionResult] = useState<SuggestionResult>({
     key: "",
@@ -187,6 +202,7 @@ export function Composer({
   const requestSequence = useRef(0)
   const skillRequest = useRef<SkillRequest | null>(null)
   const hintId = useId()
+  const sendHoldId = useId()
   const suggestionsId = `${useId().replaceAll(":", "")}-suggestions`
 
   // A focus request is a number the caller bumps when it wants the keyboard,
@@ -260,6 +276,16 @@ export function Composer({
     browserContexts.length > 0
   const canSend =
     hasContent && preparingCount === 0 && !sending && !running && !blocked
+  // A send that will not go says why, in the tooltip and to the screen
+  // reader: a dead button with no reason is a person retyping their message.
+  const sendHoldReason = blocked
+    ? blockedReason
+    : preparingCount > 0
+      ? "Wait for the images to finish preparing."
+      : !hasContent
+        ? "Write a message or attach an image first."
+        : undefined
+  const inputLocked = sending || blocked
   const triggerKey = trigger
     ? `${trigger.kind}:${trigger.rangeStart}:${trigger.query}`
     : null
@@ -605,13 +631,13 @@ export function Composer({
           onSubmit={handleSubmit}
           className={draggingFiles ? "ring-2 ring-primary" : undefined}
           onDragEnter={(event) => {
-            if (!sending && event.dataTransfer.types.includes("Files"))
+            if (!inputLocked && event.dataTransfer.types.includes("Files"))
               setDraggingFiles(true)
           }}
           onDragOver={(event) => {
             if (!event.dataTransfer.types.includes("Files")) return
             event.preventDefault()
-            if (sending) return
+            if (inputLocked) return
             event.dataTransfer.dropEffect = "copy"
           }}
           onDragLeave={(event) => {
@@ -627,7 +653,7 @@ export function Composer({
             setDraggingFiles(false)
             if (!event.dataTransfer.types.includes("Files")) return
             event.preventDefault()
-            if (sending || event.dataTransfer.files.length === 0) return
+            if (inputLocked || event.dataTransfer.files.length === 0) return
             void addFiles(Array.from(event.dataTransfer.files))
           }}
         >
@@ -659,7 +685,7 @@ export function Composer({
             }
             onKeyDown={handleKeyDown}
             onPaste={(event) => {
-              if (sending) return
+              if (inputLocked) return
               const images = Array.from(event.clipboardData.files).filter(
                 (file) => file.type.startsWith("image/")
               )
@@ -690,7 +716,7 @@ export function Composer({
               type="file"
               accept={imageFileInputAccept}
               multiple
-              disabled={sending}
+              disabled={inputLocked}
               tabIndex={-1}
               onChange={(event) => {
                 void addFiles(Array.from(event.currentTarget.files ?? []))
@@ -730,6 +756,8 @@ export function Composer({
                   size="icon-lg"
                   disabled={!canSend}
                   aria-label="Send"
+                  aria-describedby={sendHoldReason ? sendHoldId : undefined}
+                  title={sendHoldReason ?? "Send"}
                   // The one filled pill on the composer, and the only control
                   // here that sits on a drop shadow: send is what the whole
                   // surface is for, so it is the thing floating closest.
@@ -746,6 +774,9 @@ export function Composer({
       <p id={hintId} className="sr-only">
         Press Enter to send. Shift and Enter start a new line. Paste or attach
         images. Type at, slash, or dollar for suggestions.
+      </p>
+      <p id={sendHoldId} className="sr-only">
+        {sendHoldReason ?? ""}
       </p>
     </div>
   )

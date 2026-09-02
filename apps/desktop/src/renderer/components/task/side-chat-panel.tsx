@@ -257,6 +257,7 @@ function SideComposer({
       projectId={thread.projectId}
       harnessId={thread.harnessId}
       label="Side question"
+      draftKey={`side:${thread.id}`}
       placeholder={active ? "The agent is working…" : "Ask a side question"}
       running={active}
       focusToken={focusToken}

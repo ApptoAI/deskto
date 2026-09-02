@@ -123,6 +123,50 @@ describe("Composer", () => {
     expect(document.activeElement).toBe(textarea)
   })
 
+  it("keeps unsent text for the task it was written in", async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined)
+    const composer = (draftKey: string) => (
+      <RuntimeClientProvider client={new RuntimeClient(unusedTransport)}>
+        <Composer
+          projectId="project-1"
+          draftKey={draftKey}
+          label="Message"
+          placeholder="Describe the task"
+          onSend={onSend}
+        />
+      </RuntimeClientProvider>
+    )
+    const first = render(composer("thread-1"))
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), {
+      target: { value: "half written", selectionStart: 12 },
+    })
+    first.unmount()
+
+    // Another task's composer never shows this one's text.
+    const other = render(composer("thread-2"))
+    expect(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Message" })
+        .value
+    ).toBe("")
+    other.unmount()
+
+    render(composer("thread-1"))
+    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Message",
+    })
+    expect(textarea.value).toBe("half written")
+
+    fireEvent.submit(textarea.closest("form")!)
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce())
+    expect(textarea.value).toBe("")
+    cleanup()
+    render(composer("thread-1"))
+    expect(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Message" })
+        .value
+    ).toBe("")
+  })
+
   it("sends /model as text when draft images are attached", async () => {
     vi.stubGlobal("CSS", { escape: (value: string) => value })
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {

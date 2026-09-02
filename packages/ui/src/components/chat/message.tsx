@@ -23,7 +23,7 @@ const messageVariants = cva("flex w-full", {
 const messageBodyVariants = cva("min-w-0 text-sm", {
   variants: {
     role: {
-      user: "max-w-[84%] rounded-bubble bg-fill-bubble px-4 py-2.5 text-conversation leading-[1.5] text-pretty whitespace-pre-wrap",
+      user: "max-w-[84%] rounded-bubble bg-fill-bubble px-4 py-2.5 text-conversation leading-[1.5] break-words text-pretty whitespace-pre-wrap",
       assistant: "w-full text-conversation leading-[1.62] text-body",
       system: "max-w-[80%] text-center text-xs text-muted-foreground",
     },

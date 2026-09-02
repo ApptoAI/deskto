@@ -39,7 +39,10 @@ export function ComposerAttachments({
         </div>
       ))}
       {preparingCount > 0 ? (
-        <div className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-2 text-center text-xs text-muted-foreground">
+        <div
+          role="status"
+          className="flex size-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-2 text-center text-xs text-muted-foreground"
+        >
           Preparing…
         </div>
       ) : null}
