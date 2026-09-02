@@ -89,6 +89,7 @@ export function TaskPanel({
   focusRequest,
   onFocusHandled,
   files,
+  onReloadFiles,
   browserContexts,
   onSelectBrowserElement,
   onOpenSide,
@@ -106,6 +107,7 @@ export function TaskPanel({
   focusRequest?: number
   onFocusHandled?: () => void
   files: QueryState<TurnOutput[]>
+  onReloadFiles: () => void
   browserContexts: readonly BrowserElementContext[]
   onSelectBrowserElement: (context: BrowserElementContext) => void
   onOpenSide: () => void
@@ -352,8 +354,11 @@ export function TaskPanel({
           onOpenFiles={() => surface.files.overview(threadId)}
         />
       ) : files.status === "error" ? (
-        <div className="p-3">
-          <InlineError message={files.message} />
+        <div className="flex flex-col items-start gap-3 p-3">
+          <InlineError className="w-full" message={files.message} />
+          <Button variant="outline" size="sm" onClick={onReloadFiles}>
+            Try again
+          </Button>
         </div>
       ) : active ? (
         <ResultPreviewBoundary
