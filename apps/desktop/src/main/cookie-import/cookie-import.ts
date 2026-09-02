@@ -132,8 +132,13 @@ export async function importCookies(
   let imported = 0
   let skipped = 0
 
+  const nowSeconds = Date.now() / 1000
   for (const cookie of rows) {
     if (!hostMatches(cookie.hostKey, chosen)) continue
+    // Chromium keeps expired rows until its next cleanup; the session would
+    // drop them on write, so they count as neither imported nor skipped.
+    const expiresAt = expirationSeconds(cookie.expiresUtc)
+    if (expiresAt !== undefined && expiresAt <= nowSeconds) continue
 
     const value = decryptValue(cookie, crypto)
     if (value === undefined) {

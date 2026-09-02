@@ -24,7 +24,11 @@ afterEach(() => {
 const peanutsKey = deriveCbcKey("peanuts", 1)
 
 function sealV10(value: string): Buffer {
-  const cipher = createCipheriv("aes-128-cbc", peanutsKey, Buffer.alloc(16, " "))
+  const cipher = createCipheriv(
+    "aes-128-cbc",
+    peanutsKey,
+    Buffer.alloc(16, " ")
+  )
   return Buffer.concat([
     Buffer.from("v10"),
     cipher.update(value, "utf8"),
@@ -37,6 +41,8 @@ type SeedCookie = {
   name: string
   encrypted?: Buffer
   plaintext?: string
+  /** Chromium microseconds since 1601; 0 (the default) is a session cookie. */
+  expiresUtc?: bigint
 }
 
 function seedProfile(cookies: SeedCookie[]): DiscoveryEnvironment {
@@ -65,7 +71,7 @@ function seedProfile(cookies: SeedCookie[]): DiscoveryEnvironment {
       1,
       0,
       0,
-      0
+      cookie.expiresUtc ?? 0n
     )
   }
   database.close()
@@ -104,6 +110,30 @@ describe("importCookies", () => {
       "secret",
     ])
     expect(written.some((cookie) => cookie.name === "skip")).toBe(false)
+  })
+
+  it("leaves an expired cookie out of both counts", async () => {
+    // 2001-01-01 UTC in Chromium's epoch, long past.
+    const expired = 12_622_780_800n * 1_000_000n
+    const env = seedProfile([
+      {
+        hostKey: "example.com",
+        name: "old",
+        encrypted: sealV10("stale"),
+        expiresUtc: expired,
+      },
+      { hostKey: "example.com", name: "live", encrypted: sealV10("fresh") },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 1, skipped: 0 })
+    expect(written.map((cookie) => cookie.name)).toEqual(["live"])
   })
 
   it("keeps a legacy plaintext value", async () => {
