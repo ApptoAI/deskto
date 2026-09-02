@@ -37,6 +37,11 @@ recreates it on the next visit anyway.
 and acts on a Workspace id, and main resolves the id against the Runtime's
 Workspaces before touching a session or revealing a folder.
 
+**"Forget logins between tasks" (ADR 0030) wins over the profile.** With
+that setting on, a task gets its throwaway in-memory session as before and
+writes nothing to the Workspace profile; it is the stricter choice and the
+person asked for it explicitly.
+
 ## Consequences
 
 - Existing logins made before this change live in the old shared partition

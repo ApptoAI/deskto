@@ -13,7 +13,6 @@ import {
   CodexAdapter,
   codexNotInstalledReason,
   createRuntime,
-  type Runtime,
   type SessionToolProvider,
 } from "@deskto/runtime"
 
@@ -22,6 +21,7 @@ import { withForcedUnavailability } from "./dev-harness-stubs.js"
 import { browserBridgeEnabled, startBrowserBridge } from "./browser-bridge.js"
 import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
+import { browserSettingsFrom } from "./browser/browser-settings.js"
 import { configureCliPath } from "./cli-path.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
@@ -56,7 +56,9 @@ const fatalStartupDetailSchema = z
 let closeRuntime: (() => Promise<void>) | undefined
 
 type McpServerReference = { current: DesktoMcpServer | undefined }
-type RuntimeReference = { current: Runtime | undefined }
+type RuntimeReference = {
+  current: ReturnType<typeof createRuntime> | undefined
+}
 
 function taskOrchestrationProvider(
   reference: McpServerReference
@@ -137,8 +139,8 @@ async function openApplication(): Promise<void> {
 
   const window = createMainWindow()
   const unregisterWindowControls = registerWindowControlsIpc(window)
-  // The Runtime exists only after the browser does, so the profile lookup
-  // reads it through a reference that startup fills in below.
+  // The Runtime starts after the browser, so the browser reaches it through
+  // this reference rather than a constructor argument.
   const runtimeRef: RuntimeReference = { current: undefined }
   const browser = new BrowserManager(
     window,
@@ -148,16 +150,29 @@ async function openApplication(): Promise<void> {
       }
     },
     {
-      userDataPath: app.getPath("userData"),
-      workspaceForThread: async (threadId) => {
-        const runtime = runtimeRef.current
-        if (!runtime) return undefined
-        const thread = await runtime.request({
+      async projectPathForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
           method: "thread.get",
           params: { threadId },
         })
         if (!thread.ok) return undefined
-        const project = await runtime.request({
+        const project = await current.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.path : undefined
+      },
+      async workspaceForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await current.request({
           method: "project.get",
           params: { projectId: thread.data.thread.projectId },
         })
@@ -221,7 +236,6 @@ async function openApplication(): Promise<void> {
     browser.close()
     throw error
   }
-  runtimeRef.current = runtime
   // Install cleanup before the orchestration server starts so a startup
   // failure still closes the Runtime and Browser resources.
   closeRuntime = async () => {
@@ -263,8 +277,18 @@ async function openApplication(): Promise<void> {
         Number(process.env.DESKTO_BROWSER_BRIDGE_PORT ?? 5174)
       )
     : undefined
+  runtimeRef.current = runtime
+  const applyBrowserSettings = async () => {
+    const settings = await runtime.request({
+      method: "settings.get",
+      params: {},
+    })
+    if (settings.ok) browser.configure(browserSettingsFrom(settings.data))
+  }
+  await applyBrowserSettings()
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+    if (event.type === "settings.changed") void applyBrowserSettings()
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   const updateManager = new UpdateManager(
