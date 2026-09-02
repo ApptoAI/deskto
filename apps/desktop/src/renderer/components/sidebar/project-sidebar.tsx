@@ -107,7 +107,7 @@ export function ProjectSidebar({
   }, [focusSettings])
 
   return (
-    <SidebarFrame width={workspaceLayout === "slack" ? "compact" : "default"}>
+    <SidebarFrame>
       <div className="no-drag px-2 pb-3">
         {workspaceLayout === "slack" ? (
           <Button
