@@ -28,6 +28,17 @@ describe("browser host permission", () => {
       isBrowserHostPermitted("https://example.com", { allow: [], deny: [] })
     ).toBe(true)
   })
+
+  it("rechecks an existing history target after host rules change", () => {
+    const target = "https://signed-in.example/account"
+    expect(isBrowserHostPermitted(target, { allow: [], deny: [] })).toBe(true)
+    expect(
+      isBrowserHostPermitted(target, {
+        allow: [],
+        deny: ["signed-in.example"],
+      })
+    ).toBe(false)
+  })
 })
 
 describe("browser URL policy", () => {

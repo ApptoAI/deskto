@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
-import { mkdir } from "node:fs/promises"
 import path from "node:path"
 
 import {
@@ -55,9 +54,9 @@ import {
 } from "./browser-page-script.js"
 import type { CookieSink } from "../cookie-import/cookie-import.js"
 import {
-  browserDownloadDirectory,
   browserDownloadFileName,
   defaultBrowserSettings,
+  prepareBrowserDownloadDirectory,
   type BrowserSettings,
 } from "./browser-settings.js"
 import {
@@ -181,7 +180,7 @@ export class BrowserManager implements BrowserAutomationHost {
     await this.#restoreArtifact(threadId, tab)
     // Not awaited: the panel opens at once and the page lands through the
     // navigation events, so a slow start page cannot hold the Surface.
-    void this.#openHome(tab)
+    void this.#openHome(threadId, tab)
     if (
       this.#visibleThreadId !== threadId ||
       this.#tabs.get(threadId) !== tab
@@ -352,7 +351,7 @@ export class BrowserManager implements BrowserAutomationHost {
   async open(threadId: string, url?: string): Promise<BrowserSnapshot> {
     this.#requestPanel(threadId)
     if (url) return this.navigate(threadId, url)
-    await this.#openHome(this.#ensureTab(threadId))
+    await this.#openHome(threadId, this.#ensureTab(threadId))
     return this.snapshot(threadId)
   }
 
@@ -365,11 +364,7 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.registryKey = undefined
     tab.error = undefined
     const url = normalizeBrowserUrl(value)
-    if (!isBrowserHostPermitted(url, this.#settings.hostRules)) {
-      throw new Error(
-        `${new URL(url).hostname} is blocked by the browser settings in Deskto`
-      )
-    }
+    this.#assertHostPermitted(url)
     await this.#runMainNavigation(tab, url, () =>
       withNavigationTimeout(tab.view.webContents, () =>
         tab.view.webContents.loadURL(url)
@@ -483,6 +478,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const targetUrl = history.getEntryAtIndex(
         history.getActiveIndex() - 1
       ).url
+      this.#assertHostPermitted(targetUrl)
       await this.#runMainNavigation(tab, targetUrl, () =>
         waitForNavigation(tab.view.webContents, () => history.goBack())
       )
@@ -500,6 +496,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const targetUrl = history.getEntryAtIndex(
         history.getActiveIndex() + 1
       ).url
+      this.#assertHostPermitted(targetUrl)
       await this.#runMainNavigation(tab, targetUrl, () =>
         waitForNavigation(tab.view.webContents, () => history.goForward())
       )
@@ -514,6 +511,7 @@ export class BrowserManager implements BrowserAutomationHost {
     await this.#cancelElementPicker(tab)
     const currentUrl = this.#status(tab).url
     if (!currentUrl) return this.snapshot(threadId)
+    this.#assertHostPermitted(currentUrl)
     tab.refs.clear()
     await this.#runMainNavigation(tab, currentUrl, () =>
       waitForNavigation(tab.view.webContents, () =>
@@ -587,7 +585,7 @@ export class BrowserManager implements BrowserAutomationHost {
       const tab = [...this.#tabs.values()].find(
         (candidate) => candidate.view.webContents === webContents
       )
-      const directory = browserDownloadDirectory(
+      const directory = prepareBrowserDownloadDirectory(
         tab?.projectPath,
         this.#settings.downloadFolder
       )
@@ -602,10 +600,7 @@ export class BrowserManager implements BrowserAutomationHost {
       for (let attempt = 2; existsSync(target); attempt += 1) {
         target = path.join(directory, `${stem} (${attempt})${extension}`)
       }
-      // Chromium asks for the path synchronously; the folder is created
-      // beside it and a failure surfaces as an interrupted download.
       item.setSavePath(target)
-      void mkdir(directory, { recursive: true }).catch(() => item.cancel())
     })
   }
 
@@ -626,7 +621,7 @@ export class BrowserManager implements BrowserAutomationHost {
   }
 
   /** Loads the start page into a tab that has not shown anything yet. */
-  async #openHome(tab: BrowserTab): Promise<void> {
+  async #openHome(threadId: string, tab: BrowserTab): Promise<void> {
     const homeUrl = this.#settings.homeUrl
     if (
       tab.homeOpened ||
@@ -640,6 +635,7 @@ export class BrowserManager implements BrowserAutomationHost {
     tab.homeOpened = true
     if (!isBrowserHostPermitted(homeUrl, this.#settings.hostRules)) {
       tab.error = "The start page is blocked by the browser settings in Deskto"
+      this.#publishState(threadId, tab)
       return
     }
     try {
@@ -649,7 +645,10 @@ export class BrowserManager implements BrowserAutomationHost {
         )
       )
     } catch (error) {
+      // A timeout aborts the load, which did-fail-load ignores, so the
+      // message reaches the panel from here.
       tab.error = navigationErrorSchema.parse(error)
+      this.#publishState(threadId, tab)
     }
   }
 
@@ -852,6 +851,13 @@ export class BrowserManager implements BrowserAutomationHost {
       tab.view.webContents.getURL(),
       url,
       !!tab.artifactBoundaryNavigation?.started
+    )
+  }
+
+  #assertHostPermitted(url: string): void {
+    if (isBrowserHostPermitted(url, this.#settings.hostRules)) return
+    throw new Error(
+      `${new URL(url).hostname} is blocked by the browser settings in Deskto`
     )
   }
 
