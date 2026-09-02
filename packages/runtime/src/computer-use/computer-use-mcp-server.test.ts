@@ -41,12 +41,12 @@ const imageContentSchema = z.object({
 })
 
 /** A stand-in for Electron's WebContents that records the input it receives. */
-function fakePage() {
+function fakePage(image = png) {
   const events: ComputerUseInputEvent[] = []
   const page: ComputerUsePage = {
     size: () => ({ width: 1280, height: 800 }),
     capturePage: vi.fn(() =>
-      Promise.resolve({ resize: () => ({ toPNG: () => png }) })
+      Promise.resolve({ resize: () => ({ toPNG: () => image }) })
     ),
     sendInputEvent: (event) => {
       events.push(event)
@@ -171,6 +171,50 @@ describe("ComputerUseMcpServer", () => {
     expect(lease).toBeUndefined()
   })
 
+  it("consumes the lease bearer after one client initializes", async () => {
+    const { page } = fakePage()
+    server = await ComputerUseMcpServer.create(fakeHost(page).host)
+    const lease = await server.open(input, new AbortController().signal)
+    if (!lease) throw new Error("Lease should be open")
+    const config = lease.mcpServers[0]
+    if (!config?.authorization) throw new Error("Missing test authorization")
+
+    const first = mcpClient(config.url, config.authorization.token)
+    client = first.client
+    await client.connect(first.transport)
+
+    const replay = mcpClient(config.url, config.authorization.token)
+    try {
+      await expect(replay.client.connect(replay.transport)).rejects.toThrow()
+    } finally {
+      await replay.client.close().catch(() => undefined)
+      await lease.close()
+    }
+  })
+
+  it("rejects a screenshot before encoding more than 8 MB", async () => {
+    const { page } = fakePage(Buffer.alloc(8 * 1024 * 1024 + 1))
+    server = await ComputerUseMcpServer.create(fakeHost(page).host)
+    const lease = await server.open(input, new AbortController().signal)
+    if (!lease) throw new Error("Lease should be open")
+    const config = lease.mcpServers[0]
+    if (!config?.authorization) throw new Error("Missing test authorization")
+
+    const connected = mcpClient(config.url, config.authorization.token)
+    client = connected.client
+    await client.connect(connected.transport)
+    const result = imageContentSchema.parse(
+      await client.callTool({ name: "computer_screenshot", arguments: {} })
+    )
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0]).toEqual({
+      type: "text",
+      text: "Screen control screenshot exceeds the 8 MB limit",
+    })
+    await lease.close()
+  })
+
   it("rejects requests without a live token", async () => {
     const { page } = fakePage()
     server = await ComputerUseMcpServer.create(fakeHost(page).host)
@@ -182,3 +226,11 @@ describe("ComputerUseMcpServer", () => {
     expect(response.status).toBe(401)
   })
 })
+
+function mcpClient(url: string, token: string) {
+  const client = new Client({ name: "test", version: "1.0.0" })
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers: { Authorization: `Bearer ${token}` } },
+  })
+  return { client, transport }
+}

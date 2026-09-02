@@ -9,15 +9,15 @@ import { setTimeout as sleep } from "node:timers/promises"
 import {
   localhostHostValidation,
   localhostOriginValidation,
-  toNodeHandler,
+  NodeStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/node"
-import {
-  createMcpHandler,
-  McpServer,
-  type AuthInfo,
-} from "@modelcontextprotocol/server"
+import { McpServer } from "@modelcontextprotocol/server"
 import { computerUseSettings, settingValue } from "@deskto/settings"
-import type { JsonObject } from "@deskto/protocol"
+import {
+  jsonValueSchema,
+  type JsonObject,
+  type JsonValue,
+} from "@deskto/protocol"
 import { z } from "zod"
 
 import type {
@@ -55,10 +55,23 @@ export const computerUseMcpServerId = "deskto_computer_use"
 
 const localHost = "127.0.0.1"
 const tcpAddressSchema = z.object({ port: z.number().int().positive() })
+const initializeRequestSchema = z.object({ method: z.literal("initialize") })
+const maximumRequestBytes = 1024 * 1024
+const maximumScreenshotBytes = 8 * 1024 * 1024
 /** Keeps input events from landing before the page has painted the last one. */
 const inputSettleMs = 50
 
-type TurnBinding = { threadId: string }
+type ComputerUseLeaseState = {
+  threadId: string
+  sessionIds: Set<string>
+  active: boolean
+}
+
+type ComputerUseTransportState = {
+  lease: ComputerUseLeaseState
+  mcp: McpServer
+  transport: NodeStreamableHTTPServerTransport
+}
 
 function jsonError(response: ServerResponse, status: number, message: string) {
   response.writeHead(status, { "content-type": "application/json" })
@@ -71,6 +84,20 @@ function bearerToken(request: IncomingMessage): string | undefined {
   return header.slice("Bearer ".length)
 }
 
+async function readJson(request: IncomingMessage): Promise<JsonValue> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.length
+    if (size > maximumRequestBytes) throw new Error("MCP request is too large")
+    chunks.push(buffer)
+  }
+  return jsonValueSchema.parse(
+    JSON.parse(Buffer.concat(chunks).toString("utf8"))
+  )
+}
+
 /**
  * Private loopback MCP server that gives one Turn screen-level control of
  * its Task's browser page. Each Turn gets a one-time bearer token; the token
@@ -79,59 +106,48 @@ function bearerToken(request: IncomingMessage): string | undefined {
 export class ComputerUseMcpServer implements SessionToolProvider {
   private constructor(
     private readonly httpServer: ReturnType<typeof createServer>,
-    private readonly handler: ReturnType<typeof createMcpHandler>,
-    private readonly bindings: Map<string, TurnBinding>,
+    private readonly host: ComputerUseHost,
+    private readonly tokens: Map<string, ComputerUseLeaseState>,
+    private readonly transports: Map<string, ComputerUseTransportState>,
     private readonly cursors: Map<string, ComputerUsePoint>,
     readonly url: string
   ) {}
 
   static async create(host: ComputerUseHost): Promise<ComputerUseMcpServer> {
-    const bindings = new Map<string, TurnBinding>()
+    const tokens = new Map<string, ComputerUseLeaseState>()
+    const transports = new Map<string, ComputerUseTransportState>()
     const cursors = new Map<string, ComputerUsePoint>()
-    const handler = createMcpHandler((context) => {
-      const token = context.authInfo?.token
-      const binding = token ? bindings.get(token) : undefined
-      if (!binding) throw new Error("This screen control session has ended")
-      return createComputerUseMcp(host, binding.threadId, cursors)
-    })
-    const nodeHandler = toNodeHandler(handler)
+    const httpServer = createServer()
     const validateHost = localhostHostValidation()
     const validateOrigin = localhostOriginValidation()
-    const httpServer = createServer((request, response) => {
-      if (!validateHost(request, response)) return
-      if (!validateOrigin(request, response)) return
-      if (request.url !== "/mcp") {
-        jsonError(response, 404, "Not found")
-        return
-      }
-      const token = bearerToken(request)
-      if (!token || !bindings.has(token)) {
-        response.setHeader("WWW-Authenticate", "Bearer")
-        jsonError(response, 401, "Unauthorized")
-        return
-      }
-      const auth: AuthInfo = {
-        token,
-        clientId: "deskto-local",
-        scopes: ["computer-use"],
-      }
-      Object.assign(request, { auth })
-      void nodeHandler(request, response)
-    })
-    await new Promise<void>((resolve, reject) => {
+    const addressReady = new Promise<void>((resolve, reject) => {
       httpServer.once("error", reject)
       httpServer.listen(0, localHost, () => {
         httpServer.removeListener("error", reject)
         resolve()
       })
     })
+    await addressReady
     const address = tcpAddressSchema.safeParse(httpServer.address())
     if (!address.success) {
       httpServer.close()
       throw new Error("Screen control MCP server did not get a loopback port")
     }
     const url = `http://${localHost}:${address.data.port}/mcp`
-    return new ComputerUseMcpServer(httpServer, handler, bindings, cursors, url)
+    const gateway = new ComputerUseMcpServer(
+      httpServer,
+      host,
+      tokens,
+      transports,
+      cursors,
+      url
+    )
+    httpServer.on("request", (request, response) => {
+      if (!validateHost(request, response)) return
+      if (!validateOrigin(request, response)) return
+      void gateway.#handle(request, response)
+    })
+    return gateway
   }
 
   open(
@@ -144,14 +160,22 @@ export class ComputerUseMcpServer implements SessionToolProvider {
       return Promise.resolve(undefined)
     }
     const token = randomBytes(32).toString("base64url")
-    this.bindings.set(token, { threadId: input.threadId })
+    const state: ComputerUseLeaseState = {
+      threadId: input.threadId,
+      sessionIds: new Set(),
+      active: true,
+    }
+    this.tokens.set(token, state)
     let closed = false
-    const close = () => {
-      if (closed) return Promise.resolve()
+    const close = async () => {
+      if (closed) return
       closed = true
+      state.active = false
       signal.removeEventListener("abort", abort)
-      this.bindings.delete(token)
-      return Promise.resolve()
+      this.tokens.delete(token)
+      for (const sessionId of state.sessionIds) {
+        await this.#closeSession(sessionId)
+      }
     }
     const abort = () => void close()
     signal.addEventListener("abort", abort, { once: true })
@@ -168,15 +192,116 @@ export class ComputerUseMcpServer implements SessionToolProvider {
   }
 
   async close(): Promise<void> {
-    this.bindings.clear()
+    for (const state of this.tokens.values()) state.active = false
+    this.tokens.clear()
     this.cursors.clear()
+    for (const sessionId of this.transports.keys()) {
+      await this.#closeSession(sessionId)
+    }
+    await new Promise<void>((resolve) => this.httpServer.close(() => resolve()))
+  }
+
+  async #handle(
+    request: IncomingMessage,
+    response: ServerResponse
+  ): Promise<void> {
     try {
-      await this.handler.close()
-    } finally {
-      await new Promise<void>((resolve) =>
-        this.httpServer.close(() => resolve())
+      if (request.url !== "/mcp") {
+        jsonError(response, 404, "Not found")
+        return
+      }
+
+      const sessionId = z
+        .string()
+        .min(1)
+        .safeParse(request.headers["mcp-session-id"])
+      if (sessionId.success) {
+        const state = this.transports.get(sessionId.data)
+        if (!state || !state.lease.active) {
+          jsonError(response, 404, "Screen control session not found")
+          return
+        }
+        await state.transport.handleRequest(request, response)
+        if (request.method === "DELETE") {
+          await this.#closeSession(sessionId.data)
+        }
+        return
+      }
+
+      const token = bearerToken(request)
+      const lease = token ? this.tokens.get(token) : undefined
+      if (!token || !lease || !lease.active) {
+        response.setHeader("WWW-Authenticate", "Bearer")
+        jsonError(response, 401, "Unauthorized")
+        return
+      }
+      if (request.method !== "POST") {
+        response.setHeader("Allow", "POST")
+        jsonError(response, 405, "Method not allowed")
+        return
+      }
+
+      const body = await readJson(request)
+      if (!initializeRequestSchema.safeParse(body).success) {
+        jsonError(response, 400, "MCP initialization required")
+        return
+      }
+      if (this.tokens.get(token) !== lease) {
+        response.setHeader("WWW-Authenticate", "Bearer")
+        jsonError(response, 401, "Unauthorized")
+        return
+      }
+
+      this.tokens.delete(token)
+      const generatedSessionId = randomBytes(32).toString("base64url")
+      const mcp = createComputerUseMcp(this.host, lease.threadId, this.cursors)
+      const transport = new NodeStreamableHTTPServerTransport({
+        sessionIdGenerator: () => generatedSessionId,
+        enableJsonResponse: true,
+        onsessioninitialized: (initializedSessionId) => {
+          if (!lease.active) {
+            throw new Error(
+              "Screen control lease was revoked during initialization"
+            )
+          }
+          this.transports.set(initializedSessionId, state)
+          lease.sessionIds.add(initializedSessionId)
+        },
+      })
+      const state: ComputerUseTransportState = { lease, mcp, transport }
+      try {
+        await mcp.connect(transport)
+        await transport.handleRequest(request, response, body)
+      } catch (error) {
+        this.transports.delete(generatedSessionId)
+        lease.sessionIds.delete(generatedSessionId)
+        if (lease.active) this.tokens.set(token, lease)
+        await Promise.allSettled([mcp.close(), transport.close()])
+        throw error
+      }
+      if (!this.transports.has(generatedSessionId)) {
+        if (lease.active) this.tokens.set(token, lease)
+        await Promise.allSettled([mcp.close(), transport.close()])
+      }
+    } catch (error) {
+      if (response.headersSent) {
+        response.end()
+        return
+      }
+      jsonError(
+        response,
+        500,
+        error instanceof Error ? error.message : "Screen control failed"
       )
     }
+  }
+
+  async #closeSession(sessionId: string): Promise<void> {
+    const state = this.transports.get(sessionId)
+    if (!state) return
+    this.transports.delete(sessionId)
+    state.lease.sessionIds.delete(sessionId)
+    await Promise.allSettled([state.mcp.close(), state.transport.close()])
   }
 }
 
@@ -207,11 +332,15 @@ async function guarded(run: () => Promise<ToolResult>): Promise<ToolResult> {
 async function capture(page: ComputerUsePage): Promise<ToolContent[]> {
   const size = page.size()
   const image = await page.capturePage()
+  const png = image.resize(size).toPNG()
+  if (png.byteLength > maximumScreenshotBytes) {
+    throw new Error("Screen control screenshot exceeds the 8 MB limit")
+  }
   return [
     { type: "text", text: JSON.stringify({ display: size }) },
     {
       type: "image",
-      data: image.resize(size).toPNG().toString("base64"),
+      data: png.toString("base64"),
       mimeType: "image/png",
     },
   ]
@@ -313,7 +442,13 @@ function createComputerUseMcp(
     },
     ({ coordinate, text }) =>
       act((size) =>
-        clickEvents(pointFrom(coordinate), size, "left", 1, parseModifiers(text))
+        clickEvents(
+          pointFrom(coordinate),
+          size,
+          "left",
+          1,
+          parseModifiers(text)
+        )
       )
   )
   server.registerTool(
@@ -325,7 +460,13 @@ function createComputerUseMcp(
     },
     ({ coordinate, text }) =>
       act((size) =>
-        clickEvents(pointFrom(coordinate), size, "right", 1, parseModifiers(text))
+        clickEvents(
+          pointFrom(coordinate),
+          size,
+          "right",
+          1,
+          parseModifiers(text)
+        )
       )
   )
   server.registerTool(
@@ -337,7 +478,13 @@ function createComputerUseMcp(
     },
     ({ coordinate, text }) =>
       act((size) =>
-        clickEvents(pointFrom(coordinate), size, "left", 2, parseModifiers(text))
+        clickEvents(
+          pointFrom(coordinate),
+          size,
+          "left",
+          2,
+          parseModifiers(text)
+        )
       )
   )
   server.registerTool(
@@ -347,7 +494,8 @@ function createComputerUseMcp(
         "Move the mouse pointer to a screenshot coordinate without clicking and return a fresh screenshot.",
       inputSchema: mouseMoveInputSchema,
     },
-    ({ coordinate }) => act((size) => mouseMoveEvents(pointFrom(coordinate), size))
+    ({ coordinate }) =>
+      act((size) => mouseMoveEvents(pointFrom(coordinate), size))
   )
   server.registerTool(
     "computer_left_click_drag",
