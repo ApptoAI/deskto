@@ -57,7 +57,6 @@ export function harnessLabel(harnesses: Harness[], harnessId: string): string {
 export function knownHarnessLabel(harnessId: string): string {
   if (harnessId === "codex") return "Codex"
   if (harnessId === "claude") return "Claude Code"
-  if (harnessId === "pi") return "Pi"
   return harnessId
 }
 
@@ -81,7 +80,7 @@ export function describeHarnessBlock(
     return `Deskto cannot read the list of agents. ${harnesses.message}`
   }
   if (!harnessId) {
-    return "No agent is available. Deskto works with Claude Code, Codex, or Pi installed on this computer."
+    return "No agent is available. Deskto works with Claude Code and Codex installed on this computer."
   }
 
   const harness = findHarness(harnesses.data, harnessId)

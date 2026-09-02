@@ -123,14 +123,6 @@ const harnessSetup = new Map<
       docsUrl: "https://developers.openai.com/codex/cli",
     },
   ],
-  [
-    "pi",
-    {
-      install: "npm install -g @earendil-works/pi-coding-agent",
-      signInHint: "Then run pi in a terminal and add a provider.",
-      docsUrl: "https://pi.dev",
-    },
-  ],
 ])
 
 /**

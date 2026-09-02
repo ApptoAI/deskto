@@ -34,34 +34,12 @@ export function OpenAILogo(props: ComponentProps<"svg">) {
   )
 }
 
-/** Pi has no brand mark; its letter, drawn in the icon grid, is the mark. */
-export function PiLogo(props: ComponentProps<"svg">) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      {...props}
-    >
-      <path d="M4 7h16" />
-      <path d="M8 7v11" />
-      <path d="M15 7v9a2 2 0 0 0 2 2h1" />
-    </svg>
-  )
-}
-
 /** Provider tints, matched to each brand; unknown harnesses stay neutral.
     Lives beside the logo map so adding a harness is one file, and so the
     rest of the UI never has to name a provider. */
 export const harnessAccentByHarnessId = new Map<string, string>([
   ["claude", "text-brand-claude"],
   ["codex", "text-foreground"],
-  ["pi", "text-foreground"],
 ])
 
 /** Renders the provider logo for a harness, or the fallback (nothing by
@@ -73,6 +51,5 @@ export function HarnessLogo({
 }: { harnessId: string; fallback?: ReactNode } & ComponentProps<"svg">) {
   if (harnessId === "claude") return <ClaudeLogo {...props} />
   if (harnessId === "codex") return <OpenAILogo {...props} />
-  if (harnessId === "pi") return <PiLogo {...props} />
   return fallback
 }

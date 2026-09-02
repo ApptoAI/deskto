@@ -17,7 +17,7 @@ Deskto is for the other kind of agent work: preparing an outbound campaign, digg
 
 ## What you get
 
-**Your subscriptions, not another API bill.** Deskto drives the agent CLIs already installed on your computer. Claude Code, Codex, and Pi are supported today; more providers are planned. Sign in to the CLI once and Deskto uses that account.
+**Your subscriptions, not another API bill.** Deskto drives the agent CLIs already installed on your computer. Claude Code and Codex are supported today; more providers are planned. Sign in to the CLI once and Deskto uses that account.
 
 **An inbox, not a chat list.** Tasks live in an inbox with pinned, active, later, and done sections. Agent activity never reorders the list, so your muscle memory holds; status travels on a colored dot instead. Snooze a task and it comes back at the time you picked, or earlier if it fails or needs your answer. Quiet tasks close themselves after a few days, but a failed task stays visible until you deal with it. One inbox can also span every project in a workspace.
 
