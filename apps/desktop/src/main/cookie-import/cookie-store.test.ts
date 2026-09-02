@@ -18,7 +18,7 @@ afterEach(() => {
 })
 
 // Writes a minimal Chromium-shaped Cookies database and returns its path.
-function fixtureCookies(): string {
+function fixtureCookies(databaseVersion?: number): string {
   workDir = mkdtempSync(join(tmpdir(), "deskto-cookie-fixture-"))
   const path = join(workDir, "Cookies")
   const database = new DatabaseSync(path)
@@ -28,12 +28,30 @@ function fixtureCookies(): string {
       is_secure INTEGER, is_httponly INTEGER, samesite INTEGER, expires_utc INTEGER
     )`
   )
+  if (databaseVersion !== undefined) {
+    database.exec(
+      "CREATE TABLE meta (key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR)"
+    )
+    database
+      .prepare("INSERT INTO meta (key, value) VALUES ('version', ?)")
+      .run(String(databaseVersion))
+  }
   const insert = database.prepare(
     `INSERT INTO cookies
       (host_key, name, value, encrypted_value, path, is_secure, is_httponly, samesite, expires_utc)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
-  insert.run(".example.com", "sid", "", Buffer.from("v10secret"), "/", 1, 1, 2, 13_300_000_000_000_000)
+  insert.run(
+    ".example.com",
+    "sid",
+    "",
+    Buffer.from("v10secret"),
+    "/",
+    1,
+    1,
+    2,
+    13_300_000_000_000_000
+  )
   insert.run("plain.test", "legacy", "kept", null, "/app", 0, 0, 0, 0)
   database.close()
   return path
@@ -61,6 +79,12 @@ describe("readRawCookies", () => {
       isSecure: false,
     })
     expect(legacy?.encryptedValue).toHaveLength(0)
+  })
+
+  it("reads Chromium's cookie schema version from the meta table", () => {
+    const rows = readRawCookies(fixtureCookies(24))
+
+    expect(rows.every((row) => row.databaseVersion === 24)).toBe(true)
   })
 })
 

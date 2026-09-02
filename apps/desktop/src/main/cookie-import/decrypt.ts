@@ -9,9 +9,8 @@ const cbcIv = Buffer.alloc(16, " ")
 const cbcKeyLength = 16
 const gcmNonceLength = 12
 const gcmTagLength = 16
-// Recent Chromium prepends SHA-256(host_key) to the plaintext before
-// encrypting, so a decrypted value that leaks cannot be replayed against a
-// different host. We drop it only when it matches the cookie's own host.
+// Chromium schema 24+ prepends SHA-256(host_key) to the plaintext before
+// encrypting, so a decrypted value cannot be replayed against another host.
 const domainHashLength = 32
 
 const versionPrefixLength = 3
@@ -33,10 +32,19 @@ function versionTag(encrypted: Buffer): string | undefined {
   return tag === "v10" || tag === "v11" ? tag : undefined
 }
 
-function stripDomainHash(plaintext: Buffer, hostKey: string): Buffer {
-  if (plaintext.length < domainHashLength) return plaintext
+function stripDomainHash(
+  plaintext: Buffer,
+  hostKey: string,
+  databaseVersion: number | undefined
+): Buffer {
   const expected = createHash("sha256").update(hostKey).digest()
   const prefix = plaintext.subarray(0, domainHashLength)
+  if (databaseVersion !== undefined && databaseVersion >= 24) {
+    if (prefix.length !== domainHashLength || !prefix.equals(expected)) {
+      throw new Error("The decrypted cookie did not match its stored host.")
+    }
+    return plaintext.subarray(domainHashLength)
+  }
   return prefix.equals(expected)
     ? plaintext.subarray(domainHashLength)
     : plaintext
@@ -55,7 +63,11 @@ function decryptCbc(encrypted: Buffer, key: Buffer): Buffer {
 function unpadPkcs7(buffer: Buffer): Buffer {
   const last = buffer.at(-1)
   if (last === undefined || last < 1 || last > 16 || last > buffer.length) {
-    return buffer
+    throw new Error("The cookie has invalid encryption padding.")
+  }
+  const padding = buffer.subarray(buffer.length - last)
+  if (!padding.every((byte) => byte === last)) {
+    throw new Error("The cookie has invalid encryption padding.")
   }
   return buffer.subarray(0, buffer.length - last)
 }
@@ -77,18 +89,19 @@ function decryptGcm(encrypted: Buffer, key: Buffer): Buffer {
 }
 
 /**
- * Decrypts one stored cookie value. `hostKey` is the cookie's host, used only
- * to recognise and drop Chromium's domain-hash prefix. Throws when the value
- * is untagged on a CBC platform, since that means an OS-native (DPAPI or
- * keychain-wrapped) blob this path cannot open.
+ * Decrypts one stored cookie value. Schema 24+ values must carry the hash of
+ * `hostKey`; older schemas keep their historical optional-prefix behavior.
+ * Throws when the value is untagged on a CBC platform, since that means an
+ * OS-native (DPAPI or keychain-wrapped) blob this path cannot open.
  */
 export function decryptCookieValue(options: {
   encrypted: Buffer
   key: Buffer
   scheme: CookieCipherScheme
   hostKey: string
+  databaseVersion?: number
 }): string {
-  const { encrypted, key, scheme, hostKey } = options
+  const { encrypted, key, scheme, hostKey, databaseVersion } = options
   if (encrypted.length === 0) return ""
 
   const tag = versionTag(encrypted)
@@ -101,5 +114,5 @@ export function decryptCookieValue(options: {
 
   const plaintext =
     scheme === "gcm" ? decryptGcm(encrypted, key) : decryptCbc(encrypted, key)
-  return stripDomainHash(plaintext, hostKey).toString("utf8")
+  return stripDomainHash(plaintext, hostKey, databaseVersion).toString("utf8")
 }

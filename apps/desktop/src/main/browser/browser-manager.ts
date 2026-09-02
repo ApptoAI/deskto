@@ -659,6 +659,12 @@ export class BrowserManager implements BrowserAutomationHost {
    * cannot set a cookie directly.
    */
   cookieSink(): CookieSink {
+    if (this.#settings.clearSessionBetweenTasks) {
+      return {
+        unavailableReason:
+          "Cookie import is unavailable while Clear session between tasks is on. Turn it off in Browser settings to use imported cookies.",
+      }
+    }
     return {
       set: (cookie) => this.#browserSession.cookies.set(cookie),
     }

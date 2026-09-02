@@ -32,9 +32,15 @@ export type ImportableCookie = {
 }
 
 /** Where imported cookies are written; the built-in browser session in the app. */
-export type CookieSink = {
-  set(cookie: ImportableCookie): Promise<void>
-}
+export type CookieSink =
+  | {
+      /** A settings conflict that prevents cookies reaching task tabs. */
+      unavailableReason: string
+    }
+  | {
+      unavailableReason?: never
+      set(cookie: ImportableCookie): Promise<void>
+    }
 
 function profileId(profile: DetectedProfile): string {
   return `${profile.browserId}:${profile.profileDirectory}`
@@ -70,9 +76,11 @@ function hostMatches(cookieHost: string, chosen: ReadonlySet<string>): boolean {
   return false
 }
 
-function cookieVersion(encrypted: Buffer): CookieVersion | undefined {
+type StoredCookieVersion = CookieVersion | "v20"
+
+function cookieVersion(encrypted: Buffer): StoredCookieVersion | undefined {
   const tag = encrypted.subarray(0, 3).toString("latin1")
-  return tag === "v10" || tag === "v11" ? tag : undefined
+  return tag === "v10" || tag === "v11" || tag === "v20" ? tag : undefined
 }
 
 function importableCookie(cookie: RawCookie, value: string): ImportableCookie {
@@ -105,6 +113,9 @@ export async function importCookies(
   if (!env) {
     return { imported: 0, skipped: 0, error: cannotRunHereMessage }
   }
+  if ("unavailableReason" in sink) {
+    return { imported: 0, skipped: 0, error: sink.unavailableReason }
+  }
   const chosen = new Set(request.hosts.map(normalizeHost).filter(Boolean))
   if (chosen.size === 0) {
     return { imported: 0, skipped: 0, error: "Choose at least one website." }
@@ -131,6 +142,7 @@ export async function importCookies(
   const crypto = resolveCookieCrypto(env, profile)
   let imported = 0
   let skipped = 0
+  let appBoundSkipped = 0
 
   const nowSeconds = Date.now() / 1000
   for (const cookie of rows) {
@@ -140,7 +152,14 @@ export async function importCookies(
     const expiresAt = expirationSeconds(cookie.expiresUtc)
     if (expiresAt !== undefined && expiresAt <= nowSeconds) continue
 
-    const value = decryptValue(cookie, crypto)
+    const version = cookieVersion(cookie.encryptedValue)
+    if (env.platform === "win32" && version === "v20") {
+      skipped += 1
+      appBoundSkipped += 1
+      continue
+    }
+
+    const value = decryptValue(cookie, crypto, version)
     if (value === undefined) {
       skipped += 1
       continue
@@ -153,6 +172,13 @@ export async function importCookies(
     }
   }
 
+  if (appBoundSkipped > 0) {
+    return {
+      imported,
+      skipped,
+      error: appBoundEncryptionMessage(imported),
+    }
+  }
   if (imported === 0 && skipped > 0) {
     return { imported, skipped, error: keyAccessMessage(env) }
   }
@@ -161,12 +187,12 @@ export async function importCookies(
 
 function decryptValue(
   cookie: RawCookie,
-  crypto: ReturnType<typeof resolveCookieCrypto>
+  crypto: ReturnType<typeof resolveCookieCrypto>,
+  version = cookieVersion(cookie.encryptedValue)
 ): string | undefined {
   if (cookie.encryptedValue.length === 0) return cookie.plaintextValue
 
-  const version = cookieVersion(cookie.encryptedValue)
-  if (!version) return undefined
+  if (!version || version === "v20") return undefined
   const key = crypto.keyForVersion(version)
   if (!key) return undefined
 
@@ -176,6 +202,7 @@ function decryptValue(
       key,
       scheme: crypto.scheme,
       hostKey: cookie.hostKey,
+      databaseVersion: cookie.databaseVersion,
     })
   } catch {
     return undefined
@@ -186,6 +213,12 @@ const cannotRunHereMessage =
   "Cookie import runs on macOS, Windows, and Linux desktops only."
 const profileGoneMessage =
   "That browser profile is no longer available. Refresh the list and try again."
+
+function appBoundEncryptionMessage(imported: number): string {
+  const prefix =
+    imported > 0 ? `Imported ${imported} older-format cookies, but ` : ""
+  return `${prefix}this browser profile uses Windows App-Bound Encryption, which Deskto cannot import yet. Sign in again in Deskto's built-in browser.`
+}
 
 function keyAccessMessage(env: DiscoveryEnvironment): string {
   if (env.platform === "darwin") {

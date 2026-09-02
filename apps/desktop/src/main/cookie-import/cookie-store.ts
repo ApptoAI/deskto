@@ -23,6 +23,8 @@ export type RawCookie = {
   /** Microseconds since 1601; 0 for a session cookie. Read as bigint because a
    * real expiry exceeds JavaScript's safe-integer range. */
   expiresUtc: bigint
+  /** Chromium's cookie schema version from meta.version, when present. */
+  databaseVersion?: number
 }
 
 function toBuffer(value: Uint8Array | null): Buffer {
@@ -68,6 +70,7 @@ type CookieRow = {
 function readCopiedCookies(databasePath: string): RawCookie[] {
   const database = new DatabaseSync(databasePath, { readOnly: true })
   try {
+    const databaseVersion = readDatabaseVersion(database)
     const statement = database.prepare(
       `SELECT host_key, name, value, encrypted_value, path,
               is_secure, is_httponly, samesite, expires_utc
@@ -78,13 +81,32 @@ function readCopiedCookies(databasePath: string): RawCookie[] {
     // cookies table, and setReadBigInts makes every INTEGER a bigint, so each
     // row conforms to CookieRow.
     const rows = statement.all() as CookieRow[]
-    return rows.map(readRow)
+    return rows.map((row) => readRow(row, databaseVersion))
   } finally {
     database.close()
   }
 }
 
-function readRow(row: CookieRow): RawCookie {
+function readDatabaseVersion(database: DatabaseSync): number | undefined {
+  try {
+    const statement = database.prepare(
+      "SELECT CAST(value AS TEXT) AS value FROM meta WHERE key = 'version'"
+    )
+    // SAFETY: CAST pins the selected SQLite value to TEXT.
+    const row = statement.get() as { value: string } | undefined
+    if (!row) return undefined
+    const version = Number(row.value)
+    return Number.isSafeInteger(version) && version >= 0 ? version : undefined
+  } catch {
+    // Older Chromium databases may not have a meta table.
+    return undefined
+  }
+}
+
+function readRow(
+  row: CookieRow,
+  databaseVersion: number | undefined
+): RawCookie {
   return {
     hostKey: row.host_key,
     name: row.name,
@@ -95,6 +117,7 @@ function readRow(row: CookieRow): RawCookie {
     isHttpOnly: row.is_httponly !== 0n,
     sameSite: Number(row.samesite),
     expiresUtc: row.expires_utc,
+    databaseVersion,
   }
 }
 

@@ -45,9 +45,22 @@ type SeedCookie = {
   expiresUtc?: bigint
 }
 
-function seedProfile(cookies: SeedCookie[]): DiscoveryEnvironment {
+type SeedOptions = {
+  platform?: DiscoveryEnvironment["platform"]
+  databaseVersion?: number
+}
+
+function seedProfile(
+  cookies: SeedCookie[],
+  options: SeedOptions = {}
+): DiscoveryEnvironment {
   root = join(tmpdir(), `deskto-import-${Math.random().toString(36).slice(2)}`)
-  const profileDir = join(root, ".config", "google-chrome", "Default")
+  const platform = options.platform ?? "linux"
+  const localAppData = join(root, "local-app-data")
+  const profileDir =
+    platform === "win32"
+      ? join(localAppData, "Google", "Chrome", "User Data", "Default")
+      : join(root, ".config", "google-chrome", "Default")
   mkdirSync(profileDir, { recursive: true })
   const database = new DatabaseSync(join(profileDir, "Cookies"))
   database.exec(
@@ -56,6 +69,14 @@ function seedProfile(cookies: SeedCookie[]): DiscoveryEnvironment {
       is_secure INTEGER, is_httponly INTEGER, samesite INTEGER, expires_utc INTEGER
     )`
   )
+  if (options.databaseVersion !== undefined) {
+    database.exec(
+      "CREATE TABLE meta (key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR)"
+    )
+    database
+      .prepare("INSERT INTO meta (key, value) VALUES ('version', ?)")
+      .run(String(options.databaseVersion))
+  }
   const insert = database.prepare(
     `INSERT INTO cookies
       (host_key, name, value, encrypted_value, path, is_secure, is_httponly, samesite, expires_utc)
@@ -75,7 +96,7 @@ function seedProfile(cookies: SeedCookie[]): DiscoveryEnvironment {
     )
   }
   database.close()
-  return { platform: "linux", home: root }
+  return { platform, home: root, localAppData }
 }
 
 function collectingSink() {
@@ -173,6 +194,70 @@ describe("importCookies", () => {
     expect(result.imported).toBe(0)
     expect(result.skipped).toBe(1)
     expect(result.error).toBeDefined()
+  })
+
+  it("rejects unbound plaintext from a schema-v24 cookie database", async () => {
+    const env = seedProfile(
+      [
+        {
+          hostKey: "example.com",
+          name: "sid",
+          encrypted: sealV10("not-host-bound"),
+        },
+      ],
+      { databaseVersion: 24 }
+    )
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    expect(result.imported).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(written).toEqual([])
+  })
+
+  it("reports Windows App-Bound cookies as unsupported", async () => {
+    const env = seedProfile(
+      [
+        {
+          hostKey: "example.com",
+          name: "sid",
+          encrypted: Buffer.concat([Buffer.from("v20"), Buffer.alloc(32)]),
+        },
+      ],
+      { platform: "win32", databaseVersion: 24 }
+    )
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    expect(result).toMatchObject({ imported: 0, skipped: 1 })
+    expect(result.error).toContain("Windows App-Bound Encryption")
+    expect(written).toEqual([])
+  })
+
+  it("stops before reading when the task browser isolates every session", async () => {
+    const env = seedProfile([
+      { hostKey: "example.com", name: "sid", plaintext: "kept" },
+    ])
+    const result = await importCookies(
+      { profileId: "chrome:Default", hosts: ["example.com"] },
+      {
+        unavailableReason:
+          "Turn off Clear session between tasks to use imported cookies.",
+      },
+      env
+    )
+
+    expect(result.error).toContain("Clear session between tasks")
   })
 
   it("asks for at least one website when none are chosen", async () => {

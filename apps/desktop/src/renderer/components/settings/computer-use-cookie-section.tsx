@@ -26,7 +26,7 @@ type ProfilesState =
 // the host part of anything URL-shaped is kept, and leading dots and "www."
 // are dropped so a typed "www.example.com" matches the same cookies as
 // "example.com".
-function parseHosts(text: string): string[] {
+export function parseHosts(text: string): string[] {
   const seen = new Set<string>()
   for (const token of text.split(/[\s,]+/u)) {
     const host = hostOf(token)
@@ -36,12 +36,31 @@ function parseHosts(text: string): string[] {
 }
 
 function hostOf(token: string): string | undefined {
-  const trimmed = token.trim().toLowerCase()
+  const trimmed = token.trim()
   if (!trimmed) return undefined
-  const withoutScheme = trimmed.replace(/^[a-z]+:\/\//u, "")
-  const host = withoutScheme.split("/", 1)[0]?.replace(/^\.+/u, "")
-  if (!host) return undefined
+  let parsed: URL
+  try {
+    parsed = new URL(
+      /^[a-z][a-z\d+.-]*:\/\//iu.test(trimmed) ? trimmed : `https://${trimmed}`
+    )
+  } catch {
+    return undefined
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return undefined
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\.+/u, "")
+  if (!host || !isValidHost(host)) return undefined
   return host.replace(/^www\./u, "")
+}
+
+function isValidHost(host: string): boolean {
+  if (host === "localhost") return true
+  if (/^\[[\da-f:]+\]$/iu.test(host)) return true
+  if (host.length > 253) return false
+  return host
+    .split(".")
+    .every((label) => /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/iu.test(label))
 }
 
 export function CookieImportSection() {
@@ -61,12 +80,13 @@ export function CookieImportSection() {
       const found: DetectedBrowserProfile[] = await discoverBrowserProfiles()
       setProfiles({ status: "ready", profiles: found })
       setSelectedId((current) =>
-        found.some((profile) => profile.id === current)
-          ? current
-          : found[0]?.id
+        found.some((profile) => profile.id === current) ? current : found[0]?.id
       )
     } catch (error) {
-      setProfiles({ status: "error", message: describedErrorSchema.parse(error) })
+      setProfiles({
+        status: "error",
+        message: describedErrorSchema.parse(error),
+      })
     }
   }, [])
 
@@ -90,7 +110,10 @@ export function CookieImportSection() {
     setActionError(null)
     try {
       setResult(
-        await importBrowserCookies({ profileId: selectedId, hosts: parsedHosts })
+        await importBrowserCookies({
+          profileId: selectedId,
+          hosts: parsedHosts,
+        })
       )
     } catch (error) {
       setActionError(describedErrorSchema.parse(error))
@@ -185,7 +208,11 @@ export function CookieImportSection() {
       {result ? <ImportOutcome result={result} /> : null}
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={() => void runImport()} disabled={!canImport}>
+        <Button
+          size="sm"
+          onClick={() => void runImport()}
+          disabled={!canImport}
+        >
           {running ? "Importing…" : "Import cookies"}
         </Button>
       </div>
