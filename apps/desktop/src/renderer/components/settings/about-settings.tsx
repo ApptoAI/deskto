@@ -23,7 +23,8 @@ export function AboutSettings() {
           <div>
             <h2 className="text-sm font-medium">Deskto</h2>
             <p className="mt-1 font-mono text-xs text-muted-foreground">
-              Version {state?.currentVersion ?? "unavailable"}
+              Version{" "}
+              {state?.currentVersion ?? (loadError ? "unavailable" : "…")}
             </p>
           </div>
           {state?.status === "ready" ? (

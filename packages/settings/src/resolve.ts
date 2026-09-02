@@ -1,9 +1,10 @@
-import { settingDefinitions } from "./app-settings.js"
+import { keybindingSettings, settingDefinitions } from "./app-settings.js"
 import type {
   SettingDefinition,
   SettingValue,
   SettingValues,
 } from "./definition.js"
+import { parseKeybinding, type Keybinding } from "./keybinding.js"
 
 /**
  * Effective settings after user overrides are applied to the defaults.
@@ -50,4 +51,34 @@ export function isOverridden<T extends SettingValue>(
   definition: SettingDefinition<T>
 ): boolean {
   return snapshot !== null && definition.key in snapshot.overrides
+}
+
+/**
+ * The other keybinding setting already holding `binding`, or null. Two
+ * bindings that fire on the same keydown would both run, so a Surface refuses
+ * the second one and names the first.
+ */
+export function findKeybindingConflict(
+  snapshot: SettingsSnapshot | null,
+  definition: SettingDefinition<string>,
+  binding: string
+): SettingDefinition<string> | null {
+  const candidate = parseKeybinding(binding)
+  if (!candidate) return null
+  for (const other of keybindingSettings) {
+    if (other.key === definition.key) continue
+    const held = parseKeybinding(settingValue(snapshot, other))
+    if (held && sameKeybinding(held, candidate)) return other
+  }
+  return null
+}
+
+function sameKeybinding(a: Keybinding, b: Keybinding): boolean {
+  return (
+    a.key === b.key &&
+    a.mod === b.mod &&
+    a.ctrl === b.ctrl &&
+    a.alt === b.alt &&
+    a.shift === b.shift
+  )
 }
