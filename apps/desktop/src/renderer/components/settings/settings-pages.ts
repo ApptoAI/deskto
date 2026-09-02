@@ -2,6 +2,7 @@ import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ContrastIcon from "lucide-react/dist/esm/icons/contrast"
 import KeyboardIcon from "lucide-react/dist/esm/icons/keyboard"
 import InfoIcon from "lucide-react/dist/esm/icons/info"
+import MousePointerClickIcon from "lucide-react/dist/esm/icons/mouse-pointer-click"
 import SparklesIcon from "lucide-react/dist/esm/icons/sparkles"
 import type { ComponentType, SVGProps } from "react"
 
@@ -11,6 +12,7 @@ import type { ComponentType, SVGProps } from "react"
 export const settingsPageOrder = [
   "agents",
   "models",
+  "computer-use",
   "appearance",
   "shortcuts",
   "about",
@@ -35,6 +37,11 @@ export const settingsPages = {
     label: "Generated text",
     description: "Choose models for short text Deskto creates automatically.",
     icon: SparklesIcon,
+  },
+  "computer-use": {
+    label: "Computer use",
+    description: "Choose how the built-in browser behaves inside your tasks.",
+    icon: MousePointerClickIcon,
   },
   appearance: {
     label: "Appearance",

@@ -24,6 +24,28 @@ export {
   type WorkspaceLayout,
 } from "./app-settings.js"
 export {
+  browserDownloadFolderSchema,
+  browserHomeUrlSchema,
+  browserHostAllowed,
+  browserHostRuleSchema,
+  browserHostRulesSchema,
+  browserUserAgentSchema,
+  browserViewportSchema,
+  computerUseSettings,
+  defaultBrowserDownloadFolder,
+  defaultBrowserViewport,
+  isBrowserDownloadFolder,
+  isBrowserHomeUrl,
+  isBrowserHostRule,
+  maxBrowserHomeUrlLength,
+  maxBrowserHostRules,
+  maxBrowserUserAgentLength,
+  maxBrowserViewportSide,
+  minBrowserViewportSide,
+  parseBrowserHostRules,
+  type BrowserViewport,
+} from "./computer-use.js"
+export {
   defineSetting,
   type SettingChoice,
   type SettingDefinition,
@@ -42,6 +64,7 @@ export {
   type Platform,
 } from "./keybinding.js"
 export {
+  findKeybindingConflict,
   isOverridden,
   resolveSettings,
   settingValue,

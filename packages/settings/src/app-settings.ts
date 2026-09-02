@@ -6,6 +6,7 @@ import {
   type SettingDefinition,
   type SettingValue,
 } from "./definition.js"
+import { computerUseSettings } from "./computer-use.js"
 import { keybindingSchema } from "./keybinding.js"
 
 export const harnessModelSelectionSchema = z
@@ -200,6 +201,7 @@ export const appSettings = {
     schema: z.boolean(),
     defaultValue: false,
   }),
+  ...computerUseSettings,
 }
 
 export const settingDefinitions: readonly SettingDefinition<SettingValue>[] =

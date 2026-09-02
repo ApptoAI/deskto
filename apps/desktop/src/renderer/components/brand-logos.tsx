@@ -59,7 +59,7 @@ export function PiLogo(props: ComponentProps<"svg">) {
     Lives beside the logo map so adding a harness is one file, and so the
     rest of the UI never has to name a provider. */
 export const harnessAccentByHarnessId = new Map<string, string>([
-  ["claude", "text-[#D97757]"],
+  ["claude", "text-brand-claude"],
   ["codex", "text-foreground"],
   ["pi", "text-foreground"],
 ])

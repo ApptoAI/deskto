@@ -5,7 +5,12 @@ import {
   harnessModelSettings,
   interfaceFontSizeSchema,
 } from "./app-settings.js"
-import { isOverridden, resolveSettings, settingValue } from "./resolve.js"
+import {
+  findKeybindingConflict,
+  isOverridden,
+  resolveSettings,
+  settingValue,
+} from "./resolve.js"
 
 const newTask = appSettings.newTaskKeybinding
 const threadTitleModel = appSettings.threadTitleModel
@@ -58,5 +63,33 @@ describe("resolveSettings", () => {
   it("falls back to the default without a snapshot", () => {
     expect(settingValue(null, newTask)).toBe(newTask.defaultValue)
     expect(isOverridden(null, newTask)).toBe(false)
+  })
+})
+
+describe("findKeybindingConflict", () => {
+  const toggleSidebar = appSettings.toggleSidebarKeybinding
+
+  it("names the setting already holding the binding", () => {
+    const conflict = findKeybindingConflict(
+      resolveSettings({}),
+      newTask,
+      toggleSidebar.defaultValue
+    )
+    expect(conflict?.key).toBe(toggleSidebar.key)
+  })
+
+  it("compares parsed bindings, not their spelling", () => {
+    const snapshot = resolveSettings({ [toggleSidebar.key]: "shift+mod+k" })
+    expect(findKeybindingConflict(snapshot, newTask, "mod+shift+k")?.key).toBe(
+      toggleSidebar.key
+    )
+  })
+
+  it("lets a setting keep its own binding and ignores unused ones", () => {
+    const snapshot = resolveSettings({})
+    expect(findKeybindingConflict(snapshot, newTask, newTask.defaultValue)).toBe(
+      null
+    )
+    expect(findKeybindingConflict(snapshot, newTask, "mod+alt+9")).toBe(null)
   })
 })

@@ -17,8 +17,10 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Switch } from "@workspace/ui/components/switch"
 
-import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { openFolder } from "../../lib/desktop.js"
+import { describedErrorSchema } from "../../runtime/describe-error.js"
+import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
+import { InlineError } from "../inline-error.js"
 
 export type PackActions = {
   onToggle: (packId: string, attached: boolean) => Promise<void>
@@ -42,18 +44,29 @@ export function PacksPanel({
   const [newPackName, setNewPackName] = useState("")
   const [busy, setBusy] = useState<string | null>(null)
   const [removing, setRemoving] = useState<Pack | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
+  // Workbench's error strip sits under this panel's dialog, so the failure
+  // has to be repeated here, beside the control that asked for it.
   async function run(key: string, action: () => Promise<void>) {
     setBusy(key)
+    setActionError(null)
     try {
       await action()
       return true
-    } catch {
-      // Workbench shows the error above this screen.
+    } catch (error) {
+      setActionError(describedErrorSchema.parse(error))
       return false
     } finally {
       setBusy(null)
     }
+  }
+
+  // A failure the dialog reported belongs to that attempt; it must not
+  // resurface at the top of the panel once the dialog is dismissed.
+  function closeRemoveDialog() {
+    setRemoving(null)
+    setActionError(null)
   }
 
   function createPack() {
@@ -84,6 +97,9 @@ export function PacksPanel({
 
   return (
     <div className="space-y-5">
+      {actionError && removing === null ? (
+        <InlineError message={actionError} />
+      ) : null}
       <div className="space-y-4 border-b border-border pb-5">
         <div className="space-y-1.5">
           <label htmlFor="new-pack-name" className="text-sm font-medium">
@@ -231,9 +247,11 @@ export function PacksPanel({
 
       <Dialog
         open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
+        onOpenChange={(open) => {
+          if (!open && busy === null) closeRemoveDialog()
+        }}
       >
-        <DialogContent>
+        <DialogContent showCloseButton={busy === null}>
           <DialogHeader>
             <DialogTitle>
               {removing?.kind === "managed"
@@ -246,11 +264,15 @@ export function PacksPanel({
                 : "The original folder will stay on your computer. Deskto will stop using it in every workspace."}
             </DialogDescription>
           </DialogHeader>
+          {actionError && removing !== null ? (
+            <InlineError message={actionError} />
+          ) : null}
           <DialogFooter>
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setRemoving(null)}
+              disabled={busy !== null}
+              onClick={closeRemoveDialog}
             >
               Cancel
             </Button>

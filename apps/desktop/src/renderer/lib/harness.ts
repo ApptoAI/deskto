@@ -18,11 +18,15 @@ export function harnessUnavailableReason(harness: Harness): string | null {
     : null
 }
 
-/** Status dot and one-line detail shared by every place harness health shows. */
+/**
+ * Status dot and one-line detail shared by every place harness health shows.
+ * The dot carries status by shape, never by hue: ready is a filled dot,
+ * not ready is a hollow ring, and turned off is a dimmed ring.
+ */
 export function describeHarnessHealth(harness: Harness): HarnessHealth {
   if (!harness.enabled) {
     return {
-      dotClassName: "bg-muted-foreground/40",
+      dotClassName: "border border-muted-foreground/50 bg-transparent",
       detail: "Turned off in settings.",
     }
   }
@@ -34,7 +38,7 @@ export function describeHarnessHealth(harness: Harness): HarnessHealth {
     }
   }
   return {
-    dotClassName: "bg-destructive",
+    dotClassName: "border border-foreground bg-transparent",
     detail: harness.availability.reason,
   }
 }

@@ -23,6 +23,7 @@ import { withForcedUnavailability } from "./dev-harness-stubs.js"
 import { browserBridgeEnabled, startBrowserBridge } from "./browser-bridge.js"
 import { browserArtifactScheme } from "./browser/browser-artifact.js"
 import { BrowserManager } from "./browser/browser-manager.js"
+import { browserSettingsFrom } from "./browser/browser-settings.js"
 import { configureCliPath } from "./cli-path.js"
 import { registerDesktopIpc } from "./desktop-ipc.js"
 import { registerRuntimeIpc } from "./runtime-ipc.js"
@@ -57,6 +58,9 @@ const fatalStartupDetailSchema = z
 let closeRuntime: (() => Promise<void>) | undefined
 
 type McpServerReference = { current: DesktoMcpServer | undefined }
+type RuntimeReference = {
+  current: ReturnType<typeof createRuntime> | undefined
+}
 
 function taskOrchestrationProvider(
   reference: McpServerReference
@@ -137,11 +141,47 @@ async function openApplication(): Promise<void> {
 
   const window = createMainWindow()
   const unregisterWindowControls = registerWindowControlsIpc(window)
-  const browser = new BrowserManager(window, (event) => {
-    if (!window.webContents.isDestroyed()) {
-      window.webContents.send(browserEventChannel, event)
+  // The Runtime starts after the browser, so the browser reaches it through
+  // this reference rather than a constructor argument.
+  const runtimeRef: RuntimeReference = { current: undefined }
+  const browser = new BrowserManager(
+    window,
+    (event) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send(browserEventChannel, event)
+      }
+    },
+    {
+      async projectPathForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await current.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.path : undefined
+      },
+      async workspaceForThread(threadId) {
+        const current = runtimeRef.current
+        if (!current) return undefined
+        const thread = await current.request({
+          method: "thread.get",
+          params: { threadId },
+        })
+        if (!thread.ok) return undefined
+        const project = await current.request({
+          method: "project.get",
+          params: { projectId: thread.data.thread.projectId },
+        })
+        return project.ok ? project.data.project.workspaceId : undefined
+      },
     }
-  })
+  )
   let browserMcp: BrowserMcpServer
   try {
     browserMcp = await BrowserMcpServer.create(browser)
@@ -245,8 +285,19 @@ async function openApplication(): Promise<void> {
         Number(process.env.DESKTO_BROWSER_BRIDGE_PORT ?? 5174)
       )
     : undefined
+  runtimeRef.current = runtime
+  const applyBrowserSettings = async () => {
+    const settings = await runtime.request({
+      method: "settings.get",
+      params: {},
+    })
+    if (settings.ok) browser.configure(browserSettingsFrom(settings.data))
+  }
+  await applyBrowserSettings()
   const unsubscribeBrowserRuntime = runtime.subscribe((event) => {
     if (event.type === "thread.deleted") browser.closeThread(event.threadId)
+    if (event.type === "workspace.changed") browser.workspaceChanged()
+    if (event.type === "settings.changed") void applyBrowserSettings()
   })
   const unregisterRuntimeIpc = registerRuntimeIpc(runtime, window.webContents)
   const updateManager = new UpdateManager(

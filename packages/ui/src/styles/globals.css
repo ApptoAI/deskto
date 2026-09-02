@@ -7,8 +7,7 @@
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
-@source "../../../apps/**/*.{ts,tsx}";
-@source "../../../components/**/*.{ts,tsx}";
+@source "../../../../apps/desktop/src/**/*.{ts,tsx,html}";
 @source "../**/*.{ts,tsx}";
 
 /* Bundled fonts keep the app usable offline. Inter maps to human-readable text;
@@ -94,6 +93,9 @@
   --color-paper-foreground: var(--paper-fg);
   --color-paper-muted: var(--paper-fg-muted);
   --color-knockout: var(--knockout);
+  --color-scrim: var(--scrim);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--scrollbar-thumb-hover);
   --shadow-send: var(--elevation-send);
   --shadow-floating: var(--elevation-floating);
   --shadow-pane: var(--elevation-pane);
@@ -153,9 +155,6 @@
   /* The composer's plate. Light lifts it with white, a hairline and a
        shadow: a dark wash on a white pane read as a dent, not a plate. */
   --glass-composer: #ffffff;
-  --glass-window: var(--shell);
-  --glass-panel-light: var(--pane);
-  --glass-panel-dark: var(--pane);
 
   /* Quiet local fills for bubbles, rows, and chips. Ink, not opaque grey. */
   --fill-bubble: #ededeb;
@@ -196,14 +195,25 @@
        so what sits beneath a menu is felt rather than seen. */
   --blur-popover: blur(44px) saturate(1.4);
 
+  /* What a dialog dims the window with. Dark needs far more of it: 30% black
+       over a near-black pane is no dimming at all. */
+  --scrim: oklch(0 0 0 / 30%);
+
+  /* A slim lane that reads as content continuing, not as chrome. */
+  --scrollbar-thumb: oklch(0 0 0 / 14%);
+  --scrollbar-thumb-hover: oklch(0 0 0 / 22%);
+
   /* Text, by hierarchy. Opacity is the ramp; there is no second hue. */
   --text-1: #202022;
   --text-2: #3b3b3e;
   --text-3: oklch(0 0 0 / 57%);
   /* Descriptions remain below supporting text without falling below body-copy
-       readability when they span more than one line. */
-  --text-4: oklch(0 0 0 / 47%);
-  --text-5: oklch(0 0 0 / 31%);
+       readability when they span more than one line: 55% is the first step
+       that clears 4.5:1 on both the pane and the shell (47% sat at 3.6:1,
+       while the dark value clears 5:1). */
+  --text-4: oklch(0 0 0 / 55%);
+  /* The decorative rank: 3:1, the floor for a glyph, on the pane. */
+  --text-5: oklch(0 0 0 / 42%);
 
   /* Paper — the one surface that is not chrome. When Deskto shows the file it
        actually produced rather than chat about the file, that surface steps
@@ -253,13 +263,17 @@
        so it clears 3:1 against the surface rather than whispering like a rule. */
   --input: var(--edge-button);
   /* Translucent on purpose: the focus halo should read as a glow around the
-       control, not a second border stacked on the first. */
-  --ring: var(--accent-ring, oklch(0.4 0.006 286 / 40%));
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+       control, not a second border stacked on the first. The alpha is the
+       lowest that still clears 3:1 against the pane, which is what a focus
+       indicator owes a keyboard user; 40% read at 2:1. */
+  --ring: var(--accent-ring, oklch(0.4 0.006 286 / 62%));
+  /* Rank tokens follow the text ramp so a dot or a bar painted with them is
+       visible in both palettes; a fixed grey ramp vanished on one of them. */
+  --chart-1: var(--text-1);
+  --chart-2: var(--text-2);
+  --chart-3: var(--text-3);
+  --chart-4: var(--text-4);
+  --chart-5: var(--text-5);
   --radius: 0.5rem;
   --sidebar: var(--shell);
   --sidebar-foreground: var(--text-2);
@@ -301,6 +315,11 @@
   --elevation-pane: none;
   --elevation-composer: inset 0 0 0 1px var(--edge);
 
+  --scrim: oklch(0 0 0 / 55%);
+
+  --scrollbar-thumb: oklch(1 0 0 / 8%);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 12%);
+
   --text-1: #ececee;
   --text-2: #d7d7da;
   --text-3: #9d9da2;
@@ -316,7 +335,7 @@
   --primary-foreground: var(--accent-contrast, oklch(0.13 0 0));
   --secondary: oklch(1 0 0 / 12%);
   --destructive: oklch(0.7 0.19 22.2);
-  --ring: var(--accent-ring, oklch(0.75 0.006 286 / 45%));
+  --ring: var(--accent-ring, oklch(0.75 0.006 286 / 55%));
 }
 
 /* The window has a native blur behind it (macOS vibrancy, Windows acrylic).
@@ -340,7 +359,6 @@
     @apply text-foreground;
 
     background: var(--wp-base);
-    background-attachment: fixed;
 
     font-size: var(--text-base);
     -webkit-font-smoothing: antialiased;
@@ -381,6 +399,15 @@
       backdrop-filter: none;
       background: Canvas;
     }
+  }
+}
+
+/* A pulse is decoration on top of a state the text already names, and it
+   loops for as long as the state lasts. It is stated outside the layers so it
+   outranks the utility wherever a component reached for it. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
   }
 }
 
@@ -440,12 +467,24 @@
   --body: oklch(0 0 0 / 82%);
   --muted-foreground: var(--paper-fg-muted);
   --border: oklch(0 0 0 / 12%);
+  --edge: oklch(0 0 0 / 10%);
+  --edge-strong: oklch(0 0 0 / 14%);
   --card: oklch(0 0 0 / 5%);
   --muted: oklch(0 0 0 / 5%);
   --accent: oklch(0 0 0 / 6%);
   --accent-foreground: var(--paper-fg);
+  --secondary: oklch(0 0 0 / 10%);
+  --secondary-foreground: var(--paper-fg);
   --fill-card: oklch(0 0 0 / 4%);
   --fill-chip: oklch(0 0 0 / 5%);
+  /* A control on the sheet: its boundary, its focus halo and its scrollbar
+       are dark ink here even when the app is dark, because the tokens they
+       inherit from the root were resolved there, against a dark pane. */
+  --input: oklch(0 0 0 / 45%);
+  --edge-button: oklch(0 0 0 / 45%);
+  --ring: var(--accent-ring, oklch(0.4 0.006 286 / 62%));
+  --scrollbar-thumb: oklch(0 0 0 / 14%);
+  --scrollbar-thumb-hover: oklch(0 0 0 / 22%);
 }
 
 @utility display-sm {

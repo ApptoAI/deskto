@@ -1,10 +1,12 @@
 import { useState } from "react"
 import {
+  findKeybindingConflict,
   formatKeybinding,
   isOverridden,
   keybindingFromEvent,
   keybindingSettings,
   settingValue,
+  type Platform,
   type SettingDefinition,
   type SettingValues,
 } from "@deskto/settings"
@@ -21,6 +23,7 @@ import { StatusPanel } from "../status-panel.js"
 export function ShortcutSettings() {
   const { snapshot, loadError, retry, update } = useSettings()
   const [actionError, setActionError] = useState<string | null>(null)
+  const platform = keyboardPlatform()
 
   async function apply(entries: SettingValues) {
     setActionError(null)
@@ -29,6 +32,32 @@ export function ShortcutSettings() {
     } catch (error) {
       setActionError(describedErrorSchema.parse(error))
     }
+  }
+
+  function record(definition: SettingDefinition<string>, binding: string) {
+    const taken = findKeybindingConflict(snapshot, definition, binding)
+    if (taken) {
+      setActionError(
+        `${formatKeybinding(binding, platform)} already opens “${taken.label}”. Press a different combination, or reset that shortcut first.`
+      )
+      return
+    }
+    void apply({ [definition.key]: binding })
+  }
+
+  function reset(definition: SettingDefinition<string>) {
+    const taken = findKeybindingConflict(
+      snapshot,
+      definition,
+      definition.defaultValue
+    )
+    if (taken) {
+      setActionError(
+        `${formatKeybinding(definition.defaultValue, platform)} already opens “${taken.label}”. Press a different combination, or reset that shortcut first.`
+      )
+      return
+    }
+    void apply({ [definition.key]: null })
   }
 
   return (
@@ -53,7 +82,10 @@ export function ShortcutSettings() {
               definition={definition}
               value={settingValue(snapshot, definition)}
               overridden={isOverridden(snapshot, definition)}
-              onApply={(binding) => apply({ [definition.key]: binding })}
+              platform={platform}
+              onRecord={(binding) => record(definition, binding)}
+              onReset={() => reset(definition)}
+              onReject={setActionError}
             />
           ))}
         </ul>
@@ -66,16 +98,22 @@ function ShortcutRow({
   definition,
   value,
   overridden,
-  onApply,
+  platform,
+  onRecord,
+  onReset,
+  onReject,
 }: {
   definition: SettingDefinition<string>
   value: string
   overridden: boolean
-  /** Null clears the override back to the default binding. */
-  onApply: (binding: string | null) => void
+  platform: Platform
+  onRecord: (binding: string) => void
+  onReset: () => void
+  /** A keydown the recorder cannot turn into a binding, explained. */
+  onReject: (message: string) => void
 }) {
   const [recording, setRecording] = useState(false)
-  const platform = keyboardPlatform()
+  const commandKeys = platform === "mac" ? "⌘, ⌃, or ⌥" : "Ctrl or Alt"
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
@@ -88,11 +126,16 @@ function ShortcutRow({
         ) : null}
       </div>
 
-      {overridden && !recording ? (
-        <Button variant="ghost" size="sm" onClick={() => onApply(null)}>
-          Reset
-        </Button>
-      ) : null}
+      {/* Stays mounted while recording so the row does not jump; hidden
+          instead so a stray press cannot land on it. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(!overridden && "hidden", recording && "invisible")}
+        onClick={onReset}
+      >
+        Reset
+      </Button>
 
       <Button
         variant="outline"
@@ -102,10 +145,16 @@ function ShortcutRow({
           recording && "border-input ring-2 ring-ring/30"
         )}
         aria-label={`Change shortcut for ${definition.label}`}
+        aria-pressed={recording}
         onClick={() => setRecording(true)}
         onBlur={() => setRecording(false)}
         onKeyDown={(event) => {
           if (!recording) return
+          // Tab keeps its meaning so the keyboard can leave the recorder.
+          if (event.key === "Tab") {
+            setRecording(false)
+            return
+          }
           event.preventDefault()
           event.stopPropagation()
           if (event.key === "Escape") {
@@ -113,13 +162,32 @@ function ShortcutRow({
             return
           }
           const binding = keybindingFromEvent(event, platform)
-          if (!binding) return
+          if (!binding) {
+            if (isModifierKey(event.key)) return
+            onReject(
+              event.metaKey || event.ctrlKey || event.altKey
+                ? "That key changes with the keyboard layout, so it cannot be a shortcut. Try a letter, a number, or a function key."
+                : `Shortcuts need ${commandKeys}, or a function key, so they cannot fire while you type. Hold one and press again.`
+            )
+            return
+          }
           setRecording(false)
-          onApply(binding)
+          onRecord(binding)
         }}
       >
         {recording ? "Press keys…" : formatKeybinding(value, platform)}
       </Button>
     </li>
+  )
+}
+
+/** A modifier on its own is the start of a chord, not a rejected key. */
+function isModifierKey(key: string): boolean {
+  return (
+    key === "Meta" ||
+    key === "Control" ||
+    key === "Alt" ||
+    key === "Shift" ||
+    key === "AltGraph"
   )
 }

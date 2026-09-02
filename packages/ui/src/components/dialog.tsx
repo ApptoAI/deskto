@@ -23,6 +23,11 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
+/**
+ * A plain scrim. The only blurs in the app are the native one under the
+ * shell and the popover's own frost (ADR 0029); a filter here would read the
+ * pane through blur.
+ */
 function DialogOverlay({
   className,
   ...props
@@ -31,7 +36,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 duration-180 ease-(--ease-out-quart) supports-backdrop-filter:backdrop-blur-xs motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:duration-120 data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-scrim duration-180 ease-(--ease-out-quart) motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:duration-120 data-closed:fade-out-0",
         className
       )}
       {...props}

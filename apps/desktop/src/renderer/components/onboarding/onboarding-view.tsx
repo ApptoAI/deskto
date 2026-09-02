@@ -164,7 +164,7 @@ export function OnboardingView({
   const [actionError, setActionError] = useState<string | null>(null)
   // Whether a project existed when the project step opened: a project that
   // appears afterwards was created here, so the wizard finishes itself.
-  const hadProjectOnEnter = useRef(hasProject)
+  const [hadProjectOnEnter, setHadProjectOnEnter] = useState(hasProject)
 
   const available =
     harnesses.state.status === "ready" &&
@@ -174,7 +174,7 @@ export function OnboardingView({
   const current = steps[stepIndex]!
 
   function goTo(next: OnboardingStep, dir: "forward" | "back") {
-    if (next === "project") hadProjectOnEnter.current = hasProject
+    if (next === "project") setHadProjectOnEnter(hasProject)
     setDirection(dir)
     setActionError(null)
     setStep(next)
@@ -191,10 +191,10 @@ export function OnboardingView({
   }
 
   useEffect(() => {
-    if (step === "project" && hasProject && !hadProjectOnEnter.current) {
+    if (step === "project" && hasProject && !hadProjectOnEnter) {
       onFinish()
     }
-  }, [step, hasProject, onFinish])
+  }, [step, hasProject, hadProjectOnEnter, onFinish])
 
   // The registry refreshes on its own only every few minutes; while the user
   // is staring at the connect step, a fresh install should show up in
@@ -227,7 +227,7 @@ export function OnboardingView({
     })
   }
 
-  const preConfirmedProject = hasProject && hadProjectOnEnter.current
+  const preConfirmedProject = hasProject && hadProjectOnEnter
   const primary: { label: string; onClick: () => void; disabled?: boolean } =
     step === "welcome"
       ? { label: "Get started", onClick: goForward }
@@ -333,9 +333,13 @@ export function OnboardingView({
             >
               {primary.label}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onFinish}>
-              {skipLabel}
-            </Button>
+            {/* Once Finish is the primary action, a skip would be the same
+                action wearing a second label. */}
+            {preConfirmedProject && step === "project" ? null : (
+              <Button variant="ghost" size="sm" onClick={onFinish}>
+                {skipLabel}
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -602,7 +606,7 @@ function AppearanceContent({
               aria-checked={checked}
               onClick={() => onSelectTheme(option.value)}
               className={cn(
-                "flex h-8 items-center gap-2 rounded-full border px-4 text-sm transition-colors duration-150",
+                "flex h-8 items-center gap-2 rounded-button border px-4 text-sm transition-colors duration-150",
                 "motion-safe:active:scale-[0.97]",
                 checked
                   ? "border-foreground text-foreground"
@@ -776,6 +780,7 @@ function AgentCard({ harness }: { harness: Harness }) {
 
 function CopyField({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -785,6 +790,7 @@ function CopyField({ command }: { command: string }) {
   )
 
   function copy() {
+    setCopyFailed(false)
     void navigator.clipboard
       .writeText(command)
       .then(() => {
@@ -792,21 +798,26 @@ function CopyField({ command }: { command: string }) {
         if (resetTimer.current) clearTimeout(resetTimer.current)
         resetTimer.current = setTimeout(() => setCopied(false), 2000)
       })
-      .catch(() => {})
+      .catch(() => {
+        // The command stays selectable in the field, so the way out is to
+        // copy it by hand rather than to retry the same clipboard call.
+        setCopyFailed(true)
+      })
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1.5">
-      <code className="min-w-0 flex-1 truncate font-mono text-xs">
-        {command}
-      </code>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={copied ? "Copied" : "Copy install command"}
-        onClick={copy}
-        className="relative shrink-0"
-      >
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1.5">
+        <code className="min-w-0 flex-1 truncate font-mono text-xs select-all">
+          {command}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={copied ? "Copied" : "Copy install command"}
+          onClick={copy}
+          className="relative shrink-0"
+        >
         {/* Both glyphs stay mounted so the swap is a transition, not a
             remount: rapid clicks retarget instead of restarting. */}
         <CopyIcon
@@ -823,7 +834,14 @@ function CopyField({ command }: { command: string }) {
             copied ? "scale-100 opacity-100" : "scale-90 opacity-0"
           )}
         />
-      </Button>
+        </Button>
+      </div>
+      {copyFailed ? (
+        <p role="alert" className="text-xs leading-snug text-muted-foreground">
+          Deskto couldn&rsquo;t reach the clipboard. Select the command above and
+          copy it yourself.
+        </p>
+      ) : null}
     </div>
   )
 }
