@@ -1,4 +1,4 @@
-# ADR 0031: Screen control of the Task Browser over MCP
+# ADR 0032: Screen control of the Task Browser over MCP
 
 - Status: accepted
 - Date: 2026-09-02
