@@ -21,6 +21,7 @@ import { HarnessLogo } from "./brand-logos.js"
 const harnessSummaries = new Map<string, string>([
   ["claude", "Anthropic's agent. Runs with your Claude subscription."],
   ["codex", "OpenAI's agent. Runs with your ChatGPT subscription."],
+  ["pi", "Open-source agent. Runs with the providers you set up in pi."],
 ])
 
 function harnessSummary(harnessId: string): string | undefined {

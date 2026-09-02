@@ -9,6 +9,7 @@ export {
   codexNotInstalledReason,
   codexNotSignedInReason,
 } from "./harnesses/codex/index.js"
+export { PiAdapter, piNotInstalledReason } from "./harnesses/pi/index.js"
 export { BrowserMcpServer } from "./browser/browser-mcp-server.js"
 export type {
   BrowserAutomationHost,
