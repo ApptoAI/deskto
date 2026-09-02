@@ -26,6 +26,9 @@ export function useKeybinding(
     const platform = keyboardPlatform()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return
+      // A held chord auto-repeats; every binding here is a toggle or a
+      // navigation, and neither wants to fire once per repeat.
+      if (event.repeat) return
       if (!matchesKeybinding(parsed, event, platform)) return
       event.preventDefault()
       onTrigger()

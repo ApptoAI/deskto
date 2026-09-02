@@ -17,7 +17,7 @@ export function ContextUsageMeter({ usage }: { usage: ContextUsage }) {
   const meterPercentage = Math.min(100, actualPercentage)
   const nearLimit = actualPercentage > 90
   const label = usage.maxTokens
-    ? `Context ${Math.round(actualPercentage)}% used, ${formatTokens(usage.usedTokens)} of ${formatTokens(usage.maxTokens)} tokens`
+    ? `Context ${Math.round(actualPercentage)}% used, ${formatTokens(usage.usedTokens)} of ${formatTokens(usage.maxTokens)} tokens${nearLimit ? ". Nearly full." : ""}`
     : `Context ${formatTokens(usage.usedTokens)} tokens used`
 
   return (
@@ -31,9 +31,12 @@ export function ContextUsageMeter({ usage }: { usage: ContextUsage }) {
         <svg
           viewBox="0 0 24 24"
           aria-hidden
+          // The arc closing is the status; near the limit the ring steps up
+          // to full ink rather than changing hue, since nothing here is
+          // being destroyed.
           className={cn(
             "size-4 -rotate-90",
-            nearLimit ? "text-destructive" : "text-muted-foreground"
+            nearLimit ? "text-foreground" : "text-muted-foreground"
           )}
         >
           <circle

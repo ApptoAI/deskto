@@ -11,7 +11,10 @@ import ArrowRightIcon from "lucide-react/dist/esm/icons/arrow-right"
 import GlobeIcon from "lucide-react/dist/esm/icons/globe"
 import MousePointer2Icon from "lucide-react/dist/esm/icons/mouse-pointer-2"
 import RotateCwIcon from "lucide-react/dist/esm/icons/rotate-cw"
-import type { BrowserElementContext } from "@deskto/protocol"
+import {
+  browserContextLimit,
+  type BrowserElementContext,
+} from "@deskto/protocol"
 import type { BrowserViewState } from "../../../shared/desktop-api.js"
 
 import { Button } from "@workspace/ui/components/button"
@@ -178,7 +181,7 @@ export function BrowserPanel({
           onClick={() => void action("reload")}
         >
           <RotateCwIcon
-            className={state?.loading ? "animate-spin" : undefined}
+            className={state?.loading ? "motion-safe:animate-spin" : undefined}
           />
         </Button>
         <Button
@@ -186,7 +189,7 @@ export function BrowserPanel({
           size="icon-sm"
           disabled={
             (!selecting && (!state?.url || state.loading)) ||
-            selectedElementCount >= 16
+            selectedElementCount >= browserContextLimit
           }
           aria-label={
             selecting ? "Cancel element selection" : "Select a page element"
@@ -194,7 +197,11 @@ export function BrowserPanel({
           title={
             selecting
               ? "Cancel element selection"
-              : "Add a page element to the next message"
+              : selectedElementCount >= browserContextLimit
+                ? `The next message already carries ${browserContextLimit} page elements. Remove one to pick another.`
+                : !state?.url
+                  ? "Open a page first"
+                  : "Add a page element to the next message"
           }
           onClick={() => void toggleElementSelection()}
         >

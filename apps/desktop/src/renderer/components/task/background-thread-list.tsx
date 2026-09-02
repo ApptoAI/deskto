@@ -117,7 +117,7 @@ export function BackgroundThreadList({
               <span className="block truncate text-xs font-medium">
                 {thread.title}
               </span>
-              <span className="block text-[11px] text-muted-foreground">
+              <span className="block text-micro text-muted-foreground">
                 {backgroundStateLabels[state]}
               </span>
             </span>
