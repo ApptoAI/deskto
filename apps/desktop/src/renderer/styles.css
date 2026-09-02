@@ -51,6 +51,7 @@
   .glass-panel,
   .glass-composer,
   .glass-popover,
+  .pane,
   main,
   aside,
   header {
@@ -111,6 +112,7 @@
     .glass-panel,
     .glass-composer,
     .glass-popover,
+    .pane,
     main,
     aside,
     header {

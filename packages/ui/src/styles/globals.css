@@ -7,8 +7,7 @@
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
-@source "../../../apps/**/*.{ts,tsx}";
-@source "../../../components/**/*.{ts,tsx}";
+@source "../../../../apps/desktop/src/**/*.{ts,tsx,html}";
 @source "../**/*.{ts,tsx}";
 
 /* Bundled fonts keep the app usable offline. Inter maps to human-readable text;
