@@ -43,6 +43,11 @@ type SeedCookie = {
   plaintext?: string
   /** Chromium microseconds since 1601; 0 (the default) is a session cookie. */
   expiresUtc?: bigint
+  path?: string
+  isSecure?: boolean
+  isHttpOnly?: boolean
+  /** Chromium's SameSite code: 0 none, 1 lax, 2 strict, -1 unspecified. */
+  sameSite?: number
 }
 
 type SeedOptions = {
@@ -88,10 +93,10 @@ function seedProfile(
       cookie.name,
       cookie.plaintext ?? "",
       cookie.encrypted ?? null,
-      "/",
-      1,
-      0,
-      0,
+      cookie.path ?? "/",
+      cookie.isSecure === false ? 0 : 1,
+      cookie.isHttpOnly ? 1 : 0,
+      cookie.sameSite ?? 0,
       cookie.expiresUtc ?? 0n
     )
   }
@@ -111,9 +116,10 @@ function collectingSink() {
 }
 
 describe("importCookies", () => {
-  it("decrypts and writes cookies for the chosen host and its subdomains", async () => {
+  it("imports the cookies that apply to the chosen host", async () => {
     const env = seedProfile([
       { hostKey: ".example.com", name: "sid", encrypted: sealV10("secret") },
+      { hostKey: "example.com", name: "own", encrypted: sealV10("mine") },
       { hostKey: "sub.example.com", name: "sub", encrypted: sealV10("nested") },
       { hostKey: "other.test", name: "skip", encrypted: sealV10("no") },
     ])
@@ -125,12 +131,234 @@ describe("importCookies", () => {
       env
     )
 
+    // A host-only cookie on a subdomain is never sent to example.com, so it
+    // stays behind even though the domain cookie comes along.
     expect(result).toEqual({ imported: 2, skipped: 0 })
-    expect(written.map((cookie) => cookie.value).sort()).toEqual([
-      "nested",
-      "secret",
+    expect(written.map((cookie) => cookie.name).sort()).toEqual(["own", "sid"])
+    expect(written.find((cookie) => cookie.name === "sid")?.domain).toBe(
+      ".example.com"
+    )
+  })
+
+  it("brings a parent domain cookie when a subdomain is chosen", async () => {
+    const env = seedProfile([
+      { hostKey: ".example.com", name: "sid", encrypted: sealV10("secret") },
+      { hostKey: "example.com", name: "own", encrypted: sealV10("mine") },
+      { hostKey: "app.example.com", name: "app", encrypted: sealV10("here") },
+      { hostKey: "www.example.com", name: "www", encrypted: sealV10("no") },
     ])
-    expect(written.some((cookie) => cookie.name === "skip")).toBe(false)
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      {
+        workspaceId: "ws-1",
+        profileId: "chrome:Default",
+        hosts: ["app.example.com"],
+      },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 2, skipped: 0 })
+    expect(written.map((cookie) => cookie.name).sort()).toEqual(["app", "sid"])
+  })
+
+  it("does not let a lookalike domain match", async () => {
+    const env = seedProfile([
+      { hostKey: ".notexample.com", name: "look", plaintext: "alike" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      {
+        workspaceId: "ws-1",
+        profileId: "chrome:Default",
+        hosts: ["app.example.com"],
+      },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 0, skipped: 0 })
+    expect(written).toEqual([])
+  })
+
+  it("never writes a row whose host is a public suffix or a lookalike", async () => {
+    const env = seedProfile([
+      { hostKey: ".com", name: "suffix-domain", plaintext: "wide" },
+      { hostKey: "com", name: "suffix-host", plaintext: "wide" },
+      { hostKey: ".example.com.evil.test", name: "prefix", plaintext: "no" },
+      { hostKey: ".xample.com", name: "tail", plaintext: "no" },
+      { hostKey: "example.com", name: "own", plaintext: "yes" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 1, skipped: 0 })
+    expect(written.map((cookie) => cookie.name)).toEqual(["own"])
+  })
+
+  it("never lets a cookie path move the cookie URL to another host", async () => {
+    // Paths without a leading slash are refused outright; the rest exercise
+    // the URL pathname setter's quirks and must stay on example.com.
+    const env = seedProfile([
+      { hostKey: "example.com", name: "at", plaintext: "v", path: "@evil.com/" },
+      { hostKey: "example.com", name: "bare", plaintext: "v", path: "evil.com/" },
+      { hostKey: "example.com", name: "empty", plaintext: "v", path: "" },
+      { hostKey: "example.com", name: "backslash", plaintext: "v", path: "/\\evil.test/" },
+      { hostKey: "example.com", name: "encoded-slashes", plaintext: "v", path: "/%2f%2fevil.test/" },
+      { hostKey: "example.com", name: "encoded-backslash", plaintext: "v", path: "/%5cevil.test/" },
+      { hostKey: "example.com", name: "query", plaintext: "v", path: "/?x=1" },
+      { hostKey: "example.com", name: "hash", plaintext: "v", path: "/#f" },
+      { hostKey: "example.com", name: "space", plaintext: "v", path: "/a b" },
+      { hostKey: "example.com", name: "at-in-path", plaintext: "v", path: "/@evil.test/" },
+      { hostKey: "example.com", name: "ok", plaintext: "v", path: "/app" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    for (const cookie of written) {
+      const url = new URL(cookie.url)
+      expect(url.hostname).toBe("example.com")
+      expect(url.username).toBe("")
+      expect(url.password).toBe("")
+      expect(url.port).toBe("")
+    }
+    expect(result).toEqual({ imported: written.length, skipped: 0 })
+    expect(written.map((cookie) => [cookie.name, cookie.url])).toEqual([
+      ["backslash", "https://example.com//evil.test/"],
+      ["encoded-slashes", "https://example.com/%2f%2fevil.test/"],
+      ["encoded-backslash", "https://example.com/%5cevil.test/"],
+      ["query", "https://example.com/%3Fx=1"],
+      ["hash", "https://example.com/%23f"],
+      ["space", "https://example.com/a%20b"],
+      ["at-in-path", "https://example.com/@evil.test/"],
+      ["ok", "https://example.com/app"],
+    ])
+  })
+
+  it("carries every cookie attribute through to the sink", async () => {
+    // 2100-01-01 UTC in Chromium's epoch.
+    const expires = 15_745_824_000n * 1_000_000n
+    const env = seedProfile([
+      {
+        hostKey: ".example.com",
+        name: "none",
+        plaintext: "a",
+        path: "/",
+        isSecure: true,
+        isHttpOnly: true,
+        sameSite: 0,
+        expiresUtc: expires,
+      },
+      {
+        hostKey: "example.com",
+        name: "lax",
+        plaintext: "b",
+        path: "/lax",
+        isSecure: false,
+        isHttpOnly: false,
+        sameSite: 1,
+      },
+      {
+        hostKey: "example.com",
+        name: "strict",
+        plaintext: "c",
+        path: "/strict",
+        isSecure: true,
+        isHttpOnly: false,
+        sameSite: 2,
+      },
+      {
+        hostKey: "example.com",
+        name: "unspecified",
+        plaintext: "d",
+        path: "/",
+        isSecure: true,
+        isHttpOnly: true,
+        sameSite: -1,
+      },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["example.com"] },
+      sink,
+      env
+    )
+
+    expect(result).toEqual({ imported: 4, skipped: 0 })
+    const byName = new Map(written.map((cookie) => [cookie.name, cookie]))
+    expect(byName.get("none")).toEqual({
+      url: "https://example.com/",
+      name: "none",
+      value: "a",
+      domain: ".example.com",
+      path: "/",
+      secure: true,
+      httpOnly: true,
+      expirationDate: 15_745_824_000 - 11_644_473_600,
+      sameSite: "no_restriction",
+    })
+    expect(byName.get("lax")).toEqual({
+      url: "http://example.com/lax",
+      name: "lax",
+      value: "b",
+      domain: undefined,
+      path: "/lax",
+      secure: false,
+      httpOnly: false,
+      expirationDate: undefined,
+      sameSite: "lax",
+    })
+    expect(byName.get("strict")).toEqual({
+      url: "https://example.com/strict",
+      name: "strict",
+      value: "c",
+      domain: undefined,
+      path: "/strict",
+      secure: true,
+      httpOnly: false,
+      expirationDate: undefined,
+      sameSite: "strict",
+    })
+    expect(byName.get("unspecified")).toEqual({
+      url: "https://example.com/",
+      name: "unspecified",
+      value: "d",
+      domain: undefined,
+      path: "/",
+      secure: true,
+      httpOnly: true,
+      expirationDate: undefined,
+      sameSite: "unspecified",
+    })
+  })
+
+  it("ignores a public suffix even when a caller bypasses the schema", async () => {
+    const env = seedProfile([
+      { hostKey: ".example.com", name: "sid", plaintext: "secret" },
+    ])
+    const { sink, written } = collectingSink()
+
+    const result = await importCookies(
+      { workspaceId: "ws-1", profileId: "chrome:Default", hosts: ["com"] },
+      sink,
+      env
+    )
+
+    expect(result.error).toContain("website")
+    expect(written).toEqual([])
   })
 
   it("leaves an expired cookie out of both counts", async () => {

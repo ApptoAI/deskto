@@ -8,6 +8,7 @@ import { z } from "zod"
 
 import type { Runtime } from "@deskto/runtime"
 import {
+  cookieImportHostSchema,
   isPageLikeArtifactPreviewKind,
   type BrowserProfile,
   type Workspace,
@@ -74,7 +75,7 @@ const browserActionSchema: z.ZodType<BrowserAction> = z.enum([
 const cookieImportRequestSchema: z.ZodType<CookieImportRequest> = z.object({
   profileId: z.string().min(1),
   workspaceId: workspaceIdSchema,
-  hosts: z.array(z.string().min(1)).max(200),
+  hosts: z.array(cookieImportHostSchema).max(200),
 })
 
 function handleFolderPick(channel: string, title: string): void {

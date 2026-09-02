@@ -38,9 +38,17 @@ of the write: they are never persisted outside the browser session, logged, or
 returned to the renderer. The renderer sees a count and, on failure, a next
 step ("Close Chrome and try again", "Grant keychain access").
 
-Cookies are filtered to the hosts the person chose, including their
-subdomains. A cookie for a host outside that list is never read into the
-session.
+Cookies are filtered to the hosts the person chose, using the browser's own
+applicability rule: a host-only cookie is imported for its exact host, and a
+domain cookie (stored with a leading dot) is imported when a chosen host is
+that domain or sits below it. A cookie that would not be sent to any chosen
+host is never read into the session.
+
+A chosen host must be a registrable domain or something below one. The rule
+lives in `packages/protocol` as `isCookieImportHost` and is enforced in Main
+on the IPC request, not only in the Surface, because a public suffix such as
+`com` or `co.uk` would otherwise hand every matching site's cookies to an
+agent-reachable profile.
 
 ## Consequences
 

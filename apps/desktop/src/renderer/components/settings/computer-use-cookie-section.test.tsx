@@ -9,7 +9,10 @@ import {
 } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { CookieImportSection } from "./computer-use-cookie-section.js"
+import {
+  CookieImportSection,
+  parseHosts,
+} from "./computer-use-cookie-section.js"
 
 afterEach(() => {
   cleanup()
@@ -76,5 +79,19 @@ describe("Cookie import section", () => {
     expect((await screen.findByRole("status")).textContent).toBe(
       "Imported 2 cookies."
     )
+  })
+})
+
+describe("parseHosts", () => {
+  it("reduces typed input to the host and converts Unicode to punycode", () => {
+    expect(
+      parseHosts("bücher.example, https://Shop.Example.com/login?x=1 example.com.")
+    ).toEqual(["xn--bcher-kva.example", "shop.example.com"])
+  })
+
+  it("drops public suffixes and non-hosts", () => {
+    expect(parseHosts("com co.uk user:pw@example.com ftp://example.com")).toEqual([
+      "example.com",
+    ])
   })
 })
