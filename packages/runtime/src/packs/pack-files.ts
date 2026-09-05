@@ -132,7 +132,10 @@ export async function readPackContents(
     { missingIsDiagnostic: true }
   )
   const resolvedSkills = scanned.skills
-    .filter(({ content }) => content !== null)
+    .filter(
+      ({ content, occurrence }) =>
+        content !== null && occurrence.enabled !== false
+    )
     .map(({ occurrence }) => ({
       path: occurrence.skillFilePath,
       skill: {

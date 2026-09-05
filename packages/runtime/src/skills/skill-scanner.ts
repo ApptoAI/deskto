@@ -1,4 +1,4 @@
-import { readdir, realpath, stat } from "node:fs/promises"
+import { lstat, readdir, realpath, stat } from "node:fs/promises"
 import { availableParallelism } from "node:os"
 import { join } from "node:path"
 
@@ -244,7 +244,19 @@ async function scanSkillDirectory(
       content: null,
     }
   }
-  const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
+  const enabled = await lstat(skillFilePath).then(
+    () => true,
+    () => false
+  )
+  const disabledPath = join(directoryPath, "SKILL.md.disabled")
+  const disabled =
+    !enabled &&
+    (await lstat(disabledPath).then(
+      () => true,
+      () => false
+    ))
+  const readablePath = disabled ? disabledPath : skillFilePath
+  const parsed = await parseSkillFile(readablePath, resolvedSourcePath)
   const [hasScripts, hasReferences, hasAssets, contentDigest] =
     await Promise.all([
       isDirectory(join(directoryPath, "scripts")),
@@ -259,7 +271,8 @@ async function scanSkillDirectory(
       directoryName,
       directoryPath,
       resolvedDirectoryPath: directory.path,
-      skillFilePath,
+      enabled: !disabled,
+      skillFilePath: readablePath,
       name: parsed.name,
       description: parsed.description,
       instructionDigest: parsed.instructionDigest,
