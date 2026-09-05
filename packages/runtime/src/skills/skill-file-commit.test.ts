@@ -47,6 +47,23 @@ async function recoveries(directory: string) {
 }
 
 describe("skill file commit", () => {
+  it("preserves permissions restricted after the editor read the file", async () => {
+    const input = await fixture()
+    await files.chmod(input.path, 0o644)
+    input.identity = await files.stat(input.path)
+    await expect(
+      commitSkillFile(input, {
+        ...files,
+        writeFile: async (...args) => {
+          await files.writeFile(...args)
+          await files.chmod(input.path, 0o600)
+        },
+      })
+    ).rejects.toMatchObject({ code: "skill-conflict" })
+    expect((await files.stat(input.path)).mode & 0o777).toBe(0o600)
+    expect(await files.readFile(input.path, "utf8")).toBe(input.expectedContent)
+  })
+
   it.each(["replacement", "in-place"])(
     "preserves a late external %s instead of overwriting it",
     async (mode) => {

@@ -64,6 +64,7 @@ async function matchesExpected(
     return (
       opened.metadata.dev === input.identity.dev &&
       opened.metadata.ino === input.identity.ino &&
+      opened.metadata.mode === input.identity.mode &&
       (await opened.handle.readFile("utf8")) === input.expectedContent
     )
   } finally {
