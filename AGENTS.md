@@ -1,75 +1,41 @@
 # Deskto
 
-Deskto is an Electron desktop app that lets non-technical people hand folder-based work to local AI agents. A local Runtime in the Electron main process owns projects, tasks, and SQLite state; the React Surface reaches it only through a serializable protocol over IPC; Harness Adapters translate Claude Code, Codex, and Pi into one provider-neutral contract.
+Electron desktop app that lets non-technical people hand folder-based work to local AI agents. A local Runtime in the Electron main process owns projects, tasks, and SQLite state. The React Surface reaches it only through a serializable protocol over IPC. Harness Adapters translate Claude Code, Codex, and Pi into one provider-neutral contract.
 
-## The person we build for
+## The person
 
-Deskto's user, "the person" in this file and in CONTEXT.md, runs a sales pipeline, not a terminal. UI copy says "task" and "project", never Thread or Harness. An error tells them what to do next. A result is a previewable file, not a path in a transcript.
+Deskto's user runs a sales pipeline, not a terminal. UI copy says "task" and "project", never Thread or Harness. Errors say what to do next. Results are previewable files, not paths in a transcript. Everything runs on their machine with their existing Claude or Codex subscription. No account, no hosted service.
 
-Everything runs on their machine with their existing Claude or Codex subscription. No account, no hosted service, no telemetry dependency. The Client/Runtime protocol stays serializable so a hosted Runtime can exist later without rewriting Clients.
+## Docs
 
-## Start with CONTEXT.md
-
-- `CONTEXT.md` is the single source for the glossary, core rules, and package boundaries. Capitalized terms (Thread, Turn, Harness, Pack, Artifact) are defined there and nowhere else. Its "Deliberately deferred" list forbids placeholder services and UI for future features.
-- `docs/adr/` records accepted decisions. A change that contradicts an ADR argues with the ADR in a new one; it does not silently diverge. New behavior decisions get recorded the same way.
-- `docs/agents/domain.md` describes how skills consume these docs.
+`CONTEXT.md` is the glossary, core rules, and package boundaries. Capitalized terms (Thread, Turn, Harness, Pack, Artifact) are defined there only. Its "Deliberately deferred" list forbids placeholder services for future features. `docs/adr/` holds accepted decisions; contradicting one means writing a new one. Read these when the change touches vocabulary, boundaries, or a recorded decision.
 
 ## Architecture
 
-A Surface calls the Client, the Client calls the Runtime protocol over a transport (Electron IPC today), and Runtime use cases write current state to SQLite in transactions. There is no event sourcing: events are invalidation signals and sequenced thread deltas that keep an open view current, and any gap falls back to a full query.
+Surface calls Client, Client calls the Runtime protocol over a transport, Runtime use cases write current state to SQLite in transactions. No event sourcing: events are invalidation signals and sequenced thread deltas, and any gap falls back to a full query. Provider types never leave their adapter. A feature touching provider behavior gets settled for every harness; skipping one is a written choice. `@deskto/mcp-server` runs in-process so a Harness can spawn and search background Threads without setup.
 
-Harness Adapters run provider SDKs and emit Harness SDK events; provider types never leave their adapter. A feature that touches provider behavior gets settled separately for Claude Code and for Codex, and skipping one of them is a written choice, never an accident. `@deskto/mcp-server` runs in-process so a Harness can spawn and search background Threads without any user setup.
-
-## Package map
-
-- `packages/protocol`: serializable requests, events, domain records, and the guard predicates both sides share
-- `packages/harness-sdk`: provider-neutral contracts and test helpers, zero heavy dependencies
-- `packages/runtime`: use cases, SQLite, Harness Adapters
-- `packages/client`: transport wrapper any Surface uses
-- `packages/settings`: the registry of every user-configurable setting
-- `packages/mcp-server`: thread orchestration and search over MCP
-- `packages/ui`: DOM components and design tokens, no Electron, no Runtime
-- `apps/desktop`: Electron main hosting the Runtime, a narrow preload bridge, the React Surface
-
-The boundary rules for these packages are in CONTEXT.md. Treat a boundary break as a bug, even when the import happens to work.
+Packages: `protocol` (requests, events, records, shared guard predicates), `harness-sdk` (provider-neutral contracts, no heavy deps), `runtime` (use cases, SQLite, adapters), `client` (transport wrapper), `settings` (registry of user settings), `mcp-server`, `ui` (DOM components and tokens, no Electron or Runtime), `apps/desktop` (Electron main, narrow preload, React Surface). Boundary rules are in CONTEXT.md; a break is a bug even if the import works.
 
 ## Design
 
-The interface stays calm while agents work. Activity never reorders lists or steals focus; status travels on indicators, and a row moves only at a lifecycle transition. Inter carries everything a person reads, Geist Mono everything machine-shaped. Light and dark are mirrored palettes, both first-class. The design tokens and the reasoning behind them live in `packages/ui/src/styles/globals.css`, in the comments.
-
-The Surface is one shell with one opaque pane inset on it, monochrome and typography-first. The sidebar sits on the shell with no rule; the pane's hairline border is the only persistent edge, and inside it surfaces separate only where a relationship requires a hairline. Blur is native under the shell or on popovers, never over content. Status is carried by the shape of a glyph rather than its colour, and hue is reserved for what identifies rather than styles: the provider mark, a Workspace swatch, the one destructive action. Reaching for a colour anywhere else is a decision that argues with `docs/adr/0028-flat-typography-first-surface.md`; a new edge, fill, or blur argues with `docs/adr/0029-shell-and-pane.md`.
+Calm while agents work: activity never reorders lists or steals focus, rows move only at lifecycle transitions. Inter for what people read, Geist Mono for what's machine-shaped. Light and dark are mirrored, both first-class. One shell with one opaque pane inset on it, monochrome, typography-first. The sidebar sits on the shell with no rule; the pane's hairline border is the only persistent edge, and inside it hairlines appear only where a relationship needs one. Blur is native under the shell or on popovers, never over content. Status is the shape of a glyph, not its colour. Hue is reserved for the provider mark, a Workspace swatch, and the one destructive action. Tokens and reasoning live in `packages/ui/src/styles/globals.css`. A new colour argues with `docs/adr/0028-flat-typography-first-surface.md`; a new edge, fill, or blur argues with `docs/adr/0029-shell-and-pane.md`.
 
 ## Real user data
 
-- The SQLite database and managed project folders under Electron's user data directory are live user state. Copy them when you need realistic test data; experiments and cleanup happen on the copy.
-- Many core rules end with "nothing on disk is touched": deleting a Workspace, unlinking a Pack. Deleting a Thread is the only destructive task action. Keep it that way.
-- The Runtime persists user messages before starting a Harness. Any change that could lose a person's message on a crash breaks a promise the app makes.
+The SQLite database and managed folders under Electron's user data dir are live state. Copy them for test data. Deleting a Thread is the only destructive task action; everything else leaves disk untouched. User messages persist before a Harness starts; never risk losing one on a crash.
 
 ## Finish the whole change
 
-Half-done changes are the house defect: the path you exercised works while a sibling stays broken. Before calling work done, answer these:
-
-- Does it behave under both harnesses, or is the gap a recorded decision?
-- Does it hold in light and in dark?
-- Can the person leave every state they can now enter, and see the way out? Snooze has wake, done has restore.
-- Is the validity rule a shared predicate in `packages/protocol`, or did a copy sneak into a component?
-- Did CONTEXT.md or `docs/adr/` need an update?
+Before calling work done: every harness (or a recorded gap), light and dark, every state has a way out (snooze has wake, done has restore), validity rules live as shared predicates in `packages/protocol`, and CONTEXT.md or an ADR got updated if needed.
 
 ## Working here
 
-`pnpm install`, then `pnpm dev` for the desktop app. Verify with `pnpm typecheck`, `pnpm lint`, and `pnpm test`, or scope to a package with `pnpm --filter @deskto/desktop test`. Tests sit next to the code as `*.test.ts(x)`.
-
-Lint includes custom anti-slop rules (`tools/oxlint/anti-slop`) that ban `unknown` laundering, runtime `typeof` tricks, and unexplained type assertions. When one fires, fix the types; the escape hatch is a `SAFETY:` comment that explains why the assertion holds.
-
-Comments in this codebase state constraints the code cannot show, and nothing else. Match that.
+`pnpm install`, `pnpm dev`. `pnpm typecheck`, `pnpm lint`, `pnpm test`, or `pnpm --filter @deskto/desktop test`. Tests sit next to code as `*.test.ts(x)`. Custom lint rules (`tools/oxlint/anti-slop`) ban `unknown` laundering, runtime `typeof` tricks, and unexplained assertions; fix the types, or explain with a `SAFETY:` comment. Comments state constraints the code can't show, nothing else.
 
 ## Commits, PRs, issues
 
-- Commit titles use conventional prefixes and plain words: `fix: detect project template copy races`.
-- A PR carries one change. Anything visual gets screenshots of both states; anything about timing or motion gets a short recording.
-- The contribution policy is in `CONTRIBUTING.md`.
-- Issues live on GitHub via the `gh` CLI; conventions in `docs/agents/issue-tracker.md`.
+Commit freely and push your own branch. Ask once before pushing to `main`, then keep going for the job. Titles use conventional prefixes and plain words. One change per PR. Visual changes get screenshots of both states; timing or motion gets a short recording. CodeRabbit auto review is off: comment `@coderabbitai review` on open and after every push. Policy in `CONTRIBUTING.md`, issues via `gh` (`docs/agents/issue-tracker.md`).
 
 ## Settings copy
 
-- Keep settings to labels and controls. Do not add explanatory descriptions, page subtitles, or promotional filler. Keep actionable errors and current status.
+Labels and controls only. No explanatory descriptions, page subtitles, or promotional filler. Keep actionable errors and current status.
