@@ -34,7 +34,7 @@ Before calling work done: every harness (or a recorded gap), light and dark, eve
 
 ## Commits, PRs, issues
 
-Commit freely and push your own branch. Ask once before pushing to `main`, then keep going for the job. Titles use conventional prefixes and plain words. One change per PR. Visual changes get screenshots of both states; timing or motion gets a short recording. CodeRabbit auto review is off: comment `@coderabbitai review` on open and after every push. Policy in `CONTRIBUTING.md`, issues via `gh` (`docs/agents/issue-tracker.md`).
+Commit freely and push your own branch without asking. Pushing to `main` needs one explicit ok per job: wait for it, and that one approval covers every later push in the same job. Titles use conventional prefixes and plain words. One change per PR. Visual changes get screenshots of both states; timing or motion gets a short recording. CodeRabbit auto review is off: comment `@coderabbitai review` on open and after every push. Policy in `CONTRIBUTING.md`, issues via `gh` (`docs/agents/issue-tracker.md`).
 
 ## Settings copy
 
