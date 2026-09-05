@@ -48,6 +48,7 @@ export function HarnessSettings({
 
   const checking = pending.has(refreshKey)
   const checked = checkedAgo(harnesses)
+  const followUps = useFollowUpMode()
 
   return (
     <section aria-label="Providers" className="space-y-3">
@@ -70,6 +71,7 @@ export function HarnessSettings({
       </div>
 
       {actionError ? <InlineError message={actionError} /> : null}
+      {followUps.error ? <InlineError message={followUps.error} /> : null}
 
       {harnesses.state.status === "loading" ||
       harnesses.state.status === "idle" ? (
@@ -112,6 +114,22 @@ export function HarnessSettings({
                     {status.detail}
                   </p>
                 </div>
+                {harness.followUps.steer ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      Follow-ups
+                    </span>
+                    <ProfileMenu
+                      disabled={followUps.disabled}
+                      label={`${harness.name} follow-ups`}
+                      value={followUps.modes[harness.id] ?? "steer"}
+                      options={followUpOptions}
+                      onSelect={(value) =>
+                        void followUps.select(harness.id, value)
+                      }
+                    />
+                  </div>
+                ) : null}
                 <Switch
                   aria-label={`Use ${harness.name}`}
                   checked={harness.enabled}
@@ -127,13 +145,6 @@ export function HarnessSettings({
           })}
         </ul>
       )}
-      {harnesses.state.status === "ready" ? (
-        <FollowUpSettings
-          harnesses={harnesses.state.data.filter(
-            (harness) => harness.followUps.steer
-          )}
-        />
-      ) : null}
     </section>
   )
 }
@@ -152,7 +163,12 @@ function checkedAgo(harnesses: RuntimeQuery<Harness[]>): string | null {
   return age === "now" ? "Checked just now." : `Checked ${age} ago.`
 }
 
-function FollowUpSettings({ harnesses }: { harnesses: Harness[] }) {
+const followUpOptions = [
+  { value: "steer", label: "Steer" },
+  { value: "queue", label: "Queue" },
+]
+
+function useFollowUpMode() {
   const { snapshot, update } = useSettings()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -172,35 +188,5 @@ function FollowUpSettings({ harnesses }: { harnesses: Harness[] }) {
       setSaving(false)
     }
   }
-  return (
-    <div className="space-y-2 py-3">
-      {harnesses.map((harness) => (
-        <div
-          key={harness.id}
-          className="flex items-center justify-between gap-4"
-        >
-          <div>
-            <h3 className="text-sm font-medium">{harness.name} follow-ups</h3>
-          </div>
-          <ProfileMenu
-            disabled={saving || !snapshot}
-            label={`${harness.name} follow-ups`}
-            value={modes[harness.id] ?? "steer"}
-            options={[
-              {
-                value: "steer",
-                label: "Steer",
-              },
-              {
-                value: "queue",
-                label: "Queue",
-              },
-            ]}
-            onSelect={(value) => void select(harness.id, value)}
-          />
-        </div>
-      ))}
-      {error ? <InlineError message={error} /> : null}
-    </div>
-  )
+  return { modes, select, error, disabled: saving || !snapshot }
 }
