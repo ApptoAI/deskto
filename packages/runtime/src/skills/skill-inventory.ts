@@ -1,4 +1,4 @@
-import { link, lstat, realpath, unlink } from "node:fs/promises"
+import { lstat, realpath } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
 import type {
@@ -207,13 +207,14 @@ export class SkillInventory {
             "skill-conflict",
             "A skill file already exists at the destination. Open the folder to review both copies."
           )
-        await link(occurrence.skillFilePath, destination)
-        try {
-          await unlink(occurrence.skillFilePath)
-        } catch (error) {
-          await unlink(destination)
-          throw error
-        }
+        await commitSkillFile({
+          path: occurrence.skillFilePath,
+          destination,
+          root,
+          expectedContent,
+          content: expectedContent,
+          identity: opened.metadata,
+        })
       }
       if (source.packId)
         await refreshPackDigest(

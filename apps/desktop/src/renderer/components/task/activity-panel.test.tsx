@@ -166,8 +166,8 @@ describe("agent preview", () => {
     expect(screen.getByRole("heading", { name: "Check sources" })).toBeTruthy()
     view.rerender(<Panel activities={[agent]} />)
     expect(screen.queryByRole("region", { name: "Agent preview" })).toBeNull()
-    expect(
+    expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Preview Research agent" })
-    ).toBeTruthy()
+    )
   })
 })

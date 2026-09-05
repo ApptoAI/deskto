@@ -46,6 +46,128 @@ async function recoveries(directory: string) {
     .map((name) => join(directory, name))
 }
 
+async function moveFixture(direction: "enable" | "disable") {
+  const input = await fixture()
+  const disabled = join(input.directory, "SKILL.md.disabled")
+  if (direction === "enable") await files.rename(input.path, disabled)
+  return {
+    ...input,
+    path: direction === "enable" ? disabled : input.path,
+    destination: direction === "enable" ? input.path : disabled,
+    content: input.expectedContent,
+  }
+}
+
+describe.each(["enable", "disable"] as const)(
+  "skill %s commit",
+  (direction) => {
+    it.each(["replacement", "in-place"])(
+      "preserves a late source %s",
+      async (mode) => {
+        const input = await moveFixture(direction)
+        const external = input.expectedContent + " external"
+        await expect(
+          commitSkillFile(input, {
+            ...files,
+            writeFile: async (...args) => {
+              await files.writeFile(...args)
+              if (mode === "replacement") {
+                await files.writeFile(input.path + ".external", external)
+                await files.rename(input.path + ".external", input.path)
+              } else await files.writeFile(input.path, external)
+            },
+          })
+        ).rejects.toMatchObject({ code: "skill-conflict" })
+        expect(await files.readFile(input.path, "utf8")).toBe(external)
+        await expect(files.stat(input.destination)).rejects.toMatchObject({
+          code: "ENOENT",
+        })
+      }
+    )
+
+    it("never unlinks a source recreated while publishing the destination", async () => {
+      const input = await moveFixture(direction)
+      const external = input.expectedContent + " replacement during publication"
+      await expect(
+        commitSkillFile(input, {
+          ...files,
+          link: async (source, destination) => {
+            await files.link(source, destination)
+            if (String(destination) === input.destination)
+              await files.writeFile(input.path, external)
+          },
+        })
+      ).rejects.toMatchObject({ code: "skill-conflict" })
+      expect(await files.readFile(input.path, "utf8")).toBe(external)
+      expect(await files.readFile(input.destination, "utf8")).toBe(
+        input.expectedContent
+      )
+      expect(
+        await files.readFile((await recoveries(input.directory))[0]!, "utf8")
+      ).toBe(input.expectedContent)
+    })
+
+    it("preserves a destination created concurrently and restores the source", async () => {
+      const input = await moveFixture(direction)
+      const external = "External destination"
+      await expect(
+        commitSkillFile(input, {
+          ...files,
+          link: async (source, destination) => {
+            if (String(destination) === input.destination)
+              await files.writeFile(input.destination, external)
+            await files.link(source, destination)
+          },
+        })
+      ).rejects.toMatchObject({ code: "skill-conflict" })
+      expect(await files.readFile(input.path, "utf8")).toBe(
+        input.expectedContent
+      )
+      expect(await files.readFile(input.destination, "utf8")).toBe(external)
+    })
+
+    it("preserves an in-place descriptor write after source displacement", async () => {
+      const input = await moveFixture(direction)
+      const writer = await files.open(input.path, "a")
+      try {
+        await expect(
+          commitSkillFile(input, {
+            ...files,
+            link: async (source, destination) => {
+              await files.link(source, destination)
+              if (String(destination) === input.destination)
+                await writer.write(" descriptor update")
+            },
+          })
+        ).rejects.toMatchObject({ code: "skill-conflict" })
+        expect(await files.readFile(input.destination, "utf8")).toBe(
+          input.expectedContent
+        )
+        expect(
+          await files.readFile((await recoveries(input.directory))[0]!, "utf8")
+        ).toBe(input.expectedContent + " descriptor update")
+      } finally {
+        await writer.close()
+      }
+    })
+
+    it("moves an unchanged skill and retains a recovery version", async () => {
+      const input = await moveFixture(direction)
+      await commitSkillFile(input)
+      await expect(files.stat(input.path)).rejects.toMatchObject({
+        code: "ENOENT",
+      })
+      expect(await files.readFile(input.destination, "utf8")).toBe(
+        input.expectedContent
+      )
+      expect((await files.stat(input.destination)).mode & 0o777).toBe(0o600)
+      expect(
+        await files.readFile((await recoveries(input.directory))[0]!, "utf8")
+      ).toBe(input.expectedContent)
+    })
+  }
+)
+
 describe("skill file commit", () => {
   it("preserves permissions restricted after the editor read the file", async () => {
     const input = await fixture()

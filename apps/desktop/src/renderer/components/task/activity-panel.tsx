@@ -47,11 +47,16 @@ export const ActivityPanel = memo(function ActivityPanel({
   const agentButtons = useRef(new Map<string, HTMLButtonElement>())
   const returnFocus = useRef<string | null>(null)
   useEffect(() => {
-    if (!selected && returnFocus.current) {
+    if (selected) {
+      const parent = agents.find((node) =>
+        findAgent([node], selected.activity.id)
+      )
+      returnFocus.current = parent?.activity.id ?? null
+    } else if (returnFocus.current) {
       agentButtons.current.get(returnFocus.current)?.focus()
       returnFocus.current = null
     }
-  }, [selected])
+  }, [agents, selected])
 
   function backToActivities() {
     const parent = selectedAgentId

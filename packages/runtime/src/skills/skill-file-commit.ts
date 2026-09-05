@@ -1,17 +1,21 @@
 import { randomUUID } from "node:crypto"
 import * as filesystem from "node:fs/promises"
 import { dirname, join } from "node:path"
+import { z } from "zod"
 
 import { RuntimeError } from "../errors.js"
 import { openRegularFileWithinRoot } from "../safe-file-open.js"
 
 type FileOperations = Pick<
   typeof filesystem,
-  "writeFile" | "rename" | "link" | "rm"
+  "writeFile" | "rename" | "link" | "rm" | "lstat"
 >
+
+const missingFileSchema = z.object({ code: z.literal("ENOENT") })
 
 type SkillFileCommit = {
   path: string
+  destination?: string
   root: string
   expectedContent: string
   content: string
@@ -22,6 +26,7 @@ export async function commitSkillFile(
   input: SkillFileCommit,
   files: FileOperations = filesystem
 ): Promise<void> {
+  const destination = input.destination ?? input.path
   const id = randomUUID()
   const temporary = join(dirname(input.path), `.SKILL-${id}.tmp`)
   const recovery = join(dirname(input.path), `.deskto-skill-${id}.recovery`)
@@ -37,8 +42,19 @@ export async function commitSkillFile(
     await files.rename(input.path, recovery)
     displaced = true
     if (!(await matchesExpected(recovery, input))) throw conflict(recovery)
-    await files.link(temporary, input.path)
+    await files.link(temporary, destination)
     published = true
+    if (
+      destination !== input.path &&
+      (await files.lstat(input.path).then(
+        () => true,
+        (error) => {
+          if (missingFileSchema.safeParse(error).success) return false
+          throw error
+        }
+      ))
+    )
+      throw conflict(recovery)
     if (!(await matchesExpected(recovery, input))) throw conflict(recovery)
     // Keep this inode: another editor can still write through an already-open
     // descriptor after either check. Portable Node has no conditional rename.
