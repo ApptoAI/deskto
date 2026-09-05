@@ -1,5 +1,8 @@
 import { useState } from "react"
 import RefreshCwIcon from "lucide-react/dist/esm/icons/refresh-cw"
+import { appSettings, settingValue } from "@deskto/settings"
+import { useSettings } from "../../settings/settings-context.js"
+import { ProfileMenu } from "../execution-profile/profile-menu.js"
 import type { Harness } from "@deskto/protocol"
 
 import { Button } from "@workspace/ui/components/button"
@@ -47,7 +50,7 @@ export function HarnessSettings({
   const checked = checkedAgo(harnesses)
 
   return (
-    <section aria-label="Agents" className="space-y-3">
+    <section aria-label="Providers" className="space-y-3">
       <div className="flex items-center justify-end gap-3">
         {checked ? (
           <p className="mr-auto text-xs text-muted-foreground">{checked}</p>
@@ -124,6 +127,13 @@ export function HarnessSettings({
           })}
         </ul>
       )}
+      {harnesses.state.status === "ready" ? (
+        <FollowUpSettings
+          harnesses={harnesses.state.data.filter(
+            (harness) => harness.followUps.steer
+          )}
+        />
+      ) : null}
     </section>
   )
 }
@@ -140,4 +150,63 @@ function checkedAgo(harnesses: RuntimeQuery<Harness[]>): string | null {
   if (!latest) return null
   const age = formatAge(latest)
   return age === "now" ? "Checked just now." : `Checked ${age} ago.`
+}
+
+function FollowUpSettings({ harnesses }: { harnesses: Harness[] }) {
+  const { snapshot, update } = useSettings()
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const modes = settingValue(snapshot, appSettings.followUpMode)
+  async function select(harnessId: string, mode: string) {
+    if (saving || !snapshot) return
+    if (mode !== "queue" && mode !== "steer") return
+    setError(null)
+    setSaving(true)
+    try {
+      await update({
+        [appSettings.followUpMode.key]: { ...modes, [harnessId]: mode },
+      })
+    } catch (caught) {
+      setError(describedErrorSchema.parse(caught))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="space-y-2 py-3">
+      {harnesses.map((harness) => (
+        <div
+          key={harness.id}
+          className="flex items-center justify-between gap-4"
+        >
+          <div>
+            <h3 className="text-sm font-medium">{harness.name} follow-ups</h3>
+            <p className="pt-1 text-xs text-muted-foreground">
+              Choose what happens when you send a message while a task is
+              working.
+            </p>
+          </div>
+          <ProfileMenu
+            disabled={saving || !snapshot}
+            label={`${harness.name} follow-ups`}
+            value={modes[harness.id] ?? "steer"}
+            options={[
+              {
+                value: "steer",
+                label: "Steer",
+                description: "Redirect the current work.",
+              },
+              {
+                value: "queue",
+                label: "Queue",
+                description: "Wait until the current work finishes.",
+              },
+            ]}
+            onSelect={(value) => void select(harness.id, value)}
+          />
+        </div>
+      ))}
+      {error ? <InlineError message={error} /> : null}
+    </div>
+  )
 }

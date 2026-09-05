@@ -73,17 +73,21 @@ describe("ComputerUseSettings", () => {
   it("shows the built-in browser section with the registry defaults", async () => {
     renderComputerUse()
     expect(await screen.findByText("Built-in browser")).toBeTruthy()
-    expect(screen.getByLabelText("Page width")).toHaveProperty("value", "1280")
-    expect(screen.getByLabelText("Page height")).toHaveProperty("value", "800")
+    expect(screen.queryByLabelText("Page width")).toBeNull()
     expect(screen.getByLabelText("Download folder")).toHaveProperty(
       "value",
       "downloads"
     )
     expect(screen.getByLabelText("Start page")).toHaveProperty("value", "")
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }))
+    expect(screen.getByLabelText("Page width")).toHaveProperty("value", "1280")
+    expect(screen.getByLabelText("Page height")).toHaveProperty("value", "800")
+    expect(screen.queryByLabelText("Start page")).toBeNull()
   })
 
   it("saves a host list one rule per line and rejects a bad rule locally", async () => {
     const { updates } = renderComputerUse()
+    fireEvent.click(await screen.findByRole("tab", { name: "Advanced" }))
     const blocked = await screen.findByLabelText("Never open these sites")
 
     fireEvent.change(blocked, {

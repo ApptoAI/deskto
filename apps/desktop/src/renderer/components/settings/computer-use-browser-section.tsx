@@ -25,7 +25,11 @@ import { useSettings } from "../../settings/settings-context.js"
  * half-typed host list never reaches the Runtime. The schema in the
  * registry decides validity; this component only reports its message.
  */
-export function BrowserSettingsSection() {
+export function BrowserSettingsSection({
+  advanced = false,
+}: {
+  advanced?: boolean
+}) {
   const { snapshot, update } = useSettings()
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -73,54 +77,66 @@ export function BrowserSettingsSection() {
 
   return (
     <ul className="divide-y divide-border">
-      <TextSettingRow
-        definition={homeUrl}
-        value={settingValue(snapshot, homeUrl)}
-        overridden={isOverridden(snapshot, homeUrl)}
-        error={errors[homeUrl.key]}
-        onCommit={(value) => commit(homeUrl, value)}
-      />
-      <ViewportSettingRow
-        definition={viewport}
-        value={settingValue(snapshot, viewport)}
-        overridden={isOverridden(snapshot, viewport)}
-        error={errors[viewport.key]}
-        onCommit={(value) => commit(viewport, value)}
-      />
-      <HostListSettingRow
-        definition={allowed}
-        value={settingValue(snapshot, allowed)}
-        overridden={isOverridden(snapshot, allowed)}
-        error={errors[allowed.key]}
-        onCommit={(value) => commit(allowed, value)}
-      />
-      <HostListSettingRow
-        definition={blocked}
-        value={settingValue(snapshot, blocked)}
-        overridden={isOverridden(snapshot, blocked)}
-        error={errors[blocked.key]}
-        onCommit={(value) => commit(blocked, value)}
-      />
-      <ToggleSettingRow
-        definition={clearSession}
-        value={settingValue(snapshot, clearSession)}
-        error={errors[clearSession.key]}
-        onCommit={(value) => commit(clearSession, value)}
-      />
-      <TextSettingRow
-        definition={downloadFolder}
-        value={settingValue(snapshot, downloadFolder)}
-        overridden={isOverridden(snapshot, downloadFolder)}
-        error={errors[downloadFolder.key]}
-        onCommit={(value) => commit(downloadFolder, value)}
-      />
-      <TextSettingRow
-        definition={userAgent}
-        value={settingValue(snapshot, userAgent)}
-        overridden={isOverridden(snapshot, userAgent)}
-        error={errors[userAgent.key]}
-        onCommit={(value) => commit(userAgent, value)}
-      />
+      {!advanced ? (
+        <TextSettingRow
+          definition={homeUrl}
+          value={settingValue(snapshot, homeUrl)}
+          overridden={isOverridden(snapshot, homeUrl)}
+          error={errors[homeUrl.key]}
+          onCommit={(value) => commit(homeUrl, value)}
+        />
+      ) : null}
+      {advanced ? (
+        <>
+          <ViewportSettingRow
+            definition={viewport}
+            value={settingValue(snapshot, viewport)}
+            overridden={isOverridden(snapshot, viewport)}
+            error={errors[viewport.key]}
+            onCommit={(value) => commit(viewport, value)}
+          />
+          <HostListSettingRow
+            definition={allowed}
+            value={settingValue(snapshot, allowed)}
+            overridden={isOverridden(snapshot, allowed)}
+            error={errors[allowed.key]}
+            onCommit={(value) => commit(allowed, value)}
+          />
+          <HostListSettingRow
+            definition={blocked}
+            value={settingValue(snapshot, blocked)}
+            overridden={isOverridden(snapshot, blocked)}
+            error={errors[blocked.key]}
+            onCommit={(value) => commit(blocked, value)}
+          />
+        </>
+      ) : null}
+      {!advanced ? (
+        <>
+          <ToggleSettingRow
+            definition={clearSession}
+            value={settingValue(snapshot, clearSession)}
+            error={errors[clearSession.key]}
+            onCommit={(value) => commit(clearSession, value)}
+          />
+          <TextSettingRow
+            definition={downloadFolder}
+            value={settingValue(snapshot, downloadFolder)}
+            overridden={isOverridden(snapshot, downloadFolder)}
+            error={errors[downloadFolder.key]}
+            onCommit={(value) => commit(downloadFolder, value)}
+          />
+        </>
+      ) : null}
+      {advanced ? (
+        <TextSettingRow
+          definition={userAgent}
+          value={settingValue(snapshot, userAgent)}
+          overridden={isOverridden(snapshot, userAgent)}
+          error={errors[userAgent.key]}
+          onCommit={(value) => commit(userAgent, value)}
+        />
+      ) : null}
     </ul>
   )
 }

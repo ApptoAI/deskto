@@ -55,6 +55,17 @@ function SettingsPane({
       return <HarnessModelSettings harnesses={harnesses} />
     case "computer-use":
       return <ComputerUseSettings />
+    case "plugins":
+      return (
+        <section aria-label="Plugins" className="space-y-2 py-4">
+          <p className="eyebrow text-muted-foreground">Coming soon</p>
+          <h2 className="text-sm font-medium">Your tools, inside your tasks</h2>
+          <p className="text-sm text-muted-foreground">
+            A place to connect services such as Google Drive and Calendar,
+            choose what your agents can access, and manage connections.
+          </p>
+        </section>
+      )
     case "appearance":
       return <AppearanceSettings />
     case "shortcuts":

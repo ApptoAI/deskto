@@ -22,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { RuntimeClientProvider } from "../../runtime/runtime-client-context.js"
 import { SettingsProvider } from "../../settings/settings-context.js"
+import { HarnessSettings } from "./harness-settings.js"
 import { HarnessModelSettings } from "./harness-model-settings.js"
 
 afterEach(cleanup)
@@ -60,6 +61,48 @@ describe("HarnessModelSettings", () => {
     ).toBeTruthy()
   })
 
+  it("saves queue preference only for providers that can steer", async () => {
+    const { request } = renderSettings(true)
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Claude Code follow-ups: Steer",
+      })
+    )
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Queue/ }))
+    await waitFor(() =>
+      expect(request).toHaveBeenCalledWith({
+        method: "settings.update",
+        params: {
+          entries: { [appSettings.followUpMode.key]: { claude: "queue" } },
+        },
+      })
+    )
+    expect(
+      screen.queryByRole("button", { name: /Codex follow-ups/ })
+    ).toBeNull()
+  })
+
+  it("searches each provider independently", async () => {
+    renderSettings()
+    fireEvent.change(
+      await screen.findByRole("searchbox", {
+        name: "Search Claude Code models",
+      }),
+      { target: { value: "opus" } }
+    )
+    expect(
+      screen.queryByRole("switch", {
+        name: "Show Claude Haiku for Claude Code",
+      })
+    ).toBeNull()
+    expect(
+      screen.getByRole("switch", { name: "Show Claude Opus for Claude Code" })
+    ).toBeTruthy()
+    expect(
+      screen.getByRole("switch", { name: "Show Codex Sol for Codex" })
+    ).toBeTruthy()
+  })
+
   it("keeps one model visible for every provider", async () => {
     renderSettings()
 
@@ -70,7 +113,8 @@ describe("HarnessModelSettings", () => {
   })
 })
 
-function renderSettings() {
+function renderSettings(providers = false) {
+  const Component = providers ? HarnessSettings : HarnessModelSettings
   const overrides: SettingValues = {}
   const request = vi.fn((body: RuntimeRequest) => {
     if (body.method === "settings.get") {
@@ -102,7 +146,7 @@ function renderSettings() {
       }
     >
       <SettingsProvider>
-        <HarnessModelSettings
+        <Component
           harnesses={{
             state: { status: "ready", data: harnesses },
             revalidate: vi.fn(),
@@ -136,7 +180,7 @@ function harness(
   return {
     id,
     name,
-    followUps: { queue: false, steer: false },
+    followUps: { queue: false, steer: id === "claude" },
     enabled: true,
     availability: { status: "available" },
     checkedAt: "2026-09-02T12:00:00.000Z",
