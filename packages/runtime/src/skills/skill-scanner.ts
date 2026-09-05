@@ -11,7 +11,10 @@ import { z } from "zod"
 
 import { digestPackDirectory } from "../packs/pack-digest.js"
 import { pathIsWithin } from "../path-boundaries.js"
-import { skillOccurrenceId } from "./skill-identifiers.js"
+import {
+  isSkillRecoveryFileName,
+  skillOccurrenceId,
+} from "./skill-identifiers.js"
 import { parseSkillFile } from "./skill-parser.js"
 
 const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
@@ -257,6 +260,22 @@ async function scanSkillDirectory(
     ))
   const readablePath = disabled ? disabledPath : skillFilePath
   const parsed = await parseSkillFile(readablePath, resolvedSourcePath)
+  if (parsed.diagnostics.some(({ code }) => code === "skill-file-missing")) {
+    const recoveryFiles = (await readdir(directoryPath).catch(() => [])).filter(
+      isSkillRecoveryFileName
+    )
+    if (recoveryFiles.length > 0) {
+      parsed.diagnostics = parsed.diagnostics.map((diagnostic) =>
+        diagnostic.code === "skill-file-missing"
+          ? {
+              ...diagnostic,
+              message: `A skill save was interrupted. Open this folder, compare the .deskto-skill-*.recovery files, and restore the version you want as SKILL.md. Your previous file is preserved.`,
+            }
+          : diagnostic
+      )
+    }
+  }
+
   const [hasScripts, hasReferences, hasAssets, contentDigest] =
     await Promise.all([
       isDirectory(join(directoryPath, "scripts")),

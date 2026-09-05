@@ -1,13 +1,4 @@
-import { randomUUID } from "node:crypto"
-import {
-  link,
-  lstat,
-  realpath,
-  rename,
-  rm,
-  unlink,
-  writeFile,
-} from "node:fs/promises"
+import { link, lstat, realpath, unlink } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
 import type {
@@ -26,6 +17,7 @@ import { packSkillId, skillsDirectory } from "../packs/pack-files.js"
 import { canEditManagedSkills } from "../packs/pack-capabilities.js"
 import type { Store } from "../storage/store.js"
 
+import { commitSkillFile } from "./skill-file-commit.js"
 import { skillSourceId } from "./skill-identifiers.js"
 import {
   scanSkillNames,
@@ -193,19 +185,13 @@ export class SkillInventory {
             "invalid-skill",
             "Skill instructions must be smaller than 1 MB."
           )
-        const temporary = join(
-          occurrence.resolvedDirectoryPath,
-          `.SKILL-${randomUUID()}.tmp`
-        )
-        try {
-          await writeFile(temporary, change.content, {
-            flag: "wx",
-            mode: opened.metadata.mode & 0o777,
-          })
-          await rename(temporary, occurrence.skillFilePath)
-        } finally {
-          await rm(temporary, { force: true })
-        }
+        await commitSkillFile({
+          path: occurrence.skillFilePath,
+          root,
+          expectedContent,
+          content: change.content,
+          identity: opened.metadata,
+        })
       } else if (change.enabled !== (occurrence.enabled !== false)) {
         const destination = join(
           occurrence.resolvedDirectoryPath,

@@ -32,7 +32,7 @@ type SettingsPage = {
 export const settingsPages = {
   agents: {
     label: "Providers",
-    description: "Choose which agents Deskto may use for your tasks.",
+    description: "Choose which providers Deskto may use for your tasks.",
     icon: BotIcon,
   },
   models: {

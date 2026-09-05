@@ -23,3 +23,12 @@
 - Final `pnpm typecheck`: all 9 tasks passed. Final `pnpm lint`: all 8 tasks passed (3 existing desktop warnings, no errors). Desktop production build passed.
 - Final Electron checks: native skill edit/save/disable/restore; provider queue preference persisted; separate model scrolling and filtering; Computer tabs and Plugins space; read-only/nested subagent preview and keyboard focus return. Light/dark screenshots and a preview recording are in /tmp/adam-dev-qa/proof.
 - Implementation is ready for `adam-dev` delivery. Plugin proposal research starts after pushing; proposal artifacts stay outside this worktree.
+
+## PR 108
+
+- Requested end state: real `adam-dev` → `main` PR open and watched. PR: https://github.com/ApptoAI/deskto/pull/108.
+- All 28 PNGs and one MP4 attached on `gh pr create --attach`; no media committed. Initial CI passed at 7fd0e62.
+- CodeRabbit findings: external skill-save race, shared tab aria-controls, provider test file placement, Providers description. Fixing these in scope; docstring coverage is not pursued because house comments policy forbids filler.
+- Watcher: /tmp/adam-dev-pr108-watch.py, PID stored in /tmp/adam-dev-pr108-watch/pid, latest snapshot in latest.json. Polls every 120 seconds. CLI keyring lookup began hanging; watcher loads the existing akrupa-appto account credential into subprocess environment without exposing it.
+- Review fixes validated: all 899 package tests passed (354 runtime, 383 desktop), typecheck 9/9, lint 8/8 with the same 3 existing warnings, and desktop build passed. The first full test run stalled in an unchanged cookie-import test on the VM keyring; rerun used DBUS_SESSION_BUS_ADDRESS pointing to an absent test bus and passed.
+- Skill saves preserve the displaced inode in a reserved recovery file, publish without overwriting a recreated target, and test concurrent replacement/open-file writes. Recovery files count toward resource limits but do not affect duplicate digests.

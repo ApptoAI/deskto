@@ -51,7 +51,6 @@ export function ComputerUseSettings() {
             id={`${tabId}-${entry.id}`}
             role="tab"
             aria-selected={tab === entry.id}
-            aria-controls={`${tabId}-panel`}
             tabIndex={tab === entry.id ? 0 : -1}
             variant={tab === entry.id ? "secondary" : "ghost"}
             onClick={() => setTab(entry.id)}
