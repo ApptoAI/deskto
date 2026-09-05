@@ -218,7 +218,7 @@ export function AppearanceSettings() {
               value={fontSize}
               aria-label="Text size"
               aria-valuetext={`${fontSize} pixels`}
-              className="settings-range min-w-0 w-full"
+              className="settings-range w-full min-w-0"
               style={rangeStyle}
               onChange={(event) =>
                 setPendingFontSize(Number(event.currentTarget.value))
@@ -243,9 +243,7 @@ export function AppearanceSettings() {
           <div className="mt-1 grid grid-cols-[0.75rem_minmax(0,1fr)_1.125rem] gap-3 font-mono text-tiny text-muted-foreground">
             <span aria-hidden />
             <div className="relative h-4">
-              <span className="absolute left-0">
-                {minInterfaceFontSize}px
-              </span>
+              <span className="absolute left-0">{minInterfaceFontSize}px</span>
               <span
                 className="absolute -translate-x-1/2"
                 style={{
@@ -338,7 +336,10 @@ function ChoiceCardGroup<T extends string>({
   )
 }
 
-/** Filled controls, shown as they land with and without a Workspace colour. */
+/** Filled controls, shown as they land with and without a Workspace colour.
+    The monochrome pill paints the foreground rather than `bg-primary`: once
+    the accent is on, primary is the Workspace colour and both previews would
+    show the same thing. */
 function AccentPreview({ value }: { value: AccentSource }) {
   const filled =
     value === "workspace"
@@ -350,7 +351,7 @@ function AccentPreview({ value }: { value: AccentSource }) {
         <span
           className={cn(
             "h-5 w-12 rounded-full",
-            value === "workspace" ? "" : "bg-primary"
+            value === "workspace" ? "" : "bg-foreground"
           )}
           style={filled}
         />
@@ -367,9 +368,7 @@ function LayoutPreview({ value }: { value: WorkspaceLayout }) {
     <span aria-hidden className="flex h-20 bg-background">
       {value === "slack" ? (
         <span className="flex w-7 shrink-0 flex-col items-center gap-1.5 border-r border-border bg-sidebar p-1.5">
-          <span
-            className={cn("size-3 rounded", workspaceSwatch("violet"))}
-          />
+          <span className={cn("size-3 rounded", workspaceSwatch("violet"))} />
           <span
             className={cn("size-3 rounded opacity-60", workspaceSwatch("blue"))}
           />
@@ -388,9 +387,7 @@ function LayoutPreview({ value }: { value: WorkspaceLayout }) {
         )}
       >
         <span className="mb-1 flex items-center gap-1">
-          <span
-            className={cn("size-2.5 rounded", workspaceSwatch("violet"))}
-          />
+          <span className={cn("size-2.5 rounded", workspaceSwatch("violet"))} />
           <span className="h-1 w-1/2 rounded-full bg-foreground/70" />
         </span>
         <span className="h-1 w-full rounded-full bg-muted-foreground/45" />
