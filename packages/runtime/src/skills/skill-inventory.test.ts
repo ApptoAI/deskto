@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import {
+  chmod,
+  stat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -24,6 +33,158 @@ afterEach(async () => {
 })
 
 describe("skill inventory", () => {
+  it("edits native skills without losing metadata and disables them reversibly", async () => {
+    const root = await temporaryDirectory()
+    const userSkills = join(root, "skills")
+    const projectPath = join(root, "project")
+    await mkdir(projectPath)
+    await writeSkill(userSkills, "review", "review", "Review changes")
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("test", [
+          { path: userSkills, scope: "user", label: "Personal skills" },
+        ]),
+      ],
+    })
+    try {
+      const project = unwrap(
+        await runtime.request({
+          method: "project.add",
+          params: {
+            path: projectPath,
+            name: "Project",
+            workspaceId: "personal",
+          },
+        })
+      )
+      const inventory = unwrap(
+        await runtime.request({ method: "skill.listOnComputer", params: {} })
+      )
+      const occurrenceId = inventory.occurrences[0]!.id
+      const lookup = { occurrenceId }
+      await chmod(join(userSkills, "review", "SKILL.md"), 0o600)
+      const original = await readFile(
+        join(userSkills, "review", "SKILL.md"),
+        "utf8"
+      )
+      const content = original.replace(
+        "---\nInstructions",
+        "license: MIT\n---\nUpdated instructions"
+      )
+      unwrap(
+        await runtime.request({
+          method: "skill.updateContent",
+          params: { lookup, content, expectedContent: original },
+        })
+      )
+      expect(
+        await readFile(join(userSkills, "review", "SKILL.md"), "utf8")
+      ).toBe(content)
+      expect(
+        (await stat(join(userSkills, "review", "SKILL.md"))).mode & 0o777
+      ).toBe(0o600)
+      const stale = await runtime.request({
+        method: "skill.updateContent",
+        params: { lookup, content: original, expectedContent: original },
+      })
+      expect(stale).toMatchObject({
+        ok: false,
+        error: { code: "skill-conflict" },
+      })
+      const disabled = unwrap(
+        await runtime.request({
+          method: "skill.setEnabled",
+          params: { lookup, enabled: false, expectedContent: content },
+        })
+      )
+      expect(disabled.occurrence.enabled).toBe(false)
+      expect(
+        await readFile(join(userSkills, "review", "SKILL.md.disabled"), "utf8")
+      ).toBe(content)
+      expect(
+        unwrap(
+          await runtime.request({
+            method: "skill.listForPrompt",
+            params: { projectId: project.id },
+          })
+        )
+      ).toEqual([])
+      expect(
+        unwrap(
+          await runtime.request({ method: "skill.listOnComputer", params: {} })
+        ).occurrences
+      ).toHaveLength(1)
+      unwrap(
+        await runtime.request({
+          method: "skill.setEnabled",
+          params: { lookup, enabled: true, expectedContent: content },
+        })
+      )
+      expect(
+        unwrap(
+          await runtime.request({
+            method: "skill.listForPrompt",
+            params: { projectId: project.id },
+          })
+        )
+      ).toHaveLength(1)
+      expect(
+        await readFile(join(userSkills, "review", "SKILL.md"), "utf8")
+      ).toBe(content)
+    } finally {
+      await runtime.close()
+    }
+  })
+
+  it("refuses to edit administrator sources and symlinked skill folders", async () => {
+    const root = await temporaryDirectory()
+    const userSkills = join(root, "user")
+    const adminSkills = join(root, "admin")
+    await writeSkill(userSkills, "real", "real", "Real skill")
+    await symlink(join(userSkills, "real"), join(userSkills, "linked"))
+    await writeSkill(adminSkills, "admin", "admin", "Admin skill")
+    const runtime = createRuntime({
+      databasePath: join(root, "runtime.sqlite"),
+      packsPath: join(root, "packs"),
+      harnesses: [
+        inventoryHarness("test", [
+          { path: userSkills, scope: "user", label: "Personal" },
+          { path: adminSkills, scope: "admin", label: "Administrator" },
+        ]),
+      ],
+    })
+    try {
+      const inventory = unwrap(
+        await runtime.request({ method: "skill.listOnComputer", params: {} })
+      )
+      for (const directoryName of ["linked", "admin"]) {
+        const occurrence = inventory.occurrences.find(
+          (entry) => entry.directoryName === directoryName
+        )!
+        const details = unwrap(
+          await runtime.request({
+            method: "skill.get",
+            params: { occurrenceId: occurrence.id },
+          })
+        )
+        expect(
+          await runtime.request({
+            method: "skill.updateContent",
+            params: {
+              lookup: { occurrenceId: occurrence.id },
+              content: "Changed",
+              expectedContent: details.content!,
+            },
+          })
+        ).toMatchObject({ ok: false, error: { code: "skill-read-only" } })
+      }
+    } finally {
+      await runtime.close()
+    }
+  })
+
   it("keeps project, computer, and attached Pack occurrences losslessly", async () => {
     const root = await temporaryDirectory()
     const projectPath = join(root, "project")

@@ -222,6 +222,26 @@ export class RequestRouter {
         return this.#skillInventory.listForWorkspace(request.params.workspaceId)
       case "skill.listOnComputer":
         return this.#skillInventory.listOnComputer()
+      case "skill.updateContent":
+      case "skill.setEnabled": {
+        const { lookup, expectedContent } = request.params
+        const context =
+          "projectId" in lookup
+            ? { projectId: lookup.projectId }
+            : "workspaceId" in lookup
+              ? { workspaceId: lookup.workspaceId }
+              : undefined
+        const details = await this.#skillInventory.mutate(
+          lookup.occurrenceId,
+          expectedContent,
+          request.method === "skill.updateContent"
+            ? { content: request.params.content }
+            : { enabled: request.params.enabled },
+          context
+        )
+        this.events.packChanged()
+        return details
+      }
       case "skill.get": {
         const context =
           "projectId" in request.params

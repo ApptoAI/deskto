@@ -146,6 +146,13 @@ function SkillRow({
             <span className="sr-only">Needs attention</span>
           </span>
         ) : null}
+        {item.occurrences.every(
+          ({ occurrence }) => occurrence.enabled === false
+        ) ? (
+          <span className="shrink-0 text-tiny text-muted-foreground">
+            Disabled
+          </span>
+        ) : null}
         {item.occurrences.length > 1 ? (
           <span className="shrink-0 text-tiny text-muted-foreground">
             {item.occurrences.length} copies

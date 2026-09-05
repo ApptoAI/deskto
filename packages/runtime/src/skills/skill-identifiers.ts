@@ -18,3 +18,9 @@ export function skillOccurrenceId(
 ): string {
   return identifier("skill", [sourceId, directoryName])
 }
+
+export function isSkillRecoveryFileName(name: string): boolean {
+  return /^\.deskto-skill-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.recovery$/.test(
+    name
+  )
+}

@@ -1,4 +1,4 @@
-import { readdir, realpath, stat } from "node:fs/promises"
+import { lstat, readdir, realpath, stat } from "node:fs/promises"
 import { availableParallelism } from "node:os"
 import { join } from "node:path"
 
@@ -11,7 +11,10 @@ import { z } from "zod"
 
 import { digestPackDirectory } from "../packs/pack-digest.js"
 import { pathIsWithin } from "../path-boundaries.js"
-import { skillOccurrenceId } from "./skill-identifiers.js"
+import {
+  isSkillRecoveryFileName,
+  skillOccurrenceId,
+} from "./skill-identifiers.js"
 import { parseSkillFile } from "./skill-parser.js"
 
 const missingFileSystemEntrySchema = z.object({ code: z.literal("ENOENT") })
@@ -244,7 +247,35 @@ async function scanSkillDirectory(
       content: null,
     }
   }
-  const parsed = await parseSkillFile(skillFilePath, resolvedSourcePath)
+  const enabled = await lstat(skillFilePath).then(
+    () => true,
+    () => false
+  )
+  const disabledPath = join(directoryPath, "SKILL.md.disabled")
+  const disabled =
+    !enabled &&
+    (await lstat(disabledPath).then(
+      () => true,
+      () => false
+    ))
+  const readablePath = disabled ? disabledPath : skillFilePath
+  const parsed = await parseSkillFile(readablePath, resolvedSourcePath)
+  if (parsed.diagnostics.some(({ code }) => code === "skill-file-missing")) {
+    const recoveryFiles = (await readdir(directoryPath).catch(() => [])).filter(
+      isSkillRecoveryFileName
+    )
+    if (recoveryFiles.length > 0) {
+      parsed.diagnostics = parsed.diagnostics.map((diagnostic) =>
+        diagnostic.code === "skill-file-missing"
+          ? {
+              ...diagnostic,
+              message: `A skill save was interrupted. Open this folder, compare the .deskto-skill-*.recovery files, and restore the version you want as SKILL.md. Your previous file is preserved.`,
+            }
+          : diagnostic
+      )
+    }
+  }
+
   const [hasScripts, hasReferences, hasAssets, contentDigest] =
     await Promise.all([
       isDirectory(join(directoryPath, "scripts")),
@@ -259,7 +290,8 @@ async function scanSkillDirectory(
       directoryName,
       directoryPath,
       resolvedDirectoryPath: directory.path,
-      skillFilePath,
+      enabled: !disabled,
+      skillFilePath: readablePath,
       name: parsed.name,
       description: parsed.description,
       instructionDigest: parsed.instructionDigest,

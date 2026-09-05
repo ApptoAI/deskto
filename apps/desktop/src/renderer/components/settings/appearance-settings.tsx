@@ -194,9 +194,6 @@ export function AppearanceSettings() {
           <div className="flex items-baseline justify-between gap-4">
             <div>
               <p className="text-sm font-medium">Interface text</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Scales text without changing panel proportions.
-              </p>
             </div>
             <output
               htmlFor="interface-font-size"
@@ -333,11 +330,6 @@ function ChoiceCardGroup<T extends string>({
                   <CheckIcon aria-hidden className="size-3.5 shrink-0" />
                 ) : null}
               </span>
-              {option.description ? (
-                <span className="px-0.5 text-xs leading-snug text-muted-foreground">
-                  {option.description}
-                </span>
-              ) : null}
             </label>
           )
         })}

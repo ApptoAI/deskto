@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { createElement } from "react"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import type { SkillOccurrence, SkillSource } from "@deskto/protocol"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -30,6 +37,46 @@ describe("instructionsFromSkillContent", () => {
 })
 
 describe("SkillDetailsPanel", () => {
+  it("edits complete native instructions against the loaded version", async () => {
+    const native = source("native", { editable: true })
+    const selected = catalogOccurrence(occurrence("review", native.id), native)
+    const content =
+      "---\nname: review\ndescription: Review\nlicense: MIT\n---\nInstructions"
+    const onUpdateContent = vi.fn().mockResolvedValue(undefined)
+    render(
+      createElement(SkillDetailsPanel, {
+        item: {
+          key: "review",
+          name: "review",
+          description: "Review",
+          primary: selected,
+          occurrences: [selected],
+          group: "detected",
+        },
+        selected,
+        state: {
+          status: "ready",
+          data: { occurrence: selected.occurrence, content },
+        },
+        onSelectOccurrence: vi.fn(),
+        onRetry: vi.fn(),
+        onUpdateManaged: vi.fn(),
+        onUpdateContent,
+      })
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Edit skill" }))
+    const input = screen.getByRole("textbox", { name: "SKILL.md" })
+    expect(input).toHaveProperty("value", content)
+    fireEvent.change(input, { target: { value: content + " updated" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(onUpdateContent).toHaveBeenCalledWith(
+        content + " updated",
+        content
+      )
+    )
+  })
+
   it("shows failed delivery for the selected Pack copy", () => {
     const packSource = source("pack", {
       kind: "pack",

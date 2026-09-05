@@ -23,6 +23,7 @@ export type SettingInput =
   | { kind: "keybinding" }
   | { kind: "harness-model" }
   | { kind: "model-visibility" }
+  | { kind: "provider-follow-up" }
   | { kind: "choice" }
   | { kind: "range"; min: number; max: number; step: number; unit?: string }
   | { kind: "text"; placeholder?: string; monospace?: boolean }

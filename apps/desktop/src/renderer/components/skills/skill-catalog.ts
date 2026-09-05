@@ -177,7 +177,7 @@ function sourceRank(source: SkillSource): number {
 }
 
 function groupForSource(source: SkillSource): SkillCatalogGroup {
-  if (source.editable) return "personal"
+  if (source.editable && source.kind === "pack") return "personal"
   if (source.kind === "pack") return "workspace"
   return "detected"
 }

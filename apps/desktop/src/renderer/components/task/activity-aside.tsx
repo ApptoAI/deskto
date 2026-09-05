@@ -23,10 +23,12 @@ export const ActivityAside = memo(function ActivityAside({
   childThreads = [],
   onOpen,
   onOpenThread = () => undefined,
+  onOpenAgent,
 }: {
   activities: Activity[]
   childThreads?: Thread[]
   onOpen: () => void
+  onOpenAgent?: (agentId: string) => void
   onOpenThread?: (threadId: string) => void
 }) {
   const { agents, plan, working } = useMemo(
@@ -41,7 +43,7 @@ export const ActivityAside = memo(function ActivityAside({
 
   return (
     <aside className="hidden w-76 shrink-0 flex-col pt-4 pr-4 pb-6 lg:flex">
-      <div className="glass-popover flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-card">
+      <div className="flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-card glass-popover">
         <button
           type="button"
           onClick={onOpen}
@@ -80,7 +82,12 @@ export const ActivityAside = memo(function ActivityAside({
               <ul className="flex flex-col">
                 {agents.map((node) => (
                   <li key={node.activity.id}>
-                    <AgentLine node={node} onOpen={onOpen} />
+                    <AgentLine
+                      node={node}
+                      onOpen={() =>
+                        onOpenAgent ? onOpenAgent(node.activity.id) : onOpen()
+                      }
+                    />
                   </li>
                 ))}
               </ul>

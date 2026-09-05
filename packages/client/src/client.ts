@@ -176,6 +176,38 @@ export class RuntimeClient {
     })
   }
 
+  updateSkillContent(
+    occurrenceId: string,
+    content: string,
+    expectedContent: string,
+    context?: SkillLookupContext
+  ) {
+    return this.request({
+      method: "skill.updateContent",
+      params: {
+        lookup: { occurrenceId, ...context },
+        content,
+        expectedContent,
+      },
+    })
+  }
+
+  setSkillEnabled(
+    occurrenceId: string,
+    enabled: boolean,
+    expectedContent: string,
+    context?: SkillLookupContext
+  ) {
+    return this.request({
+      method: "skill.setEnabled",
+      params: {
+        lookup: { occurrenceId, ...context },
+        enabled,
+        expectedContent,
+      },
+    })
+  }
+
   createManagedSkill(packId: string, draft: ManagedSkillDraft) {
     return this.request({
       method: "skill.createManaged",

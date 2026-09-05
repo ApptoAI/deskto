@@ -5,6 +5,8 @@ export {
   defaultAccentSource,
   defaultInterfaceFontSize,
   defaultWorkspaceLayout,
+  harnessFollowUpModesSchema,
+  type HarnessFollowUpModes,
   harnessModelSettings,
   harnessModelSelectionSchema,
   harnessModelVisibilitySchema,

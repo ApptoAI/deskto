@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { lstat, realpath } from "node:fs/promises"
 import { join } from "node:path"
 
+import { isSkillRecoveryFileName } from "../skills/skill-identifiers.js"
 import { RuntimeError } from "../errors.js"
 import {
   openRegularFileWithinRoot,
@@ -78,6 +79,7 @@ async function hashDirectory(
     state.entries += 1
     if (state.entries > limits.maxEntries)
       throw invalidPack(`Pack contains more than ${limits.maxEntries} entries`)
+    if (entry.isFile() && isSkillRecoveryFileName(entry.name)) continue
 
     const childRelativePath = relativePath
       ? `${relativePath}/${entry.name}`

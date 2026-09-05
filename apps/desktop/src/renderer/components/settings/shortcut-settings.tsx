@@ -119,11 +119,6 @@ function ShortcutRow({
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <span className="text-sm font-medium">{definition.label}</span>
-        {definition.description ? (
-          <p className="pt-0.5 text-xs leading-snug text-muted-foreground">
-            {definition.description}
-          </p>
-        ) : null}
       </div>
 
       {/* Stays mounted while recording so the row does not jump; hidden

@@ -3,6 +3,24 @@ import { describe, expect, it, vi } from "vitest"
 import { SurfaceApi } from "./surface-api.js"
 
 describe("TaskPanelApi", () => {
+  it("keeps an agent preview scoped to its task and returns to the overview", () => {
+    const surface = new SurfaceApi()
+    surface.files.open("parent", "file")
+    surface.activities.preview("parent", "agent")
+    surface.files.retainAvailable("parent", [])
+    expect(surface.panel.state("parent")).toMatchObject({
+      open: true,
+      surface: "activities",
+      selectedAgentId: "agent",
+    })
+    expect(surface.panel.state("other").selectedAgentId).toBeUndefined()
+    surface.browser.open("parent")
+    surface.panel.open({ threadId: "parent", surface: "activities" })
+    expect(surface.panel.state("parent").selectedAgentId).toBe("agent")
+    surface.activities.open("parent")
+    expect(surface.panel.state("parent").selectedAgentId).toBeUndefined()
+  })
+
   it("keeps file selection while moving between surfaces", () => {
     const surface = new SurfaceApi()
     const threadId = "panel-state-thread"

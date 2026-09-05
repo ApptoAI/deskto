@@ -211,7 +211,8 @@ export function SkillsView({
             <div>
               <h1 className="font-heading display-sm">Skills</h1>
               <p className="pt-1 text-sm text-muted-foreground">
-                Instructions your agents can use for repeatable work.
+                Instructions your agents can use for repeatable work. Matching
+                copies are combined automatically.
               </p>
             </div>
             <div className="no-drag flex items-center gap-2">
@@ -312,6 +313,34 @@ export function SkillsView({
               state={shownSkill.state}
               onSelectOccurrence={selectOccurrence}
               onRetry={details.revalidate}
+              onUpdateContent={async (content, expectedContent) => {
+                const updated = await client.updateSkillContent(
+                  shownSkill.occurrence.occurrence.id,
+                  content,
+                  expectedContent,
+                  projectId
+                    ? { projectId }
+                    : workspaceId
+                      ? { workspaceId }
+                      : undefined
+                )
+                details.replace(updated)
+                inventory.revalidate()
+              }}
+              onSetEnabled={async (enabled, expectedContent) => {
+                const updated = await client.setSkillEnabled(
+                  shownSkill.occurrence.occurrence.id,
+                  enabled,
+                  expectedContent,
+                  projectId
+                    ? { projectId }
+                    : workspaceId
+                      ? { workspaceId }
+                      : undefined
+                )
+                details.replace(updated)
+                inventory.revalidate()
+              }}
               onUpdateManaged={async (packId, directoryName, draft) => {
                 await client.updateManagedSkill(packId, directoryName, draft)
                 details.revalidate()

@@ -69,3 +69,7 @@ Comments in this codebase state constraints the code cannot show, and nothing el
 - A PR carries one change. Anything visual gets screenshots of both states; anything about timing or motion gets a short recording.
 - The contribution policy is in `CONTRIBUTING.md`.
 - Issues live on GitHub via the `gh` CLI; conventions in `docs/agents/issue-tracker.md`.
+
+## Settings copy
+
+- Keep settings to labels and controls. Do not add explanatory descriptions, page subtitles, or promotional filler. Keep actionable errors and current status.

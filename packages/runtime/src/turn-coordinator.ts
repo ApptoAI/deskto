@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { appSettings, settingValue } from "@deskto/settings"
 
 import {
   harnessFailure,
@@ -483,6 +484,9 @@ export class TurnCoordinator {
       this.#runs.get(threadId) === target &&
       this.store.threads.getRow(threadId).status === "running" &&
       !this.store.turns.hasFollowUps(threadId) &&
+      settingValue(this.settings.snapshot(), appSettings.followUpMode)[
+        target.harnessId
+      ] !== "queue" &&
       this.harnesses.get(target.harnessId).descriptor.followUps.steer
     const message = this.store.turns.enqueueFollowUp(
       threadId,
