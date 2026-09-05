@@ -1,5 +1,5 @@
-import { realpath } from "node:fs/promises"
-import { resolve } from "node:path"
+import { lstat, realpath } from "node:fs/promises"
+import { join, resolve } from "node:path"
 
 import type {
   PromptSkill,
@@ -9,12 +9,15 @@ import type {
   SkillSource,
 } from "@deskto/protocol"
 
+import { openRegularFileWithinRoot } from "../safe-file-open.js"
+import { refreshPackDigest } from "../packs/refresh-pack-digest.js"
 import { RuntimeError } from "../errors.js"
 import type { HarnessRegistry } from "../harness-registry.js"
 import { packSkillId, skillsDirectory } from "../packs/pack-files.js"
 import { canEditManagedSkills } from "../packs/pack-capabilities.js"
 import type { Store } from "../storage/store.js"
 
+import { commitSkillFile } from "./skill-file-commit.js"
 import { skillSourceId } from "./skill-identifiers.js"
 import {
   scanSkillNames,
@@ -40,6 +43,7 @@ export type ResolvedPromptSkill = {
 }
 
 export class SkillInventory {
+  #mutationTail: Promise<void> = Promise.resolve()
   constructor(
     private readonly store: Store,
     private readonly harnesses: HarnessRegistry
@@ -126,6 +130,103 @@ export class SkillInventory {
     return skill
   }
 
+  async mutate(
+    occurrenceId: string,
+    expectedContent: string,
+    change: { content: string } | { enabled: boolean },
+    context?: SkillLookupContext
+  ): Promise<SkillDetails> {
+    const previous = this.#mutationTail
+    let release = () => {}
+    this.#mutationTail = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await previous
+    try {
+      const inventory =
+        context?.projectId !== undefined
+          ? await this.listForProject(context.projectId)
+          : context?.workspaceId !== undefined
+            ? await this.listForWorkspace(context.workspaceId)
+            : await this.listOnComputer()
+      const details = await this.get(occurrenceId, context)
+      const source = inventory.sources.find(
+        (candidate) => candidate.id === details.occurrence.sourceId
+      )
+      if (!source?.editable || source.scopes.includes("admin"))
+        throw new RuntimeError(
+          "skill-read-only",
+          "This skill is managed externally. Open its folder to make changes."
+        )
+      const { occurrence } = details
+      const root = await realpath(source.path)
+      const directoryMetadata = await lstat(occurrence.directoryPath)
+      if (directoryMetadata.isSymbolicLink())
+        throw new RuntimeError(
+          "skill-read-only",
+          "Linked skill folders cannot be changed here."
+        )
+      const opened = await openRegularFileWithinRoot(
+        occurrence.skillFilePath,
+        root
+      )
+      try {
+        if ((await opened.handle.readFile("utf8")) !== expectedContent)
+          throw new RuntimeError(
+            "skill-conflict",
+            "This skill changed since you opened it. Close and reopen it before saving."
+          )
+      } finally {
+        await opened.handle.close()
+      }
+      if ("content" in change) {
+        if (Buffer.byteLength(change.content, "utf8") > 1024 * 1024)
+          throw new RuntimeError(
+            "invalid-skill",
+            "Skill instructions must be smaller than 1 MB."
+          )
+        await commitSkillFile({
+          path: occurrence.skillFilePath,
+          root,
+          expectedContent,
+          content: change.content,
+          identity: opened.metadata,
+        })
+      } else if (change.enabled !== (occurrence.enabled !== false)) {
+        const destination = join(
+          occurrence.resolvedDirectoryPath,
+          change.enabled ? "SKILL.md" : "SKILL.md.disabled"
+        )
+        if (
+          await lstat(destination).then(
+            () => true,
+            () => false
+          )
+        )
+          throw new RuntimeError(
+            "skill-conflict",
+            "A skill file already exists at the destination. Open the folder to review both copies."
+          )
+        await commitSkillFile({
+          path: occurrence.skillFilePath,
+          destination,
+          root,
+          expectedContent,
+          content: expectedContent,
+          identity: opened.metadata,
+        })
+      }
+      if (source.packId)
+        await refreshPackDigest(
+          this.store.packs,
+          this.store.packs.get(source.packId)
+        )
+      return this.get(occurrenceId, context)
+    } finally {
+      release()
+    }
+  }
+
   async #scanForProject(projectId: string): Promise<InventoryScan> {
     const project = this.store.projects.get(projectId)
     const latestProvisioning = this.store.skillProvisioning.latestForProject(
@@ -166,7 +267,7 @@ export class SkillInventory {
               label: root.label,
               path: root.path,
               harnessIds: [harnessId],
-              editable: false,
+              editable: root.scope !== "admin",
               provisioning: [],
             },
             missingIsDiagnostic: false,
@@ -251,6 +352,7 @@ function uniqueById(sources: SourceToScan[]): SourceToScan[] {
             : sharedSourceLabel(scopes),
         harnessIds,
         scopes,
+        editable: existing.source.editable && entry.source.editable,
       },
       missingIsDiagnostic:
         existing.missingIsDiagnostic || entry.missingIsDiagnostic,

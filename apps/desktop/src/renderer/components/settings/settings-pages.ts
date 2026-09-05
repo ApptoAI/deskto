@@ -1,3 +1,4 @@
+import PuzzleIcon from "lucide-react/dist/esm/icons/puzzle"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
 import ContrastIcon from "lucide-react/dist/esm/icons/contrast"
 import KeyboardIcon from "lucide-react/dist/esm/icons/keyboard"
@@ -13,6 +14,7 @@ export const settingsPageOrder = [
   "agents",
   "models",
   "computer-use",
+  "plugins",
   "appearance",
   "shortcuts",
   "about",
@@ -29,8 +31,8 @@ type SettingsPage = {
 
 export const settingsPages = {
   agents: {
-    label: "Agents",
-    description: "Choose which agents Deskto may use for your tasks.",
+    label: "Providers",
+    description: "Choose which providers Deskto may use for your tasks.",
     icon: BotIcon,
   },
   models: {
@@ -40,8 +42,13 @@ export const settingsPages = {
   },
   "computer-use": {
     label: "Computer use",
-    description: "Choose how the built-in browser behaves inside your tasks.",
+    description: "Manage browser access, sign-ins, and computer capabilities.",
     icon: MousePointerClickIcon,
+  },
+  plugins: {
+    label: "Plugins",
+    description: "Connect the tools you use to your tasks.",
+    icon: PuzzleIcon,
   },
   appearance: {
     label: "Appearance",

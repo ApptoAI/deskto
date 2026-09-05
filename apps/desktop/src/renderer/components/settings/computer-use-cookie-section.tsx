@@ -151,11 +151,7 @@ export function CookieImportSection() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs leading-snug text-muted-foreground">
-          Bring your signed-in sessions into the built-in browser. Choose a
-          browser profile, the websites whose cookies to copy, and the
-          workspace that receives them.
-        </p>
+
         <Button
           variant="outline"
           size="sm"
@@ -225,10 +221,7 @@ export function CookieImportSection() {
           className="min-h-16 w-full font-mono text-xs"
           onChange={(event) => setHosts(event.currentTarget.value)}
         />
-        <p className="text-xs text-muted-foreground">
-          One website per line. Cookies that apply to each site are copied;
-          list a subdomain such as mail.example.com to include its own sign-in.
-        </p>
+
       </div>
 
       <div className="space-y-1.5">
@@ -258,9 +251,7 @@ export function CookieImportSection() {
             ))}
           </select>
         )}
-        <p className="text-xs text-muted-foreground">
-          Only tasks in this workspace open sites with the imported cookies.
-        </p>
+
       </div>
 
       {actionError ? <InlineError message={actionError} /> : null}

@@ -20,6 +20,13 @@ export const harnessModelSelectionSchema = z
 
 export type HarnessModelSelection = z.infer<typeof harnessModelSelectionSchema>
 
+export const harnessFollowUpModesSchema = z.record(
+  z.string().min(1),
+  z.enum(["queue", "steer"])
+)
+
+export type HarnessFollowUpModes = z.infer<typeof harnessFollowUpModesSchema>
+
 export const harnessModelVisibilitySchema = z.record(
   z.string().min(1),
   z.array(z.string().min(1))
@@ -41,7 +48,9 @@ export function isHarnessModelVisible(
 // Hidden ids persist across catalog changes, so a later catalog can leave
 // every model hidden; pickers must still offer something rather than run a
 // hidden provider default invisibly.
-export function visibleHarnessModels<Model extends { id: string; isDefault?: boolean }>(
+export function visibleHarnessModels<
+  Model extends { id: string; isDefault?: boolean },
+>(
   visibility: HarnessModelVisibility,
   harnessId: string,
   models: readonly Model[]
@@ -184,6 +193,15 @@ export const appSettings = {
     input: { kind: "harness-model" },
     schema: harnessModelSelectionSchema,
     defaultValue: { harnessId: null, modelId: null },
+  }),
+  followUpMode: defineSetting({
+    key: "providers.follow-up-mode",
+    label: "Follow-up messages",
+    description:
+      "Choose whether a message redirects current work or waits for it to finish.",
+    input: { kind: "provider-follow-up" },
+    schema: harnessFollowUpModesSchema,
+    defaultValue: {},
   }),
   modelVisibility: defineSetting({
     key: "models.visibility",

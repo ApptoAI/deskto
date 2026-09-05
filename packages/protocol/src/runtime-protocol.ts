@@ -151,6 +151,22 @@ export const runtimeRequestSchema = z.discriminatedUnion("method", [
   }),
   z.object({ method: z.literal("skill.listOnComputer"), params: z.object({}) }),
   z.object({
+    method: z.literal("skill.updateContent"),
+    params: z.object({
+      lookup: skillGetParamsSchema,
+      content: z.string().max(1024 * 1024),
+      expectedContent: z.string().max(1024 * 1024),
+    }),
+  }),
+  z.object({
+    method: z.literal("skill.setEnabled"),
+    params: z.object({
+      lookup: skillGetParamsSchema,
+      enabled: z.boolean(),
+      expectedContent: z.string().max(1024 * 1024),
+    }),
+  }),
+  z.object({
     method: z.literal("skill.get"),
     params: skillGetParamsSchema,
   }),
@@ -425,6 +441,8 @@ export interface RuntimeResponses {
   "skill.listForProject": z.infer<typeof skillInventorySchema>
   "skill.listForWorkspace": z.infer<typeof skillInventorySchema>
   "skill.listOnComputer": z.infer<typeof skillInventorySchema>
+  "skill.updateContent": z.infer<typeof skillDetailsSchema>
+  "skill.setEnabled": z.infer<typeof skillDetailsSchema>
   "skill.get": z.infer<typeof skillDetailsSchema>
   "skill.createManaged": z.infer<typeof packSkillSchema>
   "skill.updateManaged": z.infer<typeof packSkillSchema>

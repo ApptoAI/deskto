@@ -64,6 +64,7 @@ export const skillOccurrenceSchema = z.object({
   directoryPath: z.string().min(1),
   resolvedDirectoryPath: z.string().min(1),
   skillFilePath: z.string().min(1),
+  enabled: z.boolean().optional(),
   name: z.string().min(1).nullable(),
   description: z.string().min(1).nullable(),
   instructionDigest: z

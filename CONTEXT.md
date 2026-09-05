@@ -48,7 +48,7 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - A Side chat uses the parent Thread's Harness and Project. Its first Turn forks the parent's provider session so neither conversation changes the other's context; discarding it deletes only the side conversation and never touches Project files.
 - Deleting a Thread removes it and its Turns for good, stopping any Turn in flight. It is the only destructive task action; Done is a classification, not a delete. Nothing on disk is touched.
 - A Thread's Execution Profile can change only between Turns. Available models and thinking levels come from its Harness rather than a shared hardcoded catalog.
-- The Runtime persists user messages before starting a Harness or steering a live one. Follow-ups that cannot be steered stay in a durable FIFO queue and start only after the current Turn and its output capture settle.
+- The Runtime persists user messages before starting a Harness or steering a live one. A person can choose queueing for each steering-capable Harness. Follow-ups configured to queue or unable to steer stay in a durable FIFO queue and start only after the current Turn and its output capture settle.
 - Message Attachment bytes stay in Runtime storage and are read on demand. Thread views and Runtime events carry metadata only.
 - The Runtime converts provider output into Harness SDK events before it reaches the Client.
 - Permission modes have common product meaning. Harness Adapters own their provider-specific security mapping.
@@ -93,4 +93,4 @@ The first release is local and small. It has an Electron client, a Node runtime,
 - Automation and usage screens
 - A user-facing global search screen
 
-The boundaries above reserve a place for these features. They do not justify placeholder services or UI in the MVP.
+The boundaries above reserve a place for these features. They do not justify placeholder services or UI in the MVP, except the explicitly requested Computer use and Plugins coming-soon spaces in Settings (ADR 0041).

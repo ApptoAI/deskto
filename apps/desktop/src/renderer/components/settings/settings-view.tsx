@@ -27,10 +27,7 @@ export function SettingsView({
           the previous page happened to be scrolled to. */}
       <div key={page} className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
         <div className="mx-auto w-full max-w-2xl">
-          <h1 className="font-heading display-sm">{current.label}</h1>
-          <p className="pt-1 pb-6 text-sm text-muted-foreground">
-            {current.description}
-          </p>
+          <h1 className="font-heading display-sm pb-6">{current.label}</h1>
 
           <SettingsPane page={page} harnesses={harnesses} />
         </div>
@@ -55,6 +52,12 @@ function SettingsPane({
       return <HarnessModelSettings harnesses={harnesses} />
     case "computer-use":
       return <ComputerUseSettings />
+    case "plugins":
+      return (
+        <section aria-label="Plugins" className="space-y-2 py-4">
+          <p className="eyebrow text-muted-foreground">Coming soon</p>
+        </section>
+      )
     case "appearance":
       return <AppearanceSettings />
     case "shortcuts":

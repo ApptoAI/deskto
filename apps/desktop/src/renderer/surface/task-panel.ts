@@ -5,6 +5,7 @@ export type TaskPanelSurface = "files" | "activities" | "browser" | "side"
 export type TaskPanelState = {
   readonly open: boolean
   readonly surface: TaskPanelSurface
+  readonly selectedAgentId?: string
   readonly selectedArtifactId?: string
   /** The Project root is the empty string. */
   readonly folderPath: string
@@ -61,6 +62,17 @@ export class TaskPanelApi {
     this.open(input)
   }
 
+  showAgent(threadId: string, agentId: string | undefined): void {
+    const current = { ...this.state(threadId) }
+    if (agentId) current.selectedAgentId = agentId
+    else delete current.selectedAgentId
+    this.#update(threadId, {
+      ...current,
+      open: true,
+      surface: "activities",
+    })
+  }
+
   showFolder(threadId: string, folderPath: string): void {
     const current = this.state(threadId)
     if (
@@ -106,11 +118,9 @@ export class TaskPanelApi {
       availableIds.includes(current.selectedArtifactId)
     )
       return
-    this.#update(threadId, {
-      open: current.open,
-      surface: current.surface,
-      folderPath: current.folderPath,
-    })
+    const remaining = { ...current }
+    delete remaining.selectedArtifactId
+    this.#update(threadId, remaining)
   }
 
   #update(threadId: string, next: TaskPanelState): void {
@@ -163,7 +173,11 @@ export class ActivitiesSurfaceApi {
   constructor(private readonly panel: TaskPanelApi) {}
 
   open(threadId: string): void {
-    this.panel.open({ threadId, surface: "activities" })
+    this.panel.showAgent(threadId, undefined)
+  }
+
+  preview(threadId: string, agentId: string): void {
+    this.panel.showAgent(threadId, agentId)
   }
 }
 

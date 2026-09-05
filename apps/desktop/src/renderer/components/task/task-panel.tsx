@@ -349,6 +349,11 @@ export function TaskPanel({
       ) : panel.surface === "activities" ? (
         <ActivityPanel
           summary={activitySummary}
+          selectedAgentId={panel.selectedAgentId}
+          onSelectAgent={(agentId) =>
+            surface.activities.preview(threadId, agentId)
+          }
+          onBack={() => surface.activities.open(threadId)}
           childThreads={childThreads}
           onOpenThread={surface.navigation.openTask}
           onOpenFiles={() => surface.files.overview(threadId)}

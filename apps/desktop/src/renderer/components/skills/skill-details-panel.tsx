@@ -5,6 +5,7 @@ import FolderOpenIcon from "lucide-react/dist/esm/icons/folder-open"
 import PencilIcon from "lucide-react/dist/esm/icons/pencil"
 import type { ManagedSkillDraft, SkillDetails } from "@deskto/protocol"
 
+import { Textarea } from "@workspace/ui/components/textarea"
 import { Button } from "@workspace/ui/components/button"
 import { Markdown } from "@workspace/ui/components/chat/markdown"
 import { cn } from "@workspace/ui/lib/utils"
@@ -27,24 +28,30 @@ export function SkillDetailsPanel({
   onSelectOccurrence,
   onRetry,
   onUpdateManaged,
+  onUpdateContent,
+  onSetEnabled,
 }: {
   item: SkillCatalogItem
   selected: CatalogOccurrence
   state: QueryState<SkillDetails>
   onSelectOccurrence: (occurrence: CatalogOccurrence) => void
   onRetry: () => void
+  onUpdateContent?: (content: string, expectedContent: string) => Promise<void>
+  onSetEnabled?: (enabled: boolean, expectedContent: string) => Promise<void>
   onUpdateManaged: (
     packId: string,
     directoryName: string,
     draft: ManagedSkillDraft
   ) => Promise<void>
 }) {
+  const [rawContent, setRawContent] = useState("")
+  const [originalContent, setOriginalContent] = useState("")
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [draft, setDraft] = useState(emptySkillDraft)
   const details = state.status === "ready" ? state.data : null
-  const occurrence = selected.occurrence
+  const occurrence = details?.occurrence ?? selected.occurrence
   const source = selected.source
   const harnesses = source.harnessIds.map(knownHarnessLabel)
   const status = sourceStatus(source)
@@ -58,6 +65,8 @@ export function SkillDetailsPanel({
 
   function beginEditing() {
     setSaveError(null)
+    setRawContent(details?.content ?? "")
+    setOriginalContent(details?.content ?? "")
     setDraft({
       name: occurrence.name ?? "",
       description: occurrence.description ?? "",
@@ -67,12 +76,32 @@ export function SkillDetailsPanel({
   }
 
   async function save() {
-    if (!source.packId) return
+    if (!source.packId && !onUpdateContent) return
     setSaving(true)
     setSaveError(null)
     try {
-      await onUpdateManaged(source.packId, occurrence.directoryName, draft)
+      if (onUpdateContent) await onUpdateContent(rawContent, originalContent)
+      else if (source.packId)
+        await onUpdateManaged(source.packId, occurrence.directoryName, draft)
       setEditing(false)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleEnabled() {
+    if (
+      !onSetEnabled ||
+      details?.content === null ||
+      details?.content === undefined
+    )
+      return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSetEnabled(occurrence.enabled === false, details.content)
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -94,7 +123,13 @@ export function SkillDetailsPanel({
               <h1 className="truncate font-heading text-lg leading-6 font-medium tracking-tight">
                 {item.name}
               </h1>
-              <StatusChip status={status} />
+              <StatusChip
+                status={
+                  occurrence.enabled === false
+                    ? { label: "Disabled", tone: "neutral" }
+                    : status
+                }
+              />
             </div>
             <p className="mt-1 truncate text-xs text-muted-foreground">
               {harnesses.length > 0
@@ -111,12 +146,15 @@ export function SkillDetailsPanel({
       </header>
 
       <div className="flex flex-wrap gap-2 pt-5 pb-6">
-        {source.editable && source.packId && state.status === "ready" ? (
+        {source.editable &&
+        (source.packId || onUpdateContent) &&
+        details?.content !== null &&
+        state.status === "ready" ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={editing}
+            disabled={editing || saving}
             onClick={beginEditing}
           >
             <PencilIcon data-icon="inline-start" />
@@ -132,18 +170,55 @@ export function SkillDetailsPanel({
           <FolderOpenIcon data-icon="inline-start" />
           Open folder
         </Button>
+        {source.editable && onSetEnabled && details?.content != null ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={saving || editing}
+            onClick={() => void toggleEnabled()}
+          >
+            {occurrence.enabled === false ? "Enable skill" : "Disable skill"}
+          </Button>
+        ) : null}
       </div>
+      {saveError && !editing ? <InlineError message={saveError} /> : null}
+      {occurrence.enabled === false ? (
+        <p className="mb-5 text-sm text-muted-foreground">
+          Disabled for new tasks. Enable it again whenever you need it. Existing
+          conversations may still remember its instructions.
+        </p>
+      ) : null}
 
       {editing ? (
         <section
           className="mb-6 space-y-3 rounded-xl border border-border p-4"
           aria-label="Edit skill"
         >
-          <SkillDraftFields
-            idPrefix="edit-skill"
-            draft={draft}
-            onChange={setDraft}
-          />
+          {onUpdateContent ? (
+            <>
+              <label htmlFor="skill-content" className="text-sm font-medium">
+                SKILL.md
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Edit the complete file, including its name and description at
+                the top.
+              </p>
+              <Textarea
+                id="skill-content"
+                className="min-h-80 font-mono text-xs"
+                value={rawContent}
+                onChange={(event) => setRawContent(event.target.value)}
+                disabled={saving}
+              />
+            </>
+          ) : (
+            <SkillDraftFields
+              idPrefix="edit-skill"
+              draft={draft}
+              onChange={setDraft}
+            />
+          )}
           {saveError ? <InlineError message={saveError} /> : null}
           <div className="flex justify-end gap-2">
             <Button
@@ -156,7 +231,12 @@ export function SkillDetailsPanel({
             </Button>
             <Button
               type="button"
-              disabled={saving || !isCompleteSkillDraft(draft)}
+              disabled={
+                saving ||
+                (onUpdateContent
+                  ? !rawContent.trim()
+                  : !isCompleteSkillDraft(draft))
+              }
               onClick={() => void save()}
             >
               {saving ? "Saving..." : "Save changes"}

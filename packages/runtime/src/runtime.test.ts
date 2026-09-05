@@ -381,6 +381,80 @@ describe("Runtime", () => {
     await runtime.close()
   })
 
+  it.each(["codex", "pi"])(
+    "queues follow-ups when %s is configured to queue",
+    async (harnessId) => {
+      const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
+      directories.push(directory)
+      const scripted = new ScriptedHarness({
+        id: harnessId,
+        name: harnessId,
+        followUps: { queue: false, steer: true },
+      })
+      const runtime = createRuntime({
+        databasePath: join(directory, "runtime.sqlite"),
+        harnesses: [scripted],
+      })
+      unwrap(
+        await runtime.request({
+          method: "settings.update",
+          params: {
+            entries: { "providers.follow-up-mode": { [harnessId]: "queue" } },
+          },
+        })
+      )
+      const project = unwrap(
+        await runtime.request({
+          method: "project.add",
+          params: { path: directory, name: "Example", workspaceId: "personal" },
+        })
+      )
+      const thread = unwrap(
+        await runtime.request({
+          method: "thread.create",
+          params: { projectId: project.id, harnessId },
+        })
+      )
+      unwrap(
+        await runtime.request({
+          method: "turn.start",
+          params: { threadId: thread.id, prompt: "First request" },
+        })
+      )
+      const result = unwrap(
+        await runtime.request({
+          method: "turn.followUp",
+          params: {
+            threadId: thread.id,
+            input: { text: "Next request", references: [], attachments: [] },
+          },
+        })
+      )
+      expect(result.disposition).toBe("queued")
+      expect(scripted.runs[0]!.steered).toEqual([])
+      const queuedMessage = result.view.messages.find(
+        (message) => message.content === "Next request"
+      )!
+      expect(queuedMessage.delivery).toBe("queued")
+      scripted.runs[0]!.emit({ type: "turn.completed" })
+      scripted.runs[0]!.finish()
+      await vi.waitFor(() => expect(scripted.runs).toHaveLength(2))
+      expect(scripted.runs[1]!.input.prompt).toBe("Next request")
+      const view = unwrap(
+        await runtime.request({
+          method: "thread.get",
+          params: { threadId: thread.id },
+        })
+      )
+      expect(
+        view.messages.filter((message) => message.content === "Next request")
+      ).toMatchObject([
+        { id: queuedMessage.id, turnId: scripted.runs[1]!.input.turnId },
+      ])
+      await runtime.close()
+    }
+  )
+
   it("falls back to its durable FIFO queue when steering is rejected", async () => {
     const directory = await mkdtemp(join(tmpdir(), "deskto-runtime-"))
     directories.push(directory)
