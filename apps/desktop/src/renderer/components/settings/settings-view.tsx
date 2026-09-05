@@ -27,10 +27,7 @@ export function SettingsView({
           the previous page happened to be scrolled to. */}
       <div key={page} className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">
         <div className="mx-auto w-full max-w-2xl">
-          <h1 className="font-heading display-sm">{current.label}</h1>
-          <p className="pt-1 pb-6 text-sm text-muted-foreground">
-            {current.description}
-          </p>
+          <h1 className="font-heading display-sm pb-6">{current.label}</h1>
 
           <SettingsPane page={page} harnesses={harnesses} />
         </div>
@@ -59,11 +56,6 @@ function SettingsPane({
       return (
         <section aria-label="Plugins" className="space-y-2 py-4">
           <p className="eyebrow text-muted-foreground">Coming soon</p>
-          <h2 className="text-sm font-medium">Your tools, inside your tasks</h2>
-          <p className="text-sm text-muted-foreground">
-            A place to connect services such as Google Drive and Calendar,
-            choose what your agents can access, and manage connections.
-          </p>
         </section>
       )
     case "appearance":

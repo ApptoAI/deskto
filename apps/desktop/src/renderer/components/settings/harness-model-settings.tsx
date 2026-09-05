@@ -59,9 +59,6 @@ export function HarnessModelSettings({
       <div className="space-y-3">
         <div>
           <h2 className="text-sm font-medium">Generated text</h2>
-          <p className="pt-0.5 text-xs text-muted-foreground">
-            Choose the model Deskto uses for text it creates automatically.
-          </p>
         </div>
         <div className="divide-y divide-border rounded-lg border border-border">
           {harnessModelSettings.map((definition) => (
@@ -121,10 +118,6 @@ function ModelVisibilitySettings({
     <div className="space-y-3">
       <div>
         <h2 className="text-sm font-medium">Providers</h2>
-        <p className="pt-0.5 text-xs text-muted-foreground">
-          Choose which models appear when you configure a task. Each provider
-          keeps at least one visible model.
-        </p>
       </div>
       {providers.map((harness) => {
         const visibleCount = harness.models.filter((model) =>
@@ -176,11 +169,6 @@ function ModelVisibilitySettings({
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm">{model.name}</p>
-                        {model.description ? (
-                          <p className="truncate pt-0.5 text-xs text-muted-foreground">
-                            {model.description}
-                          </p>
-                        ) : null}
                       </div>
                       <Switch
                         aria-label={`Show ${model.name} for ${harness.name}`}
@@ -239,9 +227,6 @@ function HarnessModelRow({
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <span className="text-sm font-medium">{definition.label}</span>
-          <p className="pt-0.5 text-xs leading-snug text-muted-foreground">
-            {definition.description}
-          </p>
         </div>
 
         {isOverridden(snapshot, definition) ? (
@@ -287,7 +272,6 @@ function modelOptions(
     {
       value: selectionKey(taskModelSelection),
       label: "Same as task",
-      description: "Uses the task's agent and selected model.",
       selection: taskModelSelection,
     },
   ]
@@ -309,7 +293,6 @@ function modelOptions(
         options.push({
           value: selectionKey(selection),
           label: `${harness.name} · ${model.name}`,
-          description: model.description,
           icon: <HarnessLogo harnessId={harness.id} className="size-4" />,
           selection,
         })

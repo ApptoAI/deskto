@@ -86,12 +86,6 @@ export function ComputerUseSettings() {
         {tab === "computer" ? (
           <section className="space-y-2">
             <p className="eyebrow text-muted-foreground">Coming soon</p>
-            <h2 className="text-sm font-medium">Work across your computer</h2>
-            <p className="text-sm text-muted-foreground">
-              A place to manage access to desktop apps beyond the browser.
-              Existing Codex computer-use plugins remain available through
-              Codex.
-            </p>
           </section>
         ) : null}
         {tab === "advanced" ? (
@@ -104,10 +98,7 @@ export function ComputerUseSettings() {
           .filter((section) => activeSections.includes(section.id))
           .map((section) => (
             <section key={section.id}>
-              <h2 className="text-sm font-medium">{section.label}</h2>
-              <p className="pt-1 pb-3 text-xs leading-snug text-muted-foreground">
-                {section.description}
-              </p>
+              <h2 className="pb-3 text-sm font-medium">{section.label}</h2>
               <section.Component />
             </section>
           ))}

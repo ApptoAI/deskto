@@ -144,7 +144,6 @@ export function BrowserSettingsSection({
 function SettingRow({
   id,
   label,
-  description,
   error,
   overridden,
   onReset,
@@ -153,7 +152,6 @@ function SettingRow({
 }: {
   id: string
   label: string
-  description?: string
   error?: string
   overridden?: boolean
   onReset?: () => void
@@ -175,11 +173,6 @@ function SettingRow({
             <label htmlFor={id} className="text-sm font-medium">
               {label}
             </label>
-            {description ? (
-              <p className="pt-0.5 text-xs leading-snug text-muted-foreground">
-                {description}
-              </p>
-            ) : null}
           </div>
           {stacked && overridden && onReset ? (
             <Button variant="ghost" size="sm" onClick={onReset}>
@@ -240,7 +233,6 @@ function TextSettingRow({
     <SettingRow
       id={id}
       label={definition.label}
-      description={definition.description}
       error={error}
       overridden={overridden}
       onReset={() => void onCommit(null)}
@@ -292,7 +284,6 @@ function HostListSettingRow({
     <SettingRow
       id={id}
       label={definition.label}
-      description={definition.description}
       error={error}
       overridden={overridden}
       onReset={() => void onCommit(null)}
@@ -335,7 +326,6 @@ export function ToggleSettingRow({
     <SettingRow
       id={id}
       label={definition.label}
-      description={definition.description}
       error={error}
     >
       <Switch
@@ -392,7 +382,6 @@ function ViewportSettingRow({
     <SettingRow
       id={id}
       label={definition.label}
-      description={definition.description}
       error={error}
       overridden={overridden}
       onReset={() => void onCommit(null)}

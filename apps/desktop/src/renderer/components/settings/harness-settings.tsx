@@ -181,10 +181,6 @@ function FollowUpSettings({ harnesses }: { harnesses: Harness[] }) {
         >
           <div>
             <h3 className="text-sm font-medium">{harness.name} follow-ups</h3>
-            <p className="pt-1 text-xs text-muted-foreground">
-              Choose what happens when you send a message while a task is
-              working.
-            </p>
           </div>
           <ProfileMenu
             disabled={saving || !snapshot}
@@ -194,12 +190,10 @@ function FollowUpSettings({ harnesses }: { harnesses: Harness[] }) {
               {
                 value: "steer",
                 label: "Steer",
-                description: "Redirect the current work.",
               },
               {
                 value: "queue",
                 label: "Queue",
-                description: "Wait until the current work finishes.",
               },
             ]}
             onSelect={(value) => void select(harness.id, value)}
