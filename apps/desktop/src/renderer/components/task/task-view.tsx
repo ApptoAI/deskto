@@ -565,6 +565,9 @@ export function TaskView({
               activities={activities}
               childThreads={childThreads}
               onOpen={openActivity}
+              onOpenAgent={(agentId) =>
+                surface.activities.preview(threadId, agentId)
+              }
               onOpenThread={surface.navigation.openTask}
             />
           ) : null}

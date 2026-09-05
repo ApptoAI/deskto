@@ -1,16 +1,15 @@
-import { memo, useState } from "react"
+import { memo, useEffect, useRef } from "react"
 import BotIcon from "lucide-react/dist/esm/icons/bot"
-import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
+import ChevronRightIcon from "lucide-react/dist/esm/icons/chevron-right"
+import ArrowLeftIcon from "lucide-react/dist/esm/icons/arrow-left"
 import type { Thread } from "@deskto/protocol"
 
 import { Plan } from "@workspace/ui/components/chat/plan"
-import { cn } from "@workspace/ui/lib/utils"
 
 import { type ActivityNode, type ActivitySummary } from "./activity-tree.js"
 import {
   AgentElapsed,
   ActivityLine,
-  Collapse,
   SubagentBadge,
   activityIcon,
 } from "./activity-rows.js"
@@ -24,17 +23,53 @@ import { BackgroundThreadList } from "./background-thread-list.js"
  */
 export const ActivityPanel = memo(function ActivityPanel({
   summary,
+  selectedAgentId,
+  onSelectAgent,
+  onBack,
   childThreads,
   onOpenThread,
   onOpenFiles,
 }: {
   summary: ActivitySummary
+  selectedAgentId?: string | undefined
+  onSelectAgent: (agentId: string) => void
+  onBack: () => void
   childThreads: Thread[]
   onOpenThread: (threadId: string) => void
   onOpenFiles: () => void
 }) {
   const { agents, plan, working } = summary
   const settled = agents.length - working
+  const selected = selectedAgentId
+    ? findAgent(agents, selectedAgentId)
+    : undefined
+
+  const agentButtons = useRef(new Map<string, HTMLButtonElement>())
+  const returnFocus = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selected && returnFocus.current) {
+      agentButtons.current.get(returnFocus.current)?.focus()
+      returnFocus.current = null
+    }
+  }, [selected])
+
+  function backToActivities() {
+    const parent = selectedAgentId
+      ? agents.find((node) => findAgent([node], selectedAgentId))
+      : undefined
+    returnFocus.current = parent?.activity.id ?? null
+    onBack()
+  }
+
+  if (selected) {
+    return (
+      <AgentPreview
+        node={selected}
+        onBack={backToActivities}
+        onSelectAgent={onSelectAgent}
+      />
+    )
+  }
 
   if (!plan && agents.length === 0 && childThreads.length === 0) {
     return (
@@ -68,7 +103,16 @@ export const ActivityPanel = memo(function ActivityPanel({
             <section className="flex flex-col gap-2">
               <h3 className="px-0.5 eyebrow text-muted-foreground">Agents</h3>
               {agents.map((node) => (
-                <AgentCard key={node.activity.id} node={node} />
+                <AgentCard
+                  key={node.activity.id}
+                  node={node}
+                  onSelectAgent={onSelectAgent}
+                  buttonRef={(button) => {
+                    if (button)
+                      agentButtons.current.set(node.activity.id, button)
+                    else agentButtons.current.delete(node.activity.id)
+                  }}
+                />
               ))}
             </section>
           ) : null}
@@ -92,89 +136,173 @@ export const ActivityPanel = memo(function ActivityPanel({
   )
 })
 
-/**
- * One agent run: status, name, how long it has been at it, and its own tool
- * calls behind a rail. Open while it works, folded once it settles — and a
- * card the user opened by hand stays open through that change.
- */
-function AgentCard({ node }: { node: ActivityNode }) {
-  const activity = node.activity
-  const running = activity.status === "running"
-  const [manual, setManual] = useState<boolean | null>(null)
-  const open = manual ?? running
-  const agentType =
-    activity.payload?.kind === "subagent"
-      ? activity.payload.agentType
-      : undefined
+function findAgent(
+  nodes: ActivityNode[],
+  id: string
+): ActivityNode | undefined {
+  for (const node of nodes) {
+    if (node.activity.id === id && node.activity.payload?.kind === "subagent")
+      return node
+    const nested = findAgent(node.children, id)
+    if (nested) return nested
+  }
+  return undefined
+}
 
+function AgentCard({
+  node,
+  onSelectAgent,
+  buttonRef,
+}: {
+  node: ActivityNode
+  onSelectAgent: (agentId: string) => void
+  buttonRef?: (button: HTMLButtonElement | null) => void
+}) {
+  const activity = node.activity
   return (
-    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setManual(!open)}
-        className="flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 text-left transition-colors duration-100 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <SubagentBadge status={activity.status} />
-        <span className="min-w-0 flex-1 truncate text-ui font-medium">
-          {activity.name}
-        </span>
-        <AgentElapsed activity={activity} />
-        {agentType ? (
-          // A step above the card it sits on, since a chip filled with the
-          // card's own colour would be an outline and nothing more.
-          <span className="inline-flex h-5.5 shrink-0 items-center rounded-md bg-muted px-1.5 font-mono text-micro text-muted-foreground ring-1 ring-border/70">
-            {agentType}
-          </span>
-        ) : null}
-        <ChevronDownIcon
-          aria-hidden
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-(--ease-out-quart)",
-            open && "rotate-180"
-          )}
-        />
-      </button>
-      <Collapse open={open}>
-        <div className="grid grid-cols-[16px_1fr] gap-x-2.5 px-3 pb-2.5">
-          <span aria-hidden className="mx-auto h-full w-px bg-border" />
-          <div className="flex min-w-0 flex-col gap-px">
-            {node.children.length > 0 ? (
-              node.children.map((child) => (
-                <NestedActivity key={child.activity.id} node={child} />
-              ))
-            ) : (
-              <p className="py-1 text-micro text-muted-foreground">
-                {running
-                  ? "Working in a separate context."
-                  : activity.status === "completed"
-                    ? "Finished in a separate context."
-                    : "Failed before finishing."}
-              </p>
-            )}
-          </div>
-        </div>
-      </Collapse>
-    </div>
+    <button
+      type="button"
+      ref={buttonRef}
+      onClick={() => onSelectAgent(activity.id)}
+      aria-label={`Preview ${activity.name}`}
+      className="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <SubagentBadge status={activity.status} />
+      <span className="min-w-0 flex-1 truncate text-ui font-medium">
+        {activity.name}
+      </span>
+      <AgentElapsed activity={activity} />
+      <ChevronRightIcon
+        aria-hidden
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+    </button>
   )
 }
 
-function NestedActivity({ node }: { node: ActivityNode }) {
-  if (node.activity.payload?.kind === "subagent") {
-    return (
-      <div className="py-1">
-        <AgentCard node={node} />
-      </div>
-    )
-  }
-  if (node.activity.payload?.kind === "plan") {
-    return (
-      <div className="py-1">
-        <Plan title={node.activity.name} steps={node.activity.payload.steps} />
-      </div>
-    )
-  }
+function AgentPreview({
+  node,
+  onBack,
+  onSelectAgent,
+}: {
+  node: ActivityNode
+  onBack: () => void
+  onSelectAgent: (agentId: string) => void
+}) {
+  const activity = node.activity
+  const backButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    backButton.current?.focus()
+  }, [activity.id])
+  const status =
+    activity.status === "running"
+      ? "Working"
+      : activity.status === "completed"
+        ? "Finished"
+        : "Failed"
   return (
-    <ActivityLine activity={node.activity} icon={activityIcon(node.activity)} />
+    <section
+      aria-label="Agent preview"
+      className="flex min-h-0 flex-1 flex-col"
+    >
+      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          ref={backButton}
+          aria-label="Back to activities"
+          className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeftIcon aria-hidden className="size-4" />
+        </button>
+        <SubagentBadge status={activity.status} />
+        <h3
+          className="min-w-0 flex-1 truncate text-ui font-medium"
+          title={activity.name}
+        >
+          {activity.name}
+        </h3>
+        <span className="shrink-0 text-micro text-muted-foreground">
+          Read only
+        </span>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+          <span role="status">{status}</span>
+          <AgentElapsed activity={activity} />
+          {activity.payload?.kind === "subagent" &&
+          activity.payload.agentType ? (
+            <span>{activity.payload.agentType}</span>
+          ) : null}
+        </div>
+        {activity.detail ? (
+          <p className="mb-5 text-sm leading-relaxed break-words whitespace-pre-wrap">
+            {activity.detail}
+          </p>
+        ) : null}
+        <div className="flex min-w-0 flex-col gap-2">
+          {node.children.length > 0 ? (
+            node.children.map((child) => (
+              <NestedActivity
+                key={child.activity.id}
+                node={child}
+                onSelectAgent={onSelectAgent}
+              />
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {activity.status === "running"
+                ? "Waiting for this agent to share its work."
+                : "This agent did not share any tool activity."}
+            </p>
+          )}
+        </div>
+      </div>
+      <footer className="shrink-0 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+        Work shared by this agent appears here as it runs. Its full conversation
+        is not available.
+      </footer>
+    </section>
+  )
+}
+
+function NestedActivity({
+  node,
+  onSelectAgent,
+}: {
+  node: ActivityNode
+  onSelectAgent: (agentId: string) => void
+}) {
+  return (
+    <div className="min-w-0">
+      {node.activity.payload?.kind === "subagent" ? (
+        <AgentCard node={node} onSelectAgent={onSelectAgent} />
+      ) : (
+        <>
+          {node.activity.payload?.kind === "plan" ? (
+            <Plan
+              title={node.activity.name}
+              steps={node.activity.payload.steps}
+            />
+          ) : (
+            <ActivityLine
+              activity={node.activity}
+              icon={activityIcon(node.activity)}
+            />
+          )}
+          {node.children.length > 0 ? (
+            <div className="ml-2 border-l border-border pl-3">
+              {node.children.map((child) => (
+                <NestedActivity
+                  key={child.activity.id}
+                  node={child}
+                  onSelectAgent={onSelectAgent}
+                />
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
   )
 }

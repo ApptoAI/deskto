@@ -10,8 +10,9 @@ import { ActivityAside } from "./activity-aside.js"
 afterEach(cleanup)
 
 describe("ActivityAside", () => {
-  it("opens the Activity panel from its header and every agent row", () => {
+  it("opens the overview from its header and the selected preview from its agent row", () => {
     const onOpen = vi.fn()
+    const onOpenAgent = vi.fn()
     const agent: Activity = {
       id: "agent-1",
       threadId: "thread-1",
@@ -27,6 +28,7 @@ describe("ActivityAside", () => {
       createElement(ActivityAside, {
         activities: [agent],
         onOpen,
+        onOpenAgent,
       })
     )
 
@@ -36,6 +38,7 @@ describe("ActivityAside", () => {
         name: "Open activity for Research agent",
       })
     )
-    expect(onOpen).toHaveBeenCalledTimes(2)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onOpenAgent).toHaveBeenCalledWith("agent-1")
   })
 })
