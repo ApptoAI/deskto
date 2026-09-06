@@ -148,8 +148,16 @@
   --wp-base: #f2f1ee;
 
   /* The window shell: what the titlebar and sidebar sit on. Opaque here;
-       `.vibrant` thins it over the system's blur. */
-  --shell: #f2f1ee;
+       `.vibrant` thins it over the system's blur. When the Workspace accent is
+       on, the shell takes a few per cent of that hue so the frame says where
+       the person is without becoming a coloured surface — see ADR 0042. With
+       no accent the mix collapses to the base and nothing changes. */
+  --shell-base: #f2f1ee;
+  --shell: color-mix(
+    in oklch,
+    var(--shell-base),
+    var(--accent-base, var(--shell-base)) 4%
+  );
   /* The pane: the one opaque card where the work is read. */
   --pane: #ffffff;
   /* The composer's plate. Light lifts it with white, a hairline and a
@@ -291,7 +299,7 @@
 .dark {
   --wp-base: #151516;
 
-  --shell: #151516;
+  --shell-base: #151516;
   --pane: #0b0b0c;
   --glass-composer: #171719;
 
@@ -343,11 +351,11 @@
    never read through frost. Set on the document by the Surface when the main
    process reports that the effect is on. */
 .vibrant {
-  --shell: oklch(0.955 0.003 90 / 74%);
+  --shell-base: oklch(0.955 0.003 90 / 74%);
 }
 
 .vibrant.dark {
-  --shell: oklch(0.2 0.003 286 / 72%);
+  --shell-base: oklch(0.2 0.003 286 / 72%);
 }
 
 @layer base {

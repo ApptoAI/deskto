@@ -5,6 +5,11 @@ Deskto is a desktop agent orchestrator for work that isn't software engineering.
 > [!WARNING]
 > Deskto is a work in progress under active development. Expect bugs, expect breaking changes, sometimes several times a day. Don't build on top of it yet.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
+  <img alt="Deskto with a task running: the agent builds an HTML leads report while the browser panel previews it live" src="docs/assets/hero-light.png">
+</picture>
+
 ## Is Deskto for you?
 
 Probably not, if you're a software engineer looking for a GUI to write code with. Deskto is not a coding tool, and there are good projects built exactly for that use case:
@@ -24,6 +29,11 @@ Deskto is for the other kind of agent work: preparing an outbound campaign, digg
 **Tasks that delegate.** An agent in a chat can spin up child tasks: sibling agents that run in the background, can use a different provider than their parent, and can search your prior work. They show up as real tasks, nested under their parent, each with its own conversation, approvals, and files.
 
 **Projects with real folders.** Every project is a folder on disk, either managed by Deskto or linked to a folder you already have. Projects carry a description and shared instructions, and reusable Packs of agent skills can be attached across a whole workspace. Agents work inside the project folder, ask for approval when they need it, and their results show up as previewable files, not paths in a transcript.
+
+<p>
+  <img width="49%" alt="A finished task: the Markdown file the agent produced, previewed in the panel with Edit, download, and open-in-folder actions" src="docs/assets/result-file-preview.png">
+  <img width="49%" alt="The provider picker on a new task: Claude Code, Codex, and Pi, with Pi showing how to install it" src="docs/assets/provider-picker.png">
+</p>
 
 ## Install it
 

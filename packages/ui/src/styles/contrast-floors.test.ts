@@ -24,13 +24,51 @@ function declarations(selector: string): Map<string, string> {
   return found
 }
 
-/** Follows `var(--token, fallback)` chains down to a painted value. */
-function resolve(value: string, palette: Map<string, string>): string {
-  const match = /^var\((--[\w-]+)(?:,\s*(.+))?\)$/.exec(value)
-  if (!match) return value
-  const next = palette.get(match[1] ?? "") ?? match[2]
-  if (next === undefined) throw new Error(`${value} resolves to nothing`)
-  return resolve(next, palette)
+/** Splits a comma-separated argument list, leaving nested parentheses whole. */
+function splitArgs(text: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === "(") depth++
+    else if (ch === ")") depth--
+    else if (ch === "," && depth === 0) {
+      parts.push(text.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  parts.push(text.slice(start).trim())
+  return parts
+}
+
+/** Follows `var(--token, fallback)` chains and `color-mix()` down to paint. */
+function resolve(value: string, palette: Map<string, string>): Rgba {
+  const variable = /^var\((--[\w-]+)(?:,\s*(.+))?\)$/.exec(value)
+  if (variable) {
+    const next = palette.get(variable[1] ?? "") ?? variable[2]
+    if (next === undefined) throw new Error(`${value} resolves to nothing`)
+    return resolve(next, palette)
+  }
+  const mix = /^color-mix\(\s*in oklch,\s*(.+)\)$/.exec(value)
+  if (mix) {
+    const [first, second] = splitArgs(mix[1] ?? "")
+    const weighted = /^(.+?)\s+([\d.]+)%$/.exec(second ?? "")
+    if (!first || !weighted) throw new Error(`cannot parse ${value}`)
+    const share = Number(weighted[2]) / 100
+    const a = resolve(first, palette)
+    const b = resolve(weighted[1] ?? "", palette)
+    // A few-per-cent mix lands within rounding of the oklch result when done in sRGB,
+    // which is close enough to hold a floor with margin.
+    const lerp = (x: number, y: number) => x + (y - x) * share
+    return {
+      r: lerp(a.r, b.r),
+      g: lerp(a.g, b.g),
+      b: lerp(a.b, b.b),
+      a: lerp(a.a, b.a),
+    }
+  }
+  return parse(value)
 }
 
 type Rgba = { r: number; g: number; b: number; a: number }
@@ -89,9 +127,7 @@ function luminance(c: Rgba): number {
   )
 }
 
-function contrast(foreground: string, surface: string): number {
-  const bg = parse(surface)
-  const fg = parse(foreground)
+function contrast(fg: Rgba, bg: Rgba): number {
   const mix = (f: number, b: number) => fg.a * f + (1 - fg.a) * b
   const l1 = luminance({
     r: mix(fg.r, bg.r),
@@ -136,6 +172,27 @@ describe.each([
   it("draws a control's boundary at 3:1 on the pane", () => {
     expect(on("--input", "--pane")).toBeGreaterThanOrEqual(3)
   })
+})
+
+// The lightest Workspace accent (amber, from workspace-theme.tsx) moves the
+// shell furthest in both palettes, so it is the floor's worst case.
+describe.each([
+  ["light", light],
+  ["dark", dark],
+])("%s palette with the accent on", (_name, palette) => {
+  const tinted = new Map([...palette, ["--accent-base", "oklch(0.79 0.15 78)"]])
+  const on = (token: string, surface: string) =>
+    contrast(
+      resolve(`var(${token})`, tinted),
+      resolve(`var(${surface})`, tinted)
+    )
+
+  it.each(["--text-1", "--text-2", "--text-3", "--text-4"])(
+    "%s clears 4.5:1 on the tinted shell",
+    (token) => {
+      expect(on(token, "--shell")).toBeGreaterThanOrEqual(4.5)
+    }
+  )
 })
 
 describe("dark paper", () => {

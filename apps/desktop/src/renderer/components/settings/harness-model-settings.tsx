@@ -16,7 +16,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Switch } from "@workspace/ui/components/switch"
 
-import { knownHarnessLabel } from "../../lib/harness.js"
+import { describeHarnessHealth, knownHarnessLabel } from "../../lib/harness.js"
 import { describedErrorSchema } from "../../runtime/describe-error.js"
 import type { RuntimeQuery } from "../../runtime/use-runtime-query.js"
 import { useSettings } from "../../settings/settings-context.js"
@@ -84,9 +84,7 @@ function ModelVisibilitySettings({
   const [searches, setSearches] = useState<Record<string, string>>({})
   const visibility = settingValue(snapshot, appSettings.modelVisibility)
   const providers =
-    harnesses.state.status === "ready"
-      ? harnesses.state.data.filter((harness) => harness.models.length > 0)
-      : []
+    harnesses.state.status === "ready" ? harnesses.state.data : []
 
   async function setVisible(
     harness: Harness,
@@ -132,66 +130,78 @@ function ModelVisibilitySettings({
               <HarnessLogo harnessId={harness.id} className="size-4" />
               <h3 className="text-sm font-medium">{harness.name}</h3>
             </div>
-            <div className="px-4 py-3">
-              <Input
-                type="search"
-                aria-label={`Search ${harness.name} models`}
-                placeholder="Search models…"
-                value={searches[harness.id] ?? ""}
-                onChange={(event) =>
-                  setSearches({
-                    ...searches,
-                    [harness.id]: event.currentTarget.value,
-                  })
-                }
-              />
-            </div>
-            <ul
-              aria-label={`${harness.name} models`}
-              className="max-h-72 divide-y divide-border overflow-y-auto overscroll-contain"
-            >
-              {harness.models
-                .filter((model) =>
-                  `${model.name} ${model.id} ${model.description ?? ""}`
-                    .toLowerCase()
-                    .includes((searches[harness.id] ?? "").trim().toLowerCase())
-                )
-                .map((model) => {
-                  const visible = isHarnessModelVisible(
-                    visibility,
-                    harness.id,
-                    model.id
-                  )
-                  return (
-                    <li
-                      key={model.id}
-                      className="flex items-center gap-4 px-4 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{model.name}</p>
-                      </div>
-                      <Switch
-                        aria-label={`Show ${model.name} for ${harness.name}`}
-                        checked={visible}
-                        disabled={visible && visibleCount === 1}
-                        onCheckedChange={(checked) =>
-                          void setVisible(harness, model.id, checked)
-                        }
-                      />
-                    </li>
-                  )
-                })}
-            </ul>
-            {harness.models.every(
-              (model) =>
-                !`${model.name} ${model.id} ${model.description ?? ""}`
-                  .toLowerCase()
-                  .includes((searches[harness.id] ?? "").trim().toLowerCase())
-            ) ? (
-              <p className="px-4 pb-4 text-sm text-muted-foreground">
-                No models match your search.
+            {harness.models.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-muted-foreground">
+                {describeHarnessHealth(harness).detail}
               </p>
-            ) : null}
+            ) : (
+              <>
+                <div className="px-4 py-3">
+                  <Input
+                    type="search"
+                    aria-label={`Search ${harness.name} models`}
+                    placeholder="Search models…"
+                    value={searches[harness.id] ?? ""}
+                    onChange={(event) =>
+                      setSearches({
+                        ...searches,
+                        [harness.id]: event.currentTarget.value,
+                      })
+                    }
+                  />
+                </div>
+                <ul
+                  aria-label={`${harness.name} models`}
+                  className="max-h-72 divide-y divide-border overflow-y-auto overscroll-contain"
+                >
+                  {harness.models
+                    .filter((model) =>
+                      `${model.name} ${model.id} ${model.description ?? ""}`
+                        .toLowerCase()
+                        .includes(
+                          (searches[harness.id] ?? "").trim().toLowerCase()
+                        )
+                    )
+                    .map((model) => {
+                      const visible = isHarnessModelVisible(
+                        visibility,
+                        harness.id,
+                        model.id
+                      )
+                      return (
+                        <li
+                          key={model.id}
+                          className="flex items-center gap-4 px-4 py-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">{model.name}</p>
+                          </div>
+                          <Switch
+                            aria-label={`Show ${model.name} for ${harness.name}`}
+                            checked={visible}
+                            disabled={visible && visibleCount === 1}
+                            onCheckedChange={(checked) =>
+                              void setVisible(harness, model.id, checked)
+                            }
+                          />
+                        </li>
+                      )
+                    })}
+                </ul>
+                {harness.models.every(
+                  (model) =>
+                    !`${model.name} ${model.id} ${model.description ?? ""}`
+                      .toLowerCase()
+                      .includes(
+                        (searches[harness.id] ?? "").trim().toLowerCase()
+                      )
+                ) ? (
+                  <p className="px-4 pb-4 text-sm text-muted-foreground">
+                    No models match your search.
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
         )
       })}

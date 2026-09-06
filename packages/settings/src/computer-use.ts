@@ -219,9 +219,9 @@ export const computerUseSettings = {
   }),
   screenControlEnabled: defineSetting({
     key: "computerUse.screen-control.enabled",
-    label: "Let agents use the screen",
+    label: "Let agents click and type in the browser",
     description:
-      "Agents can look at the built-in browser and click, type, and scroll on it like a person would, instead of only reading the page. Turning this off applies to tasks started from now on.",
+      "When on, agents see the built-in browser as a screen and can click, type, and scroll on it like a person would. When off, they can only read pages. Changes apply to tasks started from now on.",
     input: { kind: "toggle" },
     schema: z.boolean(),
     defaultValue: true,
