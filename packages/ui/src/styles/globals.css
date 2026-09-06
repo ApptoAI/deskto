@@ -156,7 +156,7 @@
   --shell: color-mix(
     in oklch,
     var(--shell-base),
-    var(--accent-base, var(--shell-base)) 7%
+    var(--accent-base, var(--shell-base)) 4%
   );
   /* The pane: the one opaque card where the work is read. */
   --pane: #ffffff;

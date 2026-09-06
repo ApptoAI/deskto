@@ -20,17 +20,19 @@ already carries the Workspace name and swatch.
 
 **When the accent is on, the shell takes a small share of it.** `--shell` is
 a `color-mix` of the palette's grey (`--shell-base`) and `--accent-base` at
-7%. With the accent off `--accent-base` is absent, the mix falls back to the
+4%. With the accent off `--accent-base` is absent, the mix falls back to the
 base on both sides, and the shell is exactly the grey it was. The vibrant
 variants mix the same way, keeping their alpha.
 
 **The pane does not change.** The pane is where the work is read and stays
 the palette's opaque white or near-black. Only the frame carries the hue.
 
-**7% is a tint, not a colour.** The shell must still read as neutral grey at a
+**4% is a tint, not a colour.** The shell must still read as neutral grey at a
 glance; the accent is recognisable only next to the untinted pane or another
-Workspace. Text and hairline contrast on the shell are unaffected at this
-strength in both palettes.
+Workspace. The strength is set by ADR 0034's floors: dark `--text-4` sits just
+above 4.5:1 on the untinted shell, and the lightest accent (amber) pushes it
+under at 5%. `contrast-floors.test.ts` checks the tinted shell against that
+accent so the number cannot drift.
 
 ## Consequences
 
